@@ -1,4 +1,4 @@
-module g2
+module github.com/arran4/g2
 
 go 1.22
 
