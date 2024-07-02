@@ -26,7 +26,7 @@ func main() {
 		return
 	}
 	switch fs.Arg(1) {
-	case "generate":
+	case "manifest":
 		if err := config.cmdManifest(fs.Args()[2:]); err != nil {
 			log.Printf("generate error: %s", err)
 			os.Exit(-1)
