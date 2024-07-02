@@ -75,7 +75,7 @@ func (cfg *CmdManifestArgConfig) cmdUpsertFileFromUrl(args []string) error {
 
 	url := args[1]
 	filename := args[2]
-	ebuildDir := args[3]
+	ebuildDirOrFile := args[3]
 
 	size, blake2bSum, sha512Sum, err := downloadAndChecksum(url)
 	if err != nil {
@@ -83,7 +83,10 @@ func (cfg *CmdManifestArgConfig) cmdUpsertFileFromUrl(args []string) error {
 	}
 
 	manifestLine := fmt.Sprintf("DIST %s %d BLAKE2B %s SHA512 %s", filename, size, blake2bSum, sha512Sum)
-	manifestPath := filepath.Join(ebuildDir, "Manifest")
+	manifestPath := ebuildDirOrFile
+	if _, file := filepath.Split(manifestPath); file != "Manifest" {
+		manifestPath = filepath.Join(ebuildDirOrFile, "Manifest")
+	}
 
 	err = upsertManifest(manifestPath, filename, manifestLine)
 	if err != nil {
