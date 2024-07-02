@@ -90,9 +90,11 @@ func DownloadAndChecksum(url string) (int64, string, string, error) {
 
 		sizeCh <- size
 	}()
-
-	size := <-sizeCh
-	err = <-errCh
+	var size int64
+	select {
+	case size = <-sizeCh:
+	case err = <-errCh:
+	}
 	if err != nil {
 		return 0, "", "", err
 	}
