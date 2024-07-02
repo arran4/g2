@@ -1,16 +1,12 @@
 package main
 
 import (
-	"crypto/sha512"
 	"flag"
 	"fmt"
-	"golang.org/x/crypto/blake2b"
-	"io"
+	"github.com/arran4/g2"
 	"log"
-	"net/http"
 	"os"
 	"path/filepath"
-	"strings"
 )
 
 type MainArgConfig struct {
@@ -77,7 +73,7 @@ func (cfg *CmdManifestArgConfig) cmdUpsertFileFromUrl(args []string) error {
 	filename := args[2]
 	ebuildDirOrFile := args[3]
 
-	size, blake2bSum, sha512Sum, err := downloadAndChecksum(url)
+	size, blake2bSum, sha512Sum, err := g2.DownloadAndChecksum(url)
 	if err != nil {
 		return fmt.Errorf("downloading and calculating checksums: %v\n", err)
 	}
@@ -88,84 +84,11 @@ func (cfg *CmdManifestArgConfig) cmdUpsertFileFromUrl(args []string) error {
 		manifestPath = filepath.Join(ebuildDirOrFile, "Manifest")
 	}
 
-	err = upsertManifest(manifestPath, filename, manifestLine)
+	err = g2.UpsertManifest(manifestPath, filename, manifestLine)
 	if err != nil {
 		return fmt.Errorf("updating manifest: %v\n", err)
 	}
 
 	log.Printf("Done")
 	return nil
-}
-
-func downloadAndChecksum(url string) (int64, string, string, error) {
-	resp, err := http.Get(url)
-	if err != nil {
-		return 0, "", "", err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return 0, "", "", fmt.Errorf("bad status: %s", resp.Status)
-	}
-
-	blake2bHash, err := blake2b.New512(nil)
-	if err != nil {
-		return 0, "", "", fmt.Errorf("bad blake2b initialization: %w", err)
-	}
-	sha512Hash := sha512.New()
-
-	multiWriter := io.MultiWriter(blake2bHash, sha512Hash)
-
-	sizeCh := make(chan int64)
-	errCh := make(chan error)
-
-	go func() {
-		defer close(sizeCh)
-		defer close(errCh)
-
-		size, err := io.Copy(multiWriter, resp.Body)
-		if err != nil {
-			errCh <- err
-			return
-		}
-
-		sizeCh <- size
-	}()
-
-	size := <-sizeCh
-	err = <-errCh
-	if err != nil {
-		return 0, "", "", err
-	}
-
-	blake2bSum := fmt.Sprintf("%x", blake2bHash.Sum(nil))
-	sha512Sum := fmt.Sprintf("%x", sha512Hash.Sum(nil))
-
-	return size, blake2bSum, sha512Sum, nil
-}
-
-func upsertManifest(manifestPath, filename, manifestLine string) error {
-	content, err := os.ReadFile(manifestPath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return os.WriteFile(manifestPath, []byte(manifestLine+"\n"), 0644)
-		}
-		return err
-	}
-
-	lines := strings.Split(string(content), "\n")
-	found := false
-	for i, line := range lines {
-		if strings.Contains(line, "DIST "+filename+" ") {
-			lines[i] = manifestLine
-			found = true
-			break
-		}
-	}
-
-	if !found {
-		lines = append(lines, manifestLine)
-	}
-
-	return os.WriteFile(manifestPath, []byte(strings.Join(lines, "\n")), 0644)
 }
