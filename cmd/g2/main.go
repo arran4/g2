@@ -2,29 +2,84 @@ package main
 
 import (
 	"crypto/sha512"
+	"flag"
 	"fmt"
 	"golang.org/x/crypto/blake2b"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
 )
 
+type MainArgConfig struct {
+}
+
 func main() {
-	if len(os.Args) != 4 {
-		fmt.Println("Usage: go run main.go <url> <filename> <Manifest file or dir>")
+	fs := flag.NewFlagSet("", flag.ExitOnError)
+	config := &MainArgConfig{}
+	if err := fs.Parse(os.Args); err != nil {
+		log.Printf("Flag parse error: %s", err)
+		os.Exit(-1)
 		return
 	}
+	if fs.NArg() <= 1 {
+		log.Printf("Please specify an argument, try -help for help")
+		os.Exit(-1)
+		return
+	}
+	switch fs.Arg(1) {
+	case "generate":
+		if err := config.cmdManifest(fs.Args()[2:]); err != nil {
+			log.Printf("generate error: %s", err)
+			os.Exit(-1)
+			return
+		}
+	default:
+		log.Printf("Unknown command %s", fs.Arg(1))
+		log.Printf("Try %s for %s", "manifest", "commands relating to Manifest files")
+		os.Exit(-1)
+	}
+}
 
-	url := os.Args[1]
-	filename := os.Args[2]
-	ebuildDir := os.Args[3]
+type CmdManifestArgConfig struct {
+	*MainArgConfig
+}
+
+func (cfg *MainArgConfig) cmdManifest(args []string) error {
+	fs := flag.NewFlagSet("", flag.ExitOnError)
+	config := &CmdManifestArgConfig{
+		MainArgConfig: cfg,
+	}
+	if err := fs.Parse(args); err != nil {
+		return fmt.Errorf("parsing flags: %w", err)
+	}
+	switch fs.Arg(0) {
+	case "upsert-file-from-url":
+		if err := config.cmdUpsertFileFromUrl(fs.Args()[1:]); err != nil {
+			return fmt.Errorf("updsert file from url: %w", err)
+		}
+	default:
+		log.Printf("Unknown command %s", fs.Arg(0))
+		log.Printf("Try %s for %s", "upsert-file-from-url", "To update or insert Manifest entries streamed from a URL")
+		os.Exit(-1)
+	}
+	return nil
+}
+
+func (cfg *CmdManifestArgConfig) cmdUpsertFileFromUrl(args []string) error {
+	if len(args) != 4 {
+		return fmt.Errorf("usage: go run main.go <url> <filename> <Manifest file or dir>")
+	}
+
+	url := args[1]
+	filename := args[2]
+	ebuildDir := args[3]
 
 	size, blake2bSum, sha512Sum, err := downloadAndChecksum(url)
 	if err != nil {
-		fmt.Printf("Error downloading and calculating checksums: %v\n", err)
-		return
+		return fmt.Errorf("downloading and calculating checksums: %v\n", err)
 	}
 
 	manifestLine := fmt.Sprintf("DIST %s %d BLAKE2B %s SHA512 %s", filename, size, blake2bSum, sha512Sum)
@@ -32,8 +87,11 @@ func main() {
 
 	err = upsertManifest(manifestPath, filename, manifestLine)
 	if err != nil {
-		fmt.Printf("Error updating manifest: %v\n", err)
+		return fmt.Errorf("updating manifest: %v\n", err)
 	}
+
+	log.Printf("Done")
+	return nil
 }
 
 func downloadAndChecksum(url string) (int64, string, string, error) {
