@@ -90,13 +90,13 @@ func (cfg *MainArgConfig) cmdManifest(args []string) error {
 }
 
 func (cfg *CmdManifestArgConfig) cmdUpsertFromUrl(args []string) error {
-	if len(args) != 4 {
+	if len(args) != 3 {
 		return fmt.Errorf("usage: upsert-from-url <url> <filename> <manifestFileOrDir>")
 	}
 
-	url := args[1]
-	filename := args[2]
-	ebuildDirOrFile := args[3]
+	url := args[0]
+	filename := args[1]
+	ebuildDirOrFile := args[2]
 
 	size, blake2bSum, sha512Sum, err := g2.DownloadAndChecksum(url)
 	if err != nil {
