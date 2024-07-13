@@ -77,7 +77,7 @@ func (cfg *MainArgConfig) cmdManifest(args []string) error {
 	switch cmd {
 	case "upsert-from-url":
 		if err := config.cmdUpsertFromUrl(fs.Args()[1:]); err != nil {
-			return fmt.Errorf("updsert file from url: %w", err)
+			return fmt.Errorf("upsert file from url: %w", err)
 		}
 	default:
 		fs.Usage()
