@@ -29,14 +29,13 @@ func main() {
 		os.Exit(-1)
 		return
 	}
-	cmd := "help"
 	if fs.NArg() <= 1 {
 		log.Printf("Please specify an argument, try -help for help")
 		os.Exit(-1)
 		return
-	} else {
-		cmd = fs.Arg(1)
 	}
+
+	cmd := fs.Arg(1)
 	cfg.Args = append(cfg.Args, cmd)
 	switch cmd {
 	case "manifest":
