@@ -98,12 +98,24 @@ func (cfg *CmdManifestArgConfig) cmdUpsertFromUrl(args []string) error {
 	filename := args[1]
 	ebuildDirOrFile := args[2]
 
-	size, blake2bSum, sha512Sum, err := g2.DownloadAndChecksum(url)
+	checksums, err := g2.DownloadAndChecksum(url)
 	if err != nil {
 		return fmt.Errorf("downloading and calculating checksums: %v\n", err)
 	}
 
-	manifestLine := fmt.Sprintf("DIST %s %d BLAKE2B %s SHA512 %s", filename, size, blake2bSum, sha512Sum)
+	manifestLine := fmt.Sprintf("DIST %s %d BLAKE2B %s BLAKE2S %s MD5 %s RMD160 %s SHA1 %s SHA256 %s SHA3_256 %s SHA3_512 %s SHA512 %s",
+		filename,
+		checksums.Size,
+		checksums.Blake2b,
+		checksums.Blake2s,
+		checksums.Md5,
+		checksums.Rmd160,
+		checksums.Sha1,
+		checksums.Sha256,
+		checksums.Sha3_256,
+		checksums.Sha3_512,
+		checksums.Sha512,
+	)
 	manifestPath := ebuildDirOrFile
 	if _, file := filepath.Split(manifestPath); file != "Manifest" {
 		manifestPath = filepath.Join(ebuildDirOrFile, "Manifest")

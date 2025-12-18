@@ -1,9 +1,15 @@
 package g2
 
 import (
+	"crypto/md5"
+	"crypto/sha1"
+	"crypto/sha256"
 	"crypto/sha512"
 	"fmt"
 	"golang.org/x/crypto/blake2b"
+	"golang.org/x/crypto/blake2s"
+	"golang.org/x/crypto/ripemd160"
+	"golang.org/x/crypto/sha3"
 	"io"
 	"log"
 	"net/http"
@@ -49,10 +55,23 @@ func (d *DownloadProgress) Write(p []byte) (n int, err error) {
 	return len(p), nil
 }
 
-func DownloadAndChecksum(url string) (int64, string, string, error) {
+type Checksums struct {
+	Size     int64
+	Blake2b  string
+	Blake2s  string
+	Md5      string
+	Rmd160   string
+	Sha1     string
+	Sha256   string
+	Sha3_256 string
+	Sha3_512 string
+	Sha512   string
+}
+
+func DownloadAndChecksum(url string) (*Checksums, error) {
 	resp, err := http.Get(url)
 	if err != nil {
-		return 0, "", "", err
+		return nil, err
 	}
 	defer func(Body io.ReadCloser) {
 		err := Body.Close()
@@ -62,16 +81,37 @@ func DownloadAndChecksum(url string) (int64, string, string, error) {
 	}(resp.Body)
 
 	if resp.StatusCode != http.StatusOK {
-		return 0, "", "", fmt.Errorf("bad status: %s", resp.Status)
+		return nil, fmt.Errorf("bad status: %s", resp.Status)
 	}
 
 	blake2bHash, err := blake2b.New512(nil)
 	if err != nil {
-		return 0, "", "", fmt.Errorf("bad blake2b initialization: %w", err)
+		return nil, fmt.Errorf("bad blake2b initialization: %w", err)
 	}
+	blake2sHash, err := blake2s.New256(nil)
+	if err != nil {
+		return nil, fmt.Errorf("bad blake2s initialization: %w", err)
+	}
+	md5Hash := md5.New()
+	rmd160Hash := ripemd160.New()
+	sha1Hash := sha1.New()
+	sha256Hash := sha256.New()
+	sha3_256Hash := sha3.New256()
+	sha3_512Hash := sha3.New512()
 	sha512Hash := sha512.New()
 
-	multiWriter := io.MultiWriter(blake2bHash, sha512Hash, &DownloadProgress{Resp: resp})
+	multiWriter := io.MultiWriter(
+		blake2bHash,
+		blake2sHash,
+		md5Hash,
+		rmd160Hash,
+		sha1Hash,
+		sha256Hash,
+		sha3_256Hash,
+		sha3_512Hash,
+		sha512Hash,
+		&DownloadProgress{Resp: resp},
+	)
 
 	sizeCh := make(chan int64)
 	errCh := make(chan error)
@@ -94,11 +134,21 @@ func DownloadAndChecksum(url string) (int64, string, string, error) {
 	case err = <-errCh:
 	}
 	if err != nil {
-		return 0, "", "", err
+		return nil, err
 	}
 
-	blake2bSum := fmt.Sprintf("%x", blake2bHash.Sum(nil))
-	sha512Sum := fmt.Sprintf("%x", sha512Hash.Sum(nil))
+	checksums := &Checksums{
+		Size:     size,
+		Blake2b:  fmt.Sprintf("%x", blake2bHash.Sum(nil)),
+		Blake2s:  fmt.Sprintf("%x", blake2sHash.Sum(nil)),
+		Md5:      fmt.Sprintf("%x", md5Hash.Sum(nil)),
+		Rmd160:   fmt.Sprintf("%x", rmd160Hash.Sum(nil)),
+		Sha1:     fmt.Sprintf("%x", sha1Hash.Sum(nil)),
+		Sha256:   fmt.Sprintf("%x", sha256Hash.Sum(nil)),
+		Sha3_256: fmt.Sprintf("%x", sha3_256Hash.Sum(nil)),
+		Sha3_512: fmt.Sprintf("%x", sha3_512Hash.Sum(nil)),
+		Sha512:   fmt.Sprintf("%x", sha512Hash.Sum(nil)),
+	}
 
-	return size, blake2bSum, sha512Sum, nil
+	return checksums, nil
 }
