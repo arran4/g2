@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"golang.org/x/crypto/blake2b"
 	"golang.org/x/crypto/blake2s"
-	"golang.org/x/crypto/ripemd160"
+	"golang.org/x/crypto/ripemd160" //nolint:staticcheck
 	"golang.org/x/crypto/sha3"
 	"io"
 	"log"
