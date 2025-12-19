@@ -1,13 +1,32 @@
 package g2
 
 import (
+	"crypto/md5"
+	"crypto/sha1"
+	"crypto/sha256"
 	"crypto/sha512"
 	"fmt"
 	"golang.org/x/crypto/blake2b"
+	"golang.org/x/crypto/blake2s"
+	"golang.org/x/crypto/ripemd160" //nolint:staticcheck
+	"golang.org/x/crypto/sha3"
+	"hash"
 	"io"
 	"log"
 	"net/http"
 	"time"
+)
+
+const (
+	HashBlake2b  = "BLAKE2B"
+	HashBlake2s  = "BLAKE2S"
+	HashMd5      = "MD5"
+	HashRmd160   = "RMD160"
+	HashSha1     = "SHA1"
+	HashSha256   = "SHA256"
+	HashSha3_256 = "SHA3_256"
+	HashSha3_512 = "SHA3_512"
+	HashSha512   = "SHA512"
 )
 
 type DownloadProgress struct {
@@ -49,10 +68,23 @@ func (d *DownloadProgress) Write(p []byte) (n int, err error) {
 	return len(p), nil
 }
 
-func DownloadAndChecksum(url string) (int64, string, string, error) {
+type Checksums struct {
+	Size     int64
+	Blake2b  string
+	Blake2s  string
+	Md5      string
+	Rmd160   string
+	Sha1     string
+	Sha256   string
+	Sha3_256 string
+	Sha3_512 string
+	Sha512   string
+}
+
+func DownloadAndChecksum(url string, hashes []string) (*Checksums, error) {
 	resp, err := http.Get(url)
 	if err != nil {
-		return 0, "", "", err
+		return nil, err
 	}
 	defer func(Body io.ReadCloser) {
 		err := Body.Close()
@@ -62,16 +94,60 @@ func DownloadAndChecksum(url string) (int64, string, string, error) {
 	}(resp.Body)
 
 	if resp.StatusCode != http.StatusOK {
-		return 0, "", "", fmt.Errorf("bad status: %s", resp.Status)
+		return nil, fmt.Errorf("bad status: %s", resp.Status)
 	}
 
-	blake2bHash, err := blake2b.New512(nil)
-	if err != nil {
-		return 0, "", "", fmt.Errorf("bad blake2b initialization: %w", err)
-	}
-	sha512Hash := sha512.New()
+	writers := []io.Writer{&DownloadProgress{Resp: resp}}
+	hashers := make(map[string]hash.Hash)
 
-	multiWriter := io.MultiWriter(blake2bHash, sha512Hash, &DownloadProgress{Resp: resp})
+	for _, h := range hashes {
+		switch h {
+		case HashBlake2b:
+			blake2bHash, err := blake2b.New512(nil)
+			if err != nil {
+				return nil, fmt.Errorf("bad blake2b initialization: %w", err)
+			}
+			writers = append(writers, blake2bHash)
+			hashers[HashBlake2b] = blake2bHash
+		case HashBlake2s:
+			blake2sHash, err := blake2s.New256(nil)
+			if err != nil {
+				return nil, fmt.Errorf("bad blake2s initialization: %w", err)
+			}
+			writers = append(writers, blake2sHash)
+			hashers[HashBlake2s] = blake2sHash
+		case HashMd5:
+			h := md5.New()
+			writers = append(writers, h)
+			hashers[HashMd5] = h
+		case HashRmd160:
+			h := ripemd160.New()
+			writers = append(writers, h)
+			hashers[HashRmd160] = h
+		case HashSha1:
+			h := sha1.New()
+			writers = append(writers, h)
+			hashers[HashSha1] = h
+		case HashSha256:
+			h := sha256.New()
+			writers = append(writers, h)
+			hashers[HashSha256] = h
+		case HashSha3_256:
+			h := sha3.New256()
+			writers = append(writers, h)
+			hashers[HashSha3_256] = h
+		case HashSha3_512:
+			h := sha3.New512()
+			writers = append(writers, h)
+			hashers[HashSha3_512] = h
+		case HashSha512:
+			h := sha512.New()
+			writers = append(writers, h)
+			hashers[HashSha512] = h
+		}
+	}
+
+	multiWriter := io.MultiWriter(writers...)
 
 	sizeCh := make(chan int64)
 	errCh := make(chan error)
@@ -94,11 +170,40 @@ func DownloadAndChecksum(url string) (int64, string, string, error) {
 	case err = <-errCh:
 	}
 	if err != nil {
-		return 0, "", "", err
+		return nil, err
 	}
 
-	blake2bSum := fmt.Sprintf("%x", blake2bHash.Sum(nil))
-	sha512Sum := fmt.Sprintf("%x", sha512Hash.Sum(nil))
+	checksums := &Checksums{
+		Size: size,
+	}
 
-	return size, blake2bSum, sha512Sum, nil
+	if h, ok := hashers[HashBlake2b]; ok {
+		checksums.Blake2b = fmt.Sprintf("%x", h.Sum(nil))
+	}
+	if h, ok := hashers[HashBlake2s]; ok {
+		checksums.Blake2s = fmt.Sprintf("%x", h.Sum(nil))
+	}
+	if h, ok := hashers[HashMd5]; ok {
+		checksums.Md5 = fmt.Sprintf("%x", h.Sum(nil))
+	}
+	if h, ok := hashers[HashRmd160]; ok {
+		checksums.Rmd160 = fmt.Sprintf("%x", h.Sum(nil))
+	}
+	if h, ok := hashers[HashSha1]; ok {
+		checksums.Sha1 = fmt.Sprintf("%x", h.Sum(nil))
+	}
+	if h, ok := hashers[HashSha256]; ok {
+		checksums.Sha256 = fmt.Sprintf("%x", h.Sum(nil))
+	}
+	if h, ok := hashers[HashSha3_256]; ok {
+		checksums.Sha3_256 = fmt.Sprintf("%x", h.Sum(nil))
+	}
+	if h, ok := hashers[HashSha3_512]; ok {
+		checksums.Sha3_512 = fmt.Sprintf("%x", h.Sum(nil))
+	}
+	if h, ok := hashers[HashSha512]; ok {
+		checksums.Sha512 = fmt.Sprintf("%x", h.Sum(nil))
+	}
+
+	return checksums, nil
 }
