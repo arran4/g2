@@ -282,9 +282,6 @@ func (cfg *CmdManifestArgConfig) cmdVerify(args []string, hashes []string) error
                      err := cfg.upsertFromUrlLogic(uri.URL, uri.Filename, manifestPath, hashes)
                      if err != nil {
                          log.Printf("    Error updating manifest for %s: %v", uri.URL, err)
-                     } else {
-                         // Update in-memory manifest map so we don't think it is missing later?
-                         // Or just rely on it being written to disk.
                      }
                 }
             }
