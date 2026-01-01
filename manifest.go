@@ -142,9 +142,12 @@ func ParseManifestEntry(line string) (*ManifestEntry, error) {
 	return entry, nil
 }
 
-// Sort sorts the manifest entries by filename
+// Sort sorts the manifest entries by type then filename
 func (m *Manifest) Sort() {
 	sort.Slice(m.Entries, func(i, j int) bool {
+		if m.Entries[i].Type != m.Entries[j].Type {
+			return m.Entries[i].Type < m.Entries[j].Type
+		}
 		return m.Entries[i].Filename < m.Entries[j].Filename
 	})
 }
@@ -157,4 +160,33 @@ func (m *Manifest) GetEntry(filename string) *ManifestEntry {
 		}
 	}
 	return nil
+}
+
+func NewManifestEntry(typeStr, filename string, size int64, hashes ...Hash) *ManifestEntry {
+	return &ManifestEntry{
+		Type:     typeStr,
+		Filename: filename,
+		Size:     size,
+		Hashes:   hashes,
+	}
+}
+
+func (m *Manifest) AddOrReplace(entry *ManifestEntry) {
+	for i, e := range m.Entries {
+		if e.Filename == entry.Filename {
+			m.Entries[i] = entry
+			return
+		}
+	}
+	m.Entries = append(m.Entries, entry)
+}
+
+func (m *Manifest) Remove(filename string) {
+	var newEntries []*ManifestEntry
+	for _, e := range m.Entries {
+		if e.Filename != filename {
+			newEntries = append(newEntries, e)
+		}
+	}
+	m.Entries = newEntries
 }

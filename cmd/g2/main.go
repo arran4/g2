@@ -177,11 +177,7 @@ func (cfg *CmdManifestArgConfig) cmdUpsertFromUrl(args []string, hashes []string
 		manifestPath = filepath.Join(ebuildDirOrFile, "Manifest")
 	}
 
-	entry := &g2.ManifestEntry{
-		Type:     "DIST",
-		Filename: filename,
-		Size:     checksums.Size,
-	}
+	entry := g2.NewManifestEntry("DIST", filename, checksums.Size)
 
 	// Helper to append hash if it's computed
 	appendHashToEntry := func(name, value string) {
@@ -386,23 +382,22 @@ func (cfg *CmdManifestArgConfig) cleanLogic(manifestPath string, usedFiles map[s
 		return fmt.Errorf("reading manifest: %w", err)
 	}
 
-	var newEntries []*g2.ManifestEntry
-	changed := false
+	var filesToRemove []string
 	for _, entry := range manifest.Entries {
-		if usedFiles[entry.Filename] {
-			newEntries = append(newEntries, entry)
-		} else {
-			log.Printf("  Unused entry: %s", entry.Filename)
-			changed = true
+		if entry.Type == "DIST" && !usedFiles[entry.Filename] {
+			filesToRemove = append(filesToRemove, entry.Filename)
 		}
 	}
 
-	if !changed {
+	if len(filesToRemove) == 0 {
 		log.Println("Nothing to clean.")
 		return nil
 	}
 
-	manifest.Entries = newEntries
+	for _, filename := range filesToRemove {
+		log.Printf("  Unused entry: %s", filename)
+		manifest.Remove(filename)
+	}
 
 	return os.WriteFile(manifestPath, []byte(manifest.String()), 0644)
 }
@@ -413,11 +408,7 @@ func (cfg *CmdManifestArgConfig) upsertFromUrlLogic(url, filename, manifestPath 
 		return fmt.Errorf("downloading and calculating checksums: %v\n", err)
 	}
 
-	entry := &g2.ManifestEntry{
-		Type:     "DIST",
-		Filename: filename,
-		Size:     checksums.Size,
-	}
+	entry := g2.NewManifestEntry("DIST", filename, checksums.Size)
 
 	// Helper to append hash if it's computed
 	appendHash := func(name, value string) {

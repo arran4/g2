@@ -11,18 +11,7 @@ func UpsertManifest(manifestPath string, newEntry *ManifestEntry) error {
 		return err
 	}
 
-	found := false
-	for i, entry := range m.Entries {
-		if entry.Filename == newEntry.Filename {
-			m.Entries[i] = newEntry
-			found = true
-			break
-		}
-	}
-
-	if !found {
-		m.Entries = append(m.Entries, newEntry)
-	}
+	m.AddOrReplace(newEntry)
 
 	m.Sort()
 
