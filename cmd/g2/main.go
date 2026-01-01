@@ -162,15 +162,9 @@ func (cfg *CmdManifestArgConfig) cmdUpsertFromUrl(args []string, hashes []string
 		}
 	}
 
-	appendHash("BLAKE2B", checksums.Blake2b)
-	appendHash("BLAKE2S", checksums.Blake2s)
-	appendHash("MD5", checksums.Md5)
-	appendHash("RMD160", checksums.Rmd160)
-	appendHash("SHA1", checksums.Sha1)
-	appendHash("SHA256", checksums.Sha256)
-	appendHash("SHA3_256", checksums.Sha3_256)
-	appendHash("SHA3_512", checksums.Sha3_512)
-	appendHash("SHA512", checksums.Sha512)
+	for _, h := range g2.AllHashes {
+		appendHash(h, checksums.Hashes[h])
+	}
 
 	manifestPath := ebuildDirOrFile
 	if _, file := filepath.Split(manifestPath); file != "Manifest" {
@@ -186,15 +180,9 @@ func (cfg *CmdManifestArgConfig) cmdUpsertFromUrl(args []string, hashes []string
 		}
 	}
 
-	appendHashToEntry("BLAKE2B", checksums.Blake2b)
-	appendHashToEntry("BLAKE2S", checksums.Blake2s)
-	appendHashToEntry("MD5", checksums.Md5)
-	appendHashToEntry("RMD160", checksums.Rmd160)
-	appendHashToEntry("SHA1", checksums.Sha1)
-	appendHashToEntry("SHA256", checksums.Sha256)
-	appendHashToEntry("SHA3_256", checksums.Sha3_256)
-	appendHashToEntry("SHA3_512", checksums.Sha3_512)
-	appendHashToEntry("SHA512", checksums.Sha512)
+	for _, h := range g2.AllHashes {
+		appendHashToEntry(h, checksums.Hashes[h])
+	}
 
 	err = g2.UpsertManifest(manifestPath, entry)
 	if err != nil {
@@ -417,15 +405,9 @@ func (cfg *CmdManifestArgConfig) upsertFromUrlLogic(url, filename, manifestPath 
 		}
 	}
 
-	appendHash("BLAKE2B", checksums.Blake2b)
-	appendHash("BLAKE2S", checksums.Blake2s)
-	appendHash("MD5", checksums.Md5)
-	appendHash("RMD160", checksums.Rmd160)
-	appendHash("SHA1", checksums.Sha1)
-	appendHash("SHA256", checksums.Sha256)
-	appendHash("SHA3_256", checksums.Sha3_256)
-	appendHash("SHA3_512", checksums.Sha3_512)
-	appendHash("SHA512", checksums.Sha512)
+	for _, h := range g2.AllHashes {
+		appendHash(h, checksums.Hashes[h])
+	}
 
 	return g2.UpsertManifest(manifestPath, entry)
 }

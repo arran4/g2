@@ -29,6 +29,18 @@ const (
 	HashSha512   = "SHA512"
 )
 
+var AllHashes = []string{
+	HashBlake2b,
+	HashBlake2s,
+	HashMd5,
+	HashRmd160,
+	HashSha1,
+	HashSha256,
+	HashSha3_256,
+	HashSha3_512,
+	HashSha512,
+}
+
 type DownloadProgress struct {
 	Resp      *http.Response
 	TotalSize *int64
@@ -69,16 +81,8 @@ func (d *DownloadProgress) Write(p []byte) (n int, err error) {
 }
 
 type Checksums struct {
-	Size     int64
-	Blake2b  string
-	Blake2s  string
-	Md5      string
-	Rmd160   string
-	Sha1     string
-	Sha256   string
-	Sha3_256 string
-	Sha3_512 string
-	Sha512   string
+	Size   int64
+	Hashes map[string]string
 }
 
 func DownloadAndChecksum(url string, hashes []string) (*Checksums, error) {
@@ -174,35 +178,12 @@ func DownloadAndChecksum(url string, hashes []string) (*Checksums, error) {
 	}
 
 	checksums := &Checksums{
-		Size: size,
+		Size:   size,
+		Hashes: make(map[string]string),
 	}
 
-	if h, ok := hashers[HashBlake2b]; ok {
-		checksums.Blake2b = fmt.Sprintf("%x", h.Sum(nil))
-	}
-	if h, ok := hashers[HashBlake2s]; ok {
-		checksums.Blake2s = fmt.Sprintf("%x", h.Sum(nil))
-	}
-	if h, ok := hashers[HashMd5]; ok {
-		checksums.Md5 = fmt.Sprintf("%x", h.Sum(nil))
-	}
-	if h, ok := hashers[HashRmd160]; ok {
-		checksums.Rmd160 = fmt.Sprintf("%x", h.Sum(nil))
-	}
-	if h, ok := hashers[HashSha1]; ok {
-		checksums.Sha1 = fmt.Sprintf("%x", h.Sum(nil))
-	}
-	if h, ok := hashers[HashSha256]; ok {
-		checksums.Sha256 = fmt.Sprintf("%x", h.Sum(nil))
-	}
-	if h, ok := hashers[HashSha3_256]; ok {
-		checksums.Sha3_256 = fmt.Sprintf("%x", h.Sum(nil))
-	}
-	if h, ok := hashers[HashSha3_512]; ok {
-		checksums.Sha3_512 = fmt.Sprintf("%x", h.Sum(nil))
-	}
-	if h, ok := hashers[HashSha512]; ok {
-		checksums.Sha512 = fmt.Sprintf("%x", h.Sum(nil))
+	for k, h := range hashers {
+		checksums.Hashes[k] = fmt.Sprintf("%x", h.Sum(nil))
 	}
 
 	return checksums, nil
