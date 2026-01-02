@@ -1,4 +1,4 @@
-package model
+package g2
 
 import (
 	"encoding/xml"
