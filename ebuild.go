@@ -48,6 +48,10 @@ func (e *Ebuild) String() string {
 		if k == "P" || k == "PN" || k == "PV" {
 			continue
 		}
+		// If we are printing full ebuild with SRC_URI, don't print SRC_URI variable
+		if k == "SRC_URI" && e.Mode == ParseFull && len(e.SrcUri) > 0 {
+			continue
+		}
 		keys = append(keys, k)
 	}
 	sort.Strings(keys)
@@ -82,10 +86,8 @@ func ParseEbuild(fsys fs.FS, path string, mode ParsingMode) (*Ebuild, error) {
 
 	// Always parse metadata from filename
 	vars := ParseEbuildVariables(path)
-	if vars != nil {
-		for k, v := range vars {
-			e.Vars[k] = v
-		}
+	for k, v := range vars {
+		e.Vars[k] = v
 	}
 
 	if mode == ParseMetadataOnly {
@@ -119,6 +121,9 @@ func ParseEbuild(fsys fs.FS, path string, mode ParsingMode) (*Ebuild, error) {
 					val = val[1 : len(val)-1]
 				} else if len(val) >= 2 && strings.HasPrefix(val, "'") && strings.HasSuffix(val, "'") {
 					val = val[1 : len(val)-1]
+				} else if strings.Count(val, "\"")%2 != 0 || strings.Count(val, "'")%2 != 0 {
+					// Ignore lines with unbalanced quotes (likely multi-line strings)
+					continue
 				}
 
 				// Resolve variables in value if possible
@@ -128,8 +133,28 @@ func ParseEbuild(fsys fs.FS, path string, mode ParsingMode) (*Ebuild, error) {
 				// Ebuild vars are typically UPPER_CASE.
 				// But some local vars might be lower.
 				// Let's accept things that look like identifiers.
-				match, _ := regexp.MatchString(`^[A-Za-z_][A-Za-z0-9_]*$`, key)
-				if match {
+				// Ebuild variable names are essentially shell variable names.
+				// They must start with a letter or underscore, followed by letters, numbers, or underscores.
+				isIdentifier := true
+				if len(key) == 0 {
+					isIdentifier = false
+				} else {
+					for i, r := range key {
+						if i == 0 {
+							if !((r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || r == '_') {
+								isIdentifier = false
+								break
+							}
+						} else {
+							if !((r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '_') {
+								isIdentifier = false
+								break
+							}
+						}
+					}
+				}
+
+				if isIdentifier {
 					e.Vars[key] = val
 				}
 			}
@@ -137,11 +162,9 @@ func ParseEbuild(fsys fs.FS, path string, mode ParsingMode) (*Ebuild, error) {
 	}
 
 	if mode >= ParseFull {
-		uris, err := ExtractURIs(content, e.Vars)
-		if err != nil {
-			// Don't fail hard on URI extraction?
-			// The user said "partial implementation".
-		}
+		uris, _ := ExtractURIs(content, e.Vars)
+		// Don't fail hard on URI extraction?
+		// The user said "partial implementation".
 		e.SrcUri = uris
 	}
 
@@ -186,6 +209,11 @@ func ResolveVariables(text string, variables map[string]string) string {
 	return text
 }
 
+var (
+	reDouble = regexp.MustCompile(`SRC_URI\s*=\s*"([^"]*)"`)
+	reSingle = regexp.MustCompile(`SRC_URI\s*=\s*'([^']*)'`)
+)
+
 // ExtractURIs parses the ebuild content and extracts SRC_URI entries.
 func ExtractURIs(content string, variables map[string]string) ([]URIEntry, error) {
 	// Remove comments
@@ -201,9 +229,6 @@ func ExtractURIs(content string, variables map[string]string) ([]URIEntry, error
 	cleanContent := strings.Join(cleanLines, "\n")
 
 	var srcUriBody string
-
-	reDouble := regexp.MustCompile(`SRC_URI\s*=\s*"([^"]*)"`)
-	reSingle := regexp.MustCompile(`SRC_URI\s*=\s*'([^']*)'`)
 
 	match := reDouble.FindStringSubmatch(cleanContent)
 	if match == nil {
