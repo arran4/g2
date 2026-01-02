@@ -18,10 +18,23 @@ type URIEntry struct {
 type ParsingMode uint
 
 const (
-	ParseMetadataOnly ParsingMode = 1 << iota // Parse only filename-based metadata (PN, PV, etc.)
-	ParseVariables                        // Parse variable definitions in the file
-	ParseFull                             // Parse everything (e.g. SRC_URI)
+	ParseMetadataOnly ParsingMode = iota + 1 // Parse only filename-based metadata (PN, PV, etc.)
+	ParseVariables                           // Parse variable definitions in the file
+	ParseFull                                // Parse everything (e.g. SRC_URI)
 )
+
+func (m ParsingMode) String() string {
+	switch m {
+	case ParseMetadataOnly:
+		return "ParseMetadataOnly"
+	case ParseVariables:
+		return "ParseVariables"
+	case ParseFull:
+		return "ParseFull"
+	default:
+		return "Unknown"
+	}
+}
 
 type Ebuild struct {
 	Path      string
