@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE pkgmetadata SYSTEM "https://www.gentoo.org/dtd/metadata.dtd">
+<pkgmetadata>
+	<maintainer type="person">
+		<email>maintainer@example.com</email>
+		<name>Example Maintainer</name>
+	</maintainer>
+	<longdescription lang="en">
+		This is a long description with <pkg>dev-libs/libxml2</pkg> reference.
+	</longdescription>
+	<use>
+		<flag name="foo">Enable foo support</flag>
+		<flag name="bar">Enable bar support</flag>
+	</use>
+	<upstream>
+		<remote-id type="github">example/project</remote-id>
+	</upstream>
+</pkgmetadata>
