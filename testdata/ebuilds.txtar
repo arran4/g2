@@ -483,7 +483,12 @@ LICENSE="GPL-3+"
 MY_P="bash-${MY_PV/_/-}"
 MY_PATCHES="()"
 MY_PV="${MY_PV/_/-}"
-PATCHES="("
+PATCHES="(
+	#"${WORKDIR}"/bash-${GENTOO_PATCH_VER}/
+
+	# Patches to or from Chet, posted to the bug-bash mailing list.
+	"${FILESDIR}"/bash-5.0-syslog-history-extern.patch
+)"
 PLEVEL="0"
 PROMPT_COMMAND="(genfun_set_win_title)"
 QA_CONFIGURE_OPTIONS="--disable-static"
@@ -501,10 +506,26 @@ VERIFY_SIG_OPENPGP_KEY_PATH="/usr/share/openpgp-keys/chetramey.asc"
 ac_cv_lib_dl_dlopen="no ac_cv_header_dlfcn_h=no"
 my_p="bash$(ver_cut 1-2) my_p=${my_p/.}"
 my_urls="( "mirror://gnu/bash/bash-${MY_PV/_/-}.tar.gz" )"
-myconf="("
+myconf="(
+		--disable-profiling
+
+		# Force linking with system curses ... the bundled termcap lib
+		# sucks bad compared to ncurses.  For the most part, ncurses
+		# is here because readline needs it.  But bash itself calls
+		# ncurses in one or two small places :(.
+		--with-curses
+
+		$(use_enable mem-scramble)"
 old_ver="${ver}"
-pgo_generate_flags="("
-pgo_use_flags="("
+pgo_generate_flags="(
+			-fprofile-update=atomic
+			-fprofile-dir="${T}"/pgo
+			-fprofile-generate="${T}"/pgo
+		)"
+pgo_use_flags="(
+			-fprofile-use="${T}"/pgo
+			-fprofile-dir="${T}"/pgo
+		)"
 SRC_URI="
 	https://git.savannah.gnu.org/cgit/bash.git/snapshot/bash-.tar.gz -> bash-5.3_p9-.tar.gz
 "

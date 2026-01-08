@@ -189,8 +189,8 @@ func ParseEbuild(fsys fs.FS, path string, mode ParsingMode) (*Ebuild, error) {
 					val = val[1 : len(val)-1]
 				} else if len(val) >= 2 && strings.HasPrefix(val, "'") && strings.HasSuffix(val, "'") {
 					val = val[1 : len(val)-1]
-				} else if strings.Count(val, "\"")%2 != 0 || strings.Count(val, "'")%2 != 0 {
-					// Likely multi-line strings or unbalanced quotes.
+				} else if strings.Count(val, "\"")%2 != 0 || strings.Count(val, "'")%2 != 0 || strings.HasPrefix(val, "(") {
+					// Likely multi-line strings, arrays, or unbalanced quotes.
 					// Handle simple multi-line double-quoted string
 					if strings.HasPrefix(val, "\"") {
 						// Keep reading lines until we find the closing quote
@@ -199,18 +199,10 @@ func ParseEbuild(fsys fs.FS, path string, mode ParsingMode) (*Ebuild, error) {
 						foundEnd := false
 						for sc.Scan() {
 							nextLine := sc.Text()
-							// Don't trim space inside the string? Ebuild strings usually ignore newlines or treat them as space.
-							// But for variable assignments, newlines are preserved if quoted.
-							// However, usually people indent subsequent lines.
-
 							// Check if line ends with quote
 							trimmedNext := strings.TrimSpace(nextLine)
 							if strings.HasSuffix(trimmedNext, "\"") {
 								sb.WriteString("\n")
-								// Extract content before the last quote
-								// We need to be careful not to strip too much if there are spaces before the quote
-								// But usually closing quote is on its own line or at end of content.
-
 								// Find the last quote index in the ORIGINAL line (not trimmed)
 								lastQuoteIdx := strings.LastIndex(nextLine, "\"")
 								if lastQuoteIdx >= 0 {
@@ -227,6 +219,34 @@ func ParseEbuild(fsys fs.FS, path string, mode ParsingMode) (*Ebuild, error) {
 							val = sb.String()
 						} else {
 							continue // Unbalanced
+						}
+					} else if strings.HasPrefix(val, "(") {
+						// Handle array definitions: VAR=( ... )
+						// We'll capture the content including the parens as a string for now.
+						// We need to find the closing ')'
+						// This is naive and doesn't handle nested parens or strings containing parens properly,
+						// but sufficient for basic cases.
+						var sb strings.Builder
+						sb.WriteString(val)
+						// Check if closing paren is on the same line
+						if strings.HasSuffix(strings.TrimSpace(val), ")") {
+							val = sb.String()
+						} else {
+							foundEnd := false
+							for sc.Scan() {
+								nextLine := sc.Text()
+								sb.WriteString("\n")
+								sb.WriteString(nextLine)
+								if strings.HasSuffix(strings.TrimSpace(nextLine), ")") {
+									foundEnd = true
+									break
+								}
+							}
+							if foundEnd {
+								val = sb.String()
+							} else {
+								continue // Unbalanced
+							}
 						}
 					} else {
 						// Ignore other unbalanced cases
