@@ -93,7 +93,18 @@ func (e *Ebuild) String() string {
 
 	var entries []varEntry
 	for _, k := range keys {
-		entries = append(entries, varEntry{Key: k, Value: e.Vars[k]})
+		val := e.Vars[k]
+		// Clean up value: strip trailing whitespace from each line
+		// This avoids issues where editors or tools strip trailing whitespace from golden files
+		// causing mismatch with generated output.
+		if strings.Contains(val, "\n") {
+			lines := strings.Split(val, "\n")
+			for i, line := range lines {
+				lines[i] = strings.TrimRight(line, " \t")
+			}
+			val = strings.Join(lines, "\n")
+		}
+		entries = append(entries, varEntry{Key: k, Value: val})
 	}
 
 	data := ebuildData{

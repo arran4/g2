@@ -67,6 +67,18 @@ func TestEbuildsFromTxtar(t *testing.T) {
 				wantTrimmed := strings.TrimSpace(string(golden))
 
 				if gotTrimmed != wantTrimmed {
+					// Debug whitespace mismatch
+					// Compare lines
+					gotLines := strings.Split(gotTrimmed, "\n")
+					wantLines := strings.Split(wantTrimmed, "\n")
+					if len(gotLines) != len(wantLines) {
+						t.Errorf("Line count mismatch: got %d, want %d", len(gotLines), len(wantLines))
+					}
+					for i := 0; i < len(gotLines) && i < len(wantLines); i++ {
+						if gotLines[i] != wantLines[i] {
+							t.Logf("Line %d mismatch:\nGot:  %q\nWant: %q", i, gotLines[i], wantLines[i])
+						}
+					}
 					t.Errorf("Mismatch in output.\nGot:\n%s\nWant:\n%s", gotTrimmed, wantTrimmed)
 				}
 
@@ -104,7 +116,25 @@ func TestEbuildsFromTxtar(t *testing.T) {
 					delete(vars2, "SRC_URI")
 				}
 
-				if !reflect.DeepEqual(vars1, vars2) {
+				// Normalize values for comparison (strip trailing whitespace from lines)
+				// because String() output normalizes whitespace.
+				normalize := func(m map[string]string) map[string]string {
+					out := make(map[string]string)
+					for k, v := range m {
+						if strings.Contains(v, "\n") {
+							lines := strings.Split(v, "\n")
+							for i, line := range lines {
+								lines[i] = strings.TrimRight(line, " \t")
+							}
+							out[k] = strings.Join(lines, "\n")
+						} else {
+							out[k] = v
+						}
+					}
+					return out
+				}
+
+				if !reflect.DeepEqual(normalize(vars1), normalize(vars2)) {
 					t.Errorf("Circular mismatch Vars: %v vs %v", vars1, vars2)
 				}
 				if len(ebuild.SrcUri) != len(ebuild2.SrcUri) {
