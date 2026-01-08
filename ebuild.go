@@ -2,12 +2,14 @@ package g2
 
 import (
 	"bufio"
+	"bytes"
 	"fmt"
 	"io/fs"
 	"path/filepath"
 	"regexp"
-	"strings"
 	"sort"
+	"strings"
+	"text/template"
 )
 
 type URIEntry struct {
@@ -37,15 +39,35 @@ func (m ParsingMode) String() string {
 }
 
 type Ebuild struct {
-	Path      string
-	Vars      map[string]string
-	SrcUri    []URIEntry
-	Mode      ParsingMode
+	Path   string
+	Vars   map[string]string
+	SrcUri []URIEntry
+	Mode   ParsingMode
+}
+
+const ebuildTemplate = `{{- range .Vars -}}
+{{ .Key }}="{{ .Value }}"
+{{ end -}}
+{{- if .SrcUri -}}
+SRC_URI="
+{{- range .SrcUri }}
+	{{ .URL }}{{ if .Filename }} -> {{ .Filename }}{{ end }}
+{{- end }}
+"
+{{ end -}}
+`
+
+type varEntry struct {
+	Key   string
+	Value string
+}
+
+type ebuildData struct {
+	Vars   []varEntry
+	SrcUri []URIEntry
 }
 
 func (e *Ebuild) String() string {
-	var sb strings.Builder
-
 	// Reconstruct a valid-ish ebuild
 	// Since we don't preserve the whole file, we reconstruct what we know.
 	// We do NOT output PN/PV/P variables as they are implicit from filename usually,
@@ -69,24 +91,57 @@ func (e *Ebuild) String() string {
 	}
 	sort.Strings(keys)
 
+	var entries []varEntry
 	for _, k := range keys {
-		sb.WriteString(fmt.Sprintf("%s=\"%s\"\n", k, e.Vars[k]))
+		entries = append(entries, varEntry{Key: k, Value: e.Vars[k]})
+	}
+
+	data := ebuildData{
+		Vars: entries,
 	}
 
 	if e.Mode == ParseFull && len(e.SrcUri) > 0 {
-		sb.WriteString("SRC_URI=\"\n")
-		for _, u := range e.SrcUri {
-			line := u.URL
+		// Populate SrcUri entries with filename logic
+		for i, u := range e.SrcUri {
 			base := filepath.Base(u.URL)
-			if u.Filename != base && u.Filename != "" {
-				line = fmt.Sprintf("%s -> %s", u.URL, u.Filename)
+			if u.Filename == base || u.Filename == "" {
+				// Don't duplicate if filename matches base
+				// But wait, template expects filename to be empty if we want to skip "->".
+				// Copy struct to avoid modifying original?
+				// Actually, if filename matches, we should set it to empty in the copy for template.
+				newU := u
+				newU.Filename = ""
+				if len(data.SrcUri) == 0 {
+					data.SrcUri = make([]URIEntry, len(e.SrcUri))
+				}
+				data.SrcUri[i] = newU
+			} else {
+				if len(data.SrcUri) == 0 {
+					data.SrcUri = make([]URIEntry, len(e.SrcUri))
+				}
+				data.SrcUri[i] = u
 			}
-			sb.WriteString(fmt.Sprintf("\t%s\n", line))
 		}
-		sb.WriteString("\"\n")
+		// Wait, loop above initializes slice only once? No.
+		// Let's rewrite cleaner.
+		data.SrcUri = make([]URIEntry, len(e.SrcUri))
+		for i, u := range e.SrcUri {
+			base := filepath.Base(u.URL)
+			filename := u.Filename
+			if filename == base {
+				filename = ""
+			}
+			data.SrcUri[i] = URIEntry{URL: u.URL, Filename: filename}
+		}
 	}
 
-	return sb.String()
+	tmpl := template.Must(template.New("ebuild").Parse(ebuildTemplate))
+	var buf bytes.Buffer
+	if err := tmpl.Execute(&buf, data); err != nil {
+		// Should not happen with valid data
+		return fmt.Sprintf("Error generating ebuild: %v", err)
+	}
+	return buf.String()
 }
 
 // ParseEbuild parses an ebuild file with the specified mode.
@@ -135,8 +190,48 @@ func ParseEbuild(fsys fs.FS, path string, mode ParsingMode) (*Ebuild, error) {
 				} else if len(val) >= 2 && strings.HasPrefix(val, "'") && strings.HasSuffix(val, "'") {
 					val = val[1 : len(val)-1]
 				} else if strings.Count(val, "\"")%2 != 0 || strings.Count(val, "'")%2 != 0 {
-					// Ignore lines with unbalanced quotes (likely multi-line strings)
-					continue
+					// Likely multi-line strings or unbalanced quotes.
+					// Handle simple multi-line double-quoted string
+					if strings.HasPrefix(val, "\"") {
+						// Keep reading lines until we find the closing quote
+						var sb strings.Builder
+						sb.WriteString(val[1:])
+						foundEnd := false
+						for sc.Scan() {
+							nextLine := sc.Text()
+							// Don't trim space inside the string? Ebuild strings usually ignore newlines or treat them as space.
+							// But for variable assignments, newlines are preserved if quoted.
+							// However, usually people indent subsequent lines.
+
+							// Check if line ends with quote
+							trimmedNext := strings.TrimSpace(nextLine)
+							if strings.HasSuffix(trimmedNext, "\"") {
+								sb.WriteString("\n")
+								// Extract content before the last quote
+								// We need to be careful not to strip too much if there are spaces before the quote
+								// But usually closing quote is on its own line or at end of content.
+
+								// Find the last quote index in the ORIGINAL line (not trimmed)
+								lastQuoteIdx := strings.LastIndex(nextLine, "\"")
+								if lastQuoteIdx >= 0 {
+									sb.WriteString(nextLine[:lastQuoteIdx])
+								}
+								foundEnd = true
+								break
+							} else {
+								sb.WriteString("\n")
+								sb.WriteString(nextLine)
+							}
+						}
+						if foundEnd {
+							val = sb.String()
+						} else {
+							continue // Unbalanced
+						}
+					} else {
+						// Ignore other unbalanced cases
+						continue
+					}
 				}
 
 				// Resolve variables in value if possible
@@ -183,7 +278,6 @@ func ParseEbuild(fsys fs.FS, path string, mode ParsingMode) (*Ebuild, error) {
 
 	return e, nil
 }
-
 
 // ParseEbuildVariables extracts PN, PV, P from the ebuild filename.
 func ParseEbuildVariables(filename string) map[string]string {
