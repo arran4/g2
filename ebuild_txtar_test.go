@@ -63,8 +63,9 @@ func TestEbuildsFromTxtar(t *testing.T) {
 
 				got := ebuild.String()
 				// Trim whitespace for comparison to avoid issues with trailing newlines
-				gotTrimmed := strings.TrimSpace(got)
-				wantTrimmed := strings.TrimSpace(string(golden))
+				// Also normalize line endings (remove \r) for Windows compatibility
+				gotTrimmed := strings.TrimSpace(strings.ReplaceAll(got, "\r", ""))
+				wantTrimmed := strings.TrimSpace(strings.ReplaceAll(string(golden), "\r", ""))
 
 				if gotTrimmed != wantTrimmed {
 					// Debug whitespace mismatch
