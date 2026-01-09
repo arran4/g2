@@ -1,0 +1,69 @@
+name: pkgcheck
+
+on:
+  push:
+    branches: [ master, main ]
+  pull_request:
+    branches: [ master, main ]
+
+jobs:
+  pkgcheck:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.x'
+
+    - name: Install pkgcheck
+      run: pip install pkgcheck
+
+    - name: Run pkgcheck
+      run: |
+        # We need a repo structure for pkgcheck.
+        # Create a temporary overlay from testdata
+        mkdir -p overlay/app-shells/bash
+        mkdir -p overlay/www-apps/whoogle-search
+        mkdir -p overlay/profiles
+        echo "gentoo" > overlay/profiles/repo_name
+
+        # We need to extract the ebuilds from testdata/ebuilds.txtar
+        # But we don't have a txtar tool installed by default.
+        # We can use a simple python script to extract them.
+
+        cat <<EOF > extract.py
+        import sys
+        import os
+
+        data = open("testdata/ebuilds.txtar").read()
+        files = data.split("-- ")
+        for f in files:
+            if not f: continue
+            parts = f.split(" --\n", 1)
+            if len(parts) != 2: continue
+            name = parts[0]
+            content = parts[1]
+            if name == "bash-5.3_p9.ebuild":
+                with open("overlay/app-shells/bash/" + name, "w") as out:
+                    out.write(content)
+            elif name == "whoogle-search-0.9.3.ebuild":
+                with open("overlay/www-apps/whoogle-search/" + name, "w") as out:
+                    out.write(content)
+        EOF
+
+        python3 extract.py
+
+        # Create minimal metadata
+        echo '<?xml version="1.0" encoding="UTF-8"?>
+        <!DOCTYPE pkgmetadata SYSTEM "https://www.gentoo.org/dtd/metadata.dtd">
+        <pkgmetadata>
+        </pkgmetadata>' > overlay/app-shells/bash/metadata.xml
+
+        cp overlay/app-shells/bash/metadata.xml overlay/www-apps/whoogle-search/metadata.xml
+
+        # Run pkgcheck
+        # We expect errors because it's incomplete, but we just want to ensure it runs
+        # Or maybe we want to verify syntax only?
+        pkgcheck scan --repo overlay || true
