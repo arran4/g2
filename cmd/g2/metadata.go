@@ -10,6 +10,18 @@ import (
 	"strings"
 )
 
+// StringSliceFlag handles repeated flags for strings.
+type StringSliceFlag []string
+
+func (s *StringSliceFlag) String() string {
+	return strings.Join(*s, ",")
+}
+
+func (s *StringSliceFlag) Set(value string) error {
+	*s = append(*s, value)
+	return nil
+}
+
 // MaintainerFlag handles repeated flags for maintainers.
 type MaintainerFlag []string
 
@@ -34,19 +46,46 @@ func (r *RemoteIDFlag) Set(value string) error {
 	return nil
 }
 
+// UseFlagFlag handles repeated flags for Use flags.
+type UseFlagFlag []string
+
+func (u *UseFlagFlag) String() string {
+	return strings.Join(*u, ",")
+}
+
+func (u *UseFlagFlag) Set(value string) error {
+	*u = append(*u, value)
+	return nil
+}
+
 func (cfg *MainArgConfig) cmdMetadata(args []string) error {
 	fs := flag.NewFlagSet("metadata", flag.ExitOnError)
 
 	var maintainers MaintainerFlag
-	fs.Var(&maintainers, "maintainer", "Add/Update maintainer (format: email[:name[:type]])")
-	fs.Var(&maintainers, "m", "Add/Update maintainer (format: email[:name[:type]])")
+	fs.Var(&maintainers, "maintainer-add", "Add/Update maintainer (format: email[:name[:type]])")
+	fs.Var(&maintainers, "maintainer", "Alias for maintainer-add")
+	fs.Var(&maintainers, "m", "Alias for maintainer-add")
+
+	var maintainerRemoves StringSliceFlag
+	fs.Var(&maintainerRemoves, "maintainer-remove", "Remove maintainer (format: email)")
 
 	longDesc := fs.String("longdescription", "", "Set long description")
 	longDescShort := fs.String("l", "", "Set long description")
 
 	var remoteIDs RemoteIDFlag
-	fs.Var(&remoteIDs, "upstream-id", "Add upstream remote ID (format: type:id)")
-	fs.Var(&remoteIDs, "u", "Add upstream remote ID (format: type:id)")
+	fs.Var(&remoteIDs, "upstream-add", "Add upstream remote ID (format: type:id)")
+	fs.Var(&remoteIDs, "upstream-id", "Alias for upstream-add")
+	fs.Var(&remoteIDs, "u", "Alias for upstream-add")
+
+	var remoteIDRemoves StringSliceFlag
+	fs.Var(&remoteIDRemoves, "upstream-remove", "Remove upstream remote ID (format: type:id)")
+
+	var useAdds UseFlagFlag
+	fs.Var(&useAdds, "use-add", "Add/Update USE flag (format: name:description)")
+	fs.Var(&useAdds, "use", "Alias for use-add")
+
+	var useRemoves StringSliceFlag
+	fs.Var(&useRemoves, "use-remove", "Remove USE flag (format: name)")
 
 	force := fs.Bool("force", false, "Force overwrite if type mismatches or other errors")
 
@@ -85,7 +124,18 @@ func (cfg *MainArgConfig) cmdMetadata(args []string) error {
 		return fmt.Errorf("stat file: %w", err)
 	}
 
-	// Apply Maintainers
+	// Apply Maintainer Removes
+	for _, email := range maintainerRemoves {
+		var newMaintainers []g2.Maintainer
+		for _, m := range pkgMd.Maintainers {
+			if m.Email != email {
+				newMaintainers = append(newMaintainers, m)
+			}
+		}
+		pkgMd.Maintainers = newMaintainers
+	}
+
+	// Apply Maintainer Adds
 	for _, mStr := range maintainers {
 		parts := strings.Split(mStr, ":")
 		email := parts[0]
@@ -105,9 +155,6 @@ func (cfg *MainArgConfig) cmdMetadata(args []string) error {
 				if mType != "" {
 					pkgMd.Maintainers[i].Type = mType
 				}
-				// Default type if not specified and creating?
-				// The user might want to keep existing type if mType is empty.
-				// If mType is empty, we keep existing.
 				found = true
 				break
 			}
@@ -150,7 +197,29 @@ func (cfg *MainArgConfig) cmdMetadata(args []string) error {
 		}
 	}
 
-	// Apply RemoteIDs
+	// Apply RemoteID Removes
+	if pkgMd.Upstream != nil {
+		for _, rStr := range remoteIDRemoves {
+			parts := strings.SplitN(rStr, ":", 2)
+			if len(parts) != 2 {
+				log.Printf("Invalid remote ID remove format: %s (expected type:id)", rStr)
+				continue
+			}
+			rType := parts[0]
+			rText := parts[1]
+
+			var newRemotes []g2.RemoteID
+			for _, rid := range pkgMd.Upstream.RemoteID {
+				if rid.Type == rType && rid.Text == rText {
+					continue
+				}
+				newRemotes = append(newRemotes, rid)
+			}
+			pkgMd.Upstream.RemoteID = newRemotes
+		}
+	}
+
+	// Apply RemoteID Adds
 	for _, rStr := range remoteIDs {
 		parts := strings.SplitN(rStr, ":", 2)
 		if len(parts) != 2 {
@@ -176,6 +245,62 @@ func (cfg *MainArgConfig) cmdMetadata(args []string) error {
 			pkgMd.Upstream.RemoteID = append(pkgMd.Upstream.RemoteID, g2.RemoteID{
 				Type: rType,
 				Text: rText,
+			})
+		}
+	}
+
+	// Apply Use Removes
+	for _, name := range useRemoves {
+		for i := range pkgMd.Use {
+			var newFlags []g2.Flag
+			for _, f := range pkgMd.Use[i].Flags {
+				if f.Name != name {
+					newFlags = append(newFlags, f)
+				}
+			}
+			pkgMd.Use[i].Flags = newFlags
+		}
+	}
+
+	// Apply Use Adds
+	for _, uStr := range useAdds {
+		parts := strings.SplitN(uStr, ":", 2)
+		if len(parts) != 2 {
+			log.Printf("Invalid use flag format: %s (expected name:description)", uStr)
+			continue
+		}
+		uName := parts[0]
+		uDesc := parts[1]
+
+		targetLang := "en" // Default to english block
+
+		// Find or create correct use block
+		var useBlockIdx = -1
+		for i, u := range pkgMd.Use {
+			if u.Lang == targetLang || (u.Lang == "" && targetLang == "en") {
+				useBlockIdx = i
+				break
+			}
+		}
+
+		if useBlockIdx == -1 {
+			pkgMd.Use = append(pkgMd.Use, g2.Use{Lang: targetLang})
+			useBlockIdx = len(pkgMd.Use) - 1
+		}
+
+		// Update or Add Flag
+		found := false
+		for j, f := range pkgMd.Use[useBlockIdx].Flags {
+			if f.Name == uName {
+				pkgMd.Use[useBlockIdx].Flags[j].Text = uDesc
+				found = true
+				break
+			}
+		}
+		if !found {
+			pkgMd.Use[useBlockIdx].Flags = append(pkgMd.Use[useBlockIdx].Flags, g2.Flag{
+				Name: uName,
+				Text: uDesc,
 			})
 		}
 	}

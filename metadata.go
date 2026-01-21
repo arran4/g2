@@ -29,7 +29,7 @@ type PkgMetadata struct {
 	LongDescription    []LongDescription `xml:"longdescription"`
 	Slots              *Slots            `xml:"slots"`
 	StabilizeAllArches bool              `xml:"stabilize-allarches,omitempty"`
-	Use                *Use              `xml:"use"`
+	Use                []Use             `xml:"use"`
 	Upstream           *Upstream         `xml:"upstream"`
 }
 
