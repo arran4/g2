@@ -23,6 +23,7 @@ func main() {
 		fmt.Printf("Usage:\n")
 		fmt.Printf("\t%s\n", strings.Join(cfg.Args, " "))
 		fmt.Printf("\t\t %s \t\t %s\n", "manifest", "commands relating to Manifest files")
+		fmt.Printf("\t\t %s \t\t %s\n", "metadata", "commands relating to metadata.xml files")
 	}
 	if err := fs.Parse(os.Args); err != nil {
 		log.Printf("Flag parse error: %s", err)
@@ -41,6 +42,12 @@ func main() {
 	case "manifest":
 		if err := cfg.cmdManifest(fs.Args()[2:]); err != nil {
 			log.Printf("generate error: %s", err)
+			os.Exit(-1)
+			return
+		}
+	case "metadata":
+		if err := cfg.cmdMetadata(fs.Args()[2:]); err != nil {
+			log.Printf("metadata error: %s", err)
 			os.Exit(-1)
 			return
 		}
