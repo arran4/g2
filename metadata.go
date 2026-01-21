@@ -211,3 +211,29 @@ func ParseMetadataFromReader(r io.Reader) (interface{}, error) {
 
 	return nil, fmt.Errorf("unknown metadata type or invalid XML")
 }
+
+// WriteMetadata writes the metadata to a file with proper headers.
+func WriteMetadata(path string, data interface{}) error {
+	var output []byte
+	output = append(output, []byte(xml.Header)...)
+
+	var docType string
+	switch data.(type) {
+	case *PkgMetadata:
+		docType = "<!DOCTYPE pkgmetadata SYSTEM \"http://www.gentoo.org/dtd/metadata.dtd\">\n"
+	case *CatMetadata:
+		docType = "<!DOCTYPE catmetadata SYSTEM \"http://www.gentoo.org/dtd/metadata.dtd\">\n"
+	default:
+		return fmt.Errorf("unknown metadata type")
+	}
+	output = append(output, []byte(docType)...)
+
+	b, err := xml.MarshalIndent(data, "", "\t")
+	if err != nil {
+		return err
+	}
+	output = append(output, b...)
+	output = append(output, '\n')
+
+	return os.WriteFile(path, output, 0644)
+}
