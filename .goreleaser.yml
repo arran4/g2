@@ -48,3 +48,12 @@ nfpms:
     release: "1"
     section: default
     priority: extra
+brews:
+  -
+    name: g2
+    repository:
+      owner: arran4
+      name: homebrew-tap
+    pull_request:
+      enabled: true
+    directory: Formula
