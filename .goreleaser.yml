@@ -15,6 +15,9 @@ builds:
       - amd64
       - arm
       - arm64
+    goarm:
+      - "6"
+      - "7"
     ignore:
       - goos: windows
         goarch: arm
@@ -22,10 +25,6 @@ builds:
       - goos: windows
         goarch: arm
         goarm: "7"
-    goarm:
-      - "6"
-      - "7"
-    ignore:
       - goos: windows
         goarch: arm
       - goos: darwin
@@ -67,6 +66,9 @@ homebrew_casks:
     repository:
       owner: arran4
       name: homebrew-tap
+      token: "{{ .Env.TAP_GITHUB_TOKEN }}" # From Secrets.TAP_GITHUB_TOKEN update ci.yaml too to match
+      token_type: "github"
       pull_request:
         enabled: true
+        draft: false
     directory: Formula
