@@ -17,6 +17,11 @@ builds:
     goarm:
       - "6"
       - "7"
+    ignore:
+      - goos: windows
+        goarch: arm
+      - goos: darwin
+        goarch: arm
 archives:
   -
     format_overrides:
@@ -48,7 +53,7 @@ nfpms:
     release: "1"
     section: default
     priority: extra
-brews:
+homebrew_casks:
   -
     name: g2
     repository:
