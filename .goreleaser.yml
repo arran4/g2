@@ -62,21 +62,15 @@ nfpms:
     priority: extra
 homebrew_casks:
   -
-    name: g2
     repository:
       owner: arran4
       name: homebrew-tap
+      branch: "{{.ProjectName}}-{{.Version}}"
       token: "{{ .Env.TAP_GITHUB_TOKEN }}"
       pull_request:
         enabled: true
         draft: false
     commit_author:
-      # Git author name.
-      #
-      # Templates: allowed.
       name: goreleaserbot
-
-      # Git author email.
-      #
-      # Templates: allowed.
       email: bot@goreleaser.com
+
