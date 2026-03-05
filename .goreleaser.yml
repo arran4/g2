@@ -1,3 +1,4 @@
+version: 2
 project_name: g2
 builds:
   -
@@ -54,6 +55,6 @@ brews:
     repository:
       owner: arran4
       name: homebrew-tap
-    pull_request:
-      enabled: true
+      pull_request:
+        enabled: true
     directory: Formula
