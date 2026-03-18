@@ -2,55 +2,46 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
+	"fmt"
 	"testing"
 	"golang.org/x/tools/txtar"
 )
 
 func TestEbuildTemplatesTxtar(t *testing.T) {
-	archive, err := txtar.ParseFile("testdata/templates.txtar")
-	if err != nil {
-		t.Fatalf("failed to parse txtar file: %v", err)
-	}
-
 	for _, tpl := range ebuildTemplates {
 		t.Run(tpl.Name, func(t *testing.T) {
-			params := EbuildParams{
-				EAPI:         "8",
-				Description:  "A short description",
-				Homepage:     "https://example.com",
-				SrcURI:       "https://example.com/${P}.tar.gz",
-				License:      "GPL-2",
-				Slot:         "0",
-				Keywords:     "~amd64",
-				Depend:       "",
-				RDepend:      "",
-				BDepend:      "",
-				PythonCompat: "python3_{10..12}",
-				Pep517:       "setuptools",
-				Crates:       "rand-0.8.5",
+			archive, err := txtar.ParseFile(fmt.Sprintf("testdata/templates/%s.txtar", tpl.Name))
+			if err != nil {
+				t.Fatalf("failed to parse txtar file: %v", err)
 			}
 
-			if tpl.Name == "cmake-kde" {
-			    params.Homepage = ""
-			} else if tpl.Name == "python" || tpl.Name == "python-single" {
-			    params.SrcURI = ""
+			var inputData []byte
+			var expectedContent []byte
+
+			for _, file := range archive.Files {
+				if file.Name == "input.json" {
+					inputData = file.Data
+				} else if file.Name == "output.ebuild" {
+					expectedContent = file.Data
+				}
+			}
+
+			if inputData == nil {
+				t.Fatalf("missing input.json in txtar for %s", tpl.Name)
+			}
+			if expectedContent == nil {
+				t.Fatalf("missing output.ebuild in txtar for %s", tpl.Name)
+			}
+
+			var params EbuildParams
+			if err := json.Unmarshal(inputData, &params); err != nil {
+				t.Fatalf("failed to unmarshal input.json: %v", err)
 			}
 
 			content, err := tpl.Execute(params)
 			if err != nil {
 				t.Fatalf("failed to execute template: %v", err)
-			}
-
-			var expectedContent []byte
-			for _, file := range archive.Files {
-				if file.Name == tpl.Name+".ebuild" {
-					expectedContent = file.Data
-					break
-				}
-			}
-
-			if expectedContent == nil {
-				t.Fatalf("no expected content found in txtar for %s.ebuild", tpl.Name)
 			}
 
 			if !bytes.Equal([]byte(content), expectedContent) {

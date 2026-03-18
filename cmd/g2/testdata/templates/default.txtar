@@ -1,0 +1,35 @@
+-- input.json --
+{
+  "EAPI": "8",
+  "Description": "A short description",
+  "Homepage": "https://example.com",
+  "SrcURI": "https://example.com/${P}.tar.gz",
+  "License": "GPL-2",
+  "Slot": "0",
+  "Keywords": "~amd64",
+  "Depend": "",
+  "RDepend": "",
+  "BDepend": ""
+}
+-- output.ebuild --
+EAPI=8
+
+DESCRIPTION="A short description"
+HOMEPAGE="https://example.com"
+SRC_URI="https://example.com/${P}.tar.gz"
+
+LICENSE="GPL-2"
+SLOT="0"
+KEYWORDS="~amd64"
+
+DEPEND=""
+RDEPEND=""
+BDEPEND=""
+
+src_compile() {
+	emake
+}
+
+src_install() {
+	emake DESTDIR="${D}" install
+}
