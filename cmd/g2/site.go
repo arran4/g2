@@ -2,16 +2,35 @@ package main
 
 import (
 	"bytes"
+	"encoding/xml"
 	"flag"
 	"fmt"
 	"github.com/arran4/g2"
 	"html/template"
+	"io"
 	"log"
+	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
 )
+
+type RemoteRepositories struct {
+	XMLName xml.Name     `xml:"repositories"`
+	Repos   []RemoteRepo `xml:"repo"`
+}
+
+type RemoteRepo struct {
+	Name    string       `xml:"name"`
+	Sources []RepoSource `xml:"source"`
+}
+
+type RepoSource struct {
+	Type string `xml:"type,attr"`
+	URL  string `xml:",chardata"`
+}
 
 type SiteData struct {
 	Title      string
@@ -40,14 +59,20 @@ func (cfg *MainArgConfig) cmdSite(args []string) error {
 	fs := flag.NewFlagSet("site", flag.ExitOnError)
 	outDir := fs.String("out", "site_out", "Output directory for the generated site")
 	repoDir := fs.String("repo", ".", "Repository root directory")
+	repositories := fs.String("repositories", "", "URL or path to a repositories.xml file. Overrides -repo.")
 
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 
-	log.Printf("Generating site from %s into %s", *repoDir, *outDir)
+	if *repositories != "" {
+		log.Printf("Generating site from remote repositories: %s into %s", *repositories, *outDir)
+		return cfg.cmdSiteRemote(*repositories, *outDir)
+	}
 
-	siteData, err := parseRepo(*repoDir)
+	log.Printf("Generating site from local repo %s into %s", *repoDir, *outDir)
+
+	siteData, err := parseRepo(*repoDir, "Gentoo Packages")
 	if err != nil {
 		return fmt.Errorf("parsing repo: %w", err)
 	}
@@ -60,9 +85,9 @@ func (cfg *MainArgConfig) cmdSite(args []string) error {
 	return nil
 }
 
-func parseRepo(repoDir string) (*SiteData, error) {
+func parseRepo(repoDir string, title string) (*SiteData, error) {
 	site := &SiteData{
-		Title: "Gentoo Packages",
+		Title: title,
 	}
 
 	entries, err := os.ReadDir(repoDir)
@@ -205,13 +230,13 @@ func generateSite(outDir string, site *SiteData) error {
 		return err
 	}
 
-	tmpl := template.Must(template.New("layout").Parse(layoutTemplate))
-	tmpl = template.Must(tmpl.New("index").Parse(indexTemplate))
-	tmpl = template.Must(tmpl.New("category").Parse(categoryTemplate))
-	tmpl = template.Must(tmpl.New("package").Parse(packageTemplate))
+	tmpl, err := template.ParseFS(siteTemplates, "sitegen_templates/*.html")
+	if err != nil {
+		return fmt.Errorf("parsing templates: %w", err)
+	}
 
 	// Generate index
-	if err := renderPage(filepath.Join(outDir, "index.html"), tmpl, "index", map[string]interface{}{
+	if err := renderPage(filepath.Join(outDir, "index.html"), tmpl, "index.html", map[string]interface{}{
 		"Title":      site.Title,
 		"Categories": site.Categories,
 	}); err != nil {
@@ -225,7 +250,7 @@ func generateSite(outDir string, site *SiteData) error {
 		}
 
 		// Generate category index
-		if err := renderPage(filepath.Join(catDir, "index.html"), tmpl, "category", map[string]interface{}{
+		if err := renderPage(filepath.Join(catDir, "index.html"), tmpl, "category.html", map[string]interface{}{
 			"Title":    fmt.Sprintf("%s - %s", site.Title, cat.Name),
 			"Category": cat,
 		}); err != nil {
@@ -239,7 +264,7 @@ func generateSite(outDir string, site *SiteData) error {
 			}
 
 			// Generate package index
-			if err := renderPage(filepath.Join(pkgDir, "index.html"), tmpl, "package", map[string]interface{}{
+			if err := renderPage(filepath.Join(pkgDir, "index.html"), tmpl, "package.html", map[string]interface{}{
 				"Title":   fmt.Sprintf("%s - %s/%s", site.Title, cat.Name, pkg.Name),
 				"Package": pkg,
 			}); err != nil {
@@ -265,5 +290,103 @@ func renderPage(path string, tmpl *template.Template, name string, data map[stri
 	}
 	defer f.Close()
 
-	return tmpl.ExecuteTemplate(f, "layout", data)
+	return tmpl.ExecuteTemplate(f, "layout.html", data)
+}
+
+func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string) error {
+	var data []byte
+	var err error
+
+	if strings.HasPrefix(repositoriesFile, "http://") || strings.HasPrefix(repositoriesFile, "https://") {
+		resp, err := http.Get(repositoriesFile)
+		if err != nil {
+			return fmt.Errorf("fetching repositories.xml: %w", err)
+		}
+		defer resp.Body.Close()
+		data, err = io.ReadAll(resp.Body)
+		if err != nil {
+			return fmt.Errorf("reading repositories.xml: %w", err)
+		}
+	} else {
+		data, err = os.ReadFile(repositoriesFile)
+		if err != nil {
+			return fmt.Errorf("reading repositories.xml file: %w", err)
+		}
+	}
+
+	var repos RemoteRepositories
+	if err := xml.Unmarshal(data, &repos); err != nil {
+		return fmt.Errorf("parsing repositories.xml: %w", err)
+	}
+
+	// Create a temporary directory to clone repos into
+	tmpDir, err := os.MkdirTemp("", "g2-sitegen-*")
+	if err != nil {
+		return fmt.Errorf("creating temp dir: %w", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	overallSiteData := &SiteData{
+		Title: "Remote Gentoo Repositories",
+	}
+
+	for _, repo := range repos.Repos {
+		if len(repo.Sources) == 0 {
+			continue
+		}
+
+		var gitUrl string
+		for _, src := range repo.Sources {
+			if src.Type == "git" && strings.HasPrefix(src.URL, "http") {
+				gitUrl = src.URL
+				break
+			}
+		}
+
+		if gitUrl == "" {
+			continue // skip non-http git repos for this tool
+		}
+
+		log.Printf("Cloning remote repository: %s (%s)", repo.Name, gitUrl)
+
+		repoPath := filepath.Join(tmpDir, repo.Name)
+		// Try to shallow clone
+		cmd := exec.Command("git", "clone", "--depth", "1", gitUrl, repoPath)
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		if err := cmd.Run(); err != nil {
+			log.Printf("Failed to clone %s: %v", repo.Name, err)
+			continue
+		}
+
+		log.Printf("Parsing repository: %s", repo.Name)
+		siteData, err := parseRepo(repoPath, repo.Name)
+		if err != nil {
+			log.Printf("Failed to parse repo %s: %v", repo.Name, err)
+			continue
+		}
+
+		// Merge categories, prefixing them with repo name if needed, or just combine
+		// For simplicity, let's prefix the category name with repo name so they don't clash
+		for _, cat := range siteData.Categories {
+			cat.Name = fmt.Sprintf("%s/%s", repo.Name, cat.Name)
+			// Update package category references
+			for i := range cat.Packages {
+				cat.Packages[i].Category = cat.Name
+			}
+			overallSiteData.Categories = append(overallSiteData.Categories, cat)
+		}
+	}
+
+	// Sort categories
+	sort.Slice(overallSiteData.Categories, func(i, j int) bool {
+		return overallSiteData.Categories[i].Name < overallSiteData.Categories[j].Name
+	})
+
+	if err := generateSite(outDir, overallSiteData); err != nil {
+		return fmt.Errorf("generating site: %w", err)
+	}
+
+	log.Println("Remote site generation complete.")
+	return nil
 }
