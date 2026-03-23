@@ -55,24 +55,72 @@ type VersionData struct {
 	Ebuild  *g2.Ebuild
 }
 
-func (cfg *MainArgConfig) cmdSite(args []string) error {
-	fs := flag.NewFlagSet("site", flag.ExitOnError)
-	outDir := fs.String("out", "site_out", "Output directory for the generated site")
-	repoDir := fs.String("repo", ".", "Repository root directory")
-	repositories := fs.String("repositories", "", "URL or path to a repositories.xml file. Overrides -repo.")
+func (cfg *MainArgConfig) cmdOverlay(args []string) error {
+	if len(args) < 1 {
+		return fmt.Errorf("missing subcommand for overlay (e.g., site)")
+	}
+	subcmd := args[0]
+	if subcmd != "site" {
+		return fmt.Errorf("unknown overlay subcommand: %s", subcmd)
+	}
 
-	if err := fs.Parse(args); err != nil {
+	if len(args) < 2 {
+		return fmt.Errorf("missing subcommand for overlay site (e.g., generate)")
+	}
+	subcmd2 := args[1]
+	if subcmd2 != "generate" {
+		return fmt.Errorf("unknown overlay site subcommand: %s", subcmd2)
+	}
+
+	fs := flag.NewFlagSet("overlay site generate", flag.ExitOnError)
+	outDir := fs.String("out", "site_out", "Output directory for the generated site")
+	clear := fs.Bool("clear", false, "Clear output directory before generation")
+
+	if err := fs.Parse(args[2:]); err != nil {
 		return err
 	}
 
-	if *repositories != "" {
-		log.Printf("Generating site from remote repositories: %s into %s", *repositories, *outDir)
-		return cfg.cmdSiteRemote(*repositories, *outDir)
+	location := "."
+	if fs.NArg() > 0 {
+		location = fs.Arg(0)
 	}
 
-	log.Printf("Generating site from local repo %s into %s", *repoDir, *outDir)
+	if *clear {
+		if err := os.RemoveAll(*outDir); err != nil {
+			return fmt.Errorf("clearing output directory: %w", err)
+		}
+	}
 
-	siteData, err := parseRepo(*repoDir, "Gentoo Packages")
+	log.Printf("Generating site from overlay location %s into %s", location, *outDir)
+
+	// if location is a url, clone it temporarily
+	isRemote := strings.HasPrefix(location, "http://") || strings.HasPrefix(location, "https://") || strings.HasPrefix(location, "git://")
+	var parseLocation string
+	var cleanup func()
+
+	if isRemote {
+		tmpDir, err := os.MkdirTemp("", "g2-overlay-*")
+		if err != nil {
+			return fmt.Errorf("creating temp dir: %w", err)
+		}
+		cleanup = func() { os.RemoveAll(tmpDir) }
+
+		log.Printf("Cloning remote repository: %s", location)
+		cmd := exec.Command("git", "clone", "--depth", "1", location, tmpDir)
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		if err := cmd.Run(); err != nil {
+			cleanup()
+			return fmt.Errorf("cloning repository: %w", err)
+		}
+		parseLocation = tmpDir
+	} else {
+		parseLocation = location
+		cleanup = func() {}
+	}
+	defer cleanup()
+
+	siteData, err := parseRepo(parseLocation, "Gentoo Packages")
 	if err != nil {
 		return fmt.Errorf("parsing repo: %w", err)
 	}
@@ -83,6 +131,46 @@ func (cfg *MainArgConfig) cmdSite(args []string) error {
 
 	log.Println("Site generation complete.")
 	return nil
+}
+
+func (cfg *MainArgConfig) cmdOverlays(args []string) error {
+	if len(args) < 1 {
+		return fmt.Errorf("missing subcommand for overlays (e.g., site)")
+	}
+	subcmd := args[0]
+	if subcmd != "site" {
+		return fmt.Errorf("unknown overlays subcommand: %s", subcmd)
+	}
+
+	if len(args) < 2 {
+		return fmt.Errorf("missing subcommand for overlays site (e.g., generate)")
+	}
+	subcmd2 := args[1]
+	if subcmd2 != "generate" {
+		return fmt.Errorf("unknown overlays site subcommand: %s", subcmd2)
+	}
+
+	fs := flag.NewFlagSet("overlays site generate", flag.ExitOnError)
+	outDir := fs.String("out", "site_out", "Output directory for the generated site")
+	clear := fs.Bool("clear", false, "Clear output directory before generation")
+
+	if err := fs.Parse(args[2:]); err != nil {
+		return err
+	}
+
+	if fs.NArg() == 0 {
+		return fmt.Errorf("missing location argument (url, file path, or - for stdin)")
+	}
+	location := fs.Arg(0)
+
+	if *clear {
+		if err := os.RemoveAll(*outDir); err != nil {
+			return fmt.Errorf("clearing output directory: %w", err)
+		}
+	}
+
+	log.Printf("Generating site from remote repositories: %s into %s", location, *outDir)
+	return cfg.cmdSiteRemote(location, *outDir)
 }
 
 func parseRepo(repoDir string, title string) (*SiteData, error) {
@@ -239,6 +327,7 @@ func generateSite(outDir string, site *SiteData) error {
 	if err := renderPage(filepath.Join(outDir, "index.html"), tmpl, "index.html", map[string]interface{}{
 		"Title":      site.Title,
 		"Categories": site.Categories,
+		"Version":    "v1",
 	}); err != nil {
 		return err
 	}
@@ -253,6 +342,7 @@ func generateSite(outDir string, site *SiteData) error {
 		if err := renderPage(filepath.Join(catDir, "index.html"), tmpl, "category.html", map[string]interface{}{
 			"Title":    fmt.Sprintf("%s - %s", site.Title, cat.Name),
 			"Category": cat,
+			"Version":  "v1",
 		}); err != nil {
 			return err
 		}
@@ -267,6 +357,7 @@ func generateSite(outDir string, site *SiteData) error {
 			if err := renderPage(filepath.Join(pkgDir, "index.html"), tmpl, "package.html", map[string]interface{}{
 				"Title":   fmt.Sprintf("%s - %s/%s", site.Title, cat.Name, pkg.Name),
 				"Package": pkg,
+				"Version": "v1",
 			}); err != nil {
 				return err
 			}
@@ -297,7 +388,12 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string) 
 	var data []byte
 	var err error
 
-	if strings.HasPrefix(repositoriesFile, "http://") || strings.HasPrefix(repositoriesFile, "https://") {
+	if repositoriesFile == "-" {
+		data, err = io.ReadAll(os.Stdin)
+		if err != nil {
+			return fmt.Errorf("reading repositories.xml from stdin: %w", err)
+		}
+	} else if strings.HasPrefix(repositoriesFile, "http://") || strings.HasPrefix(repositoriesFile, "https://") {
 		resp, err := http.Get(repositoriesFile)
 		if err != nil {
 			return fmt.Errorf("fetching repositories.xml: %w", err)
@@ -366,25 +462,40 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string) 
 			continue
 		}
 
-		// Merge categories, prefixing them with repo name if needed, or just combine
-		// For simplicity, let's prefix the category name with repo name so they don't clash
-		for _, cat := range siteData.Categories {
-			cat.Name = fmt.Sprintf("%s/%s", repo.Name, cat.Name)
-			// Update package category references
-			for i := range cat.Packages {
-				cat.Packages[i].Category = cat.Name
-			}
-			overallSiteData.Categories = append(overallSiteData.Categories, cat)
+		// Since user requested a "list of overlays" we should put each repo in a subfolder
+		// generateSite will write into outDir/repo.Name
+		repoOutDir := filepath.Join(outDir, repo.Name)
+		log.Printf("Generating site for repo: %s", repo.Name)
+		if err := generateSite(repoOutDir, siteData); err != nil {
+			log.Printf("Failed to generate site for repo %s: %v", repo.Name, err)
 		}
+		// Add as a root category simply so we can create an index.html listing the repos
+		overallSiteData.Categories = append(overallSiteData.Categories, CategoryData{
+			Name: repo.Name,
+		})
 	}
 
-	// Sort categories
+	// Sort categories (which are now repos in this context)
 	sort.Slice(overallSiteData.Categories, func(i, j int) bool {
 		return overallSiteData.Categories[i].Name < overallSiteData.Categories[j].Name
 	})
 
-	if err := generateSite(outDir, overallSiteData); err != nil {
-		return fmt.Errorf("generating site: %w", err)
+	// Generate the root index.html listing the overlays
+	if err := os.MkdirAll(outDir, 0755); err != nil {
+		return err
+	}
+
+	tmpl, err := template.ParseFS(siteTemplates, "sitegen_templates/*.html")
+	if err != nil {
+		return fmt.Errorf("parsing templates: %w", err)
+	}
+
+	if err := renderPage(filepath.Join(outDir, "index.html"), tmpl, "index.html", map[string]interface{}{
+		"Title":      overallSiteData.Title,
+		"Categories": overallSiteData.Categories,
+		"Version":    "v1",
+	}); err != nil {
+		return err
 	}
 
 	log.Println("Remote site generation complete.")
