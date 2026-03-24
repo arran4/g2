@@ -1,0 +1,54 @@
+test: basic repositories
+
+-- input.xml --
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE repositories SYSTEM "http://www.gentoo.org/dtd/repositories.dtd">
+<repositories version="1.0">
+  <repo quality="experimental" status="unofficial">
+    <name>foo-overlay</name>
+    <description lang="en">Foo Overlay</description>
+    <homepage>https://github.com/foo/foo-overlay</homepage>
+    <owner type="person">
+      <email>foo@example.com</email>
+      <name>Foo Bar</name>
+    </owner>
+    <source type="git">https://github.com/foo/foo-overlay.git</source>
+    <feed>https://github.com/foo/foo-overlay/commits/master.atom</feed>
+  </repo>
+</repositories>
+-- expected.json --
+{
+  "Version": "1.0",
+  "Repositories": [
+    {
+      "Quality": "experimental",
+      "Status": "unofficial",
+      "Name": "foo-overlay",
+      "Priority": "",
+      "Descriptions": [
+        {
+          "Text": "Foo Overlay",
+          "Lang": "en"
+        }
+      ],
+      "LongDescriptions": null,
+      "Homepage": "https://github.com/foo/foo-overlay",
+      "Owners": [
+        {
+          "Type": "person",
+          "Email": "foo@example.com",
+          "Name": "Foo Bar"
+        }
+      ],
+      "Sources": [
+        {
+          "Text": "https://github.com/foo/foo-overlay.git",
+          "Type": "git"
+        }
+      ],
+      "Feeds": [
+        "https://github.com/foo/foo-overlay/commits/master.atom"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,45 @@
+test: basic projects
+
+-- input.xml --
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE projects SYSTEM "http://www.gentoo.org/dtd/projects.dtd">
+<projects>
+  <project>
+    <email>council@gentoo.org</email>
+    <name>Gentoo Council</name>
+    <url>https://wiki.gentoo.org/wiki/Project:Council</url>
+    <description>The Gentoo Council is an elected body...</description>
+    <subproject inherit-members="1" ref="base-system@gentoo.org"/>
+    <member is-lead="1">
+      <email>dev@gentoo.org</email>
+      <name>John Doe</name>
+      <role>Chair</role>
+    </member>
+  </project>
+</projects>
+-- expected.json --
+{
+  "Projects": [
+    {
+      "Email": "council@gentoo.org",
+      "Name": "Gentoo Council",
+      "URL": "https://wiki.gentoo.org/wiki/Project:Council",
+      "Description": "The Gentoo Council is an elected body...",
+      "Subprojects": [
+        {
+          "Text": "",
+          "InheritMembers": "1",
+          "Ref": "base-system@gentoo.org"
+        }
+      ],
+      "Members": [
+        {
+          "IsLead": "1",
+          "Email": "dev@gentoo.org",
+          "Name": "John Doe",
+          "Role": "Chair"
+        }
+      ]
+    }
+  ]
+}
