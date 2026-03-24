@@ -71,11 +71,7 @@ jobs:
                 # Push wins for code checks on same-repo branches.
                 # PR lane focuses on metadata/docs/review checks.
                 run_pr_meta_checks=true
-
-                # Optional exception for fork PRs where base repo has no push event for the branch:
-                if [[ "${{ github.event.pull_request.head.repo.full_name || '' }}" != "${{ github.repository }}" ]]; then
-                  run_code_checks=true
-                fi
+                run_code_checks=true
               fi
               ;;
             release)
