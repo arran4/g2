@@ -103,7 +103,7 @@ func (cfg *MainArgConfig) cmdOverlay(args []string) error {
 		if err != nil {
 			return fmt.Errorf("creating temp dir: %w", err)
 		}
-		cleanup = func() { os.RemoveAll(tmpDir) }
+		cleanup = func() { _ = os.RemoveAll(tmpDir) }
 
 		log.Printf("Cloning remote repository: %s", location)
 		cmd := exec.Command("git", "clone", "--depth", "1", location, tmpDir)
@@ -379,7 +379,7 @@ func renderPage(path string, tmpl *template.Template, name string, data map[stri
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	return tmpl.ExecuteTemplate(f, "layout.html", data)
 }
@@ -398,7 +398,7 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string) 
 		if err != nil {
 			return fmt.Errorf("fetching repositories.xml: %w", err)
 		}
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 		data, err = io.ReadAll(resp.Body)
 		if err != nil {
 			return fmt.Errorf("reading repositories.xml: %w", err)
@@ -420,7 +420,7 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string) 
 	if err != nil {
 		return fmt.Errorf("creating temp dir: %w", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	overallSiteData := &SiteData{
 		Title: "Remote Gentoo Repositories",

@@ -4,8 +4,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"testing"
 	"golang.org/x/tools/txtar"
+	"testing"
 )
 
 func TestEbuildTemplatesTxtar(t *testing.T) {
@@ -20,9 +20,10 @@ func TestEbuildTemplatesTxtar(t *testing.T) {
 			var expectedContent []byte
 
 			for _, file := range archive.Files {
-				if file.Name == "input.json" {
+				switch file.Name {
+				case "input.json":
 					inputData = file.Data
-				} else if file.Name == "output.ebuild" {
+				case "output.ebuild":
 					expectedContent = file.Data
 				}
 			}

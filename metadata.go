@@ -63,7 +63,7 @@ type Maintainer struct {
 type LongDescription struct {
 	// Body contains the inner XML of the long description.
 	// We use InnerXML to preserve mixed content (text + <pkg>/<cat> tags) and ensure circularity.
-	Body    string `xml:",innerxml"`
+	Body string `xml:",innerxml"`
 	// Lang specifies the language of the description.
 	Lang string `xml:"lang,attr,omitempty"`
 	// Restrict specifies restrictions on the applicability of the description.
@@ -176,7 +176,7 @@ func ParseMetadata(path string) (interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	return ParseMetadataFromReader(f)
 }
