@@ -1,0 +1,6 @@
+<h2>Category: {{.Category.Name}}</h2>
+<ul>
+    {{range .Category.Packages}}
+    <li><a href="{{.Name}}/">{{.Name}}</a></li>
+    {{end}}
+</ul>

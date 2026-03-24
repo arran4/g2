@@ -1,0 +1,48 @@
+<h2>{{.Package.Category}}/{{.Package.Name}}</h2>
+
+<div class="metadata-section">
+    <h3>Versions</h3>
+    <table>
+        <tr>
+            <th>Version</th>
+            <th>EAPI</th>
+            <th>Keywords</th>
+            <th>Description</th>
+        </tr>
+        {{range .Package.Versions}}
+        <tr>
+            <td>{{if .Ebuild.Vars.PV}}{{.Ebuild.Vars.PV}}{{else}}{{.Version}}{{end}}</td>
+            <td>{{.Ebuild.Vars.EAPI}}</td>
+            <td>{{.Ebuild.Vars.KEYWORDS}}</td>
+            <td>{{.Ebuild.Vars.DESCRIPTION}}</td>
+        </tr>
+        {{end}}
+    </table>
+</div>
+
+{{if .Package.Metadata}}
+<div class="metadata-section">
+    <h3>Metadata</h3>
+    <pre>{{.Package.Metadata}}</pre>
+</div>
+{{end}}
+
+{{if .Package.Manifest}}
+<div class="metadata-section">
+    <h3>Manifest</h3>
+    <table>
+        <tr>
+            <th>Type</th>
+            <th>File</th>
+            <th>Size</th>
+        </tr>
+        {{range .Package.Manifest.Entries}}
+        <tr>
+            <td>{{.Type}}</td>
+            <td>{{.Filename}}</td>
+            <td>{{.Size}} bytes</td>
+        </tr>
+        {{end}}
+    </table>
+</div>
+{{end}}

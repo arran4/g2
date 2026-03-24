@@ -25,6 +25,8 @@ func main() {
 		fmt.Printf("\t\t %s \t\t %s\n", "manifest", "commands relating to Manifest files")
 		fmt.Printf("\t\t %s \t\t %s\n", "metadata", "commands relating to metadata.xml files")
 		fmt.Printf("\t\t %s \t\t %s\n", "ebuild", "commands relating to ebuild files")
+		fmt.Printf("\t\t %s \t\t %s\n", "overlay", "commands relating to a single overlay")
+		fmt.Printf("\t\t %s \t\t %s\n", "overlays", "commands relating to multiple overlays")
 	}
 	if err := fs.Parse(os.Args); err != nil {
 		log.Printf("Flag parse error: %s", err)
@@ -55,6 +57,18 @@ func main() {
 	case "ebuild":
 		if err := cfg.cmdEbuild(fs.Args()[2:]); err != nil {
 			log.Printf("ebuild error: %s", err)
+			os.Exit(-1)
+			return
+		}
+	case "overlay":
+		if err := cfg.cmdOverlay(fs.Args()[2:]); err != nil {
+			log.Printf("overlay error: %s", err)
+			os.Exit(-1)
+			return
+		}
+	case "overlays":
+		if err := cfg.cmdOverlays(fs.Args()[2:]); err != nil {
+			log.Printf("overlays error: %s", err)
 			os.Exit(-1)
 			return
 		}
