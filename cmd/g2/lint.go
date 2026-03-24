@@ -47,59 +47,94 @@ func (cfg *MainArgConfig) cmdLint(args []string) error {
 	return nil
 }
 
+type LintRule interface {
+	Lint(repoDir string, pkg PackageData) []string
+}
+
+var lintRules []LintRule
+
+func RegisterLintRule(rule LintRule) {
+	lintRules = append(lintRules, rule)
+}
+
 func performLinting(repoDir string, pkg PackageData) []string {
 	var warnings []string
+	for _, rule := range lintRules {
+		warnings = append(warnings, rule.Lint(repoDir, pkg)...)
+	}
+	return warnings
+}
 
-	// Check if metadata exists
+func init() {
+	RegisterLintRule(&MetadataLintRule{})
+	RegisterLintRule(&IUSELintRule{})
+	RegisterLintRule(&MD5CacheLintRule{})
+}
+
+type MetadataLintRule struct{}
+
+func (r *MetadataLintRule) Lint(repoDir string, pkg PackageData) []string {
+	var warnings []string
 	if pkg.Metadata == nil {
 		if pkg.MetadataError != nil {
 			if os.IsNotExist(pkg.MetadataError) {
-				warnings = append(warnings, "metadata.xml is missing")
+				warnings = append(warnings, "metadata.xml is missing. Create one to describe the package.")
 			} else {
-				warnings = append(warnings, fmt.Sprintf("metadata.xml is invalid: %v", pkg.MetadataError))
+				warnings = append(warnings, fmt.Sprintf("metadata.xml is invalid: %v. Fix the XML syntax or schema.", pkg.MetadataError))
 			}
 		} else {
-			warnings = append(warnings, "metadata.xml is missing or invalid")
+			warnings = append(warnings, "metadata.xml is missing or invalid. Check the file for issues.")
 		}
-	} else {
-		// Collect all metadata USE flags
-		metaUseFlags := make(map[string]bool)
-		for _, use := range pkg.Metadata.Use {
-			for _, flag := range use.Flags {
-				metaUseFlags[flag.Name] = true
-			}
+	}
+	return warnings
+}
+
+type IUSELintRule struct{}
+
+func (r *IUSELintRule) Lint(repoDir string, pkg PackageData) []string {
+	var warnings []string
+	if pkg.Metadata == nil {
+		return warnings
+	}
+
+	metaUseFlags := make(map[string]bool)
+	for _, use := range pkg.Metadata.Use {
+		for _, flag := range use.Flags {
+			metaUseFlags[flag.Name] = true
 		}
+	}
 
-		// Check ebuilds for IUSE missing in metadata.xml
-		for _, ver := range pkg.Versions {
-			if ver.Ebuild != nil && ver.Ebuild.Vars != nil {
-				iuseRaw := strings.ReplaceAll(ver.Ebuild.Vars["IUSE"], "\"", "")
-				if iuseRaw != "" {
-					iuseFlags := strings.Fields(iuseRaw)
-					for _, f := range iuseFlags {
-						f = strings.TrimPrefix(f, "+")
-						f = strings.TrimPrefix(f, "-")
+	for _, ver := range pkg.Versions {
+		if ver.Ebuild != nil && ver.Ebuild.Vars != nil {
+			iuseRaw := strings.ReplaceAll(ver.Ebuild.Vars["IUSE"], "\"", "")
+			if iuseRaw != "" {
+				iuseFlags := strings.Fields(iuseRaw)
+				for _, f := range iuseFlags {
+					f = strings.TrimPrefix(f, "+")
+					f = strings.TrimPrefix(f, "-")
 
-						// Very basic list of global USE flags we can ignore
-						globalFlags := map[string]bool{"test": true, "doc": true, "debug": true}
+					globalFlags := map[string]bool{"test": true, "doc": true, "debug": true}
 
-						if !metaUseFlags[f] && !globalFlags[f] {
-							warnings = append(warnings, fmt.Sprintf("Ebuild %s uses IUSE flag '%s' which is not documented in metadata.xml", ver.Version, f))
-						}
+					if !metaUseFlags[f] && !globalFlags[f] {
+						warnings = append(warnings, fmt.Sprintf("Ebuild %s uses IUSE flag '%s' which is not documented in metadata.xml. Add the flag to metadata.xml <use> section.", ver.Version, f))
 					}
 				}
 			}
 		}
 	}
+	return warnings
+}
 
-	// Check for missing md5-cache
+type MD5CacheLintRule struct{}
+
+func (r *MD5CacheLintRule) Lint(repoDir string, pkg PackageData) []string {
+	var warnings []string
 	cachePath := filepath.Join(repoDir, "metadata", "md5-cache", pkg.Category, pkg.Name)
 	for _, ver := range pkg.Versions {
 		verCachePath := fmt.Sprintf("%s-%s", cachePath, ver.Version)
 		if _, err := os.Stat(verCachePath); os.IsNotExist(err) {
-			warnings = append(warnings, fmt.Sprintf("Missing md5-cache for version %s", ver.Version))
+			warnings = append(warnings, fmt.Sprintf("Missing md5-cache for version %s. Run 'ebuild <ebuild_file> manifest' or 'egencache' to generate it.", ver.Version))
 		}
 	}
-
 	return warnings
 }
