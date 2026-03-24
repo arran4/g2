@@ -34,9 +34,10 @@ func TestMetadataExtraTxtar(t *testing.T) {
 			var expectedJSON []byte
 
 			for _, f := range ar.Files {
-				if f.Name == "input.xml" {
+				switch f.Name {
+				case "input.xml":
 					inputXML = f.Data
-				} else if f.Name == "expected.json" {
+				case "expected.json":
 					expectedJSON = f.Data
 				}
 			}
@@ -53,7 +54,7 @@ func TestMetadataExtraTxtar(t *testing.T) {
 				// create a map representation for comparison to ignore XMLName
 				actualMap := make(map[string]interface{})
 				b, _ := json.Marshal(glsa)
-				json.Unmarshal(b, &actualMap)
+				_ = json.Unmarshal(b, &actualMap)
 				delete(actualMap, "XMLName")
 				compareJSON(t, expectedJSON, actualMap)
 			} else if strings.HasPrefix(fixture, "testdata/metadata_extra/mirrors_") {
@@ -63,7 +64,7 @@ func TestMetadataExtraTxtar(t *testing.T) {
 				}
 				actualMap := make(map[string]interface{})
 				b, _ := json.Marshal(mirrors)
-				json.Unmarshal(b, &actualMap)
+				_ = json.Unmarshal(b, &actualMap)
 				delete(actualMap, "XMLName")
 				compareJSON(t, expectedJSON, actualMap)
 			} else if strings.HasPrefix(fixture, "testdata/metadata_extra/projects_") {
@@ -73,7 +74,7 @@ func TestMetadataExtraTxtar(t *testing.T) {
 				}
 				actualMap := make(map[string]interface{})
 				b, _ := json.Marshal(projects)
-				json.Unmarshal(b, &actualMap)
+				_ = json.Unmarshal(b, &actualMap)
 				delete(actualMap, "XMLName")
 				compareJSON(t, expectedJSON, actualMap)
 			} else if strings.HasPrefix(fixture, "testdata/metadata_extra/repositories_") {
@@ -83,7 +84,7 @@ func TestMetadataExtraTxtar(t *testing.T) {
 				}
 				actualMap := make(map[string]interface{})
 				b, _ := json.Marshal(repositories)
-				json.Unmarshal(b, &actualMap)
+				_ = json.Unmarshal(b, &actualMap)
 				delete(actualMap, "XMLName")
 				compareJSON(t, expectedJSON, actualMap)
 			} else if strings.HasPrefix(fixture, "testdata/metadata_extra/userinfo_") {
@@ -93,7 +94,7 @@ func TestMetadataExtraTxtar(t *testing.T) {
 				}
 				actualMap := make(map[string]interface{})
 				b, _ := json.Marshal(userinfo)
-				json.Unmarshal(b, &actualMap)
+				_ = json.Unmarshal(b, &actualMap)
 				delete(actualMap, "XMLName")
 				compareJSON(t, expectedJSON, actualMap)
 			} else {
