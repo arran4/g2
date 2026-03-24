@@ -102,7 +102,33 @@
 </div>
 {{end}}
 
-{{if .Package.Manifest}}
+{{if .Package.ManifestData}}
+<div class="metadata-section">
+    <h3>Manifest</h3>
+    <table>
+        <tr>
+            <th>Type</th>
+            <th>File</th>
+            <th>Size</th>
+            <th>Versions</th>
+            <th>Source URLs</th>
+        </tr>
+        {{range .Package.ManifestData}}
+        <tr>
+            <td>{{.Entry.Type}}</td>
+            <td>{{.Entry.Filename}}</td>
+            <td>{{.Entry.Size}} bytes</td>
+            <td>
+                {{range $i, $v := .Versions}}{{if $i}}, {{end}}{{$v}}{{end}}
+            </td>
+            <td>
+                {{range $i, $u := .URLs}}{{if $i}}<br>{{end}}<a href="{{$u}}">{{$u}}</a>{{end}}
+            </td>
+        </tr>
+        {{end}}
+    </table>
+</div>
+{{else if .Package.Manifest}}
 <div class="metadata-section">
     <h3>Manifest</h3>
     <table>
