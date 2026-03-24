@@ -62,13 +62,20 @@ type FileData struct {
 	RawURL string
 }
 
+type ManifestEntryData struct {
+	Entry    *g2.ManifestEntry
+	Versions []string
+	URLs     []string
+}
+
 type PackageData struct {
-	Name     string
-	Category string
-	Versions []VersionData
-	Metadata *g2.PkgMetadata
-	Manifest *g2.Manifest
-	Files    []FileData
+	Name         string
+	Category     string
+	Versions     []VersionData
+	Metadata     *g2.PkgMetadata
+	Manifest     *g2.Manifest
+	ManifestData []ManifestEntryData
+	Files        []FileData
 
 	// Git info
 	MetadataRawURL string
@@ -360,6 +367,7 @@ func parseRepo(repoDir string, defaultTitle string) (*SiteData, error) {
 			manifest, err := g2.ParseManifest(manifestPath)
 			if err == nil {
 				pkgData.Manifest = manifest
+				pkgData.ManifestData = buildManifestData(manifest, pkgData.Versions)
 			}
 
 			// Read files/ directory
@@ -406,6 +414,52 @@ func parseRepo(repoDir string, defaultTitle string) (*SiteData, error) {
 	})
 
 	return site, nil
+}
+
+func buildManifestData(manifest *g2.Manifest, versions []VersionData) []ManifestEntryData {
+	var manifestData []ManifestEntryData
+	for _, entry := range manifest.Entries {
+		md := ManifestEntryData{
+			Entry: entry,
+		}
+
+		urlMap := make(map[string]bool)
+		versionMap := make(map[string]bool)
+
+		for _, ver := range versions {
+			if ver.Ebuild == nil {
+				continue
+			}
+			for _, uri := range ver.Ebuild.SrcUri {
+				fname := uri.Filename
+				if fname == "" {
+					fname = filepath.Base(uri.URL)
+				}
+				if fname == entry.Filename {
+					verStr := ver.Version
+					if ver.Ebuild.Vars != nil && ver.Ebuild.Vars["PV"] != "" {
+						verStr = ver.Ebuild.Vars["PV"]
+					}
+					if !versionMap[verStr] {
+						md.Versions = append(md.Versions, verStr)
+						versionMap[verStr] = true
+					}
+					if !urlMap[uri.URL] {
+						md.URLs = append(md.URLs, uri.URL)
+						urlMap[uri.URL] = true
+					}
+				}
+			}
+		}
+		// Sort versions descending
+		sort.Slice(md.Versions, func(i, j int) bool {
+			return md.Versions[i] > md.Versions[j]
+		})
+		sort.Strings(md.URLs)
+
+		manifestData = append(manifestData, md)
+	}
+	return manifestData
 }
 
 func isIgnoredDir(name string) bool {
