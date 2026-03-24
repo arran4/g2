@@ -7,6 +7,8 @@ import (
 	"os"
 	"strings"
 	"text/tabwriter"
+
+	"github.com/arran4/g2"
 )
 
 type CmdEbuildArgConfig struct {
@@ -20,6 +22,7 @@ func (cfg *MainArgConfig) cmdEbuild(args []string) error {
 		fmt.Printf("\t%s\n", strings.Join(cfg.Args, " "))
 		fmt.Printf("\t\t %s \t\t %s\n", "init", "Initialize an ebuild from a template")
 		fmt.Printf("\t\t %s \t\t %s\n", "templates", "Manage ebuild templates")
+		fmt.Printf("\t\t %s \t\t %s\n", "sh-parse-to-json", "Parse ebuild using shell parser and output JSON")
 	}
 
 	config := &CmdEbuildArgConfig{
@@ -42,6 +45,10 @@ func (cfg *MainArgConfig) cmdEbuild(args []string) error {
 	case "init":
 		if err := config.cmdEbuildInit(fs.Args()[1:]); err != nil {
 			return fmt.Errorf("ebuild init: %w", err)
+		}
+	case "sh-parse-to-json":
+		if err := config.cmdEbuildShParseToJson(fs.Args()[1:]); err != nil {
+			return fmt.Errorf("ebuild sh-parse-to-json: %w", err)
 		}
 	case "templates":
 		if err := config.cmdEbuildTemplates(fs.Args()[1:]); err != nil {
@@ -226,5 +233,35 @@ func (cfg *CmdEbuildArgConfig) cmdEbuildTemplatesInit(args []string) error {
 	}
 
 	log.Printf("Initialized %s with template %q", filename, templateName)
+	return nil
+}
+
+func (cfg *CmdEbuildArgConfig) cmdEbuildShParseToJson(args []string) error {
+	fs := flag.NewFlagSet("sh-parse-to-json", flag.ExitOnError)
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if fs.NArg() != 1 {
+		return fmt.Errorf("usage: g2 ebuild sh-parse-to-json <ebuild file>")
+	}
+	filename := fs.Arg(0)
+
+	f, err := os.Open(filename)
+	if err != nil {
+		return fmt.Errorf("opening file: %w", err)
+	}
+	defer f.Close()
+
+	data, err := g2.ShParseEbuild(f, filename)
+	if err != nil {
+		return fmt.Errorf("parsing ebuild: %w", err)
+	}
+
+	jsonBytes, err := g2.ShParseDataToJSON(data)
+	if err != nil {
+		return fmt.Errorf("serializing to json: %w", err)
+	}
+
+	fmt.Println(string(jsonBytes))
 	return nil
 }
