@@ -211,8 +211,44 @@ func (cfg *MainArgConfig) cmdUseLocalDescDiscover(args []string) error {
 						ud.Flags[fullPkgName] = make(map[string]string)
 					}
 					// Only add if it doesn't already exist to respect existing edits
-					if _, exists := ud.Flags[fullPkgName][flag.Name]; !exists {
+					if existing, exists := ud.Flags[fullPkgName][flag.Name]; !exists || existing == "" {
 						ud.Flags[fullPkgName][flag.Name] = flag.Text
+						added++
+					}
+				}
+			}
+		}
+
+		if strings.HasSuffix(info.Name(), ".ebuild") {
+			dir := filepath.Dir(path)
+			pkgName := filepath.Base(dir)
+			catName := filepath.Base(filepath.Dir(dir))
+			if catName == "." {
+				return nil
+			}
+			fullPkgName := fmt.Sprintf("%s/%s", catName, pkgName)
+
+			vars := g2.ParseEbuildVariables(path)
+			if vars == nil {
+				return nil
+			}
+
+			ebuild, parseErr := g2.ParseEbuild(os.DirFS(filepath.Dir(path)), info.Name(), g2.ParseVariables)
+			if parseErr != nil {
+				return nil
+			}
+
+			if iuse, ok := ebuild.Vars["IUSE"]; ok && iuse != "" {
+				flags := strings.Fields(iuse)
+				for _, flagName := range flags {
+					flagName = strings.TrimPrefix(flagName, "+")
+					flagName = strings.TrimPrefix(flagName, "-")
+
+					if ud.Flags[fullPkgName] == nil {
+						ud.Flags[fullPkgName] = make(map[string]string)
+					}
+					if _, exists := ud.Flags[fullPkgName][flagName]; !exists {
+						ud.Flags[fullPkgName][flagName] = "" // No description in ebuild
 						added++
 					}
 				}

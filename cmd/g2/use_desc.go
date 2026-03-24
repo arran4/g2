@@ -179,8 +179,32 @@ func (cfg *MainArgConfig) cmdUseDescDiscover(args []string) error {
 
 			for _, useBlock := range pkgMd.Use {
 				for _, flag := range useBlock.Flags {
-					if _, exists := foundFlags[flag.Name]; !exists {
+					if existing, exists := foundFlags[flag.Name]; !exists || existing == "" {
 						foundFlags[flag.Name] = flag.Text
+					}
+				}
+			}
+		}
+
+		if strings.HasSuffix(info.Name(), ".ebuild") {
+			vars := g2.ParseEbuildVariables(path)
+			if vars == nil {
+				return nil
+			}
+
+			ebuild, parseErr := g2.ParseEbuild(os.DirFS(filepath.Dir(path)), info.Name(), g2.ParseVariables)
+			if parseErr != nil {
+				return nil
+			}
+
+			if iuse, ok := ebuild.Vars["IUSE"]; ok && iuse != "" {
+				flags := strings.Fields(iuse)
+				for _, flagName := range flags {
+					flagName = strings.TrimPrefix(flagName, "+")
+					flagName = strings.TrimPrefix(flagName, "-")
+
+					if _, exists := foundFlags[flagName]; !exists {
+						foundFlags[flagName] = "" // No description in ebuild
 					}
 				}
 			}
