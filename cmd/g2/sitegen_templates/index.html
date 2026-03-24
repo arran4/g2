@@ -1,6 +1,33 @@
+{{if .RepoName}}
+<div class="metadata-section">
+    <h3>Repository: {{.RepoName}}</h3>
+    <p>To use this repository, you can enable it via eselect:</p>
+    <pre><code>eselect repository enable {{.RepoName}}</code></pre>
+    <p>And sync it:</p>
+    <pre><code>emerge --sync {{.RepoName}}</code></pre>
+    {{if .RemoteURL}}
+    <p>Git Source: <a href="{{.RemoteURL}}">{{.RemoteURL}}</a></p>
+    {{end}}
+</div>
+{{end}}
+
 <h2>Categories</h2>
 <ul>
     {{range .Categories}}
-    <li><a href="{{.Name}}/">{{.Name}}</a> ({{len .Packages}} packages)</li>
+    <li><a href="categories/{{.Name}}/">{{.Name}}</a></li>
+    {{end}}
+</ul>
+
+<h2>All Packages</h2>
+<ul>
+    {{range .AllPackages}}
+    <li><a href="packages/{{.Name}}/">{{.Category}}/{{.Name}}</a></li>
+    {{end}}
+</ul>
+
+<h2>Licenses</h2>
+<ul>
+    {{range .Licenses}}
+    <li><a href="licenses/{{.Name}}/">{{.Name}} ({{.Count}})</a></li>
     {{end}}
 </ul>

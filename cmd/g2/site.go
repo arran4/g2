@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 )
 
 type RemoteRepositories struct {
@@ -34,7 +35,20 @@ type RepoSource struct {
 
 type SiteData struct {
 	Title      string
+	RepoName   string
+	RemoteURL  string
 	Categories []CategoryData
+}
+
+type LicenseData struct {
+	Name     string
+	Count    int
+	Packages []PackageData
+}
+
+type Breadcrumb struct {
+	Name string
+	URL  string
 }
 
 type CategoryData struct {
@@ -42,17 +56,33 @@ type CategoryData struct {
 	Packages []PackageData
 }
 
+type FileData struct {
+	Name   string
+	Path   string
+	RawURL string
+}
+
 type PackageData struct {
 	Name     string
 	Category string
 	Versions []VersionData
-	Metadata interface{}
+	Metadata *g2.PkgMetadata
 	Manifest *g2.Manifest
+	Files    []FileData
+
+	// Git info
+	MetadataRawURL string
+
+	// Lint Info
+	LintWarnings []string
 }
 
 type VersionData struct {
 	Version string
 	Ebuild  *g2.Ebuild
+
+	// Git info
+	EbuildRawURL string
 }
 
 func (cfg *MainArgConfig) cmdOverlay(args []string) error {
@@ -173,9 +203,41 @@ func (cfg *MainArgConfig) cmdOverlays(args []string) error {
 	return cfg.cmdSiteRemote(location, *outDir)
 }
 
-func parseRepo(repoDir string, title string) (*SiteData, error) {
+func parseRepo(repoDir string, defaultTitle string) (*SiteData, error) {
+	title := defaultTitle
+	var repoName string
+
+	// Get Git Info
+	remoteURL, err := getGitOriginURL(repoDir)
+	if err != nil {
+		log.Printf("Warning: failed to get git origin url: %v", err)
+	}
+
+	repoNameBytes, err := os.ReadFile(filepath.Join(repoDir, "profiles", "repo_name"))
+	if err == nil && len(repoNameBytes) > 0 {
+		title = strings.TrimSpace(string(repoNameBytes))
+		repoName = title
+	} else {
+		repoName = filepath.Base(repoDir)
+		title = repoName
+	}
+
 	site := &SiteData{
-		Title: title,
+		Title:     title,
+		RepoName:  repoName,
+		RemoteURL: remoteURL,
+	}
+
+	supportedCategories := make(map[string]bool)
+	categoriesBytes, err := os.ReadFile(filepath.Join(repoDir, "profiles", "categories"))
+	if err == nil {
+		lines := strings.Split(string(categoriesBytes), "\n")
+		for _, line := range lines {
+			cat := strings.TrimSpace(line)
+			if cat != "" && !strings.HasPrefix(cat, "#") {
+				supportedCategories[cat] = true
+			}
+		}
 	}
 
 	entries, err := os.ReadDir(repoDir)
@@ -189,6 +251,10 @@ func parseRepo(repoDir string, title string) (*SiteData, error) {
 		}
 		name := entry.Name()
 		if isIgnoredDir(name) {
+			continue
+		}
+
+		if len(supportedCategories) > 0 && !supportedCategories[name] {
 			continue
 		}
 
@@ -248,9 +314,19 @@ func parseRepo(repoDir string, title string) (*SiteData, error) {
 					}
 				}
 
+				var ebuildRawURL string
+				if remoteURL != "" {
+					relPath, _ := filepath.Rel(repoDir, ebuildPath)
+					commitHash, _ := getFileCommit(repoDir, relPath)
+					if commitHash != "" {
+						ebuildRawURL = generateGitHubRawURL(remoteURL, commitHash, relPath)
+					}
+				}
+
 				pkgData.Versions = append(pkgData.Versions, VersionData{
-					Version: version,
-					Ebuild:  ebuild,
+					Version:      version,
+					Ebuild:       ebuild,
+					EbuildRawURL: ebuildRawURL,
 				})
 			}
 
@@ -267,7 +343,17 @@ func parseRepo(repoDir string, title string) (*SiteData, error) {
 			metaPath := filepath.Join(pkgPath, "metadata.xml")
 			metadata, err := g2.ParseMetadata(metaPath)
 			if err == nil {
-				pkgData.Metadata = metadata
+				if pkgMd, ok := metadata.(*g2.PkgMetadata); ok {
+					pkgData.Metadata = pkgMd
+				}
+			}
+
+			if remoteURL != "" {
+				relPath, _ := filepath.Rel(repoDir, metaPath)
+				commitHash, _ := getFileCommit(repoDir, relPath)
+				if commitHash != "" {
+					pkgData.MetadataRawURL = generateGitHubRawURL(remoteURL, commitHash, relPath)
+				}
 			}
 
 			// Read Manifest
@@ -276,6 +362,32 @@ func parseRepo(repoDir string, title string) (*SiteData, error) {
 			if err == nil {
 				pkgData.Manifest = manifest
 			}
+
+			// Read files/ directory
+			filesDirPath := filepath.Join(pkgPath, "files")
+			if info, err := os.Stat(filesDirPath); err == nil && info.IsDir() {
+				fileEntries, err := os.ReadDir(filesDirPath)
+				if err == nil {
+					for _, fe := range fileEntries {
+						if !fe.IsDir() {
+							fd := FileData{
+								Name: fe.Name(),
+								Path: filepath.Join(filesDirPath, fe.Name()),
+							}
+							if remoteURL != "" {
+								relPath, _ := filepath.Rel(repoDir, fd.Path)
+								commitHash, _ := getFileCommit(repoDir, relPath)
+								if commitHash != "" {
+									fd.RawURL = generateGitHubRawURL(remoteURL, commitHash, relPath)
+								}
+							}
+							pkgData.Files = append(pkgData.Files, fd)
+						}
+					}
+				}
+			}
+
+			pkgData.LintWarnings = performLinting(repoDir, pkgData)
 
 			catData.Packages = append(catData.Packages, pkgData)
 		}
@@ -323,44 +435,175 @@ func generateSite(outDir string, site *SiteData) error {
 		return fmt.Errorf("parsing templates: %w", err)
 	}
 
+	var allPackages []PackageData
+	licenseMap := make(map[string]*LicenseData)
+
+	for _, cat := range site.Categories {
+		for _, pkg := range cat.Packages {
+			allPackages = append(allPackages, pkg)
+			for _, ver := range pkg.Versions {
+				if ver.Ebuild != nil && ver.Ebuild.Vars != nil {
+					lic := ver.Ebuild.Vars["LICENSE"]
+					if lic != "" {
+						if _, ok := licenseMap[lic]; !ok {
+							licenseMap[lic] = &LicenseData{Name: lic}
+						}
+						// simple deduplication
+						found := false
+						for _, p := range licenseMap[lic].Packages {
+							if p.Name == pkg.Name && p.Category == pkg.Category {
+								found = true
+								break
+							}
+						}
+						if !found {
+							licenseMap[lic].Packages = append(licenseMap[lic].Packages, pkg)
+							licenseMap[lic].Count++
+						}
+					}
+				}
+			}
+		}
+	}
+
+	sort.Slice(allPackages, func(i, j int) bool {
+		if allPackages[i].Category == allPackages[j].Category {
+			return allPackages[i].Name < allPackages[j].Name
+		}
+		return allPackages[i].Category < allPackages[j].Category
+	})
+
+	var sortedLicenses []*LicenseData
+	for _, ld := range licenseMap {
+		sortedLicenses = append(sortedLicenses, ld)
+	}
+	sort.Slice(sortedLicenses, func(i, j int) bool {
+		return sortedLicenses[i].Name < sortedLicenses[j].Name
+	})
+
+	// Generate Feeds for Repo
+	var repoFeedItems []FeedItem
+	for _, pkg := range allPackages {
+		for _, ver := range pkg.Versions {
+			desc := ""
+			if ver.Ebuild != nil && ver.Ebuild.Vars != nil {
+				desc = ver.Ebuild.Vars["DESCRIPTION"]
+			}
+			repoFeedItems = append(repoFeedItems, FeedItem{
+				Title:       fmt.Sprintf("%s/%s-%s", pkg.Category, pkg.Name, ver.Version),
+				Link:        fmt.Sprintf("packages/%s/", pkg.Name),
+				Description: desc,
+				PubDate:     time.Now().Format(time.RFC1123Z),
+				Updated:     time.Now().Format(time.RFC3339),
+			})
+		}
+	}
+	if len(repoFeedItems) > 50 {
+		repoFeedItems = repoFeedItems[:50]
+	}
+	if err := generateFeeds(filepath.Join(outDir, "index"), site.Title, "Latest updates to repository", "", repoFeedItems); err != nil {
+		log.Printf("Warning: failed to generate repo feed: %v", err)
+	}
+
 	// Generate index
 	if err := renderPage(filepath.Join(outDir, "index.html"), tmpl, "index.html", map[string]interface{}{
-		"Title":      site.Title,
-		"Categories": site.Categories,
-		"Version":    "v1",
+		"Title":       site.Title,
+		"BaseURL":     "",
+		"RepoName":    site.RepoName,
+		"RemoteURL":   site.RemoteURL,
+		"Categories":  site.Categories,
+		"AllPackages": allPackages,
+		"Licenses":    sortedLicenses,
+		"Version":     version,
 	}); err != nil {
 		return err
 	}
 
+	// Generate Categories
 	for _, cat := range site.Categories {
-		catDir := filepath.Join(outDir, cat.Name)
+		catDir := filepath.Join(outDir, "categories", cat.Name)
 		if err := os.MkdirAll(catDir, 0755); err != nil {
 			return err
 		}
+		breadcrumbs := []Breadcrumb{
+			{Name: site.Title, URL: "../../"},
+			{Name: "Categories"},
+			{Name: cat.Name},
+		}
 
-		// Generate category index
 		if err := renderPage(filepath.Join(catDir, "index.html"), tmpl, "category.html", map[string]interface{}{
-			"Title":    fmt.Sprintf("%s - %s", site.Title, cat.Name),
-			"Category": cat,
-			"Version":  "v1",
+			"Title":       fmt.Sprintf("%s - %s", site.Title, cat.Name),
+			"BaseURL":     "../../",
+			"Breadcrumbs": breadcrumbs,
+			"Category":    cat,
+			"Version":     version,
 		}); err != nil {
 			return err
 		}
+	}
 
-		for _, pkg := range cat.Packages {
-			pkgDir := filepath.Join(catDir, pkg.Name)
-			if err := os.MkdirAll(pkgDir, 0755); err != nil {
-				return err
-			}
+	// Generate Packages
+	for _, pkg := range allPackages {
+		pkgDir := filepath.Join(outDir, "packages", pkg.Name)
+		if err := os.MkdirAll(pkgDir, 0755); err != nil {
+			return err
+		}
+		breadcrumbs := []Breadcrumb{
+			{Name: site.Title, URL: "../../"},
+			{Name: "Categories", URL: "../../categories/" + pkg.Category + "/"},
+			{Name: pkg.Category},
+			{Name: pkg.Name},
+		}
 
-			// Generate package index
-			if err := renderPage(filepath.Join(pkgDir, "index.html"), tmpl, "package.html", map[string]interface{}{
-				"Title":   fmt.Sprintf("%s - %s/%s", site.Title, cat.Name, pkg.Name),
-				"Package": pkg,
-				"Version": "v1",
-			}); err != nil {
-				return err
+		var pkgFeedItems []FeedItem
+		for _, ver := range pkg.Versions {
+			desc := ""
+			if ver.Ebuild != nil && ver.Ebuild.Vars != nil {
+				desc = ver.Ebuild.Vars["DESCRIPTION"]
 			}
+			pkgFeedItems = append(pkgFeedItems, FeedItem{
+				Title:       fmt.Sprintf("%s/%s-%s", pkg.Category, pkg.Name, ver.Version),
+				Link:        fmt.Sprintf(""),
+				Description: desc,
+				PubDate:     time.Now().Format(time.RFC1123Z),
+				Updated:     time.Now().Format(time.RFC3339),
+			})
+		}
+		if err := generateFeeds(filepath.Join(pkgDir, "index"), pkg.Category+"/"+pkg.Name, "Latest updates to package", "", pkgFeedItems); err != nil {
+			log.Printf("Warning: failed to generate package feed: %v", err)
+		}
+
+		if err := renderPage(filepath.Join(pkgDir, "index.html"), tmpl, "package.html", map[string]interface{}{
+			"Title":       fmt.Sprintf("%s - %s/%s", site.Title, pkg.Category, pkg.Name),
+			"BaseURL":     "../../",
+			"Breadcrumbs": breadcrumbs,
+			"Package":     pkg,
+			"Version":     version,
+		}); err != nil {
+			return err
+		}
+	}
+
+	// Generate Licenses
+	for _, lic := range sortedLicenses {
+		licDir := filepath.Join(outDir, "licenses", lic.Name)
+		if err := os.MkdirAll(licDir, 0755); err != nil {
+			return err
+		}
+		breadcrumbs := []Breadcrumb{
+			{Name: site.Title, URL: "../../"},
+			{Name: "Licenses"},
+			{Name: lic.Name},
+		}
+
+		if err := renderPage(filepath.Join(licDir, "index.html"), tmpl, "license.html", map[string]interface{}{
+			"Title":       fmt.Sprintf("%s - License: %s", site.Title, lic.Name),
+			"BaseURL":     "../../",
+			"Breadcrumbs": breadcrumbs,
+			"License":     lic,
+			"Version":     version,
+		}); err != nil {
+			return err
 		}
 	}
 
@@ -493,7 +736,7 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string) 
 	if err := renderPage(filepath.Join(outDir, "index.html"), tmpl, "index.html", map[string]interface{}{
 		"Title":      overallSiteData.Title,
 		"Categories": overallSiteData.Categories,
-		"Version":    "v1",
+		"Version":    version,
 	}); err != nil {
 		return err
 	}
