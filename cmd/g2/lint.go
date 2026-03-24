@@ -52,7 +52,15 @@ func performLinting(repoDir string, pkg PackageData) []string {
 
 	// Check if metadata exists
 	if pkg.Metadata == nil {
-		warnings = append(warnings, "metadata.xml is missing or invalid")
+		if pkg.MetadataError != nil {
+			if os.IsNotExist(pkg.MetadataError) {
+				warnings = append(warnings, "metadata.xml is missing")
+			} else {
+				warnings = append(warnings, fmt.Sprintf("metadata.xml is invalid: %v", pkg.MetadataError))
+			}
+		} else {
+			warnings = append(warnings, "metadata.xml is missing or invalid")
+		}
 	} else {
 		// Collect all metadata USE flags
 		metaUseFlags := make(map[string]bool)
