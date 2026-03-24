@@ -1,0 +1,8 @@
+<h2>License: {{.License.Name}}</h2>
+<p>{{.License.Count}} packages use this license.</p>
+
+<ul>
+    {{range .License.Packages}}
+        <li><a href="../../../packages/{{.Name}}/">{{.Category}}/{{.Name}}</a></li>
+    {{end}}
+</ul>

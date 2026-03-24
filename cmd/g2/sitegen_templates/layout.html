@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{.Title}}</title>
+    <link rel="alternate" type="application/rss+xml" title="RSS" href="index.rss" />
+    <link rel="alternate" type="application/atom+xml" title="Atom" href="index.atom" />
     <style>
         body { font-family: sans-serif; margin: 2em; line-height: 1.6; color: #333; }
         h1, h2, h3 { color: #5c4f85; } /* Tyrian purple-ish */
@@ -21,7 +23,15 @@
 <body>
     <div class="container">
         <div class="nav">
-            <h1><a href="/">Packages</a></h1>
+            <h1><a href="{{.BaseURL}}">{{.Title}}</a></h1>
+            {{if .Breadcrumbs}}
+            <nav style="font-size: 0.9em; margin-top: 10px;">
+                {{range $i, $bc := .Breadcrumbs}}
+                    {{if $i}} > {{end}}
+                    {{if $bc.URL}}<a href="{{$bc.URL}}">{{$bc.Name}}</a>{{else}}{{$bc.Name}}{{end}}
+                {{end}}
+            </nav>
+            {{end}}
         </div>
         {{.Content}}
         <hr>

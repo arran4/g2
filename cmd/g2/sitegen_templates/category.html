@@ -1,6 +1,13 @@
 <h2>Category: {{.Category.Name}}</h2>
 <ul>
     {{range .Category.Packages}}
-    <li><a href="{{.Name}}/">{{.Name}}</a></li>
+        <li>
+            <a href="../../packages/{{.Name}}/">{{.Name}}</a>
+            {{if .Versions}}
+            <span style="color: #666; font-size: 0.9em;">
+                - {{with (index .Versions 0)}}{{.Ebuild.Vars.DESCRIPTION}}{{end}}
+            </span>
+            {{end}}
+        </li>
     {{end}}
 </ul>
