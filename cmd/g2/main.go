@@ -24,6 +24,7 @@ func main() {
 		fmt.Printf("\t%s\n", strings.Join(cfg.Args, " "))
 		fmt.Printf("\t\t %s \t\t %s\n", "manifest", "commands relating to Manifest files")
 		fmt.Printf("\t\t %s \t\t %s\n", "metadata", "commands relating to metadata.xml files")
+		fmt.Printf("\t\t %s \t\t %s\n", "ebuild", "commands relating to ebuild files")
 		fmt.Printf("\t\t %s \t\t %s\n", "overlay", "commands relating to a single overlay")
 		fmt.Printf("\t\t %s \t\t %s\n", "overlays", "commands relating to multiple overlays")
 	}
@@ -50,6 +51,12 @@ func main() {
 	case "metadata":
 		if err := cfg.cmdMetadata(fs.Args()[2:]); err != nil {
 			log.Printf("metadata error: %s", err)
+			os.Exit(-1)
+			return
+		}
+	case "ebuild":
+		if err := cfg.cmdEbuild(fs.Args()[2:]); err != nil {
+			log.Printf("ebuild error: %s", err)
 			os.Exit(-1)
 			return
 		}

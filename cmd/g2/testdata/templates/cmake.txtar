@@ -1,0 +1,41 @@
+-- input.json --
+{
+  "EAPI": "8",
+  "Description": "A short description",
+  "Homepage": "https://example.com",
+  "SrcURI": "https://example.com/${P}.tar.gz",
+  "License": "GPL-2",
+  "Slot": "0",
+  "Keywords": "~amd64",
+  "Depend": "",
+  "RDepend": "",
+  "BDepend": ""
+}
+-- output.ebuild --
+EAPI=8
+
+# cmake eclass handles configuration, building, and installation of CMake-based projects.
+inherit cmake
+
+DESCRIPTION="A short description"
+HOMEPAGE="https://example.com"
+SRC_URI="https://example.com/${P}.tar.gz"
+
+LICENSE="GPL-2"
+SLOT="0"
+KEYWORDS="~amd64"
+
+DEPEND=""
+RDEPEND=""
+BDEPEND=""
+
+# configure the CMake project. mycmakeargs can be used to pass specific options to CMake.
+src_configure() {
+	local mycmakeargs=(
+		-DCMAKE_INSTALL_PREFIX="${EPREFIX}/usr"
+	)
+	cmake_src_configure
+}
+
+# Note: cmake_src_compile and cmake_src_install are exported by the cmake eclass
+# and will be used automatically to build and install the project.

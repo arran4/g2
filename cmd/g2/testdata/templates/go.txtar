@@ -1,0 +1,41 @@
+-- input.json --
+{
+  "EAPI": "8",
+  "Description": "A short description",
+  "Homepage": "https://example.com",
+  "SrcURI": "https://example.com/${P}.tar.gz",
+  "License": "GPL-2",
+  "Slot": "0",
+  "Keywords": "~amd64",
+  "Depend": "",
+  "RDepend": "",
+  "BDepend": ""
+}
+-- output.ebuild --
+EAPI=8
+
+# go-module handles downloading and unpacking go modules based on go.mod and go.sum.
+inherit go-module
+
+DESCRIPTION="A short description"
+HOMEPAGE="https://example.com"
+SRC_URI="https://example.com/${P}.tar.gz"
+
+LICENSE="GPL-2"
+SLOT="0"
+KEYWORDS="~amd64"
+
+DEPEND=""
+RDEPEND=""
+BDEPEND=""
+
+# ego is a wrapper around the standard `go` command that sets up the proper environment variables
+# for offline building using the downloaded modules.
+src_compile() {
+	ego build -o bin/app
+}
+
+# dobin installs the compiled binary into /usr/bin.
+src_install() {
+	dobin bin/app
+}
