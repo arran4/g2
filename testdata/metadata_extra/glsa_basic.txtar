@@ -1,0 +1,120 @@
+test: basic glsa
+
+-- input.xml --
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE glsa SYSTEM "http://www.gentoo.org/dtd/glsa.dtd">
+<glsa id="200311-01">
+  <title>Buffer overflow vulnerability found in openssl-0.9.5</title>
+  <synopsis>rsync has an exploitable buffer overflow that can lead to remote compromise</synopsis>
+  <product type="ebuild">openssl</product>
+  <announced>2003-11-20</announced>
+  <revised count="02">2003-11-20</revised>
+  <bug>34200</bug>
+  <access>Remote</access>
+  <affected>
+    <package name="dev-libs/openssl" auto="yes" arch="*">
+      <vulnerable range="lt">0.9.6k</vulnerable>
+      <unaffected range="gt">0.9.6k</unaffected>
+    </package>
+  </affected>
+  <background>
+    <p>some background</p>
+  </background>
+  <description>
+    <p>some desc</p>
+  </description>
+  <impact type="high">
+    <p>some impact</p>
+  </impact>
+  <workaround>
+    <p>some workaround</p>
+  </workaround>
+  <resolution>
+    <p>some resolution</p>
+  </resolution>
+  <references>
+    <uri link="http://www.cert.org">CERT</uri>
+  </references>
+  <license/>
+  <metadata tag="approved">Level 1</metadata>
+</glsa>
+-- expected.json --
+{
+  "ID": "200311-01",
+  "Title": "Buffer overflow vulnerability found in openssl-0.9.5",
+  "Synopsis": "rsync has an exploitable buffer overflow that can lead to remote compromise",
+  "Product": {
+    "Text": "openssl",
+    "Type": "ebuild"
+  },
+  "Announced": "2003-11-20",
+  "Revised": {
+    "Text": "2003-11-20",
+    "Count": "02"
+  },
+  "Bugs": [
+    "34200"
+  ],
+  "Access": "Remote",
+  "Affected": {
+    "Packages": [
+      {
+        "Name": "dev-libs/openssl",
+        "Auto": "yes",
+        "Arch": "*",
+        "Vulnerable": [
+          {
+            "Text": "0.9.6k",
+            "Range": "lt",
+            "Slot": ""
+          }
+        ],
+        "Unaffected": [
+          {
+            "Text": "0.9.6k",
+            "Range": "gt",
+            "Slot": "",
+            "Name": ""
+          }
+        ]
+      }
+    ],
+    "Services": null
+  },
+  "Background": {
+    "Text": "\n    <p>some background</p>\n  "
+  },
+  "Description": {
+    "Text": "\n    <p>some desc</p>\n  "
+  },
+  "Impact": {
+    "Text": "\n    <p>some impact</p>\n  ",
+    "Type": "high"
+  },
+  "Workaround": {
+    "Text": "\n    <p>some workaround</p>\n  "
+  },
+  "Resolution": {
+    "Text": "\n    <p>some resolution</p>\n  "
+  },
+  "References": {
+    "URIs": [
+      {
+        "Text": "CERT",
+        "Link": "http://www.cert.org"
+      }
+    ]
+  },
+  "License": {
+    "Text": ""
+  },
+  "Metadata": [
+    {
+      "Text": "Level 1",
+      "Tag": "approved",
+      "Author": "",
+      "Revision": "",
+      "Timestamp": ""
+    }
+  ]
+}

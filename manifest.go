@@ -78,7 +78,6 @@ func (e *ManifestEntry) GetHash(hType string) string {
 	return ""
 }
 
-
 func ParseManifest(path string) (*Manifest, error) {
 	content, err := os.ReadFile(path)
 	if err != nil {

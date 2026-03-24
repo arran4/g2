@@ -280,12 +280,12 @@ func ParseEbuild(fsys fs.FS, path string, mode ParsingMode) (*Ebuild, error) {
 				} else {
 					for i, r := range key {
 						if i == 0 {
-							if !((r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || r == '_') {
+							if (r < 'a' || r > 'z') && (r < 'A' || r > 'Z') && r != '_' {
 								isIdentifier = false
 								break
 							}
 						} else {
-							if !((r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '_') {
+							if (r < 'a' || r > 'z') && (r < 'A' || r > 'Z') && (r < '0' || r > '9') && r != '_' {
 								isIdentifier = false
 								break
 							}

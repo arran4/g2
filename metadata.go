@@ -9,6 +9,7 @@ import (
 )
 
 // CatMetadata represents metadata for a category.
+// Source: https://github.com/gentoo-mirror/gentoo/blob/stable/metadata/dtd/metadata.dtd
 type CatMetadata struct {
 	XMLName         xml.Name          `xml:"catmetadata"`
 	LongDescription []LongDescription `xml:"longdescription"`
@@ -23,6 +24,7 @@ func (c *CatMetadata) String() string {
 }
 
 // PkgMetadata represents metadata for a package.
+// Source: https://github.com/gentoo-mirror/gentoo/blob/stable/metadata/dtd/metadata.dtd
 type PkgMetadata struct {
 	XMLName            xml.Name          `xml:"pkgmetadata"`
 	Maintainers        []Maintainer      `xml:"maintainer"`
@@ -63,7 +65,7 @@ type Maintainer struct {
 type LongDescription struct {
 	// Body contains the inner XML of the long description.
 	// We use InnerXML to preserve mixed content (text + <pkg>/<cat> tags) and ensure circularity.
-	Body    string `xml:",innerxml"`
+	Body string `xml:",innerxml"`
 	// Lang specifies the language of the description.
 	Lang string `xml:"lang,attr,omitempty"`
 	// Restrict specifies restrictions on the applicability of the description.
@@ -85,7 +87,7 @@ type Slot struct {
 	// Name of the SLOT.
 	Name string `xml:"name,attr"`
 	// Text of the slot.
-	Text string `xml:",chardata"`
+	Text string `xml:",innerxml"`
 }
 
 // Use represents the description of USE flags for a package.
@@ -101,7 +103,7 @@ type Flag struct {
 	// Name of the USE flag.
 	Name string `xml:"name,attr"`
 	// Text of the flag.
-	Text string `xml:",chardata"`
+	Text string `xml:",innerxml"`
 	// Restrict specifies restrictions on the applicability of the flag.
 	Restrict string `xml:"restrict,attr,omitempty"`
 }
@@ -129,9 +131,13 @@ type Doc struct {
 }
 
 // RemoteID represents a remote identifier for a package.
+// Supported types: bitbucket, codeberg, cpan, cpan-module, cpe, cran, ctan, freedesktop-gitlab,
+// gentoo, github, gitlab, gnome-gitlab, google-code, hackage, heptapod, kde-invent,
+// launchpad, osdn, pear, pecl, pypi, rubygems, savannah, savannah-nongnu,
+// sourceforge, sourcehut, vim
 type RemoteID struct {
 	// Text of the remote identifier.
-	Text string `xml:",chardata"`
+	Text string `xml:",innerxml"`
 	// Type of the remote identifier.
 	Type string `xml:"type,attr"`
 }
@@ -141,7 +147,7 @@ type RemoteID struct {
 // but is provided as part of the model definition.
 type Pkg struct {
 	// Text of the package.
-	Text string `xml:",chardata"`
+	Text string `xml:",innerxml"`
 }
 
 // Cat represents a cross-linking category.
@@ -149,25 +155,25 @@ type Pkg struct {
 // but is provided as part of the model definition.
 type Cat struct {
 	// Text of the category.
-	Text string `xml:",chardata"`
+	Text string `xml:",innerxml"`
 }
 
 // Email represents an email address.
 type Email struct {
 	// Text of the email address.
-	Text string `xml:",chardata"`
+	Text string `xml:",innerxml"`
 }
 
 // Name represents a name of a person or maintainer.
 type Name struct {
 	// Text of the name.
-	Text string `xml:",chardata"`
+	Text string `xml:",innerxml"`
 }
 
 // Description represents a description of a maintainer or change.
 type Description struct {
 	// Text of the description.
-	Text string `xml:",chardata"`
+	Text string `xml:",innerxml"`
 }
 
 // ParseMetadata parses a metadata.xml file and returns either a PkgMetadata or CatMetadata pointer (as interface{}), or an error.
@@ -176,7 +182,7 @@ func ParseMetadata(path string) (interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	return ParseMetadataFromReader(f)
 }
