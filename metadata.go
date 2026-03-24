@@ -85,7 +85,7 @@ type Slot struct {
 	// Name of the SLOT.
 	Name string `xml:"name,attr"`
 	// Text of the slot.
-	Text string `xml:",chardata"`
+	Text string `xml:",innerxml"`
 }
 
 // Use represents the description of USE flags for a package.
@@ -101,7 +101,7 @@ type Flag struct {
 	// Name of the USE flag.
 	Name string `xml:"name,attr"`
 	// Text of the flag.
-	Text string `xml:",chardata"`
+	Text string `xml:",innerxml"`
 	// Restrict specifies restrictions on the applicability of the flag.
 	Restrict string `xml:"restrict,attr,omitempty"`
 }
@@ -131,7 +131,7 @@ type Doc struct {
 // RemoteID represents a remote identifier for a package.
 type RemoteID struct {
 	// Text of the remote identifier.
-	Text string `xml:",chardata"`
+	Text string `xml:",innerxml"`
 	// Type of the remote identifier.
 	Type string `xml:"type,attr"`
 }
@@ -141,7 +141,7 @@ type RemoteID struct {
 // but is provided as part of the model definition.
 type Pkg struct {
 	// Text of the package.
-	Text string `xml:",chardata"`
+	Text string `xml:",innerxml"`
 }
 
 // Cat represents a cross-linking category.
@@ -149,25 +149,25 @@ type Pkg struct {
 // but is provided as part of the model definition.
 type Cat struct {
 	// Text of the category.
-	Text string `xml:",chardata"`
+	Text string `xml:",innerxml"`
 }
 
 // Email represents an email address.
 type Email struct {
 	// Text of the email address.
-	Text string `xml:",chardata"`
+	Text string `xml:",innerxml"`
 }
 
 // Name represents a name of a person or maintainer.
 type Name struct {
 	// Text of the name.
-	Text string `xml:",chardata"`
+	Text string `xml:",innerxml"`
 }
 
 // Description represents a description of a maintainer or change.
 type Description struct {
 	// Text of the description.
-	Text string `xml:",chardata"`
+	Text string `xml:",innerxml"`
 }
 
 // ParseMetadata parses a metadata.xml file and returns either a PkgMetadata or CatMetadata pointer (as interface{}), or an error.

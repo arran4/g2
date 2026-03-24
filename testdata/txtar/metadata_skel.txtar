@@ -1,0 +1,126 @@
+-- input.xml --
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE pkgmetadata SYSTEM "https://www.gentoo.org/dtd/metadata.dtd">
+<!--
+  This is the example metadata file.
+  The root element of this file is <pkgmetadata>. Within this element a
+  number of subelements are allowed, the most common being maintainer.
+
+  For a full description look at:
+  https://devmanual.gentoo.org/ebuild-writing/misc-files/metadata/
+
+  Before committing, please remove the comments from this file. They are
+  not relevant for general metadata.xml files.
+-->
+<pkgmetadata>
+  <maintainer type="person">
+    <email>exampledev@gentoo.org</email>
+    <description>Primary maintainer</description>
+  </maintainer>
+  <maintainer type="project">
+    <email>exampleproject@gentoo.org</email>
+    <name>Gentoo Example Project</name>
+  </maintainer>
+  <longdescription>
+    Long description of the package. Note that long description should be long.
+    This section doesn't have to exist, if it doesn't differ from ebuild's
+    DESCRIPTION.
+
+    Using either spaces or tabs to indent is allowed. However mixing both in
+    a single metadata.xml file is not.
+  </longdescription>
+  <use>
+    <flag name="aspell">Uses <pkg>app-text/aspell</pkg> for spell checking.
+      Requires an installed dictionary from <cat>app-dicts</cat></flag>
+    <flag name="flag">Description of how USE='flag' affects this package</flag>
+    <flag name="kernel_linux">
+      Description of how KERNEL="linux" affects this package
+    </flag>
+  </use>
+</pkgmetadata>
+-- expected.xml --
+<pkgmetadata>
+	<maintainer type="person">
+		<email>exampledev@gentoo.org</email>
+		<description>Primary maintainer</description>
+	</maintainer>
+	<maintainer type="project">
+		<email>exampleproject@gentoo.org</email>
+		<name>Gentoo Example Project</name>
+	</maintainer>
+	<longdescription>
+    Long description of the package. Note that long description should be long.
+    This section doesn't have to exist, if it doesn't differ from ebuild's
+    DESCRIPTION.
+
+    Using either spaces or tabs to indent is allowed. However mixing both in
+    a single metadata.xml file is not.
+  </longdescription>
+	<use>
+		<flag name="aspell">Uses <pkg>app-text/aspell</pkg> for spell checking.
+      Requires an installed dictionary from <cat>app-dicts</cat></flag>
+		<flag name="flag">Description of how USE='flag' affects this package</flag>
+		<flag name="kernel_linux">
+      Description of how KERNEL="linux" affects this package
+    </flag>
+	</use>
+</pkgmetadata>
+-- expected.json --
+{
+  "XMLName": {
+    "Space": "",
+    "Local": "pkgmetadata"
+  },
+  "Maintainers": [
+    {
+      "Email": "exampledev@gentoo.org",
+      "Name": "",
+      "Description": "Primary maintainer",
+      "Type": "person",
+      "Proxied": "",
+      "Status": "",
+      "Restrict": ""
+    },
+    {
+      "Email": "exampleproject@gentoo.org",
+      "Name": "Gentoo Example Project",
+      "Description": "",
+      "Type": "project",
+      "Proxied": "",
+      "Status": "",
+      "Restrict": ""
+    }
+  ],
+  "LongDescription": [
+    {
+      "Body": "\n    Long description of the package. Note that long description should be long.\n    This section doesn't have to exist, if it doesn't differ from ebuild's\n    DESCRIPTION.\n\n    Using either spaces or tabs to indent is allowed. However mixing both in\n    a single metadata.xml file is not.\n  ",
+      "Lang": "",
+      "Restrict": ""
+    }
+  ],
+  "Slots": null,
+  "StabilizeAllArches": false,
+  "Use": [
+    {
+      "Flags": [
+        {
+          "Name": "aspell",
+          "Text": "Uses \u003cpkg\u003eapp-text/aspell\u003c/pkg\u003e for spell checking.\n      Requires an installed dictionary from \u003ccat\u003eapp-dicts\u003c/cat\u003e",
+          "Restrict": ""
+        },
+        {
+          "Name": "flag",
+          "Text": "Description of how USE='flag' affects this package",
+          "Restrict": ""
+        },
+        {
+          "Name": "kernel_linux",
+          "Text": "\n      Description of how KERNEL=\"linux\" affects this package\n    ",
+          "Restrict": ""
+        }
+      ],
+      "Lang": ""
+    }
+  ],
+  "Upstream": null
+}
