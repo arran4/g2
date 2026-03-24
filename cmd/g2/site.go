@@ -219,7 +219,6 @@ func parseRepo(repoDir string, defaultTitle string) (*SiteData, error) {
 		repoName = title
 	} else {
 		repoName = filepath.Base(repoDir)
-		title = repoName
 	}
 
 	site := &SiteData{
@@ -563,7 +562,7 @@ func generateSite(outDir string, site *SiteData) error {
 			}
 			pkgFeedItems = append(pkgFeedItems, FeedItem{
 				Title:       fmt.Sprintf("%s/%s-%s", pkg.Category, pkg.Name, ver.Version),
-				Link:        fmt.Sprintf(""),
+				Link:        "",
 				Description: desc,
 				PubDate:     time.Now().Format(time.RFC1123Z),
 				Updated:     time.Now().Format(time.RFC3339),
