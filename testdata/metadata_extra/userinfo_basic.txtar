@@ -1,0 +1,53 @@
+test: basic userinfo
+
+-- input.xml --
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE userlist SYSTEM "http://www.gentoo.org/dtd/userinfo.dtd">
+<userlist>
+  <user username="foo">
+    <realname fullname="Foo Bar">
+      <firstname>Foo</firstname>
+      <familyname sort="Bar">Bar</familyname>
+    </realname>
+    <pgpkey>0x12345678</pgpkey>
+    <email>foo@gentoo.org</email>
+    <joined>2010-01-01</joined>
+    <status>active</status>
+    <roles>Developer</roles>
+    <location latitude="50.0" longitude="10.0">Germany</location>
+  </user>
+</userlist>
+-- expected.json --
+{
+  "Users": [
+    {
+      "Username": "foo",
+      "Realname": {
+        "Fullname": "Foo Bar",
+        "Firstname": "Foo",
+        "Familyname": {
+          "Text": "Bar",
+          "Sort": "Bar"
+        }
+      },
+      "PGPKeys": [
+        "0x12345678"
+      ],
+      "Aliases": null,
+      "Emails": [
+        "foo@gentoo.org"
+      ],
+      "Joined": [
+        "2010-01-01"
+      ],
+      "Retired": null,
+      "Status": "active",
+      "Roles": "Developer",
+      "Location": {
+        "Text": "Germany",
+        "Latitude": "50.0",
+        "Longitude": "10.0"
+      }
+    }
+  ]
+}

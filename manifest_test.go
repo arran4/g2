@@ -249,8 +249,16 @@ func TestSort(t *testing.T) {
 	}
 	m.Sort()
 
-	if m.Entries[0].Type != "AUX" { t.Error("Sort failed: expected AUX first") }
-	if m.Entries[1].Type != "DIST" || m.Entries[1].Filename != "a" { t.Error("Sort failed: expected DIST a second") }
-	if m.Entries[2].Type != "DIST" || m.Entries[2].Filename != "d" { t.Error("Sort failed: expected DIST d third") }
-	if m.Entries[3].Type != "EBUILD" { t.Error("Sort failed: expected EBUILD last") }
+	if m.Entries[0].Type != "AUX" {
+		t.Error("Sort failed: expected AUX first")
+	}
+	if m.Entries[1].Type != "DIST" || m.Entries[1].Filename != "a" {
+		t.Error("Sort failed: expected DIST a second")
+	}
+	if m.Entries[2].Type != "DIST" || m.Entries[2].Filename != "d" {
+		t.Error("Sort failed: expected DIST d third")
+	}
+	if m.Entries[3].Type != "EBUILD" {
+		t.Error("Sort failed: expected EBUILD last")
+	}
 }

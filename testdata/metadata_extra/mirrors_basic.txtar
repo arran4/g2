@@ -1,0 +1,40 @@
+test: basic mirrors
+
+-- input.xml --
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mirrors SYSTEM "http://www.gentoo.org/dtd/mirrors.dtd">
+<mirrors>
+  <mirrorgroup region="North America" country="US" countryname="USA">
+    <mirror city="Corvallis" coordinates="44.5646,-123.2620" gentoo-bug="12345">
+      <name>OSU Open Source Lab</name>
+      <uri protocol="http" ipv4="y" ipv6="n">http://gentoo.osuosl.org/</uri>
+    </mirror>
+  </mirrorgroup>
+</mirrors>
+-- expected.json --
+{
+  "MirrorGroups": [
+    {
+      "Region": "North America",
+      "Country": "US",
+      "CountryName": "USA",
+      "Mirrors": [
+        {
+          "City": "Corvallis",
+          "Coordinates": "44.5646,-123.2620",
+          "GentooBug": "12345",
+          "Name": "OSU Open Source Lab",
+          "URIs": [
+            {
+              "Text": "http://gentoo.osuosl.org/",
+              "IPv4": "y",
+              "IPv6": "n",
+              "Protocol": "http",
+              "Partial": ""
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

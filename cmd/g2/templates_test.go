@@ -4,8 +4,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"testing"
 	"golang.org/x/tools/txtar"
+	"testing"
 )
 
 func TestEbuildTemplatesTxtar(t *testing.T) {
