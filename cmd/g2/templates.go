@@ -60,6 +60,10 @@ var ebuildTemplates = []Template{
 		Description: "Default generic ebuild",
 	},
 	{
+		Name:        "skel",
+		Description: "Gentoo standard skeleton ebuild",
+	},
+	{
 		Name:        "make",
 		Description: "Standard make based ebuild",
 	},
