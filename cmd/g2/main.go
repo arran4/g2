@@ -125,15 +125,33 @@ func (cfg *MainArgConfig) cmdManifest(args []string) error {
 
 	getHashes := func() []string {
 		hashes := make([]string, 0)
-		if *blake2b { hashes = append(hashes, g2.HashBlake2b) }
-		if *blake2s { hashes = append(hashes, g2.HashBlake2s) }
-		if *md5 { hashes = append(hashes, g2.HashMd5) }
-		if *rmd160 { hashes = append(hashes, g2.HashRmd160) }
-		if *sha1 { hashes = append(hashes, g2.HashSha1) }
-		if *sha256 { hashes = append(hashes, g2.HashSha256) }
-		if *sha3_256 { hashes = append(hashes, g2.HashSha3_256) }
-		if *sha3_512 { hashes = append(hashes, g2.HashSha3_512) }
-		if *sha512 { hashes = append(hashes, g2.HashSha512) }
+		if *blake2b {
+			hashes = append(hashes, g2.HashBlake2b)
+		}
+		if *blake2s {
+			hashes = append(hashes, g2.HashBlake2s)
+		}
+		if *md5 {
+			hashes = append(hashes, g2.HashMd5)
+		}
+		if *rmd160 {
+			hashes = append(hashes, g2.HashRmd160)
+		}
+		if *sha1 {
+			hashes = append(hashes, g2.HashSha1)
+		}
+		if *sha256 {
+			hashes = append(hashes, g2.HashSha256)
+		}
+		if *sha3_256 {
+			hashes = append(hashes, g2.HashSha3_256)
+		}
+		if *sha3_512 {
+			hashes = append(hashes, g2.HashSha3_512)
+		}
+		if *sha512 {
+			hashes = append(hashes, g2.HashSha512)
+		}
 		return hashes
 	}
 
@@ -172,8 +190,8 @@ func (cfg *CmdManifestArgConfig) cmdUpsertFromUrl(args []string, hashes []string
 	filename := args[1]
 	ebuildDirOrFile := args[2]
 
-    // Logic to be moved to a reusable function if we want to reuse it in verify --fix
-    // For now I'll just keep it here and maybe call this function or copy logic.
+	// Logic to be moved to a reusable function if we want to reuse it in verify --fix
+	// For now I'll just keep it here and maybe call this function or copy logic.
 
 	checksums, err := g2.DownloadAndChecksum(url, hashes)
 	if err != nil {
