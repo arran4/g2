@@ -2,6 +2,7 @@ package g2
 
 import (
 	"embed"
+	"encoding/json"
 	"io/fs"
 	"path"
 	"strings"
@@ -28,16 +29,18 @@ func TestMetadataFromTxtar(t *testing.T) {
 			}
 			ar := txtar.Parse(raw)
 
-			var input, expected []byte
+			var input, expectedXML, expectedJSON []byte
 			for _, f := range ar.Files {
 				if f.Name == "input.xml" {
 					input = f.Data
 				} else if f.Name == "expected.xml" {
-					expected = f.Data
+					expectedXML = f.Data
+				} else if f.Name == "expected.json" {
+					expectedJSON = f.Data
 				}
 			}
 
-			if input == nil || expected == nil {
+			if input == nil || expectedXML == nil {
 				t.Fatalf("fixture %s must contain input.xml and expected.xml", fixture)
 			}
 
@@ -56,12 +59,52 @@ func TestMetadataFromTxtar(t *testing.T) {
 				t.Fatalf("Unknown metadata type: %T", got)
 			}
 
-			expectedStr := strings.TrimSpace(string(expected))
+			expectedStr := strings.TrimSpace(string(expectedXML))
 			if strings.TrimSpace(gotStr) != expectedStr {
 				t.Errorf("Mismatch in parsing output.\nGot:\n%s\nWant:\n%s", gotStr, expectedStr)
 			}
 
-			// Circularity test
+			// JSON testing
+			if expectedJSON != nil {
+				jsonBytes, err := json.MarshalIndent(got, "", "  ")
+				if err != nil {
+					t.Fatalf("json.MarshalIndent error: %v", err)
+				}
+				if strings.TrimSpace(string(jsonBytes)) != strings.TrimSpace(string(expectedJSON)) {
+					t.Errorf("Mismatch in JSON output.\nGot:\n%s\nWant:\n%s", string(jsonBytes), string(expectedJSON))
+				}
+
+				// JSON to XML circular testing
+				var gotFromJSON interface{}
+				switch got.(type) {
+				case *PkgMetadata:
+					var p PkgMetadata
+					if err := json.Unmarshal(jsonBytes, &p); err != nil {
+						t.Fatalf("json.Unmarshal error: %v", err)
+					}
+					gotFromJSON = &p
+				case *CatMetadata:
+					var c CatMetadata
+					if err := json.Unmarshal(jsonBytes, &c); err != nil {
+						t.Fatalf("json.Unmarshal error: %v", err)
+					}
+					gotFromJSON = &c
+				}
+
+				var jsonToXmlStr string
+				switch v := gotFromJSON.(type) {
+				case *PkgMetadata:
+					jsonToXmlStr = v.String()
+				case *CatMetadata:
+					jsonToXmlStr = v.String()
+				}
+
+				if strings.TrimSpace(jsonToXmlStr) != expectedStr {
+					t.Errorf("Mismatch in JSON -> XML parsing output.\nGot:\n%s\nWant:\n%s", jsonToXmlStr, expectedStr)
+				}
+			}
+
+			// XML to XML Circularity test
 			got2, err := ParseMetadataBytes([]byte(gotStr))
 			if err != nil {
 				t.Fatalf("ParseMetadataBytes() on stringified data error: %v", err)
