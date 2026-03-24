@@ -153,12 +153,12 @@ func (cfg *MainArgConfig) cmdManifest(args []string) error {
 		if err := config.cmdClean(cleanArgs); err != nil {
 			return fmt.Errorf("clean manifest: %w", err)
 		}
-	case "help", "-help", "--help":
-		fs.Usage()
-		os.Exit(-1)
 	default:
 		fs.Usage()
 		return fmt.Errorf("unknown command %s", cmd)
+	case "help", "-help", "--help":
+		fs.Usage()
+		os.Exit(-1)
 	}
 	return nil
 }

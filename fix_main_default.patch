@@ -1,0 +1,19 @@
+--- cmd/g2/main.go
++++ cmd/g2/main.go
+@@ -73,13 +73,13 @@
+			os.Exit(-1)
+			return
+		}
+-	default:
+-		fmt.Printf("Unknown command %s", cmd)
+-		fs.Usage()
+-		return
+	case "help", "-help", "--help":
+		fs.Usage()
+		os.Exit(-1)
++	default:
++		fmt.Printf("Unknown command %s", cmd)
++		fs.Usage()
++		return
+	}
+ }

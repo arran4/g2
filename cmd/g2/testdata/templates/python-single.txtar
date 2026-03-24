@@ -1,0 +1,43 @@
+-- input.json --
+{
+  "EAPI": "8",
+  "Description": "A short description",
+  "Homepage": "https://example.com",
+  "SrcURI": "",
+  "License": "GPL-2",
+  "Slot": "0",
+  "Keywords": "~amd64",
+  "Depend": "",
+  "RDepend": "",
+  "BDepend": "",
+  "PythonCompat": "python3_{10..12}",
+  "Pep517": "setuptools"
+}
+-- output.ebuild --
+EAPI=8
+
+# Specifies the supported Python implementations.
+PYTHON_COMPAT=( python3_{10..12} )
+
+# python-single-r1 eclass is used for packages that are meant to be built against a single
+# Python implementation (typically tools or applications, rather than libraries).
+inherit python-single-r1
+
+DESCRIPTION="A short description"
+HOMEPAGE="https://example.com"
+SRC_URI=""
+
+LICENSE="GPL-2"
+SLOT="0"
+KEYWORDS="~amd64"
+
+REQUIRED_USE="${PYTHON_REQUIRED_USE}"
+DEPEND="${PYTHON_DEPS} "
+RDEPEND="${PYTHON_DEPS} "
+BDEPEND=""
+
+# Use python_doscript to install executable Python scripts, ensuring they get the
+# correct shebang for the active Python implementation.
+src_install() {
+	python_doscript myscript.py
+}

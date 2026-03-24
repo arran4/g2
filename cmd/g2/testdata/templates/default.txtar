@@ -1,0 +1,39 @@
+-- input.json --
+{
+  "EAPI": "8",
+  "Description": "A short description",
+  "Homepage": "https://example.com",
+  "SrcURI": "https://example.com/${P}.tar.gz",
+  "License": "GPL-2",
+  "Slot": "0",
+  "Keywords": "~amd64",
+  "Depend": "",
+  "RDepend": "",
+  "BDepend": ""
+}
+-- output.ebuild --
+EAPI=8
+
+DESCRIPTION="A short description"
+HOMEPAGE="https://example.com"
+SRC_URI="https://example.com/${P}.tar.gz"
+
+LICENSE="GPL-2"
+SLOT="0"
+KEYWORDS="~amd64"
+
+DEPEND=""
+RDEPEND=""
+BDEPEND=""
+
+# The default src_compile function calls emake, which runs `make` in the source directory.
+# This requires a Makefile to be present in the unpacked source tree.
+src_compile() {
+	emake
+}
+
+# The default src_install function installs the compiled files into the destination directory.
+# It expects the Makefile to support the `install` target and respect the `DESTDIR` variable.
+src_install() {
+	emake DESTDIR="${D}" install
+}

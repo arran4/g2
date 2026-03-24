@@ -67,9 +67,9 @@ func (d *DownloadProgress) Write(p []byte) (n int, err error) {
 		if d.TotalSize != nil {
 			percent = fmt.Sprintf("%03d%%", int(100*(float64(d.Size)/float64(*d.TotalSize))))
 			total = fmt.Sprintf("%d kb", *d.TotalSize/1024)
-			durationInSeconds := duration / time.Second
-			if durationInSeconds > 0 {
-				bytesPerSec := d.Size / int(durationInSeconds)
+			durationSecs := duration / time.Second
+			if durationSecs > 0 {
+				bytesPerSec := d.Size / int(durationSecs)
 				if bytesPerSec > 0 {
 					estimate = (time.Duration(int(*d.TotalSize)/bytesPerSec) * time.Second).String()
 				}

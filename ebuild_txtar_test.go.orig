@@ -43,10 +43,9 @@ func TestEbuildsFromTxtar(t *testing.T) {
 				}
 
 				mode := ParseFull
-				switch config.ParserMode {
-				case "ParseVariables":
+				if config.ParserMode == "ParseVariables" {
 					mode = ParseVariables
-				case "ParseMetadataOnly":
+				} else if config.ParserMode == "ParseMetadataOnly" {
 					mode = ParseMetadataOnly
 				}
 

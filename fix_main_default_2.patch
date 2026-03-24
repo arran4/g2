@@ -1,0 +1,18 @@
+--- cmd/g2/main.go
++++ cmd/g2/main.go
+@@ -155,12 +155,12 @@
+		if err := config.cmdClean(cleanArgs); err != nil {
+			return fmt.Errorf("clean manifest: %w", err)
+		}
+-	default:
+-		fs.Usage()
+-		return fmt.Errorf("unknown command %s", cmd)
+	case "help", "-help", "--help":
+		fs.Usage()
+		os.Exit(-1)
++	default:
++		fs.Usage()
++		return fmt.Errorf("unknown command %s", cmd)
+	}
+	return nil
+ }

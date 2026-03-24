@@ -1,0 +1,19 @@
+--- ebuild.go
++++ ebuild.go
+@@ -47,13 +47,13 @@
+	cmd := fs.Arg(0)
+
+	switch cmd {
+-	default:
+-		fs.Usage()
+-		return fmt.Errorf("unknown command %s", cmd)
+	case "help", "-help", "--help":
+		fs.Usage()
+		os.Exit(-1)
+	case "init":
+		return cmdEbuildInit(fs)
+	case "templates":
+		return cmdEbuildTemplates(fs)
++	default:
++		fs.Usage()
++		return fmt.Errorf("unknown command %s", cmd)
