@@ -31,6 +31,7 @@ func main() {
 		fmt.Printf("\t\t %s \t\t %s\n", "overlays", "commands relating to multiple overlays")
 		fmt.Printf("\t\t %s \t\t %s\n", "lint", "lints the repository for errors")
 		fmt.Printf("\t\t %s \t\t %s\n", "usedesc", "commands relating to use.desc files")
+		fmt.Printf("\t\t %s \t\t %s\n", "uselocaldesc", "commands relating to use.local.desc files")
 	}
 	if err := fs.Parse(os.Args); err != nil {
 		log.Printf("Flag parse error: %s", err)
@@ -85,6 +86,12 @@ func main() {
 	case "usedesc":
 		if err := cfg.cmdUseDesc(fs.Args()[2:]); err != nil {
 			log.Printf("usedesc error: %s", err)
+			os.Exit(-1)
+			return
+		}
+	case "uselocaldesc":
+		if err := cfg.cmdUseLocalDesc(fs.Args()[2:]); err != nil {
+			log.Printf("uselocaldesc error: %s", err)
 			os.Exit(-1)
 			return
 		}
