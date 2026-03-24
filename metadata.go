@@ -9,6 +9,7 @@ import (
 )
 
 // CatMetadata represents metadata for a category.
+// Source: https://github.com/gentoo-mirror/gentoo/blob/stable/metadata/dtd/metadata.dtd
 type CatMetadata struct {
 	XMLName         xml.Name          `xml:"catmetadata"`
 	LongDescription []LongDescription `xml:"longdescription"`
@@ -23,6 +24,7 @@ func (c *CatMetadata) String() string {
 }
 
 // PkgMetadata represents metadata for a package.
+// Source: https://github.com/gentoo-mirror/gentoo/blob/stable/metadata/dtd/metadata.dtd
 type PkgMetadata struct {
 	XMLName            xml.Name          `xml:"pkgmetadata"`
 	Maintainers        []Maintainer      `xml:"maintainer"`
@@ -129,6 +131,10 @@ type Doc struct {
 }
 
 // RemoteID represents a remote identifier for a package.
+// Supported types: bitbucket, codeberg, cpan, cpan-module, cpe, cran, ctan, freedesktop-gitlab,
+// gentoo, github, gitlab, gnome-gitlab, google-code, hackage, heptapod, kde-invent,
+// launchpad, osdn, pear, pecl, pypi, rubygems, savannah, savannah-nongnu,
+// sourceforge, sourcehut, vim
 type RemoteID struct {
 	// Text of the remote identifier.
 	Text string `xml:",innerxml"`
