@@ -31,7 +31,6 @@ concurrency:
 
 permissions:
   contents: write
-  contents: write
   pull-requests: write
   checks: write
   packages: write
