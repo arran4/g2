@@ -199,15 +199,15 @@ jobs:
             next_tag="v$OVERRIDE"
           else
             case "$MODE" in
-              release-major) level="--major"; suffix="" ;;
-              release-minor) level="--minor"; suffix="" ;;
-              release-patch) level="--patch"; suffix="" ;;
-              release-test)  level="--patch"; suffix="--prerelease test" ;;
-              release-rc)    level="--patch"; suffix="--prerelease rc" ;;
-              release-alpha) level="--patch"; suffix="--prerelease alpha" ;;
+              release-major) level="major"; suffix="" ;;
+              release-minor) level="minor"; suffix="" ;;
+              release-patch) level="patch"; suffix="" ;;
+              release-test)  level="patch"; suffix="test" ;;
+              release-rc)    level="patch"; suffix="rc" ;;
+              release-alpha) level="patch"; suffix="alpha" ;;
               *) echo "Unsupported release mode: $MODE"; exit 1 ;;
             esac
-            next_tag=$(git-tag-inc $level $suffix)
+            next_tag=$(git-tag-inc -print-version-only $level $suffix)
           fi
 
           # Tagging safety guards to avoid duplicate/invalid release states.
