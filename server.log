@@ -1,6 +1,0 @@
-127.0.0.1 - - [24/Mar/2026 23:24:42] "GET / HTTP/1.1" 200 -
-127.0.0.1 - - [24/Mar/2026 23:24:43] "GET /packages/ HTTP/1.1" 200 -
-127.0.0.1 - - [24/Mar/2026 23:24:43] "GET /packages/app-misc/foo/ HTTP/1.1" 200 -
-127.0.0.1 - - [24/Mar/2026 23:24:43] "GET /repos/test_overlay/categories/app-misc/packages/foo/ HTTP/1.1" 200 -
-127.0.0.1 - - [24/Mar/2026 23:24:44] "GET /categories/ HTTP/1.1" 200 -
-127.0.0.1 - - [24/Mar/2026 23:24:45] "GET /categories/app-misc/ HTTP/1.1" 200 -

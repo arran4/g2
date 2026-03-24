@@ -1,2 +1,6 @@
 /.idea
 *.iml
+
+/g2
+/*.log
+/test_site_out/
