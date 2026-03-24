@@ -128,22 +128,4 @@
         {{end}}
     </table>
 </div>
-{{else if .Package.Manifest}}
-<div class="metadata-section">
-    <h3>Manifest</h3>
-    <table>
-        <tr>
-            <th>Type</th>
-            <th>File</th>
-            <th>Size</th>
-        </tr>
-        {{range .Package.Manifest.Entries}}
-        <tr>
-            <td>{{.Type}}</td>
-            <td>{{.Filename}}</td>
-            <td>{{.Size}} bytes</td>
-        </tr>
-        {{end}}
-    </table>
-</div>
 {{end}}
