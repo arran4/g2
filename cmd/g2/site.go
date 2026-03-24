@@ -155,7 +155,7 @@ func (cfg *MainArgConfig) cmdOverlay(args []string) error {
 		return fmt.Errorf("parsing repo: %w", err)
 	}
 
-	if err := generateSite(*outDir, siteData); err != nil {
+	if err := generateSite(*outDir, []*SiteData{siteData}); err != nil {
 		return fmt.Errorf("generating site: %w", err)
 	}
 
@@ -424,7 +424,24 @@ func isIgnoredDir(name string) bool {
 	return ignored[name]
 }
 
-func generateSite(outDir string, site *SiteData) error {
+
+type AggCategory struct {
+	Name     string
+	Packages map[string]*AggPackage
+}
+type AggPackage struct {
+	Name     string
+	Category string
+	Repos    map[string]*SiteData
+}
+type AggLicense struct {
+	Name     string
+	Count    int
+	Packages []*AggPackage
+	Text     string
+}
+
+func generateSite(outDir string, sites []*SiteData) error {
 	if err := os.MkdirAll(outDir, 0755); err != nil {
 		return err
 	}
@@ -434,30 +451,45 @@ func generateSite(outDir string, site *SiteData) error {
 		return fmt.Errorf("parsing templates: %w", err)
 	}
 
-	var allPackages []PackageData
-	licenseMap := make(map[string]*LicenseData)
+	aggCategories := make(map[string]*AggCategory)
+	aggPackages := make(map[string]*AggPackage)
+	aggLicenses := make(map[string]*AggLicense)
 
-	for _, cat := range site.Categories {
-		for _, pkg := range cat.Packages {
-			allPackages = append(allPackages, pkg)
-			for _, ver := range pkg.Versions {
-				if ver.Ebuild != nil && ver.Ebuild.Vars != nil {
-					lic := ver.Ebuild.Vars["LICENSE"]
-					if lic != "" {
-						if _, ok := licenseMap[lic]; !ok {
-							licenseMap[lic] = &LicenseData{Name: lic}
-						}
-						// simple deduplication
-						found := false
-						for _, p := range licenseMap[lic].Packages {
-							if p.Name == pkg.Name && p.Category == pkg.Category {
-								found = true
-								break
+	totalPackages := 0
+
+	for _, site := range sites {
+		for _, cat := range site.Categories {
+			if _, ok := aggCategories[cat.Name]; !ok {
+				aggCategories[cat.Name] = &AggCategory{Name: cat.Name, Packages: make(map[string]*AggPackage)}
+			}
+			for _, pkg := range cat.Packages {
+				pkgKey := cat.Name + "/" + pkg.Name
+				if _, ok := aggPackages[pkgKey]; !ok {
+					aggPackages[pkgKey] = &AggPackage{Name: pkg.Name, Category: cat.Name, Repos: make(map[string]*SiteData)}
+					totalPackages++
+				}
+				aggPackages[pkgKey].Repos[site.RepoName] = site
+				aggCategories[cat.Name].Packages[pkg.Name] = aggPackages[pkgKey]
+
+				for _, ver := range pkg.Versions {
+					if ver.Ebuild != nil && ver.Ebuild.Vars != nil {
+						lic := ver.Ebuild.Vars["LICENSE"]
+						if lic != "" {
+							if _, ok := aggLicenses[lic]; !ok {
+								aggLicenses[lic] = &AggLicense{Name: lic}
 							}
-						}
-						if !found {
-							licenseMap[lic].Packages = append(licenseMap[lic].Packages, pkg)
-							licenseMap[lic].Count++
+
+							found := false
+							for _, p := range aggLicenses[lic].Packages {
+								if p.Name == pkg.Name && p.Category == pkg.Category {
+									found = true
+									break
+								}
+							}
+							if !found {
+								aggLicenses[lic].Packages = append(aggLicenses[lic].Packages, aggPackages[pkgKey])
+								aggLicenses[lic].Count++
+							}
 						}
 					}
 				}
@@ -465,150 +497,334 @@ func generateSite(outDir string, site *SiteData) error {
 		}
 	}
 
-	sort.Slice(allPackages, func(i, j int) bool {
-		if allPackages[i].Category == allPackages[j].Category {
-			return allPackages[i].Name < allPackages[j].Name
-		}
-		return allPackages[i].Category < allPackages[j].Category
-	})
-
-	var sortedLicenses []*LicenseData
-	for _, ld := range licenseMap {
-		sortedLicenses = append(sortedLicenses, ld)
+	// Sort structures for templates
+	var sortedCategories []*AggCategory
+	for _, c := range aggCategories {
+		sortedCategories = append(sortedCategories, c)
 	}
-	sort.Slice(sortedLicenses, func(i, j int) bool {
-		return sortedLicenses[i].Name < sortedLicenses[j].Name
+	sort.Slice(sortedCategories, func(i, j int) bool { return sortedCategories[i].Name < sortedCategories[j].Name })
+
+	var sortedPackages []*AggPackage
+	for _, p := range aggPackages {
+		sortedPackages = append(sortedPackages, p)
+	}
+	sort.Slice(sortedPackages, func(i, j int) bool {
+		if sortedPackages[i].Category == sortedPackages[j].Category {
+			return sortedPackages[i].Name < sortedPackages[j].Name
+		}
+		return sortedPackages[i].Category < sortedPackages[j].Category
 	})
 
-	// Generate Feeds for Repo
-	var repoFeedItems []FeedItem
-	for _, pkg := range allPackages {
-		for _, ver := range pkg.Versions {
-			desc := ""
-			if ver.Ebuild != nil && ver.Ebuild.Vars != nil {
-				desc = ver.Ebuild.Vars["DESCRIPTION"]
+	var sortedLicenses []*AggLicense
+	for _, l := range aggLicenses {
+		sortedLicenses = append(sortedLicenses, l)
+	}
+	sort.Slice(sortedLicenses, func(i, j int) bool { return sortedLicenses[i].Name < sortedLicenses[j].Name })
+
+	mapToList := func(m map[string]*SiteData) []*SiteData {
+		var l []*SiteData
+		for _, v := range m {
+			l = append(l, v)
+		}
+		sort.Slice(l, func(i, j int) bool { return l[i].RepoName < l[j].RepoName })
+		return l
+	}
+
+	// Title
+	title := "Gentoo Packages"
+	if len(sites) == 1 {
+		title = sites[0].Title
+	}
+
+	// Generate Global Feeds
+	var globalFeedItems []FeedItem
+	for _, pkg := range sortedPackages {
+		for _, site := range pkg.Repos {
+			var sPkg *PackageData
+			for _, cat := range site.Categories {
+				if cat.Name == pkg.Category {
+					for _, p := range cat.Packages {
+						if p.Name == pkg.Name {
+							sPkg = &p
+							break
+						}
+					}
+				}
 			}
-			repoFeedItems = append(repoFeedItems, FeedItem{
-				Title:       fmt.Sprintf("%s/%s-%s", pkg.Category, pkg.Name, ver.Version),
-				Link:        fmt.Sprintf("packages/%s/", pkg.Name),
-				Description: desc,
-				PubDate:     time.Now().Format(time.RFC1123Z),
-				Updated:     time.Now().Format(time.RFC3339),
-			})
+			if sPkg != nil {
+				for _, ver := range sPkg.Versions {
+					desc := ""
+					if ver.Ebuild != nil && ver.Ebuild.Vars != nil {
+						desc = ver.Ebuild.Vars["DESCRIPTION"]
+					}
+					globalFeedItems = append(globalFeedItems, FeedItem{
+						Title:       fmt.Sprintf("%s/%s-%s (%s)", sPkg.Category, sPkg.Name, ver.Version, site.RepoName),
+						Link:        fmt.Sprintf("repos/%s/categories/%s/packages/%s/", site.RepoName, sPkg.Category, sPkg.Name),
+						Description: desc,
+						PubDate:     time.Now().Format(time.RFC1123Z),
+						Updated:     time.Now().Format(time.RFC3339),
+					})
+				}
+			}
 		}
 	}
-	if len(repoFeedItems) > 50 {
-		repoFeedItems = repoFeedItems[:50]
+	if len(globalFeedItems) > 50 {
+		globalFeedItems = globalFeedItems[:50]
 	}
-	if err := generateFeeds(filepath.Join(outDir, "index"), site.Title, "Latest updates to repository", "", repoFeedItems); err != nil {
-		log.Printf("Warning: failed to generate repo feed: %v", err)
+	if err := generateFeeds(filepath.Join(outDir, "index"), title, "Latest updates to global repository", "", globalFeedItems); err != nil {
+		log.Printf("Warning: failed to generate global feed: %v", err)
 	}
 
-	// Generate index
-	if err := renderPage(filepath.Join(outDir, "index.html"), tmpl, "index.html", map[string]interface{}{
-		"Title":       site.Title,
-		"BaseURL":     "",
-		"RepoName":    site.RepoName,
-		"RemoteURL":   site.RemoteURL,
-		"Categories":  site.Categories,
-		"AllPackages": allPackages,
-		"Licenses":    sortedLicenses,
+	// 1. Root Dashboard
+	if err := renderPage(filepath.Join(outDir, "index.html"), tmpl, "dashboard.html", map[string]interface{}{
+		"Title":      title,
+		"BaseURL":    "",
+		"Repos":      sites,
+		"Categories": sortedCategories,
+		"Packages":   sortedPackages,
+		"Licenses":   sortedLicenses,
+		"Updates":    globalFeedItems,
+		"Version":    version,
+	}); err != nil { return err }
+
+	// 2. Overlays List
+	if err := os.MkdirAll(filepath.Join(outDir, "overlays"), 0755); err != nil { return err }
+	if err := renderPage(filepath.Join(outDir, "overlays", "index.html"), tmpl, "overlays.html", map[string]interface{}{
+		"Title":       "Overlays",
+		"BaseURL":     "../",
+		"Breadcrumbs": []Breadcrumb{{Name: title, URL: "../"}, {Name: "Overlays"}},
+		"Repos":       sites,
 		"Version":     version,
-	}); err != nil {
-		return err
-	}
+	}); err != nil { return err }
 
-	// Generate Categories
-	for _, cat := range site.Categories {
+	// 3. Global Categories
+	if err := os.MkdirAll(filepath.Join(outDir, "categories"), 0755); err != nil { return err }
+	if err := renderPage(filepath.Join(outDir, "categories", "index.html"), tmpl, "categories.html", map[string]interface{}{
+		"Title":       "Categories",
+		"BaseURL":     "../",
+		"Breadcrumbs": []Breadcrumb{{Name: title, URL: "../"}, {Name: "Categories"}},
+		"Categories":  sortedCategories,
+		"Version":     version,
+	}); err != nil { return err }
+
+	for _, cat := range sortedCategories {
 		catDir := filepath.Join(outDir, "categories", cat.Name)
-		if err := os.MkdirAll(catDir, 0755); err != nil {
-			return err
+		if err := os.MkdirAll(catDir, 0755); err != nil { return err }
+
+		var catPkgs []*AggPackage
+		for _, p := range cat.Packages {
+			catPkgs = append(catPkgs, p)
 		}
-		breadcrumbs := []Breadcrumb{
-			{Name: site.Title, URL: "../../"},
-			{Name: "Categories"},
-			{Name: cat.Name},
+		sort.Slice(catPkgs, func(i, j int) bool { return catPkgs[i].Name < catPkgs[j].Name })
+
+		type TmplPkg struct {
+			Name string
+			ReposList []*SiteData
+		}
+		var tmplPkgs []TmplPkg
+		for _, p := range catPkgs {
+			tmplPkgs = append(tmplPkgs, TmplPkg{Name: p.Name, ReposList: mapToList(p.Repos)})
 		}
 
 		if err := renderPage(filepath.Join(catDir, "index.html"), tmpl, "category.html", map[string]interface{}{
-			"Title":       fmt.Sprintf("%s - %s", site.Title, cat.Name),
+			"Title":       "Category: " + cat.Name,
 			"BaseURL":     "../../",
-			"Breadcrumbs": breadcrumbs,
-			"Category":    cat,
+			"Breadcrumbs": []Breadcrumb{{Name: title, URL: "../../"}, {Name: "Categories", URL: "../"}, {Name: cat.Name}},
+			"Category":    map[string]interface{}{"Name": cat.Name, "Packages": tmplPkgs},
 			"Version":     version,
-		}); err != nil {
-			return err
+		}); err != nil { return err }
+	}
+
+	// 4. Global Packages
+	if err := os.MkdirAll(filepath.Join(outDir, "packages"), 0755); err != nil { return err }
+	if err := renderPage(filepath.Join(outDir, "packages", "index.html"), tmpl, "packages.html", map[string]interface{}{
+		"Title":       "Packages",
+		"BaseURL":     "../",
+		"Breadcrumbs": []Breadcrumb{{Name: title, URL: "../"}, {Name: "Packages"}},
+		"Packages":    sortedPackages,
+		"Version":     version,
+	}); err != nil { return err }
+
+	for _, pkg := range sortedPackages {
+		pkgDir := filepath.Join(outDir, "packages", pkg.Category, pkg.Name)
+		if err := os.MkdirAll(pkgDir, 0755); err != nil { return err }
+
+		reposList := mapToList(pkg.Repos)
+
+		if len(reposList) == 1 {
+			targetURL := fmt.Sprintf("../../../repos/%s/categories/%s/packages/%s/", reposList[0].RepoName, pkg.Category, pkg.Name)
+			redirectHTML := fmt.Sprintf(`<!DOCTYPE html><html><head><meta http-equiv="refresh" content="0; url=%s"></head><body><a href="%s">Redirecting...</a></body></html>`, targetURL, targetURL)
+			if err := os.WriteFile(filepath.Join(pkgDir, "index.html"), []byte(redirectHTML), 0644); err != nil { return err }
+		} else {
+			if err := renderPage(filepath.Join(pkgDir, "index.html"), tmpl, "package_picker.html", map[string]interface{}{
+				"Title":       "Package: " + pkg.Category + "/" + pkg.Name,
+				"BaseURL":     "../../../",
+				"Breadcrumbs": []Breadcrumb{{Name: title, URL: "../../../"}, {Name: "Packages", URL: "../../"}, {Name: pkg.Category}, {Name: pkg.Name}},
+				"Package":     map[string]interface{}{"Category": pkg.Category, "Name": pkg.Name, "ReposList": reposList},
+				"Version":     version,
+			}); err != nil { return err }
 		}
 	}
 
-	// Generate Packages
-	for _, pkg := range allPackages {
-		pkgDir := filepath.Join(outDir, "packages", pkg.Name)
-		if err := os.MkdirAll(pkgDir, 0755); err != nil {
-			return err
-		}
-		breadcrumbs := []Breadcrumb{
-			{Name: site.Title, URL: "../../"},
-			{Name: "Categories", URL: "../../categories/" + pkg.Category + "/"},
-			{Name: pkg.Category},
-			{Name: pkg.Name},
-		}
+	// 5. Global Licenses
+	if err := os.MkdirAll(filepath.Join(outDir, "licenses"), 0755); err != nil { return err }
+	if err := renderPage(filepath.Join(outDir, "licenses", "index.html"), tmpl, "licenses.html", map[string]interface{}{
+		"Title":       "Licenses",
+		"BaseURL":     "../",
+		"Breadcrumbs": []Breadcrumb{{Name: title, URL: "../"}, {Name: "Licenses"}},
+		"Licenses":    sortedLicenses,
+		"Version":     version,
+	}); err != nil { return err }
 
-		var pkgFeedItems []FeedItem
-		for _, ver := range pkg.Versions {
-			desc := ""
-			if ver.Ebuild != nil && ver.Ebuild.Vars != nil {
-				desc = ver.Ebuild.Vars["DESCRIPTION"]
-			}
-			pkgFeedItems = append(pkgFeedItems, FeedItem{
-				Title:       fmt.Sprintf("%s/%s-%s", pkg.Category, pkg.Name, ver.Version),
-				Link:        "",
-				Description: desc,
-				PubDate:     time.Now().Format(time.RFC1123Z),
-				Updated:     time.Now().Format(time.RFC3339),
-			})
-		}
-		if err := generateFeeds(filepath.Join(pkgDir, "index"), pkg.Category+"/"+pkg.Name, "Latest updates to package", "", pkgFeedItems); err != nil {
-			log.Printf("Warning: failed to generate package feed: %v", err)
-		}
-
-		if err := renderPage(filepath.Join(pkgDir, "index.html"), tmpl, "package.html", map[string]interface{}{
-			"Title":       fmt.Sprintf("%s - %s/%s", site.Title, pkg.Category, pkg.Name),
-			"BaseURL":     "../../",
-			"Breadcrumbs": breadcrumbs,
-			"Package":     pkg,
-			"Version":     version,
-		}); err != nil {
-			return err
-		}
-	}
-
-	// Generate Licenses
 	for _, lic := range sortedLicenses {
-		licDir := filepath.Join(outDir, "licenses", lic.Name, "packages")
-		if err := os.MkdirAll(licDir, 0755); err != nil {
-			return err
+		licDir := filepath.Join(outDir, "licenses", lic.Name)
+		if err := os.MkdirAll(licDir, 0755); err != nil { return err }
+
+		type TmplPkg struct {
+			Name string
+			Category string
+			ReposList []*SiteData
 		}
-		breadcrumbs := []Breadcrumb{
-			{Name: site.Title, URL: "../../../"},
-			{Name: "Licenses"},
-			{Name: lic.Name},
+		var tmplPkgs []TmplPkg
+		for _, p := range lic.Packages {
+			tmplPkgs = append(tmplPkgs, TmplPkg{Name: p.Name, Category: p.Category, ReposList: mapToList(p.Repos)})
 		}
 
 		if err := renderPage(filepath.Join(licDir, "index.html"), tmpl, "license.html", map[string]interface{}{
-			"Title":       fmt.Sprintf("%s - License: %s", site.Title, lic.Name),
-			"BaseURL":     "../../../",
-			"Breadcrumbs": breadcrumbs,
-			"License":     lic,
+			"Title":       "License: " + lic.Name,
+			"BaseURL":     "../../",
+			"Breadcrumbs": []Breadcrumb{{Name: title, URL: "../../"}, {Name: "Licenses", URL: "../"}, {Name: lic.Name}},
+			"License":     map[string]interface{}{"Name": lic.Name, "Packages": tmplPkgs, "Text": lic.Text},
 			"Version":     version,
-		}); err != nil {
-			return err
+		}); err != nil { return err }
+	}
+
+	// 6. Repo-Specific Pages
+	for _, site := range sites {
+		repoDir := filepath.Join(outDir, "repos", site.RepoName)
+		if err := os.MkdirAll(repoDir, 0755); err != nil { return err }
+
+		var repoFeedItems []FeedItem
+		for _, cat := range site.Categories {
+			for _, pkg := range cat.Packages {
+				for _, ver := range pkg.Versions {
+					desc := ""
+					if ver.Ebuild != nil && ver.Ebuild.Vars != nil {
+						desc = ver.Ebuild.Vars["DESCRIPTION"]
+					}
+					repoFeedItems = append(repoFeedItems, FeedItem{
+						Title:       fmt.Sprintf("%s/%s-%s", pkg.Category, pkg.Name, ver.Version),
+						Link:        fmt.Sprintf("categories/%s/packages/%s/", pkg.Category, pkg.Name),
+						Description: desc,
+						PubDate:     time.Now().Format(time.RFC1123Z),
+						Updated:     time.Now().Format(time.RFC3339),
+					})
+				}
+			}
+		}
+		if len(repoFeedItems) > 50 {
+			repoFeedItems = repoFeedItems[:50]
+		}
+		if err := generateFeeds(filepath.Join(repoDir, "index"), site.RepoName, "Latest updates to repository", "", repoFeedItems); err != nil {
+			log.Printf("Warning: failed to generate repo feed: %v", err)
+		}
+
+		pkgCount := 0
+		for _, c := range site.Categories { pkgCount += len(c.Packages) }
+
+		if err := renderPage(filepath.Join(repoDir, "index.html"), tmpl, "repo_index.html", map[string]interface{}{
+			"Title":       site.RepoName,
+			"BaseURL":     "../../",
+			"Breadcrumbs": []Breadcrumb{{Name: title, URL: "../../"}, {Name: "Overlays", URL: "../../overlays/"}, {Name: site.RepoName}},
+			"Repo":        site,
+			"PackageCount": pkgCount,
+			"Updates":     repoFeedItems,
+			"Version":     version,
+		}); err != nil { return err }
+
+		if err := os.MkdirAll(filepath.Join(repoDir, "categories"), 0755); err != nil { return err }
+		if err := renderPage(filepath.Join(repoDir, "categories", "index.html"), tmpl, "categories.html", map[string]interface{}{
+			"Title":       site.RepoName + " - Categories",
+			"BaseURL":     "../../../",
+			"Breadcrumbs": []Breadcrumb{{Name: title, URL: "../../../"}, {Name: site.RepoName, URL: "../"}, {Name: "Categories"}},
+			"Categories":  site.Categories,
+			"Version":     version,
+		}); err != nil { return err }
+
+		for _, cat := range site.Categories {
+			catDir := filepath.Join(repoDir, "categories", cat.Name)
+			if err := os.MkdirAll(catDir, 0755); err != nil { return err }
+
+			type TmplPkg struct {
+				Name string
+				ReposList []*SiteData
+			}
+			var tmplPkgs []TmplPkg
+			for _, p := range cat.Packages {
+				tmplPkgs = append(tmplPkgs, TmplPkg{Name: p.Name, ReposList: []*SiteData{site}})
+			}
+
+			if err := renderPage(filepath.Join(catDir, "index.html"), tmpl, "category.html", map[string]interface{}{
+				"Title":       "Category: " + cat.Name,
+				"BaseURL":     "../../../../",
+				"Breadcrumbs": []Breadcrumb{{Name: title, URL: "../../../../"}, {Name: site.RepoName, URL: "../../"}, {Name: "Categories", URL: "../"}, {Name: cat.Name}},
+				"Category":    map[string]interface{}{"Name": cat.Name, "Packages": tmplPkgs},
+				"Version":     version,
+			}); err != nil { return err }
+		}
+
+		if err := os.MkdirAll(filepath.Join(repoDir, "packages"), 0755); err != nil { return err }
+		var repoPkgs []PackageData
+		for _, c := range site.Categories { repoPkgs = append(repoPkgs, c.Packages...) }
+		sort.Slice(repoPkgs, func(i, j int) bool {
+			if repoPkgs[i].Category == repoPkgs[j].Category { return repoPkgs[i].Name < repoPkgs[j].Name }
+			return repoPkgs[i].Category < repoPkgs[j].Category
+		})
+
+		if err := renderPage(filepath.Join(repoDir, "packages", "index.html"), tmpl, "repo_packages.html", map[string]interface{}{
+			"Title":       site.RepoName + " - Packages",
+			"BaseURL":     "../../../",
+			"Breadcrumbs": []Breadcrumb{{Name: title, URL: "../../../"}, {Name: site.RepoName, URL: "../"}, {Name: "Packages"}},
+			"Packages":    repoPkgs,
+			"Repo":        site,
+			"Version":     version,
+		}); err != nil { return err }
+
+		for _, pkg := range repoPkgs {
+			pkgDir := filepath.Join(repoDir, "categories", pkg.Category, "packages", pkg.Name)
+			if err := os.MkdirAll(pkgDir, 0755); err != nil { return err }
+
+			var pkgFeedItems []FeedItem
+			for _, ver := range pkg.Versions {
+				desc := ""
+				if ver.Ebuild != nil && ver.Ebuild.Vars != nil {
+					desc = ver.Ebuild.Vars["DESCRIPTION"]
+				}
+				pkgFeedItems = append(pkgFeedItems, FeedItem{
+					Title:       fmt.Sprintf("%s/%s-%s", pkg.Category, pkg.Name, ver.Version),
+					Link:        "",
+					Description: desc,
+					PubDate:     time.Now().Format(time.RFC1123Z),
+					Updated:     time.Now().Format(time.RFC3339),
+				})
+			}
+			if err := generateFeeds(filepath.Join(pkgDir, "index"), pkg.Category+"/"+pkg.Name, "Latest updates to package", "", pkgFeedItems); err != nil {
+				log.Printf("Warning: failed to generate package feed: %v", err)
+			}
+
+			if err := renderPage(filepath.Join(pkgDir, "index.html"), tmpl, "repo_package.html", map[string]interface{}{
+				"Title":       fmt.Sprintf("%s - %s/%s", site.RepoName, pkg.Category, pkg.Name),
+				"BaseURL":     "../../../../../../",
+				"Breadcrumbs": []Breadcrumb{{Name: title, URL: "../../../../../../"}, {Name: site.RepoName, URL: "../../../../"}, {Name: "Categories", URL: "../../../"}, {Name: pkg.Category}, {Name: pkg.Name}},
+				"Repo":        site,
+				"Package":     pkg,
+				"Version":     version,
+			}); err != nil { return err }
 		}
 	}
 
 	return nil
 }
-
 func renderPage(path string, tmpl *template.Template, name string, data map[string]interface{}) error {
 	var buf bytes.Buffer
 	if err := tmpl.ExecuteTemplate(&buf, name, data); err != nil {
@@ -664,9 +880,7 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string) 
 	}
 	defer func() { _ = os.RemoveAll(tmpDir) }()
 
-	overallSiteData := &SiteData{
-		Title: "Remote Gentoo Repositories",
-	}
+	var allSites []*SiteData
 
 	for _, repo := range repos.Repos {
 		if len(repo.Sources) == 0 {
@@ -704,40 +918,12 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string) 
 			continue
 		}
 
-		// Since user requested a "list of overlays" we should put each repo in a subfolder
-		// generateSite will write into outDir/repo.Name
-		repoOutDir := filepath.Join(outDir, repo.Name)
-		log.Printf("Generating site for repo: %s", repo.Name)
-		if err := generateSite(repoOutDir, siteData); err != nil {
-			log.Printf("Failed to generate site for repo %s: %v", repo.Name, err)
-		}
-		// Add as a root category simply so we can create an index.html listing the repos
-		overallSiteData.Categories = append(overallSiteData.Categories, CategoryData{
-			Name: repo.Name,
-		})
+		allSites = append(allSites, siteData)
 	}
 
-	// Sort categories (which are now repos in this context)
-	sort.Slice(overallSiteData.Categories, func(i, j int) bool {
-		return overallSiteData.Categories[i].Name < overallSiteData.Categories[j].Name
-	})
-
-	// Generate the root index.html listing the overlays
-	if err := os.MkdirAll(outDir, 0755); err != nil {
-		return err
-	}
-
-	tmpl, err := template.ParseFS(siteTemplates, "sitegen_templates/*.html")
-	if err != nil {
-		return fmt.Errorf("parsing templates: %w", err)
-	}
-
-	if err := renderPage(filepath.Join(outDir, "index.html"), tmpl, "index.html", map[string]interface{}{
-		"Title":      overallSiteData.Title,
-		"Categories": overallSiteData.Categories,
-		"Version":    version,
-	}); err != nil {
-		return err
+	log.Printf("Generating site for %d repositories", len(allSites))
+	if err := generateSite(outDir, allSites); err != nil {
+		return fmt.Errorf("generating multi-repo site: %w", err)
 	}
 
 	log.Println("Remote site generation complete.")

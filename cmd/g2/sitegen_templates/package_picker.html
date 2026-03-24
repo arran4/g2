@@ -1,0 +1,8 @@
+
+<h2>Package: {{.Package.Category}}/{{.Package.Name}}</h2>
+<p>This package is available in multiple overlays. Please select one:</p>
+<ul>
+    {{range .Package.ReposList}}
+    <li><a href="{{$.BaseURL}}repos/{{.RepoName}}/categories/{{$.Package.Category}}/packages/{{$.Package.Name}}/">{{.RepoName}}</a></li>
+    {{end}}
+</ul>

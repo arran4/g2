@@ -1,0 +1,22 @@
+
+<h2>Repository: {{.Repo.RepoName}}</h2>
+<div class="metadata-section">
+    <p>To use this repository, you can enable it via eselect:</p>
+    <pre><code>eselect repository enable {{.Repo.RepoName}}</code></pre>
+    <p>And sync it:</p>
+    <pre><code>emerge --sync {{.Repo.RepoName}}</code></pre>
+    {{if .Repo.RemoteURL}}
+    <p>Git Source: <a href="{{.Repo.RemoteURL}}">{{.Repo.RemoteURL}}</a></p>
+    {{end}}
+</div>
+<ul>
+    <li><a href="categories/">Categories ({{len .Repo.Categories}})</a></li>
+    <li><a href="packages/">Packages ({{.PackageCount}})</a></li>
+    <li><a href="../../licenses/">Licenses (Global)</a></li>
+</ul>
+<h2>Recent Updates</h2>
+<ul>
+    {{range .Updates}}
+    <li><a href="{{.Link}}">{{.Title}}</a> - {{.Description}} ({{.Updated}})</li>
+    {{end}}
+</ul>

@@ -1,0 +1,124 @@
+
+<h2>{{.Package.Category}}/{{.Package.Name}} ({{.Repo.RepoName}})</h2>
+
+<div class="metadata-section">
+    <h3>Versions</h3>
+    <table>
+        <tr>
+            <th>Version</th>
+            <th>EAPI</th>
+            <th>Keywords</th>
+            <th>Slot</th>
+            <th>License</th>
+            <th>Description</th>
+        </tr>
+        {{range .Package.Versions}}
+        <tr>
+            <td>{{if .EbuildRawURL}}<a href="{{.EbuildRawURL}}">{{if .Ebuild.Vars.PV}}{{.Ebuild.Vars.PV}}{{else}}{{.Version}}{{end}}</a>{{else}}{{if .Ebuild.Vars.PV}}{{.Ebuild.Vars.PV}}{{else}}{{.Version}}{{end}}{{end}}</td>
+            <td>{{.Ebuild.Vars.EAPI}}</td>
+            <td>{{.Ebuild.Vars.KEYWORDS}}</td>
+            <td>{{.Ebuild.Vars.SLOT}}</td>
+            <td>{{.Ebuild.Vars.LICENSE}}</td>
+            <td>{{.Ebuild.Vars.DESCRIPTION}}</td>
+        </tr>
+        {{end}}
+    </table>
+</div>
+
+{{if .Package.Metadata}}
+<div class="metadata-section">
+    <h3>Metadata {{if .Package.MetadataRawURL}}<a href="{{.Package.MetadataRawURL}}" style="font-size: 0.8em; font-weight: normal; color: #888;">(raw)</a>{{end}}</h3>
+    {{if .Package.Metadata.LongDescription}}
+    <h4>Description</h4>
+    <ul>
+    {{range .Package.Metadata.LongDescription}}
+        <li>{{.Body}}</li>
+    {{end}}
+    </ul>
+    {{end}}
+
+    {{if .Package.Metadata.Maintainers}}
+    <h4>Maintainers</h4>
+    <ul>
+    {{range .Package.Metadata.Maintainers}}
+        <li>
+            {{if .Name}}{{.Name}}{{else}}Unknown{{end}}
+            (<a href="mailto:{{.Email}}">{{.Email}}</a>)
+            {{if .Type}} - Type: {{.Type}}{{end}}
+        </li>
+    {{end}}
+    </ul>
+    {{end}}
+
+    {{if .Package.Metadata.Upstream}}
+    <h4>Upstream</h4>
+    <ul>
+    {{if .Package.Metadata.Upstream.BugsTo}}<li>Bugs: <a href="{{.Package.Metadata.Upstream.BugsTo}}">{{.Package.Metadata.Upstream.BugsTo}}</a></li>{{end}}
+    {{if .Package.Metadata.Upstream.Changelog}}<li>Changelog: <a href="{{.Package.Metadata.Upstream.Changelog}}">{{.Package.Metadata.Upstream.Changelog}}</a></li>{{end}}
+    {{if .Package.Metadata.Upstream.RemoteID}}
+    <li>Remote IDs:
+        <ul>
+        {{range .Package.Metadata.Upstream.RemoteID}}
+            <li>{{.Type}}: {{.Text}}</li>
+        {{end}}
+        </ul>
+    </li>
+    {{end}}
+    </ul>
+    {{end}}
+
+    <details>
+        <summary>Raw Metadata XML</summary>
+        <pre>{{.Package.Metadata}}</pre>
+    </details>
+</div>
+{{else}}
+<div class="metadata-section">
+    <h3>Metadata {{if .Package.MetadataRawURL}}<a href="{{.Package.MetadataRawURL}}" style="font-size: 0.8em; font-weight: normal; color: #888;">(raw)</a>{{end}}</h3>
+    <p><em>No metadata available.</em></p>
+</div>
+{{end}}
+
+{{if .Package.LintWarnings}}
+<div class="metadata-section" style="border-color: #ffcc00; background-color: #fff9e6;">
+    <h3 style="color: #d99900;">Lint Warnings</h3>
+    <ul>
+        {{range .Package.LintWarnings}}
+        <li>{{.}}</li>
+        {{end}}
+    </ul>
+</div>
+{{end}}
+
+{{if .Package.Files}}
+<div class="metadata-section">
+    <h3>Files</h3>
+    <ul>
+        {{range .Package.Files}}
+        <li>
+            {{if .RawURL}}<a href="{{.RawURL}}">{{.Name}}</a>{{else}}{{.Name}}{{end}}
+        </li>
+        {{end}}
+    </ul>
+</div>
+{{end}}
+
+{{if .Package.Manifest}}
+<div class="metadata-section">
+    <h3>Manifest</h3>
+    <table>
+        <tr>
+            <th>Type</th>
+            <th>File</th>
+            <th>Size</th>
+        </tr>
+        {{range .Package.Manifest.Entries}}
+        <tr>
+            <td>{{.Type}}</td>
+            <td>{{.Filename}}</td>
+            <td>{{.Size}} bytes</td>
+        </tr>
+        {{end}}
+    </table>
+</div>
+{{end}}
