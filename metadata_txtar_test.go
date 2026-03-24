@@ -31,11 +31,12 @@ func TestMetadataFromTxtar(t *testing.T) {
 
 			var input, expectedXML, expectedJSON []byte
 			for _, f := range ar.Files {
-				if f.Name == "input.xml" {
+				switch f.Name {
+				case "input.xml":
 					input = f.Data
-				} else if f.Name == "expected.xml" {
+				case "expected.xml":
 					expectedXML = f.Data
-				} else if f.Name == "expected.json" {
+				case "expected.json":
 					expectedJSON = f.Data
 				}
 			}
