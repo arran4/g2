@@ -586,19 +586,19 @@ func generateSite(outDir string, site *SiteData) error {
 
 	// Generate Licenses
 	for _, lic := range sortedLicenses {
-		licDir := filepath.Join(outDir, "licenses", lic.Name)
+		licDir := filepath.Join(outDir, "licenses", lic.Name, "packages")
 		if err := os.MkdirAll(licDir, 0755); err != nil {
 			return err
 		}
 		breadcrumbs := []Breadcrumb{
-			{Name: site.Title, URL: "../../"},
+			{Name: site.Title, URL: "../../../"},
 			{Name: "Licenses"},
 			{Name: lic.Name},
 		}
 
 		if err := renderPage(filepath.Join(licDir, "index.html"), tmpl, "license.html", map[string]interface{}{
 			"Title":       fmt.Sprintf("%s - License: %s", site.Title, lic.Name),
-			"BaseURL":     "../../",
+			"BaseURL":     "../../../",
 			"Breadcrumbs": breadcrumbs,
 			"License":     lic,
 			"Version":     version,
