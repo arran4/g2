@@ -115,7 +115,7 @@ func (cfg *MainArgConfig) cmdMetadata(args []string) error {
 			pkgMd, ok = data.(*g2.PkgMetadata)
 			if !ok {
 				// It might be CatMetadata
-				return fmt.Errorf("existing file is not PkgMetadata (maybe CatMetadata?). Editing CatMetadata not supported yet.")
+				return fmt.Errorf("existing file is not PkgMetadata (maybe CatMetadata?) - editing CatMetadata not supported yet")
 			}
 		}
 	} else if os.IsNotExist(err) {

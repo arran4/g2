@@ -47,12 +47,12 @@ func (cfg *MainArgConfig) cmdEbuild(args []string) error {
 		if err := config.cmdEbuildTemplates(fs.Args()[1:]); err != nil {
 			return fmt.Errorf("ebuild templates: %w", err)
 		}
-	default:
-		fs.Usage()
-		return fmt.Errorf("unknown command %s", cmd)
 	case "help", "-help", "--help":
 		fs.Usage()
 		os.Exit(-1)
+	default:
+		fs.Usage()
+		return fmt.Errorf("unknown command %s", cmd)
 	}
 	return nil
 }
@@ -158,11 +158,11 @@ func (cfg *CmdEbuildArgConfig) cmdEbuildTemplates(args []string) error {
 
 func (cfg *CmdEbuildArgConfig) cmdEbuildTemplatesList(args []string) error {
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "NAME\tDESCRIPTION")
+	_, _ = fmt.Fprintln(w, "NAME\tDESCRIPTION")
 	for _, t := range ebuildTemplates {
-		fmt.Fprintf(w, "%s\t%s\n", t.Name, t.Description)
+		_, _ = fmt.Fprintf(w, "%s\t%s\n", t.Name, t.Description)
 	}
-	w.Flush()
+	_ = w.Flush()
 	return nil
 }
 

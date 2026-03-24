@@ -67,9 +67,9 @@ func (d *DownloadProgress) Write(p []byte) (n int, err error) {
 		if d.TotalSize != nil {
 			percent = fmt.Sprintf("%03d%%", int(100*(float64(d.Size)/float64(*d.TotalSize))))
 			total = fmt.Sprintf("%d kb", *d.TotalSize/1024)
-			durationInSeconds := duration / time.Second
-			if durationInSeconds > 0 {
-				bytesPerSec := d.Size / int(durationInSeconds)
+			secs := duration / time.Second
+			if secs > 0 {
+				bytesPerSec := d.Size / int(secs)
 				if bytesPerSec > 0 {
 					estimate = (time.Duration(int(*d.TotalSize)/bytesPerSec) * time.Second).String()
 				}
@@ -125,7 +125,7 @@ func DownloadAndChecksum(url string, hashes []string) (*Checksums, error) {
 			writers = append(writers, h)
 			hashers[HashMd5] = h
 		case HashRmd160:
-			h := ripemd160.New()
+			h := ripemd160.New() //nolint:staticcheck
 			writers = append(writers, h)
 			hashers[HashRmd160] = h
 		case HashSha1:

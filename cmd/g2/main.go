@@ -72,13 +72,13 @@ func main() {
 			os.Exit(-1)
 			return
 		}
+	case "help", "-help", "--help":
+		fs.Usage()
+		os.Exit(-1)
 	default:
 		fmt.Printf("Unknown command %s", cmd)
 		fs.Usage()
 		return
-	case "help", "-help", "--help":
-		fs.Usage()
-		os.Exit(-1)
 	}
 }
 
@@ -125,15 +125,33 @@ func (cfg *MainArgConfig) cmdManifest(args []string) error {
 
 	getHashes := func() []string {
 		hashes := make([]string, 0)
-		if *blake2b { hashes = append(hashes, g2.HashBlake2b) }
-		if *blake2s { hashes = append(hashes, g2.HashBlake2s) }
-		if *md5 { hashes = append(hashes, g2.HashMd5) }
-		if *rmd160 { hashes = append(hashes, g2.HashRmd160) }
-		if *sha1 { hashes = append(hashes, g2.HashSha1) }
-		if *sha256 { hashes = append(hashes, g2.HashSha256) }
-		if *sha3_256 { hashes = append(hashes, g2.HashSha3_256) }
-		if *sha3_512 { hashes = append(hashes, g2.HashSha3_512) }
-		if *sha512 { hashes = append(hashes, g2.HashSha512) }
+		if *blake2b {
+			hashes = append(hashes, g2.HashBlake2b)
+		}
+		if *blake2s {
+			hashes = append(hashes, g2.HashBlake2s)
+		}
+		if *md5 {
+			hashes = append(hashes, g2.HashMd5)
+		}
+		if *rmd160 {
+			hashes = append(hashes, g2.HashRmd160)
+		}
+		if *sha1 {
+			hashes = append(hashes, g2.HashSha1)
+		}
+		if *sha256 {
+			hashes = append(hashes, g2.HashSha256)
+		}
+		if *sha3_256 {
+			hashes = append(hashes, g2.HashSha3_256)
+		}
+		if *sha3_512 {
+			hashes = append(hashes, g2.HashSha3_512)
+		}
+		if *sha512 {
+			hashes = append(hashes, g2.HashSha512)
+		}
 		return hashes
 	}
 
@@ -153,12 +171,12 @@ func (cfg *MainArgConfig) cmdManifest(args []string) error {
 		if err := config.cmdClean(cleanArgs); err != nil {
 			return fmt.Errorf("clean manifest: %w", err)
 		}
-	default:
-		fs.Usage()
-		return fmt.Errorf("unknown command %s", cmd)
 	case "help", "-help", "--help":
 		fs.Usage()
 		os.Exit(-1)
+	default:
+		fs.Usage()
+		return fmt.Errorf("unknown command %s", cmd)
 	}
 	return nil
 }
@@ -172,21 +190,21 @@ func (cfg *CmdManifestArgConfig) cmdUpsertFromUrl(args []string, hashes []string
 	filename := args[1]
 	ebuildDirOrFile := args[2]
 
-    // Logic to be moved to a reusable function if we want to reuse it in verify --fix
-    // For now I'll just keep it here and maybe call this function or copy logic.
+	// Logic to be moved to a reusable function if we want to reuse it in verify --fix
+	// For now I'll just keep it here and maybe call this function or copy logic.
 
 	checksums, err := g2.DownloadAndChecksum(url, hashes)
 	if err != nil {
-		return fmt.Errorf("downloading and calculating checksums: %v\n", err)
+		return fmt.Errorf("downloading and calculating checksums: %w", err)
 	}
 
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("DIST %s %d", filename, checksums.Size))
+	fmt.Fprintf(&sb, "DIST %s %d", filename, checksums.Size)
 
 	// Helper to append hash if it's computed
 	appendHash := func(name, value string) {
 		if value != "" {
-			sb.WriteString(fmt.Sprintf(" %s %s", name, value))
+			fmt.Fprintf(&sb, " %s %s", name, value)
 		}
 	}
 
@@ -214,7 +232,7 @@ func (cfg *CmdManifestArgConfig) cmdUpsertFromUrl(args []string, hashes []string
 
 	err = g2.UpsertManifest(manifestPath, entry)
 	if err != nil {
-		return fmt.Errorf("updating manifest: %v\n", err)
+		return fmt.Errorf("updating manifest: %w", err)
 	}
 
 	log.Printf("Done")
@@ -421,7 +439,7 @@ func (cfg *CmdManifestArgConfig) cleanLogic(manifestPath string, usedFiles map[s
 func (cfg *CmdManifestArgConfig) upsertFromUrlLogic(url, filename, manifestPath string, hashes []string) error {
 	checksums, err := g2.DownloadAndChecksum(url, hashes)
 	if err != nil {
-		return fmt.Errorf("downloading and calculating checksums: %v\n", err)
+		return fmt.Errorf("downloading and calculating checksums: %w", err)
 	}
 
 	entry := g2.NewManifestEntry("DIST", filename, checksums.Size)
