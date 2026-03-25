@@ -996,6 +996,26 @@ func generateSite(outDir string, sites []*SiteData) error {
 			"Version":     version,
 		}); err != nil { return err }
 
+		for _, p := range site.Profiles {
+			profDir := filepath.Join(repoDir, "profiles", p.Path)
+			if err := os.MkdirAll(profDir, 0755); err != nil { return err }
+
+			relToRoot := "../../../../"
+			for i := 0; i < strings.Count(p.Path, "/"); i++ {
+				relToRoot += "../"
+			}
+
+			if err := renderPage(filepath.Join(profDir, "index.html"), tmpl, "repo_profile.html", map[string]interface{}{
+				"Title":       site.RepoName + " - Profile: " + p.Path,
+				"BaseURL":     relToRoot,
+				"Breadcrumbs": []Breadcrumb{{Name: title, URL: relToRoot}, {Name: site.RepoName, URL: relToRoot + "repos/" + site.RepoName + "/"}, {Name: "Profiles", URL: relToRoot + "repos/" + site.RepoName + "/profiles/"}, {Name: p.Path}},
+				"RepoName":    site.RepoName,
+				"ProfilePath": p.Path,
+				"Profile":     p,
+				"Version":     version,
+			}); err != nil { return err }
+		}
+
 		if err := os.MkdirAll(filepath.Join(repoDir, "categories"), 0755); err != nil { return err }
 		if err := renderPage(filepath.Join(repoDir, "categories", "index.html"), tmpl, "categories.html", map[string]interface{}{
 			"Title":       site.RepoName + " - Categories",
