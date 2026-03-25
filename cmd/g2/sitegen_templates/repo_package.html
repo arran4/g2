@@ -1,6 +1,12 @@
 
 <h2>{{.Package.Category}}/{{.Package.Name}} ({{.Repo.RepoName}})</h2>
 
+{{if .MovedToName}}
+<div class="alert alert-warning">
+    <strong>Notice:</strong> Older versions of this package were moved to <a href="{{.MovedToURL}}">{{.MovedToName}}</a>.
+</div>
+{{end}}
+
 <div class="metadata-section">
     <h3>Versions</h3>
     <table>
