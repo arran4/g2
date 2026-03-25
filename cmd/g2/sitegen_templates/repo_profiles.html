@@ -1,0 +1,6 @@
+<h2>Profiles in {{.Repo.RepoName}}</h2>
+<ul>
+    {{range .Repo.Profiles}}
+    <li><a href="../../../profiles/{{.Path}}/">{{.Path}}</a>{{if .IsDesc}} [{{.DescArch}} - {{.DescStat}}]{{end}}</li>
+    {{end}}
+</ul>
