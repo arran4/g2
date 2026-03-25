@@ -1,0 +1,6 @@
+<h2>All Profiles</h2>
+<ul>
+    {{range .Profiles}}
+    <li><a href="{{.Path}}/">{{.Path}}</a> ({{len .Repos}} repos){{if .IsDesc}} [{{.DescArch}} - {{.DescStat}}]{{end}}</li>
+    {{end}}
+</ul>
