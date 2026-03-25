@@ -8,6 +8,17 @@
     {{if .Repo.RemoteURL}}
     <p>Git Source: <a href="{{.Repo.RemoteURL}}">{{.Repo.RemoteURL}}</a></p>
     {{end}}
+    {{if .Repo.EAPI}}
+    <p>EAPI: {{.Repo.EAPI}}</p>
+    {{end}}
+    {{if .Repo.LayoutConf}}
+        {{if .Repo.LayoutConf.GetValue "eapis-banned"}}
+            <p>EAPIs Banned: {{.Repo.LayoutConf.GetValue "eapis-banned"}}</p>
+        {{end}}
+        {{if .Repo.LayoutConf.GetValue "eapis-deprecated"}}
+            <p>EAPIs Deprecated: {{.Repo.LayoutConf.GetValue "eapis-deprecated"}}</p>
+        {{end}}
+    {{end}}
 </div>
 <ul>
     <li><a href="categories/">Categories ({{len .Repo.Categories}})</a></li>

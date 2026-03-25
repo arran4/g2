@@ -6,3 +6,5 @@
 /test_site_out/
 /*.py
 /site_out
+site_out/
+testrepo/
