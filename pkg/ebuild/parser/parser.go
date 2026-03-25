@@ -198,7 +198,7 @@ func (p *EbuildParser) Parse() (*Ebuild, error) {
 			} else if nextR == '(' {
 				// Function declaration e.g. `src_prepare() {`
 				_, _ = p.nextRune() // '('
-				r, err = p.nextRune() // ')'
+				r, _ = p.nextRune() // ')'
 				if r != ')' {
 					return nil, fmt.Errorf("%w: expected ')' at %s", ErrSyntaxError, p.r.Pos)
 				}
