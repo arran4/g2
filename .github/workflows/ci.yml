@@ -181,6 +181,13 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '>=1.22.0'
+      - name: Install git-tag-inc
+        uses: arran4/git-tag-inc-action@v1
+        with:
+          mode: 'install'
       - id: tag
         shell: bash
         run: |
@@ -194,15 +201,15 @@ jobs:
             next_tag="v$OVERRIDE"
           else
             case "$MODE" in
-              release-major) level="--major"; suffix="" ;;
-              release-minor) level="--minor"; suffix="" ;;
-              release-patch) level="--patch"; suffix="" ;;
-              release-test)  level="--patch"; suffix="--prerelease test" ;;
-              release-rc)    level="--patch"; suffix="--prerelease rc" ;;
-              release-alpha) level="--patch"; suffix="--prerelease alpha" ;;
+              release-major) level="major"; suffix="" ;;
+              release-minor) level="minor"; suffix="" ;;
+              release-patch) level="patch"; suffix="" ;;
+              release-test)  level="patch"; suffix="test" ;;
+              release-rc)    level="patch"; suffix="rc" ;;
+              release-alpha) level="patch"; suffix="alpha" ;;
               *) echo "Unsupported release mode: $MODE"; exit 1 ;;
             esac
-            next_tag=$(git-tag-inc $level $suffix)
+            next_tag=$(git-tag-inc -print-version-only $level $suffix)
           fi
 
           # Tagging safety guards to avoid duplicate/invalid release states.
@@ -288,6 +295,22 @@ jobs:
           go-version-file: go.mod
           cache: true
       - run: go vet ./...
+
+  test-site-generation:
+    name: Test Site Generation
+    needs: [route, discover]
+    if: ${{ needs.discover.outputs.has_go == 'true' && needs.route.outputs.run_code_checks == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Build g2
+        run: go build -o g2 cmd/g2/*.go
+      - name: Test site generation
+        run: go run ./cmd/g2 overlay site generate https://github.com/arran4/arrans_overlay
 
   go-fmt-pr:
     name: go fmt -> PR (manual dispatch)
@@ -472,6 +495,9 @@ jobs:
       - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
+      - name: Tag commit locally
+        if: ${{ github.event_name == 'workflow_dispatch' && startsWith(inputs.mode, 'release-') }}
+        run: git tag ${{ needs.prepare-release-tag.outputs.release_tag }}
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v6
         with:
@@ -480,10 +506,10 @@ jobs:
           args: >-
             release --clean
             ${{ (github.event_name == 'workflow_dispatch' && (inputs.mode == 'release-test' || inputs.mode == 'release-rc' || inputs.mode == 'release-alpha')) && '--snapshot' || '' }}
-            ${{ needs.prepare-release-tag.outputs.release_tag != '' && format('--tag {0}', needs.prepare-release-tag.outputs.release_tag) || '' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAP_GITHUB_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }} # inject secrets.TAP_GITHUB_TOKEN
+          GORELEASER_CURRENT_TAG: ${{ needs.prepare-release-tag.outputs.release_tag }}
   publish-draft:
     name: Publish draft release assets
     needs:

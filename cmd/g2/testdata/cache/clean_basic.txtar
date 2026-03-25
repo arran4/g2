@@ -1,0 +1,21 @@
+-- input/metadata/layout.conf --
+cache-formats = md5-dict
+-- input/sys-apps/test/test-1.0.ebuild --
+DESCRIPTION="A test ebuild"
+
+-- input/metadata/md5-dict/sys-apps/test-1.0 --
+DESCRIPTION=A test ebuild
+_md5_=abcdef1234567890
+
+-- input/metadata/md5-dict/sys-apps/old-1.0 --
+DESCRIPTION=Old cache that should be removed
+
+-- expected/metadata/layout.conf --
+cache-formats = md5-dict
+
+-- expected/sys-apps/test/test-1.0.ebuild --
+DESCRIPTION="A test ebuild"
+
+-- expected/metadata/md5-dict/sys-apps/test-1.0 --
+DESCRIPTION=A test ebuild
+_md5_=abcdef1234567890

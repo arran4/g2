@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>{{.Title}}</title>
+  <link href="{{.Link}}"/>
+  <updated>{{.Updated}}</updated>
+  <id>{{.Link}}</id>
+  {{range .Items}}
+  <entry>
+    <title>{{.Title}}</title>
+    <link href="{{.Link}}"/>
+    <id>{{.Link}}</id>
+    <updated>{{.Updated}}</updated>
+    <summary>{{.Description}}</summary>
+  </entry>
+  {{end}}
+</feed>

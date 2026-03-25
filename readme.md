@@ -47,3 +47,93 @@ To download a package, calculate SHA256 in addition to defaults, and update the 
 ```bash
 g2 manifest -sha256=true upsert-from-url https://example.com/software-1.0.tar.gz software-1.0.tar.gz .
 ```
+
+## Site Generation
+
+`g2` can generate a static HTML website representing your Gentoo overlay, including categories, packages, metadata, and git commit history. It also supports aggregating multiple remote overlays.
+
+### `overlay site generate`
+
+Generates a static site for a single overlay.
+
+**Usage:**
+
+```bash
+g2 overlay site generate [-out <dir>] [-clear] [<location>]
+```
+
+**Arguments:**
+
+*   `<location>`: Path to the overlay directory, or a Git URL (defaults to `.`).
+
+**Flags:**
+
+*   `-out`: Output directory for the generated site (default: `site_out`).
+*   `-clear`: Clear output directory before generation.
+
+### `overlays site generate`
+
+Generates an aggregated static site for multiple remote repositories from a `repositories.xml` file.
+
+**Usage:**
+
+```bash
+g2 overlays site generate [-out <dir>] [-clear] <repositoriesFile>
+```
+
+**Arguments:**
+
+*   `<repositoriesFile>`: Path or URL to a Gentoo `repositories.xml` file, or `-` for stdin.
+
+## Linting
+
+`g2` provides linting to ensure overlay consistency.
+
+### `lint`
+
+Checks the repository for errors such as ebuild `IUSE` variables missing in `metadata.xml` and missing `md5-cache` files.
+
+**Usage:**
+
+```bash
+g2 lint [<location>]
+```
+
+**Arguments:**
+
+*   `<location>`: Path to the overlay directory (defaults to `.`).
+
+## GitHub Action
+
+You can use the [g2 GitHub Action](https://github.com/arran4/g2-action) to integrate `g2` into your CI/CD workflows. It automatically downloads and installs `g2` for use in your workflow steps.
+
+### Example Usage
+
+```yaml
+name: Example workflow
+on: [push]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install g2
+        uses: arran4/g2-action@v1
+        with:
+          # Optional: specify a version. Defaults to 'latest'
+          version: 'latest'
+
+      - name: Use g2
+        run: |
+          g2 lint .
+
+      - name: Use g2 Action
+        uses: arran4/g2-action@v1.2
+        with:
+          # Optional: specify an action
+          action: 'lint .'
+          # Optional: skip installation if already installed
+          mode: 'run'
+```

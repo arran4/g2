@@ -1,0 +1,7 @@
+Title: Recent News Article
+Author: Jane Smith <jane@smith.com>
+Posted: 2024-01-01
+Revision: 2
+
+This is a recent test news article.
+It should show up in the recent news section.

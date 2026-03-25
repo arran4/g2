@@ -1,0 +1,8 @@
+<h2>Recent Updates</h2>
+<ul>
+    {{range .Updates}}
+    <li><a href="{{.Link}}">{{.Title}}</a> - {{.Description}} ({{.Updated}})</li>
+    {{else}}
+    <li>No recent updates.</li>
+    {{end}}
+</ul>
