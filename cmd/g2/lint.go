@@ -22,7 +22,7 @@ func (cfg *MainArgConfig) cmdLint(args []string) error {
 		location = fs.Arg(0)
 	}
 
-	siteData, err := parseRepo(location, "Linting", true)
+	siteData, err := parseRepo(os.DirFS(location), ".", "Linting", true)
 	if err != nil {
 		return fmt.Errorf("parsing repo: %w", err)
 	}

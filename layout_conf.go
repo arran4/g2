@@ -31,6 +31,11 @@ func ParseLayoutConf(path string) (*LayoutConf, error) {
 	return parseLayoutConfFromReader(file)
 }
 
+// ParseLayoutConfFromReader parses a layout.conf from an io.Reader
+func ParseLayoutConfFromReader(r io.Reader) (*LayoutConf, error) {
+	return parseLayoutConfFromReader(r)
+}
+
 func parseLayoutConfFromReader(r io.Reader) (*LayoutConf, error) {
 	scanner := bufio.NewScanner(r)
 	lc := &LayoutConf{}
