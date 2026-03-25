@@ -1,4 +1,11 @@
-<h2>{{.Package.Category}}/{{.Package.Name}}</h2>
+
+<h2>{{.Package.Category}}/{{.Package.Name}} ({{.Repo.RepoName}})</h2>
+
+{{if .MovedToName}}
+<div class="alert alert-warning">
+    <strong>Notice:</strong> Older versions of this package were moved to <a href="{{.MovedToURL}}">{{.MovedToName}}</a>.
+</div>
+{{end}}
 
 <div class="metadata-section">
     <h3>Versions</h3>
@@ -102,7 +109,7 @@
 </div>
 {{end}}
 
-{{if .Package.ManifestData}}
+{{if .Package.Manifest}}
 <div class="metadata-section">
     <h3>Manifest</h3>
     <table>
@@ -110,20 +117,12 @@
             <th>Type</th>
             <th>File</th>
             <th>Size</th>
-            <th>Versions</th>
-            <th>Source URLs</th>
         </tr>
-        {{range .Package.ManifestData}}
+        {{range .Package.Manifest.Entries}}
         <tr>
-            <td>{{.Entry.Type}}</td>
-            <td>{{.Entry.Filename}}</td>
-            <td>{{.Entry.Size}} bytes</td>
-            <td>
-                {{range $i, $v := .Versions}}{{if $i}}, {{end}}{{$v}}{{end}}
-            </td>
-            <td>
-                {{range $i, $u := .URLs}}{{if $i}}<br>{{end}}<a href="{{$u}}">{{$u}}</a>{{end}}
-            </td>
+            <td>{{.Type}}</td>
+            <td>{{.Filename}}</td>
+            <td>{{.Size}} bytes</td>
         </tr>
         {{end}}
     </table>

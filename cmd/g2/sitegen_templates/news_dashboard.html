@@ -1,0 +1,16 @@
+<h2>{{.Title}}</h2>
+<div class="news-dashboard">
+    {{range .RecentNews}}
+    <article class="news-item">
+        <h3><a href="archive/{{.DirName}}/">{{.Title}}</a></h3>
+        <div class="news-meta">
+            <span class="news-date">Posted: {{.Posted.Format "2006-01-02"}}</span>
+            {{if .Author}}<span class="news-author"> by {{.Author}}</span>{{end}}
+            {{/* .RepoName is only available for AggNewsItem (global), but templates might be shared with local NewsItem */}}
+        </div>
+        <div class="news-body" style="white-space: pre-wrap;">{{.Body}}</div>
+    </article>
+    <hr/>
+    {{end}}
+</div>
+<p><a href="archive/">More... (Archive)</a></p>

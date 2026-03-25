@@ -1,2 +1,16 @@
 /.idea
 *.iml
+
+/g2
+/*.log
+/test_site_out/
+/*.sh
+/*.py
+/test_*
+site_out/
+test_repo/
+test_site/
+/*.py
+/site_out
+site_out/
+testrepo/

@@ -1,0 +1,34 @@
+
+<div class="metadata-section">
+    <h3>Dashboard</h3>
+    <p>Welcome to {{.Title}}.</p>
+    <ul>
+        <li><a href="overlays/">Overlays ({{len .Repos}})</a></li>
+        <li><a href="categories/">Categories ({{len .Categories}})</a></li>
+        <li><a href="packages/">Packages ({{len .Packages}})</a></li>
+        <li><a href="licenses/">Licenses ({{len .Licenses}})</a></li>
+        <li><a href="profiles/">Profiles</a></li>
+    </ul>
+</div>
+{{if .RecentNews}}
+<h2>Recent News</h2>
+<ul>
+    {{range .RecentNews}}
+    <li><a href="news/archive/{{.DirName}}/">{{.Title}}</a> - {{.Posted.Format "Jan 02, 2006"}} {{if .RepoName}}({{.RepoName}}){{end}}</li>
+    {{end}}
+</ul>
+<p><a href="news/archive/">More... (Archive)</a></p>
+{{end}}
+
+<h2>Overlays</h2>
+<ul>
+    {{range .Repos}}
+    <li><a href="repos/{{.RepoName}}/">{{.RepoName}}</a></li>
+    {{end}}
+</ul>
+<h2>Recent Updates</h2>
+<ul>
+    {{range .Updates}}
+    <li><a href="{{.Link}}">{{.Title}}</a> - {{.Description}} ({{.Updated}})</li>
+    {{end}}
+</ul>
