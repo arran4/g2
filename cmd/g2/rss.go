@@ -13,6 +13,7 @@ type FeedItem struct {
 	Description string
 	PubDate     string
 	Updated     string
+	Time        time.Time
 }
 
 type FeedData struct {

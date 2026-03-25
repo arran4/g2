@@ -18,5 +18,8 @@
 <ul>
     {{range .Updates}}
     <li><a href="{{.Link}}">{{.Title}}</a> - {{.Description}} ({{.Updated}})</li>
+    {{else}}
+    <li>No recent updates in the last 24 hours.</li>
     {{end}}
 </ul>
+<p><a href="recent/">View all recent updates</a></p>

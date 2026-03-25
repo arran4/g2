@@ -79,6 +79,7 @@ type PackageData struct {
 
 	// Git info
 	MetadataRawURL string
+	ModTime        time.Time
 
 	// Lint Info
 	LintWarnings []string
@@ -90,6 +91,7 @@ type VersionData struct {
 
 	// Git info
 	EbuildRawURL string
+	ModTime      time.Time
 }
 
 func (cfg *MainArgConfig) cmdOverlay(args []string) error {
@@ -321,18 +323,24 @@ func parseRepo(repoDir string, defaultTitle string) (*SiteData, error) {
 				}
 
 				var ebuildRawURL string
+				relPath, _ := filepath.Rel(repoDir, ebuildPath)
 				if remoteURL != "" {
-					relPath, _ := filepath.Rel(repoDir, ebuildPath)
 					commitHash, _ := getFileCommit(repoDir, relPath)
 					if commitHash != "" {
 						ebuildRawURL = generateGitHubRawURL(remoteURL, commitHash, relPath)
 					}
 				}
 
+				modTime := getFileModTime(repoDir, relPath)
+				if modTime.After(pkgData.ModTime) {
+					pkgData.ModTime = modTime
+				}
+
 				pkgData.Versions = append(pkgData.Versions, VersionData{
 					Version:      version,
 					Ebuild:       ebuild,
 					EbuildRawURL: ebuildRawURL,
+					ModTime:      modTime,
 				})
 			}
 
@@ -611,17 +619,51 @@ func generateSite(outDir string, sites []*SiteData) error {
 					if ver.Ebuild != nil && ver.Ebuild.Vars != nil {
 						desc = ver.Ebuild.Vars["DESCRIPTION"]
 					}
+					t := ver.ModTime
+					if t.IsZero() {
+						t = time.Now()
+					}
 					globalFeedItems = append(globalFeedItems, FeedItem{
 						Title:       fmt.Sprintf("%s/%s-%s (%s)", sPkg.Category, sPkg.Name, ver.Version, site.RepoName),
 						Link:        fmt.Sprintf("repos/%s/categories/%s/packages/%s/", site.RepoName, sPkg.Category, sPkg.Name),
 						Description: desc,
-						PubDate:     time.Now().Format(time.RFC1123Z),
-						Updated:     time.Now().Format(time.RFC3339),
+						PubDate:     t.Format(time.RFC1123Z),
+						Updated:     t.Format(time.RFC3339),
+						Time:        t,
 					})
 				}
 			}
 		}
 	}
+	sort.Slice(globalFeedItems, func(i, j int) bool {
+		return globalFeedItems[i].Time.After(globalFeedItems[j].Time)
+	})
+	var recentGlobalUpdates []FeedItem
+	dayAgo := time.Now().Add(-24 * time.Hour)
+	for _, item := range globalFeedItems {
+		if item.Time.After(dayAgo) {
+			recentGlobalUpdates = append(recentGlobalUpdates, item)
+			if len(recentGlobalUpdates) >= 10 {
+				break
+			}
+		}
+	}
+
+	if err := os.MkdirAll(filepath.Join(outDir, "recent"), 0755); err != nil { return err }
+	var allRecentGlobal []FeedItem
+	if len(globalFeedItems) > 500 {
+		allRecentGlobal = globalFeedItems[:500]
+	} else {
+		allRecentGlobal = globalFeedItems
+	}
+	if err := renderPage(filepath.Join(outDir, "recent", "index.html"), tmpl, "recent.html", map[string]interface{}{
+		"Title":       "Recent Updates",
+		"BaseURL":     "../",
+		"Breadcrumbs": []Breadcrumb{{Name: title, URL: "../"}, {Name: "Recent Updates"}},
+		"Updates":     allRecentGlobal,
+		"Version":     version,
+	}); err != nil { return err }
+
 	if len(globalFeedItems) > 50 {
 		globalFeedItems = globalFeedItems[:50]
 	}
@@ -637,7 +679,7 @@ func generateSite(outDir string, sites []*SiteData) error {
 		"Categories": sortedCategories,
 		"Packages":   sortedPackages,
 		"Licenses":   sortedLicenses,
-		"Updates":    globalFeedItems,
+		"Updates":    recentGlobalUpdates,
 		"Version":    version,
 	}); err != nil { return err }
 
@@ -766,16 +808,49 @@ func generateSite(outDir string, sites []*SiteData) error {
 					if ver.Ebuild != nil && ver.Ebuild.Vars != nil {
 						desc = ver.Ebuild.Vars["DESCRIPTION"]
 					}
+					t := ver.ModTime
+					if t.IsZero() {
+						t = time.Now()
+					}
 					repoFeedItems = append(repoFeedItems, FeedItem{
 						Title:       fmt.Sprintf("%s/%s-%s", pkg.Category, pkg.Name, ver.Version),
 						Link:        fmt.Sprintf("categories/%s/packages/%s/", pkg.Category, pkg.Name),
 						Description: desc,
-						PubDate:     time.Now().Format(time.RFC1123Z),
-						Updated:     time.Now().Format(time.RFC3339),
+						PubDate:     t.Format(time.RFC1123Z),
+						Updated:     t.Format(time.RFC3339),
+						Time:        t,
 					})
 				}
 			}
 		}
+		sort.Slice(repoFeedItems, func(i, j int) bool {
+			return repoFeedItems[i].Time.After(repoFeedItems[j].Time)
+		})
+		var recentRepoUpdates []FeedItem
+		for _, item := range repoFeedItems {
+			if item.Time.After(dayAgo) {
+				recentRepoUpdates = append(recentRepoUpdates, item)
+				if len(recentRepoUpdates) >= 10 {
+					break
+				}
+			}
+		}
+
+		if err := os.MkdirAll(filepath.Join(repoDir, "recent"), 0755); err != nil { return err }
+		var allRecentRepo []FeedItem
+		if len(repoFeedItems) > 500 {
+			allRecentRepo = repoFeedItems[:500]
+		} else {
+			allRecentRepo = repoFeedItems
+		}
+		if err := renderPage(filepath.Join(repoDir, "recent", "index.html"), tmpl, "recent.html", map[string]interface{}{
+			"Title":       site.RepoName + " - Recent Updates",
+			"BaseURL":     "../../../",
+			"Breadcrumbs": []Breadcrumb{{Name: title, URL: "../../../"}, {Name: site.RepoName, URL: "../"}, {Name: "Recent Updates"}},
+			"Updates":     allRecentRepo,
+			"Version":     version,
+		}); err != nil { return err }
+
 		if len(repoFeedItems) > 50 {
 			repoFeedItems = repoFeedItems[:50]
 		}
@@ -792,7 +867,7 @@ func generateSite(outDir string, sites []*SiteData) error {
 			"Breadcrumbs": []Breadcrumb{{Name: title, URL: "../../"}, {Name: "Overlays", URL: "../../overlays/"}, {Name: site.RepoName}},
 			"Repo":        site,
 			"PackageCount": pkgCount,
-			"Updates":     repoFeedItems,
+			"Updates":     recentRepoUpdates,
 			"Version":     version,
 		}); err != nil { return err }
 
@@ -854,14 +929,22 @@ func generateSite(outDir string, sites []*SiteData) error {
 				if ver.Ebuild != nil && ver.Ebuild.Vars != nil {
 					desc = ver.Ebuild.Vars["DESCRIPTION"]
 				}
+				t := ver.ModTime
+				if t.IsZero() {
+					t = time.Now()
+				}
 				pkgFeedItems = append(pkgFeedItems, FeedItem{
 					Title:       fmt.Sprintf("%s/%s-%s", pkg.Category, pkg.Name, ver.Version),
 					Link:        "",
 					Description: desc,
-					PubDate:     time.Now().Format(time.RFC1123Z),
-					Updated:     time.Now().Format(time.RFC3339),
+					PubDate:     t.Format(time.RFC1123Z),
+					Updated:     t.Format(time.RFC3339),
+					Time:        t,
 				})
 			}
+			sort.Slice(pkgFeedItems, func(i, j int) bool {
+				return pkgFeedItems[i].Time.After(pkgFeedItems[j].Time)
+			})
 			if err := generateFeeds(filepath.Join(pkgDir, "index"), pkg.Category+"/"+pkg.Name, "Latest updates to package", "", pkgFeedItems); err != nil {
 				log.Printf("Warning: failed to generate package feed: %v", err)
 			}

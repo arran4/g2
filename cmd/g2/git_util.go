@@ -2,9 +2,31 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
+	"time"
 )
+
+func getFileModTime(repoDir string, relPath string) time.Time {
+	cmd := exec.Command("git", "log", "-n", "1", "--pretty=format:%aI", "--", relPath)
+	cmd.Dir = repoDir
+	out, err := cmd.Output()
+	if err == nil {
+		tstr := strings.TrimSpace(string(out))
+		if tstr != "" {
+			if t, err := time.Parse(time.RFC3339, tstr); err == nil {
+				return t
+			}
+		}
+	}
+	info, err := os.Stat(filepath.Join(repoDir, relPath))
+	if err == nil {
+		return info.ModTime()
+	}
+	return time.Now()
+}
 
 func getGitOriginURL(repoDir string) (string, error) {
 	cmd := exec.Command("git", "config", "--get", "remote.origin.url")
