@@ -4,3 +4,6 @@
 /g2
 /*.log
 /test_site_out/
+site_out/
+test_repo/
+test_site/
