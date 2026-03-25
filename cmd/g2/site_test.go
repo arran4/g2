@@ -1,8 +1,10 @@
 package main
 
 import (
+	"os"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/arran4/g2"
 )
@@ -95,14 +97,14 @@ func TestBuildManifestData(t *testing.T) {
 }
 
 func TestGenerateSite(t *testing.T) {
-	siteData, err := parseRepo("../../testdata/test_overlay", "Test Overlay")
+	siteData, err := parseRepo(os.DirFS("../../testdata/test_overlay"), ".", "Test Overlay", false)
 	if err != nil {
 		t.Fatalf("parseRepo failed: %v", err)
 	}
 
 	outDir := t.TempDir()
 
-	err = generateSite(outDir, []*SiteData{siteData})
+	err = generateSite(outDir, []*SiteData{siteData}, 90*24*time.Hour, "3 months")
 	if err != nil {
 		t.Fatalf("generateSite failed: %v", err)
 	}
@@ -131,7 +133,7 @@ func TestGenerateSite_TemplateError(t *testing.T) {
 	}
 	outDir := t.TempDir()
 
-	err := generateSite(outDir, []*SiteData{siteData})
+	err := generateSite(outDir, []*SiteData{siteData}, 90*24*time.Hour, "3 months")
 
 	if err == nil {
 		t.Fatalf("generateSite unexpectedly succeeded with bad parameters, template/file errors are likely being swallowed")
