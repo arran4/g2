@@ -1286,18 +1286,21 @@ func generateSite(outDir string, sites []*SiteData) error {
 func renderPage(path string, tmpl *template.Template, name string, data map[string]interface{}) error {
 	var buf bytes.Buffer
 	if err := tmpl.ExecuteTemplate(&buf, name, data); err != nil {
-		return err
+		return fmt.Errorf("executing template %s: %w", name, err)
 	}
 
 	data["Content"] = template.HTML(buf.String())
 
 	f, err := os.Create(path)
 	if err != nil {
-		return err
+		return fmt.Errorf("creating file %s: %w", path, err)
 	}
 	defer func() { _ = f.Close() }()
 
-	return tmpl.ExecuteTemplate(f, "layout.html", data)
+	if err := tmpl.ExecuteTemplate(f, "layout.html", data); err != nil {
+		return fmt.Errorf("executing layout template for %s: %w", path, err)
+	}
+	return nil
 }
 
 func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string) error {
