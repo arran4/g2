@@ -37,6 +37,7 @@ type SiteData struct {
 	Title      string
 	RepoName   string
 	RemoteURL  string
+	EAPI       string
 	Categories []CategoryData
 }
 
@@ -228,10 +229,17 @@ func parseRepo(repoDir string, defaultTitle string) (*SiteData, error) {
 		repoName = filepath.Base(repoDir)
 	}
 
+	var eapi string
+	eapiBytes, err := os.ReadFile(filepath.Join(repoDir, "profiles", "eapi"))
+	if err == nil && len(eapiBytes) > 0 {
+		eapi = strings.TrimSpace(string(eapiBytes))
+	}
+
 	site := &SiteData{
 		Title:     title,
 		RepoName:  repoName,
 		RemoteURL: remoteURL,
+		EAPI:      eapi,
 	}
 
 	supportedCategories := make(map[string]bool)
