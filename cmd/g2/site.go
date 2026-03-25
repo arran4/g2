@@ -278,7 +278,11 @@ func parseRepo(repoDir string, defaultTitle string) (*g2.SiteData, error) {
 			if err == nil {
 				if pkgMd, ok := metadata.(*g2.PkgMetadata); ok {
 					pkgData.Metadata = pkgMd
+				} else {
+					pkgData.MetadataError = fmt.Errorf("metadata.xml is not a pkgmetadata")
 				}
+			} else {
+				pkgData.MetadataError = err
 			}
 
 			if remoteURL != "" {

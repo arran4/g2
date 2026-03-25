@@ -1,22 +1,5 @@
 package g2
 
-import "encoding/xml"
-
-type RemoteRepositories struct {
-	XMLName xml.Name     `xml:"repositories"`
-	Repos   []RemoteRepo `xml:"repo"`
-}
-
-type RemoteRepo struct {
-	Name    string       `xml:"name"`
-	Sources []RepoSource `xml:"source"`
-}
-
-type RepoSource struct {
-	Type string `xml:"type,attr"`
-	URL  string `xml:",chardata"`
-}
-
 type SiteData struct {
 	Title      string
 	RepoName   string
@@ -68,13 +51,4 @@ type VersionData struct {
 
 	// Git info
 	EbuildRawURL string
-}
-
-// FeedItem is needed from site generation too
-type FeedItem struct {
-	Title       string
-	Link        string
-	Description string
-	PubDate     string
-	Updated     string
 }

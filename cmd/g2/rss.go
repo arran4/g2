@@ -8,18 +8,9 @@ import (
 	"time"
 )
 
-type FeedData struct {
-	Title         string
-	Link          string
-	Description   string
-	LastBuildDate string
-	Updated       string
-	Items         []g2.FeedItem
-}
-
 func generateFeeds(outPath, feedTitle, feedDescription, linkBase string, items []g2.FeedItem) error {
 	now := time.Now()
-	data := FeedData{
+	data := g2.Feed{
 		Title:         feedTitle,
 		Link:          linkBase,
 		Description:   feedDescription,
