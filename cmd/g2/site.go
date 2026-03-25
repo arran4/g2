@@ -63,13 +63,12 @@ type FileData struct {
 }
 
 type PackageData struct {
-	Name          string
-	Category      string
-	Versions      []VersionData
-	Metadata      *g2.PkgMetadata
-	MetadataError error
-	Manifest      *g2.Manifest
-	Files         []FileData
+	Name     string
+	Category string
+	Versions []VersionData
+	Metadata *g2.PkgMetadata
+	Manifest *g2.Manifest
+	Files    []FileData
 
 	// Git info
 	MetadataRawURL string
@@ -345,11 +344,7 @@ func parseRepo(repoDir string, defaultTitle string) (*SiteData, error) {
 			if err == nil {
 				if pkgMd, ok := metadata.(*g2.PkgMetadata); ok {
 					pkgData.Metadata = pkgMd
-				} else {
-					pkgData.MetadataError = fmt.Errorf("metadata.xml is not a pkgmetadata")
 				}
-			} else {
-				pkgData.MetadataError = err
 			}
 
 			if remoteURL != "" {
