@@ -428,6 +428,7 @@ func parseRepo(repoDir string, defaultTitle string) (*SiteData, error) {
 		}
 
 		if len(catData.Packages) > 0 {
+			// TODO: Make a lint rule
 			if len(supportedCategories) > 0 && !supportedCategories[name] {
 				log.Printf("Warning: category '%s' is not listed in repo's profiles/categories", name)
 			}
