@@ -271,9 +271,10 @@ func (p *EbuildParser) consumeValue() (string, error) {
 		return "", err
 	}
 
-	if r == '"' || r == '\'' {
+	switch r {
+	case '"', '\'':
 		return p.consumeQuotedString()
-	} else if r == '(' {
+	case '(':
 		return p.consumeArray()
 	}
 

@@ -350,7 +350,7 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool) (
 	layoutConfPath := filepath.Join(repoDir, "metadata", "layout.conf")
 	var lc *g2.LayoutConf
 	if f, err := sysFS.Open(filepath.ToSlash(layoutConfPath)); err == nil {
-		f.Close()
+		_ = f.Close()
 		lc, err = parseLayoutConfFromFS(sysFS, filepath.ToSlash(layoutConfPath))
 		if err != nil {
 			log.Printf("Warning: failed to parse layout.conf: %v", err)
