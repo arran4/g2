@@ -8,7 +8,6 @@ import (
 	"io"
 	"strings"
 	"unicode"
-
 )
 
 var (
@@ -208,8 +207,21 @@ func (p *EbuildParser) Parse() (*Ebuild, error) {
 					return nil, err
 				}
 			} else {
-				// Bare command or reserved word. Skip line.
-				p.skipLine()
+				if ident == "inherit" {
+					// Collect inherited eclasses
+					val, err := p.consumeLine()
+					if err != nil && !errors.Is(err, io.EOF) {
+						return nil, err
+					}
+					if ebuild.Variables["INHERITED"] != "" {
+						ebuild.Variables["INHERITED"] += " " + val
+					} else {
+						ebuild.Variables["INHERITED"] = val
+					}
+				} else {
+					// Bare command or reserved word. Skip line.
+					p.skipLine()
+				}
 			}
 		} else {
 			// Not an assignment or function we care about right now at top level.
@@ -230,7 +242,7 @@ func (p *EbuildParser) consumeIdent() (string, error) {
 			}
 			return "", err
 		}
-		if unicode.IsLetter(r) || unicode.IsDigit(r) || r == '_' {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) || r == '_' || r == '[' || r == ']' {
 			sb.WriteRune(r)
 			_, _ = p.nextRune()
 		} else {
@@ -297,7 +309,7 @@ func (p *EbuildParser) consumeQuotedString() (string, error) {
 		}
 		if r == '\\' {
 			escape = true
-            sb.WriteRune(r) // Keep the escape in the AST representation for now
+			sb.WriteRune(r) // Keep the escape in the AST representation for now
 			continue
 		}
 		if r == quote {
@@ -311,7 +323,7 @@ func (p *EbuildParser) consumeQuotedString() (string, error) {
 func (p *EbuildParser) consumeArray() (string, error) {
 	_, _ = p.nextRune() // consume '('
 	var sb strings.Builder
-    sb.WriteString("(")
+	sb.WriteString("(")
 	// read until matching ')'
 	parens := 1
 	for {
@@ -324,20 +336,20 @@ func (p *EbuildParser) consumeArray() (string, error) {
 		} else if r == ')' {
 			parens--
 			if parens == 0 {
-                sb.WriteRune(r)
+				sb.WriteRune(r)
 				break
 			}
 		}
-        if r == '#' {
-            // Comment inside array! Common ebuild issue.
-            for {
-                nr, err := p.nextRune()
-                if err != nil || nr == '\n' {
-                    break
-                }
-            }
-            continue // Skipped comment
-        }
+		if r == '#' {
+			// Comment inside array! Common ebuild issue.
+			for {
+				nr, err := p.nextRune()
+				if err != nil || nr == '\n' {
+					break
+				}
+			}
+			continue // Skipped comment
+		}
 		sb.WriteRune(r)
 	}
 	return sb.String(), nil
@@ -370,19 +382,19 @@ func (p *EbuildParser) skipFunctionBody() error {
 				break
 			}
 		} else if r == '"' || r == '\'' {
-            // Skip strings inside functions so we don't accidentally match braces
-            p.peekRune = r
-            p.hasPeek = true
-            _, _ = p.consumeQuotedString()
-        } else if r == '#' {
-            // skip comments
-            for {
-                nr, err := p.nextRune()
-                if err != nil || nr == '\n' {
-                    break
-                }
-            }
-        }
+			// Skip strings inside functions so we don't accidentally match braces
+			p.peekRune = r
+			p.hasPeek = true
+			_, _ = p.consumeQuotedString()
+		} else if r == '#' {
+			// skip comments
+			for {
+				nr, err := p.nextRune()
+				if err != nil || nr == '\n' {
+					break
+				}
+			}
+		}
 	}
 	return nil
 }
@@ -394,4 +406,23 @@ func (p *EbuildParser) skipLine() {
 			break
 		}
 	}
+}
+
+func (p *EbuildParser) consumeLine() (string, error) {
+	var sb strings.Builder
+	for {
+		r, err := p.nextRune()
+		if err != nil {
+			return strings.TrimSpace(sb.String()), err
+		}
+		if r == '\n' {
+			break
+		}
+		if r == '#' {
+			p.skipLine()
+			break
+		}
+		sb.WriteRune(r)
+	}
+	return strings.TrimSpace(sb.String()), nil
 }
