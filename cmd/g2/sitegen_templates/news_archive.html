@@ -1,0 +1,11 @@
+<h2>{{.Title}}</h2>
+
+<div class="news-archive">
+    <ul>
+        {{range .News}}
+        <li>
+            <a href="{{.DirName}}/">{{.Title}}</a> - {{.Posted.Format "2006-01-02"}}
+        </li>
+        {{end}}
+    </ul>
+</div>

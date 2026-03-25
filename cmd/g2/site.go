@@ -15,8 +15,40 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 )
+
+var (
+	mainGentooCategories map[string]bool
+	mainGentooOnce       sync.Once
+)
+
+func fetchMainGentooCategories() map[string]bool {
+	mainGentooOnce.Do(func() {
+		mainGentooCategories = make(map[string]bool)
+		client := http.Client{Timeout: 5 * time.Second}
+		resp, err := client.Get("https://raw.githubusercontent.com/gentoo-mirror/gentoo/stable/profiles/categories")
+		if err == nil {
+			defer func() { _ = resp.Body.Close() }()
+			if resp.StatusCode == http.StatusOK {
+				data, err := io.ReadAll(resp.Body)
+				if err == nil {
+					lines := strings.Split(string(data), "\n")
+					for _, line := range lines {
+						cat := strings.TrimSpace(line)
+						if cat != "" && !strings.HasPrefix(cat, "#") {
+							mainGentooCategories[cat] = true
+						}
+					}
+				}
+			}
+		} else {
+			log.Printf("Warning: failed to fetch main gentoo categories: %v", err)
+		}
+	})
+	return mainGentooCategories
+}
 
 type RemoteRepositories struct {
 	XMLName xml.Name     `xml:"repositories"`
@@ -33,12 +65,25 @@ type RepoSource struct {
 	URL  string `xml:",chardata"`
 }
 
+type NewsItem struct {
+	Title    string
+	Author   string
+	Posted   time.Time
+	Revision string
+	Body     string
+	DirName  string
+	FileName string
+}
+
 type SiteData struct {
 	Title      string
 	RepoName   string
 	RemoteURL  string
+	EAPI       string
 	Categories []CategoryData
 	Moves      []g2.PackageMove
+	News       []NewsItem
+	LayoutConf *g2.LayoutConf
 }
 
 type LicenseData struct {
@@ -229,10 +274,95 @@ func parseRepo(repoDir string, defaultTitle string) (*SiteData, error) {
 		repoName = filepath.Base(repoDir)
 	}
 
+	var eapi string
+	eapiBytes, err := os.ReadFile(filepath.Join(repoDir, "profiles", "eapi"))
+	if err == nil && len(eapiBytes) > 0 {
+		eapi = strings.TrimSpace(string(eapiBytes))
+	}
+
+	layoutConfPath := filepath.Join(repoDir, "metadata", "layout.conf")
+	var lc *g2.LayoutConf
+	if _, err := os.Stat(layoutConfPath); err == nil {
+		lc, err = g2.ParseLayoutConf(layoutConfPath)
+		if err != nil {
+			log.Printf("Warning: failed to parse layout.conf: %v", err)
+			lc = nil
+		}
+	}
+
 	site := &SiteData{
-		Title:     title,
-		RepoName:  repoName,
-		RemoteURL: remoteURL,
+		Title:      title,
+		RepoName:   repoName,
+		RemoteURL:  remoteURL,
+		EAPI:       eapi,
+		LayoutConf: lc,
+	}
+
+	// Parse News
+	newsDir := filepath.Join(repoDir, "metadata", "news")
+	if entries, err := os.ReadDir(newsDir); err == nil {
+		for _, entry := range entries {
+			if !entry.IsDir() {
+				continue
+			}
+			dirName := entry.Name()
+			txtFile := filepath.Join(newsDir, dirName, dirName+".en.txt")
+
+			content, err := os.ReadFile(txtFile)
+			if err != nil {
+				continue
+			}
+
+			lines := strings.Split(string(content), "\n")
+			var item NewsItem
+			item.DirName = dirName
+			item.FileName = dirName + ".en.txt"
+
+			inBody := false
+			var bodyLines []string
+
+			for _, line := range lines {
+				if inBody {
+					bodyLines = append(bodyLines, line)
+					continue
+				}
+
+				if strings.TrimSpace(line) == "" {
+					inBody = true
+					continue
+				}
+
+				parts := strings.SplitN(line, ":", 2)
+				if len(parts) != 2 {
+					continue
+				}
+
+				key := strings.TrimSpace(parts[0])
+				val := strings.TrimSpace(parts[1])
+
+				switch key {
+				case "Title":
+					item.Title = val
+				case "Author":
+					item.Author = val
+				case "Posted":
+					t, err := time.Parse("2006-01-02", val)
+					if err == nil {
+						item.Posted = t
+					}
+				case "Revision":
+					item.Revision = val
+				}
+			}
+
+			item.Body = strings.TrimSpace(strings.Join(bodyLines, "\n"))
+			site.News = append(site.News, item)
+		}
+
+		// Sort news descending by posted date
+		sort.Slice(site.News, func(i, j int) bool {
+			return site.News[i].Posted.After(site.News[j].Posted)
+		})
 	}
 
 	supportedCategories := make(map[string]bool)
@@ -266,10 +396,6 @@ func parseRepo(repoDir string, defaultTitle string) (*SiteData, error) {
 		}
 		name := entry.Name()
 		if isIgnoredDir(name) {
-			continue
-		}
-
-		if len(supportedCategories) > 0 && !supportedCategories[name] {
 			continue
 		}
 
@@ -409,6 +535,15 @@ func parseRepo(repoDir string, defaultTitle string) (*SiteData, error) {
 		}
 
 		if len(catData.Packages) > 0 {
+			// TODO: Make a lint rule
+			if len(supportedCategories) > 0 && !supportedCategories[name] {
+				log.Printf("Warning: category '%s' is not listed in repo's profiles/categories", name)
+			}
+			mainCats := fetchMainGentooCategories()
+			if len(mainCats) > 0 && !mainCats[name] {
+				log.Printf("Warning: category '%s' is not in the main gentoo categories list", name)
+			}
+
 			// Sort packages by name
 			sort.Slice(catData.Packages, func(i, j int) bool {
 				return catData.Packages[i].Name < catData.Packages[j].Name
@@ -509,6 +644,11 @@ type AggPackageMove struct {
 	New string
 }
 
+type AggNewsItem struct {
+	NewsItem
+	RepoName string
+}
+
 func generateSite(outDir string, sites []*SiteData) error {
 	if err := os.MkdirAll(outDir, 0755); err != nil {
 		return err
@@ -523,10 +663,18 @@ func generateSite(outDir string, sites []*SiteData) error {
 	aggPackages := make(map[string]*AggPackage)
 	aggLicenses := make(map[string]*AggLicense)
 	aggMoves := make(map[string]*AggPackageMove)
+	var globalNews []AggNewsItem
 
 	totalPackages := 0
 
 	for _, site := range sites {
+		for _, news := range site.News {
+			globalNews = append(globalNews, AggNewsItem{
+				NewsItem: news,
+				RepoName: site.RepoName,
+			})
+		}
+
 		for _, cat := range site.Categories {
 			if _, ok := aggCategories[cat.Name]; !ok {
 				aggCategories[cat.Name] = &AggCategory{Name: cat.Name, Packages: make(map[string]*AggPackage)}
@@ -594,6 +742,26 @@ func generateSite(outDir string, sites []*SiteData) error {
 		sortedLicenses = append(sortedLicenses, l)
 	}
 	sort.Slice(sortedLicenses, func(i, j int) bool { return sortedLicenses[i].Name < sortedLicenses[j].Name })
+
+	sort.Slice(globalNews, func(i, j int) bool {
+		return globalNews[i].Posted.After(globalNews[j].Posted)
+	})
+
+	var recentNews []AggNewsItem
+	cutoffDate := time.Now().AddDate(0, -3, 0)
+	for _, n := range globalNews {
+		if n.Posted.After(cutoffDate) {
+			recentNews = append(recentNews, n)
+		} else {
+			break
+		}
+	}
+	if len(recentNews) == 0 && len(globalNews) > 0 {
+		// fallback if no news in last 3 months, show the last 3 items
+		for i := 0; i < len(globalNews) && i < 3; i++ {
+			recentNews = append(recentNews, globalNews[i])
+		}
+	}
 
 	mapToList := func(m map[string]*SiteData) []*SiteData {
 		var l []*SiteData
@@ -690,8 +858,44 @@ func generateSite(outDir string, sites []*SiteData) error {
 		"Packages":   sortedPackages,
 		"Licenses":   sortedLicenses,
 		"Updates":    globalFeedItems,
+		"RecentNews": recentNews,
 		"Version":    version,
 	}); err != nil { return err }
+
+	// 1b. Global News Dashboard
+	if len(globalNews) > 0 {
+		if err := os.MkdirAll(filepath.Join(outDir, "news"), 0755); err != nil { return err }
+		if err := renderPage(filepath.Join(outDir, "news", "index.html"), tmpl, "news_dashboard.html", map[string]interface{}{
+			"Title":       "News Dashboard",
+			"BaseURL":     "../",
+			"Breadcrumbs": []Breadcrumb{{Name: title, URL: "../"}, {Name: "News"}},
+			"RecentNews":  recentNews,
+			"Version":     version,
+		}); err != nil { return err }
+
+		// Global News Archive
+		if err := os.MkdirAll(filepath.Join(outDir, "news", "archive"), 0755); err != nil { return err }
+		if err := renderPage(filepath.Join(outDir, "news", "archive", "index.html"), tmpl, "news_archive.html", map[string]interface{}{
+			"Title":       "News Archive",
+			"BaseURL":     "../../",
+			"Breadcrumbs": []Breadcrumb{{Name: title, URL: "../../"}, {Name: "News", URL: "../"}, {Name: "Archive"}},
+			"News":        globalNews,
+			"Version":     version,
+		}); err != nil { return err }
+
+		// Global News Articles
+		for _, n := range globalNews {
+			newsDir := filepath.Join(outDir, "news", "archive", n.DirName)
+			if err := os.MkdirAll(newsDir, 0755); err != nil { return err }
+			if err := renderPage(filepath.Join(newsDir, "index.html"), tmpl, "news_article.html", map[string]interface{}{
+				"Title":       n.Title,
+				"BaseURL":     "../../../",
+				"Breadcrumbs": []Breadcrumb{{Name: title, URL: "../../../"}, {Name: "News", URL: "../../"}, {Name: "Archive", URL: "../"}, {Name: n.Title}},
+				"NewsItem":    n,
+				"Version":     version,
+			}); err != nil { return err }
+		}
+	}
 
 	// 2. Overlays List
 	if err := os.MkdirAll(filepath.Join(outDir, "overlays"), 0755); err != nil { return err }
@@ -892,6 +1096,20 @@ func generateSite(outDir string, sites []*SiteData) error {
 		pkgCount := 0
 		for _, c := range site.Categories { pkgCount += len(c.Packages) }
 
+		var repoRecentNews []NewsItem
+		for _, n := range site.News {
+			if n.Posted.After(cutoffDate) {
+				repoRecentNews = append(repoRecentNews, n)
+			} else {
+				break
+			}
+		}
+		if len(repoRecentNews) == 0 && len(site.News) > 0 {
+			for i := 0; i < len(site.News) && i < 3; i++ {
+				repoRecentNews = append(repoRecentNews, site.News[i])
+			}
+		}
+
 		if err := renderPage(filepath.Join(repoDir, "index.html"), tmpl, "repo_index.html", map[string]interface{}{
 			"Title":       site.RepoName,
 			"BaseURL":     "../../",
@@ -899,8 +1117,44 @@ func generateSite(outDir string, sites []*SiteData) error {
 			"Repo":        site,
 			"PackageCount": pkgCount,
 			"Updates":     repoFeedItems,
+			"RecentNews":  repoRecentNews,
 			"Version":     version,
 		}); err != nil { return err }
+
+		// Repo News Dashboard
+		if len(site.News) > 0 {
+			if err := os.MkdirAll(filepath.Join(repoDir, "news"), 0755); err != nil { return err }
+			if err := renderPage(filepath.Join(repoDir, "news", "index.html"), tmpl, "news_dashboard.html", map[string]interface{}{
+				"Title":       site.RepoName + " - News Dashboard",
+				"BaseURL":     "../../../",
+				"Breadcrumbs": []Breadcrumb{{Name: title, URL: "../../../"}, {Name: "Overlays", URL: "../../../overlays/"}, {Name: site.RepoName, URL: "../"}, {Name: "News"}},
+				"RecentNews":  repoRecentNews,
+				"Version":     version,
+			}); err != nil { return err }
+
+			// Repo News Archive
+			if err := os.MkdirAll(filepath.Join(repoDir, "news", "archive"), 0755); err != nil { return err }
+			if err := renderPage(filepath.Join(repoDir, "news", "archive", "index.html"), tmpl, "news_archive.html", map[string]interface{}{
+				"Title":       site.RepoName + " - News Archive",
+				"BaseURL":     "../../../../",
+				"Breadcrumbs": []Breadcrumb{{Name: title, URL: "../../../../"}, {Name: "Overlays", URL: "../../../../overlays/"}, {Name: site.RepoName, URL: "../../"}, {Name: "News", URL: "../"}, {Name: "Archive"}},
+				"News":        site.News,
+				"Version":     version,
+			}); err != nil { return err }
+
+			// Repo News Articles
+			for _, n := range site.News {
+				newsDir := filepath.Join(repoDir, "news", "archive", n.DirName)
+				if err := os.MkdirAll(newsDir, 0755); err != nil { return err }
+				if err := renderPage(filepath.Join(newsDir, "index.html"), tmpl, "news_article.html", map[string]interface{}{
+					"Title":       n.Title,
+					"BaseURL":     "../../../../../",
+					"Breadcrumbs": []Breadcrumb{{Name: title, URL: "../../../../../"}, {Name: "Overlays", URL: "../../../../../overlays/"}, {Name: site.RepoName, URL: "../../../"}, {Name: "News", URL: "../../"}, {Name: "Archive", URL: "../"}, {Name: n.Title}},
+					"NewsItem":    n,
+					"Version":     version,
+				}); err != nil { return err }
+			}
+		}
 
 		if err := os.MkdirAll(filepath.Join(repoDir, "categories"), 0755); err != nil { return err }
 		if err := renderPage(filepath.Join(repoDir, "categories", "index.html"), tmpl, "categories.html", map[string]interface{}{
