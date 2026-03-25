@@ -308,7 +308,7 @@ jobs:
       - name: Build g2
         run: go build -o g2 cmd/g2/*.go
       - name: Test site generation
-        run: ./g2 overlay site generate https://github.com/arran4/arrans_overlay
+        run: go run ./cmd/g2 overlay site generate https://github.com/arran4/arrans_overlay
 
   go-fmt-pr:
     name: go fmt -> PR (manual dispatch)

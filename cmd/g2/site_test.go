@@ -93,3 +93,48 @@ func TestBuildManifestData(t *testing.T) {
 		}
 	}
 }
+
+func TestGenerateSite(t *testing.T) {
+	siteData, err := parseRepo("../../testdata/test_overlay", "Test Overlay")
+	if err != nil {
+		t.Fatalf("parseRepo failed: %v", err)
+	}
+
+	outDir := t.TempDir()
+
+	err = generateSite(outDir, []*SiteData{siteData})
+	if err != nil {
+		t.Fatalf("generateSite failed: %v", err)
+	}
+}
+
+func TestGenerateSite_TemplateError(t *testing.T) {
+	// Let's pass a struct to generateSite that we know will fail.
+	// To cause an issue intentionally with templates, we can pass something
+	// that will cause MkdirAll to fail, or just pass a package with a malformed template format.
+	// We will supply a category with a malformed name to trigger a file path error or a bad move.
+
+	siteData := &SiteData{
+		Title:    "Bad Template Site",
+		RepoName: "bad-repo",
+		Categories: []CategoryData{
+			{
+				Name: "broken-category/\x00/invalid",
+				Packages: []PackageData{
+					{
+						Name:     "broken-package",
+						Category: "broken-category/\x00/invalid",
+					},
+				},
+			},
+		},
+	}
+	outDir := t.TempDir()
+
+	err := generateSite(outDir, []*SiteData{siteData})
+
+	if err == nil {
+		t.Fatalf("generateSite unexpectedly succeeded with bad parameters, template/file errors are likely being swallowed")
+	}
+	t.Logf("generateSite successfully surfaced error: %v", err)
+}
