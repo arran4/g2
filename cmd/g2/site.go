@@ -1906,13 +1906,15 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, 
 	tmpl, err := template.ParseFS(siteTemplates, "sitegen_templates/*.html")
 	if err != nil {
 		return fmt.Errorf("parsing templates: %w", err)
-  }
-		allSites = append(allSites, siteData)
 	}
 
-	log.Printf("Generating site for %d repositories", len(allSites))
-	if err := generateSite(outDir, allSites, recentDuration, recentDurationStr); err != nil {
-		return fmt.Errorf("generating multi-repo site: %w", err)
+	if err := renderPage(filepath.Join(outDir, "index.html"), tmpl, "index.html", map[string]interface{}{
+		"Title":       overallSiteData.Title,
+		"BaseURL":     "",
+		"Categories":  overallSiteData.Categories,
+		"Breadcrumbs": []g2.Breadcrumb{},
+	}); err != nil {
+		return fmt.Errorf("rendering overall index page: %w", err)
 	}
 
 	log.Println("Remote site generation complete.")
