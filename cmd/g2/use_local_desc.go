@@ -239,11 +239,8 @@ func (cfg *MainArgConfig) cmdUseLocalDescDiscover(args []string) error {
 			}
 
 			if iuse, ok := ebuild.Vars["IUSE"]; ok && iuse != "" {
-				flags := strings.Fields(iuse)
-				for _, flagName := range flags {
-					flagName = strings.TrimPrefix(flagName, "+")
-					flagName = strings.TrimPrefix(flagName, "-")
-
+				parsedFlags := g2.ParseIUSE(iuse)
+				for _, flagName := range parsedFlags {
 					if ud.Flags[fullPkgName] == nil {
 						ud.Flags[fullPkgName] = make(map[string]string)
 					}

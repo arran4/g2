@@ -374,12 +374,9 @@ func (cfg *MainArgConfig) cmdMetadataDiscover(args []string) error {
 			pkgMd = &g2.PkgMetadata{XMLName: xml.Name{Local: "pkgmetadata"}}
 		}
 
-		flags := strings.Fields(iuse)
+		parsedFlags := g2.ParseIUSE(iuse)
 		added := 0
-		for _, flagName := range flags {
-			flagName = strings.TrimPrefix(flagName, "+")
-			flagName = strings.TrimPrefix(flagName, "-")
-
+		for _, flagName := range parsedFlags {
 			// Check if flag is global? We'll just add them all and it won't hurt
 			// The issue asks to "update the corresponding metadata.xml to ensure all these flags are listed."
 
