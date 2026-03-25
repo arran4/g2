@@ -38,6 +38,7 @@ type SiteData struct {
 	RepoName   string
 	RemoteURL  string
 	Categories []CategoryData
+	Authors    []g2.Author
 }
 
 type LicenseData struct {
@@ -232,6 +233,16 @@ func parseRepo(repoDir string, defaultTitle string) (*SiteData, error) {
 		Title:     title,
 		RepoName:  repoName,
 		RemoteURL: remoteURL,
+	}
+
+	authorsFile, err := os.Open(filepath.Join(repoDir, "metadata", "AUTHORS"))
+	if err == nil {
+		if authors, err := g2.ParseAuthors(authorsFile); err == nil {
+			site.Authors = authors
+		} else {
+			log.Printf("Warning: failed to parse metadata/AUTHORS: %v", err)
+		}
+		_ = authorsFile.Close()
 	}
 
 	supportedCategories := make(map[string]bool)
@@ -804,6 +815,17 @@ func generateSite(outDir string, sites []*SiteData) error {
 			"Categories":  site.Categories,
 			"Version":     version,
 		}); err != nil { return err }
+
+		if len(site.Authors) > 0 {
+			if err := os.MkdirAll(filepath.Join(repoDir, "authors"), 0755); err != nil { return err }
+			if err := renderPage(filepath.Join(repoDir, "authors", "index.html"), tmpl, "authors.html", map[string]interface{}{
+				"Title":       site.RepoName + " - Authors",
+				"BaseURL":     "../../../",
+				"Breadcrumbs": []Breadcrumb{{Name: title, URL: "../../../"}, {Name: site.RepoName, URL: "../"}, {Name: "Authors"}},
+				"Authors":     site.Authors,
+				"Version":     version,
+			}); err != nil { return err }
+		}
 
 		for _, cat := range site.Categories {
 			catDir := filepath.Join(repoDir, "categories", cat.Name)

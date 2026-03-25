@@ -1,0 +1,11 @@
+<h2>Authors</h2>
+<ul>
+    {{range .Authors}}
+    <li>
+        {{.Name}}
+        {{if .Email}}
+        &lt;<a href="mailto:{{.Email}}">{{.Email}}</a>&gt;
+        {{end}}
+    </li>
+    {{end}}
+</ul>

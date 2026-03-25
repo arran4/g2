@@ -1,0 +1,16 @@
+&lt;?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>dev-util/test-pkg</title>
+  <link href=""/>
+  <updated>2026-03-25T00:27:21Z</updated>
+  <id></id>
+
+  <entry>
+    <title>dev-util/test-pkg-1.0</title>
+    <link href=""/>
+    <id></id>
+    <updated>2026-03-25T00:27:21Z</updated>
+    <summary></summary>
+  </entry>
+
+</feed>
