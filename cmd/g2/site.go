@@ -81,6 +81,7 @@ type SiteData struct {
 	RemoteURL  string
 	EAPI       string
 	Categories []CategoryData
+	Moves      []g2.PackageMove
 	News       []NewsItem
 	LayoutConf *g2.LayoutConf
 }
@@ -376,6 +377,14 @@ func parseRepo(repoDir string, defaultTitle string) (*SiteData, error) {
 		}
 	}
 
+	updates, err := g2.ParseUpdatesDir(filepath.Join(repoDir, "profiles", "updates"))
+	if err != nil && !os.IsNotExist(err) {
+		log.Printf("Warning: failed to parse updates: %v", err)
+	}
+	if updates != nil {
+		site.Moves = updates.Moves
+	}
+
 	entries, err := os.ReadDir(repoDir)
 	if err != nil {
 		return nil, fmt.Errorf("reading repo dir: %w", err)
@@ -630,6 +639,11 @@ type AggLicense struct {
 	Text     string
 }
 
+type AggPackageMove struct {
+	Old string
+	New string
+}
+
 type AggNewsItem struct {
 	NewsItem
 	RepoName string
@@ -648,6 +662,7 @@ func generateSite(outDir string, sites []*SiteData) error {
 	aggCategories := make(map[string]*AggCategory)
 	aggPackages := make(map[string]*AggPackage)
 	aggLicenses := make(map[string]*AggLicense)
+	aggMoves := make(map[string]*AggPackageMove)
 	var globalNews []AggNewsItem
 
 	totalPackages := 0
@@ -695,6 +710,11 @@ func generateSite(outDir string, sites []*SiteData) error {
 						}
 					}
 				}
+			}
+		}
+		for _, move := range site.Moves {
+			if _, ok := aggMoves[move.Old]; !ok {
+				aggMoves[move.Old] = &AggPackageMove{Old: move.Old, New: move.New}
 			}
 		}
 	}
@@ -756,6 +776,38 @@ func generateSite(outDir string, sites []*SiteData) error {
 	title := "Gentoo Packages"
 	if len(sites) == 1 {
 		title = sites[0].Title
+	}
+
+	// Global Moved Packages Pages
+	for oldPath, move := range aggMoves {
+		parts := strings.Split(oldPath, "/")
+		if len(parts) != 2 {
+			continue
+		}
+		oldCat, oldName := parts[0], parts[1]
+
+		pkgKey := oldCat + "/" + oldName
+		if _, exists := aggPackages[pkgKey]; exists {
+			continue // skip if a package now exists at this location
+		}
+
+		newParts := strings.Split(move.New, "/")
+		if len(newParts) != 2 {
+			continue
+		}
+
+		pkgDir := filepath.Join(outDir, "packages", oldCat, oldName)
+		if err := os.MkdirAll(pkgDir, 0755); err != nil { return err }
+
+		if err := renderPage(filepath.Join(pkgDir, "index.html"), tmpl, "moved_package.html", map[string]interface{}{
+			"Title":       "Package Moved: " + oldCat + "/" + oldName,
+			"BaseURL":     "../../../",
+			"Breadcrumbs": []Breadcrumb{{Name: title, URL: "../../../"}, {Name: "Packages", URL: "../../"}, {Name: oldCat}, {Name: oldName}},
+			"OldName":     oldCat + "/" + oldName,
+			"NewName":     move.New,
+			"NewURL":      "../../" + newParts[0] + "/" + newParts[1] + "/",
+			"Version":     version,
+		}); err != nil { return err }
 	}
 
 	// Generate Global Feeds
@@ -914,11 +966,22 @@ func generateSite(outDir string, sites []*SiteData) error {
 			redirectHTML := fmt.Sprintf(`<!DOCTYPE html><html><head><meta http-equiv="refresh" content="0; url=%s"></head><body><a href="%s">Redirecting...</a></body></html>`, targetURL, targetURL)
 			if err := os.WriteFile(filepath.Join(pkgDir, "index.html"), []byte(redirectHTML), 0644); err != nil { return err }
 		} else {
+			var movedToName, movedToURL string
+			if move, ok := aggMoves[pkg.Category+"/"+pkg.Name]; ok {
+				newParts := strings.Split(move.New, "/")
+				if len(newParts) == 2 {
+					movedToName = move.New
+					movedToURL = "../../" + newParts[0] + "/" + newParts[1] + "/"
+				}
+			}
+
 			if err := renderPage(filepath.Join(pkgDir, "index.html"), tmpl, "package_picker.html", map[string]interface{}{
 				"Title":       "Package: " + pkg.Category + "/" + pkg.Name,
 				"BaseURL":     "../../../",
 				"Breadcrumbs": []Breadcrumb{{Name: title, URL: "../../../"}, {Name: "Packages", URL: "../../"}, {Name: pkg.Category}, {Name: pkg.Name}},
 				"Package":     map[string]interface{}{"Category": pkg.Category, "Name": pkg.Name, "ReposList": reposList},
+				"MovedToName": movedToName,
+				"MovedToURL":  movedToURL,
 				"Version":     version,
 			}); err != nil { return err }
 		}
@@ -961,6 +1024,49 @@ func generateSite(outDir string, sites []*SiteData) error {
 	for _, site := range sites {
 		repoDir := filepath.Join(outDir, "repos", site.RepoName)
 		if err := os.MkdirAll(repoDir, 0755); err != nil { return err }
+
+		// Repo Moved Packages Pages
+		for _, move := range site.Moves {
+			parts := strings.Split(move.Old, "/")
+			if len(parts) != 2 {
+				continue
+			}
+			oldCat, oldName := parts[0], parts[1]
+
+			// Check if package exists in this repo currently
+			pkgExists := false
+			for _, cat := range site.Categories {
+				if cat.Name == oldCat {
+					for _, pkg := range cat.Packages {
+						if pkg.Name == oldName {
+							pkgExists = true
+							break
+						}
+					}
+				}
+				if pkgExists { break }
+			}
+			if pkgExists { continue }
+
+			newParts := strings.Split(move.New, "/")
+			if len(newParts) != 2 {
+				continue
+			}
+
+			pkgDir := filepath.Join(repoDir, "categories", oldCat, "packages", oldName)
+			if err := os.MkdirAll(pkgDir, 0755); err != nil { return err }
+
+			if err := renderPage(filepath.Join(pkgDir, "index.html"), tmpl, "moved_package.html", map[string]interface{}{
+				"Title":       fmt.Sprintf("%s - %s/%s (Moved)", site.RepoName, oldCat, oldName),
+				"BaseURL":     "../../../../../../",
+				"Breadcrumbs": []Breadcrumb{{Name: title, URL: "../../../../../../"}, {Name: site.RepoName, URL: "../../../../"}, {Name: "Categories", URL: "../../../"}, {Name: oldCat}, {Name: oldName}},
+				"Repo":        site,
+				"OldName":     oldCat + "/" + oldName,
+				"NewName":     move.New,
+				"NewURL":      "../../../" + newParts[0] + "/packages/" + newParts[1] + "/",
+				"Version":     version,
+			}); err != nil { return err }
+		}
 
 		var repoFeedItems []FeedItem
 		for _, cat := range site.Categories {
@@ -1120,12 +1226,26 @@ func generateSite(outDir string, sites []*SiteData) error {
 				log.Printf("Warning: failed to generate package feed: %v", err)
 			}
 
+			var movedToName, movedToURL string
+			for _, move := range site.Moves {
+				if move.Old == pkg.Category+"/"+pkg.Name {
+					newParts := strings.Split(move.New, "/")
+					if len(newParts) == 2 {
+						movedToName = move.New
+						movedToURL = "../../../" + newParts[0] + "/packages/" + newParts[1] + "/"
+					}
+					break
+				}
+			}
+
 			if err := renderPage(filepath.Join(pkgDir, "index.html"), tmpl, "repo_package.html", map[string]interface{}{
 				"Title":       fmt.Sprintf("%s - %s/%s", site.RepoName, pkg.Category, pkg.Name),
 				"BaseURL":     "../../../../../../",
 				"Breadcrumbs": []Breadcrumb{{Name: title, URL: "../../../../../../"}, {Name: site.RepoName, URL: "../../../../"}, {Name: "Categories", URL: "../../../"}, {Name: pkg.Category}, {Name: pkg.Name}},
 				"Repo":        site,
 				"Package":     pkg,
+				"MovedToName": movedToName,
+				"MovedToURL":  movedToURL,
 				"Version":     version,
 			}); err != nil { return err }
 		}
