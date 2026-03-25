@@ -1,0 +1,10 @@
+--- cmd/g2/site.go
++++ cmd/g2/site.go
+@@ -1503,6 +1503,7 @@
+				"Profile":     p,
+				"Version":     version,
+			}); err != nil { return err }
++		}
+		// Repo News Dashboard
+		if len(site.News) > 0 {
+			if err := os.MkdirAll(filepath.Join(repoDir, "news"), 0755); err != nil { return err }

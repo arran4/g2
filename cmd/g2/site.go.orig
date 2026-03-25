@@ -1355,7 +1355,6 @@ func generateSite(outDir string, sites []*SiteData) error {
 				"Profile":     p,
 				"Version":     version,
 			}); err != nil { return err }
-		}
 		// Repo News Dashboard
 		if len(site.News) > 0 {
 			if err := os.MkdirAll(filepath.Join(repoDir, "news"), 0755); err != nil { return err }
