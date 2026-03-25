@@ -65,6 +65,21 @@ type RepoSource struct {
 	URL  string `xml:",chardata"`
 }
 
+type ProfileDescEntry struct {
+	Arch   string
+	Path   string
+	Status string
+}
+
+type ProfileData struct {
+	Path     string
+	IsDesc   bool
+	DescArch string
+	DescStat string
+	Parents  []string
+	Children []string
+}
+
 type NewsItem struct {
 	Title    string
 	Author   string
@@ -81,6 +96,7 @@ type SiteData struct {
 	RemoteURL  string
 	EAPI       string
 	Categories []CategoryData
+	Profiles   []ProfileData
 	Authors    []g2.Author
 	AuthorsURL string
 	Moves      []g2.PackageMove
@@ -383,6 +399,18 @@ func parseRepo(repoDir string, defaultTitle string) (*SiteData, error) {
 		_ = authorsFile.Close()
 	}
 
+	var profilesDescEntries []ProfileDescEntry
+	profilesDescBytes, err := os.ReadFile(filepath.Join(repoDir, "profiles", "profiles.desc"))
+	if err == nil {
+		profilesDescEntries = parseProfilesDesc(string(profilesDescBytes))
+	}
+
+	profilesData, err := parseProfilesDir(repoDir, profilesDescEntries)
+	if err != nil {
+		log.Printf("Warning: failed to parse profiles dir: %v", err)
+	}
+	site.Profiles = profilesData
+
 	supportedCategories := make(map[string]bool)
 	categoriesBytes, err := os.ReadFile(filepath.Join(repoDir, "profiles", "categories"))
 	if err == nil {
@@ -624,6 +652,103 @@ func buildManifestData(manifest *g2.Manifest, versions []VersionData) []Manifest
 	return manifestData
 }
 
+func parseProfilesDir(repoDir string, entries []ProfileDescEntry) ([]ProfileData, error) {
+	profilesDir := filepath.Join(repoDir, "profiles")
+
+	if info, err := os.Stat(profilesDir); err != nil || !info.IsDir() {
+		return nil, nil
+	}
+
+	descMap := make(map[string]ProfileDescEntry)
+	for _, e := range entries {
+		descMap[e.Path] = e
+	}
+
+	profilesMap := make(map[string]*ProfileData)
+
+	err := filepath.Walk(profilesDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return nil
+		}
+		if !info.IsDir() {
+			return nil
+		}
+
+		relPath, err := filepath.Rel(profilesDir, path)
+		if err != nil || relPath == "." {
+			return nil
+		}
+
+		pData := &ProfileData{
+			Path: relPath,
+		}
+
+		if desc, ok := descMap[relPath]; ok {
+			pData.IsDesc = true
+			pData.DescArch = desc.Arch
+			pData.DescStat = desc.Status
+		}
+
+		parentBytes, err := os.ReadFile(filepath.Join(path, "parent"))
+		if err == nil {
+			lines := strings.Split(string(parentBytes), "\n")
+			for _, line := range lines {
+				line = strings.TrimSpace(line)
+				if line == "" || strings.HasPrefix(line, "#") {
+					continue
+				}
+
+				parentRelPath := filepath.Clean(filepath.Join(relPath, line))
+				if !strings.HasPrefix(parentRelPath, "..") {
+					pData.Parents = append(pData.Parents, parentRelPath)
+				}
+			}
+		}
+
+		profilesMap[relPath] = pData
+		return nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	for path, pData := range profilesMap {
+		for _, parentPath := range pData.Parents {
+			if parent, ok := profilesMap[parentPath]; ok {
+				parent.Children = append(parent.Children, path)
+			}
+		}
+	}
+
+	var result []ProfileData
+	for _, pData := range profilesMap {
+		result = append(result, *pData)
+	}
+
+	return result, nil
+}
+
+func parseProfilesDesc(content string) []ProfileDescEntry {
+	var entries []ProfileDescEntry
+	lines := strings.Split(content, "\n")
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		parts := strings.Fields(line)
+		if len(parts) >= 3 {
+			entries = append(entries, ProfileDescEntry{
+				Arch:   parts[0],
+				Path:   parts[1],
+				Status: parts[2],
+			})
+		}
+	}
+	return entries
+}
+
 func isIgnoredDir(name string) bool {
 	if strings.HasPrefix(name, ".") {
 		return true
@@ -657,6 +782,19 @@ type AggLicense struct {
 	Text     string
 }
 
+type AggProfileRepo struct {
+	RepoName string
+	Profile  ProfileData
+}
+
+type AggProfile struct {
+	Path     string
+	IsDesc   bool
+	DescArch string
+	DescStat string
+	Repos    []AggProfileRepo
+}
+
 type AggPackageMove struct {
 	Old string
 	New string
@@ -680,12 +818,29 @@ func generateSite(outDir string, sites []*SiteData) error {
 	aggCategories := make(map[string]*AggCategory)
 	aggPackages := make(map[string]*AggPackage)
 	aggLicenses := make(map[string]*AggLicense)
+	aggProfiles := make(map[string]*AggProfile)
 	aggMoves := make(map[string]*AggPackageMove)
 	var globalNews []AggNewsItem
 
 	totalPackages := 0
 
 	for _, site := range sites {
+		for _, p := range site.Profiles {
+			if _, ok := aggProfiles[p.Path]; !ok {
+				aggProfiles[p.Path] = &AggProfile{
+					Path: p.Path,
+				}
+			}
+			aggProfiles[p.Path].Repos = append(aggProfiles[p.Path].Repos, AggProfileRepo{
+				RepoName: site.RepoName,
+				Profile:  p,
+			})
+			if p.IsDesc {
+				aggProfiles[p.Path].IsDesc = true
+				aggProfiles[p.Path].DescArch = p.DescArch
+				aggProfiles[p.Path].DescStat = p.DescStat
+			}
+    }
 		for _, news := range site.News {
 			globalNews = append(globalNews, AggNewsItem{
 				NewsItem: news,
@@ -761,6 +916,11 @@ func generateSite(outDir string, sites []*SiteData) error {
 	}
 	sort.Slice(sortedLicenses, func(i, j int) bool { return sortedLicenses[i].Name < sortedLicenses[j].Name })
 
+	var sortedProfiles []*AggProfile
+	for _, p := range aggProfiles {
+		sortedProfiles = append(sortedProfiles, p)
+	}
+	sort.Slice(sortedProfiles, func(i, j int) bool { return sortedProfiles[i].Path < sortedProfiles[j].Path })
 	sort.Slice(globalNews, func(i, j int) bool {
 		return globalNews[i].Posted.After(globalNews[j].Posted)
 	})
@@ -963,6 +1123,35 @@ func generateSite(outDir string, sites []*SiteData) error {
 		}); err != nil { return err }
 	}
 
+	// Profiles
+	if err := os.MkdirAll(filepath.Join(outDir, "profiles"), 0755); err != nil { return err }
+	if err := renderPage(filepath.Join(outDir, "profiles", "index.html"), tmpl, "profiles.html", map[string]interface{}{
+		"Title":       "Profiles",
+		"BaseURL":     "../",
+		"Breadcrumbs": []Breadcrumb{{Name: title, URL: "../"}, {Name: "Profiles"}},
+		"Profiles":    sortedProfiles,
+		"Version":     version,
+	}); err != nil { return err }
+
+	for _, p := range sortedProfiles {
+		profDir := filepath.Join(outDir, "profiles", p.Path)
+		if err := os.MkdirAll(profDir, 0755); err != nil { return err }
+
+		relToRoot := "../../"
+		for i := 0; i < strings.Count(p.Path, "/"); i++ {
+			relToRoot += "../"
+		}
+
+		if err := renderPage(filepath.Join(profDir, "index.html"), tmpl, "profile.html", map[string]interface{}{
+			"Title":       "Profile: " + p.Path,
+			"BaseURL":     relToRoot,
+			"Breadcrumbs": []Breadcrumb{{Name: title, URL: relToRoot}, {Name: "Profiles", URL: relToRoot + "profiles/"}, {Name: p.Path}},
+			"ProfilePath": p.Path,
+			"ProfileList": p.Repos,
+			"Version":     version,
+		}); err != nil { return err }
+	}
+
 	// 4. Global Packages
 	if err := os.MkdirAll(filepath.Join(outDir, "packages"), 0755); err != nil { return err }
 	if err := renderPage(filepath.Join(outDir, "packages", "index.html"), tmpl, "packages.html", map[string]interface{}{
@@ -1139,6 +1328,33 @@ func generateSite(outDir string, sites []*SiteData) error {
 			"Version":     version,
 		}); err != nil { return err }
 
+		if err := os.MkdirAll(filepath.Join(repoDir, "profiles"), 0755); err != nil { return err }
+		if err := renderPage(filepath.Join(repoDir, "profiles", "index.html"), tmpl, "repo_profiles.html", map[string]interface{}{
+			"Title":       site.RepoName + " - Profiles",
+			"BaseURL":     "../../../",
+			"Breadcrumbs": []Breadcrumb{{Name: title, URL: "../../../"}, {Name: site.RepoName, URL: "../"}, {Name: "Profiles"}},
+			"Repo":        site,
+			"Version":     version,
+		}); err != nil { return err }
+
+		for _, p := range site.Profiles {
+			profDir := filepath.Join(repoDir, "profiles", p.Path)
+			if err := os.MkdirAll(profDir, 0755); err != nil { return err }
+
+			relToRoot := "../../../../"
+			for i := 0; i < strings.Count(p.Path, "/"); i++ {
+				relToRoot += "../"
+			}
+
+			if err := renderPage(filepath.Join(profDir, "index.html"), tmpl, "repo_profile.html", map[string]interface{}{
+				"Title":       site.RepoName + " - Profile: " + p.Path,
+				"BaseURL":     relToRoot,
+				"Breadcrumbs": []Breadcrumb{{Name: title, URL: relToRoot}, {Name: site.RepoName, URL: relToRoot + "repos/" + site.RepoName + "/"}, {Name: "Profiles", URL: relToRoot + "repos/" + site.RepoName + "/profiles/"}, {Name: p.Path}},
+				"RepoName":    site.RepoName,
+				"ProfilePath": p.Path,
+				"Profile":     p,
+				"Version":     version,
+			}); err != nil { return err }
 		// Repo News Dashboard
 		if len(site.News) > 0 {
 			if err := os.MkdirAll(filepath.Join(repoDir, "news"), 0755); err != nil { return err }
