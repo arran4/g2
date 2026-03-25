@@ -14,6 +14,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -114,9 +115,15 @@ func (cfg *MainArgConfig) cmdOverlay(args []string) error {
 	fs := flag.NewFlagSet("overlay site generate", flag.ExitOnError)
 	outDir := fs.String("out", "site_out", "Output directory for the generated site")
 	clear := fs.Bool("clear", false, "Clear output directory before generation")
+	recentDurOpt := fs.String("recent-duration", "3mo", "Duration to consider an update 'recent' (e.g. 3mo, 14d, 72h)")
+	fastGit := fs.Bool("fast-git-modtime", false, "Use fast (O(1)) but potentially less reliable go-git file log lookup")
 
 	if err := fs.Parse(args[2:]); err != nil {
 		return err
+	}
+	recentDuration, recentDurationStr, err := parseDuration(*recentDurOpt)
+	if err != nil {
+		return fmt.Errorf("invalid recent-duration: %w", err)
 	}
 
 	location := "."
@@ -159,12 +166,12 @@ func (cfg *MainArgConfig) cmdOverlay(args []string) error {
 	}
 	defer cleanup()
 
-	siteData, err := parseRepo(parseLocation, "Gentoo Packages")
+	siteData, err := parseRepo(parseLocation, "Gentoo Packages", *fastGit)
 	if err != nil {
 		return fmt.Errorf("parsing repo: %w", err)
 	}
 
-	if err := generateSite(*outDir, []*SiteData{siteData}); err != nil {
+	if err := generateSite(*outDir, []*SiteData{siteData}, recentDuration, recentDurationStr); err != nil {
 		return fmt.Errorf("generating site: %w", err)
 	}
 
@@ -192,9 +199,15 @@ func (cfg *MainArgConfig) cmdOverlays(args []string) error {
 	fs := flag.NewFlagSet("overlays site generate", flag.ExitOnError)
 	outDir := fs.String("out", "site_out", "Output directory for the generated site")
 	clear := fs.Bool("clear", false, "Clear output directory before generation")
+	recentDurOpt := fs.String("recent-duration", "3mo", "Duration to consider an update 'recent' (e.g. 3mo, 14d, 72h)")
+	fastGit := fs.Bool("fast-git-modtime", false, "Use fast (O(1)) but potentially less reliable go-git file log lookup")
 
 	if err := fs.Parse(args[2:]); err != nil {
 		return err
+	}
+	recentDuration, recentDurationStr, err := parseDuration(*recentDurOpt)
+	if err != nil {
+		return fmt.Errorf("invalid recent-duration: %w", err)
 	}
 
 	if fs.NArg() == 0 {
@@ -209,10 +222,10 @@ func (cfg *MainArgConfig) cmdOverlays(args []string) error {
 	}
 
 	log.Printf("Generating site from remote repositories: %s into %s", location, *outDir)
-	return cfg.cmdSiteRemote(location, *outDir)
+	return cfg.cmdSiteRemote(location, *outDir, recentDuration, recentDurationStr, *fastGit)
 }
 
-func parseRepo(repoDir string, defaultTitle string) (*SiteData, error) {
+func parseRepo(repoDir string, defaultTitle string, fastGit bool) (*SiteData, error) {
 	title := defaultTitle
 	var repoName string
 
@@ -331,7 +344,7 @@ func parseRepo(repoDir string, defaultTitle string) (*SiteData, error) {
 					}
 				}
 
-				modTime := getFileModTime(repoDir, relPath)
+				modTime := getFileModTime(repoDir, relPath, fastGit)
 				if modTime.After(pkgData.ModTime) {
 					pkgData.ModTime = modTime
 				}
@@ -503,7 +516,39 @@ type AggLicense struct {
 	Text     string
 }
 
-func generateSite(outDir string, sites []*SiteData) error {
+func parseDuration(s string) (time.Duration, string, error) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return 90 * 24 * time.Hour, "3 months", nil
+	}
+	if strings.HasSuffix(s, "mo") {
+		val, err := strconv.Atoi(strings.TrimSuffix(s, "mo"))
+		if err != nil {
+			return 0, "", err
+		}
+		if val == 1 {
+			return time.Duration(val) * 30 * 24 * time.Hour, "1 month", nil
+		}
+		return time.Duration(val) * 30 * 24 * time.Hour, fmt.Sprintf("%d months", val), nil
+	}
+	if strings.HasSuffix(s, "d") {
+		val, err := strconv.Atoi(strings.TrimSuffix(s, "d"))
+		if err != nil {
+			return 0, "", err
+		}
+		if val == 1 {
+			return time.Duration(val) * 24 * time.Hour, "1 day", nil
+		}
+		return time.Duration(val) * 24 * time.Hour, fmt.Sprintf("%d days", val), nil
+	}
+	d, err := time.ParseDuration(s)
+	if err != nil {
+		return 0, "", err
+	}
+	return d, s, nil
+}
+
+func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration, recentDurationStr string) error {
 	if err := os.MkdirAll(outDir, 0755); err != nil {
 		return err
 	}
@@ -639,7 +684,7 @@ func generateSite(outDir string, sites []*SiteData) error {
 		return globalFeedItems[i].Time.After(globalFeedItems[j].Time)
 	})
 	var recentGlobalUpdates []FeedItem
-	recentLimit := time.Now().Add(-24 * 90 * time.Hour) // 90 days = ~3 months
+	recentLimit := time.Now().Add(-recentDuration)
 	for _, item := range globalFeedItems {
 		if item.Time.After(recentLimit) {
 			recentGlobalUpdates = append(recentGlobalUpdates, item)
@@ -652,9 +697,14 @@ func generateSite(outDir string, sites []*SiteData) error {
 	if err := os.MkdirAll(filepath.Join(outDir, "recent"), 0755); err != nil { return err }
 	var allRecentGlobal []FeedItem
 	if len(globalFeedItems) > 500 {
-		allRecentGlobal = globalFeedItems[:500]
+		allRecentGlobal = append([]FeedItem(nil), globalFeedItems[:500]...)
 	} else {
-		allRecentGlobal = globalFeedItems
+		allRecentGlobal = append([]FeedItem(nil), globalFeedItems...)
+	}
+	for i := range allRecentGlobal {
+		if allRecentGlobal[i].Link != "" && !strings.HasPrefix(allRecentGlobal[i].Link, "http") {
+			allRecentGlobal[i].Link = "../" + allRecentGlobal[i].Link
+		}
 	}
 	if err := renderPage(filepath.Join(outDir, "recent", "index.html"), tmpl, "recent.html", map[string]interface{}{
 		"Title":       "Recent Updates",
@@ -673,14 +723,15 @@ func generateSite(outDir string, sites []*SiteData) error {
 
 	// 1. Root Dashboard
 	if err := renderPage(filepath.Join(outDir, "index.html"), tmpl, "dashboard.html", map[string]interface{}{
-		"Title":      title,
-		"BaseURL":    "",
-		"Repos":      sites,
-		"Categories": sortedCategories,
-		"Packages":   sortedPackages,
-		"Licenses":   sortedLicenses,
-		"Updates":    recentGlobalUpdates,
-		"Version":    version,
+		"Title":                title,
+		"BaseURL":              "",
+		"Repos":                sites,
+		"Categories":           sortedCategories,
+		"Packages":             sortedPackages,
+		"Licenses":             sortedLicenses,
+		"Updates":              recentGlobalUpdates,
+		"Version":              version,
+		"RecentDurationString": recentDurationStr,
 	}); err != nil { return err }
 
 	// 2. Overlays List
@@ -839,9 +890,14 @@ func generateSite(outDir string, sites []*SiteData) error {
 		if err := os.MkdirAll(filepath.Join(repoDir, "recent"), 0755); err != nil { return err }
 		var allRecentRepo []FeedItem
 		if len(repoFeedItems) > 500 {
-			allRecentRepo = repoFeedItems[:500]
+			allRecentRepo = append([]FeedItem(nil), repoFeedItems[:500]...)
 		} else {
-			allRecentRepo = repoFeedItems
+			allRecentRepo = append([]FeedItem(nil), repoFeedItems...)
+		}
+		for i := range allRecentRepo {
+			if allRecentRepo[i].Link != "" && !strings.HasPrefix(allRecentRepo[i].Link, "http") {
+				allRecentRepo[i].Link = "../" + allRecentRepo[i].Link
+			}
 		}
 		if err := renderPage(filepath.Join(repoDir, "recent", "index.html"), tmpl, "recent.html", map[string]interface{}{
 			"Title":       site.RepoName + " - Recent Updates",
@@ -862,13 +918,14 @@ func generateSite(outDir string, sites []*SiteData) error {
 		for _, c := range site.Categories { pkgCount += len(c.Packages) }
 
 		if err := renderPage(filepath.Join(repoDir, "index.html"), tmpl, "repo_index.html", map[string]interface{}{
-			"Title":       site.RepoName,
-			"BaseURL":     "../../",
-			"Breadcrumbs": []Breadcrumb{{Name: title, URL: "../../"}, {Name: "Overlays", URL: "../../overlays/"}, {Name: site.RepoName}},
-			"Repo":        site,
-			"PackageCount": pkgCount,
-			"Updates":     recentRepoUpdates,
-			"Version":     version,
+			"Title":                site.RepoName,
+			"BaseURL":              "../../",
+			"Breadcrumbs":          []Breadcrumb{{Name: title, URL: "../../"}, {Name: "Overlays", URL: "../../overlays/"}, {Name: site.RepoName}},
+			"Repo":                 site,
+			"PackageCount":         pkgCount,
+			"Updates":              recentRepoUpdates,
+			"Version":              version,
+			"RecentDurationString": recentDurationStr,
 		}); err != nil { return err }
 
 		if err := os.MkdirAll(filepath.Join(repoDir, "categories"), 0755); err != nil { return err }
@@ -979,7 +1036,7 @@ func renderPage(path string, tmpl *template.Template, name string, data map[stri
 	return tmpl.ExecuteTemplate(f, "layout.html", data)
 }
 
-func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string) error {
+func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, recentDuration time.Duration, recentDurationStr string, fastGit bool) error {
 	var data []byte
 	var err error
 
@@ -1049,7 +1106,7 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string) 
 		}
 
 		log.Printf("Parsing repository: %s", repo.Name)
-		siteData, err := parseRepo(repoPath, repo.Name)
+		siteData, err := parseRepo(repoPath, repo.Name, fastGit)
 		if err != nil {
 			log.Printf("Failed to parse repo %s: %v", repo.Name, err)
 			continue
@@ -1059,7 +1116,7 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string) 
 	}
 
 	log.Printf("Generating site for %d repositories", len(allSites))
-	if err := generateSite(outDir, allSites); err != nil {
+	if err := generateSite(outDir, allSites, recentDuration, recentDurationStr); err != nil {
 		return fmt.Errorf("generating multi-repo site: %w", err)
 	}
 
