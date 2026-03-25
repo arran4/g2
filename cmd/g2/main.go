@@ -30,6 +30,7 @@ func main() {
 		fmt.Printf("\t\t %s \t\t %s\n", "overlay", "commands relating to a single overlay")
 		fmt.Printf("\t\t %s \t\t %s\n", "overlays", "commands relating to multiple overlays")
 		fmt.Printf("\t\t %s \t\t %s\n", "lint", "lints the repository for errors")
+		fmt.Printf("\t\t %s \t\t %s\n", "site", "commands relating to static sites")
 	}
 	if err := fs.Parse(os.Args); err != nil {
 		log.Printf("Flag parse error: %s", err)
@@ -48,6 +49,12 @@ func main() {
 	case "manifest":
 		if err := cfg.cmdManifest(fs.Args()[2:]); err != nil {
 			log.Printf("generate error: %s", err)
+			os.Exit(-1)
+			return
+		}
+	case "layout-conf":
+		if err := cfg.cmdLayoutConf(fs.Args()[2:]); err != nil {
+			log.Printf("layout-conf error: %s", err)
 			os.Exit(-1)
 			return
 		}
@@ -78,6 +85,12 @@ func main() {
 	case "lint":
 		if err := cfg.cmdLint(fs.Args()[2:]); err != nil {
 			log.Printf("lint error: %s", err)
+			os.Exit(-1)
+			return
+		}
+	case "site":
+		if err := cfg.cmdSite(fs.Args()[2:]); err != nil {
+			log.Printf("site error: %s", err)
 			os.Exit(-1)
 			return
 		}
