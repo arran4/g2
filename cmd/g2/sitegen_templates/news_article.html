@@ -1,0 +1,11 @@
+<h2>{{.Title}}</h2>
+
+<article class="news-article">
+    <div class="news-meta">
+        <span class="news-date">Posted: {{.NewsItem.Posted.Format "2006-01-02"}}</span>
+        {{if .NewsItem.Author}}<span class="news-author"> by {{.NewsItem.Author}}</span>{{end}}
+        {{if .NewsItem.Revision}}<span class="news-revision"> | Revision: {{.NewsItem.Revision}}</span>{{end}}
+    </div>
+
+    <div class="news-body" style="white-space: pre-wrap; margin-top: 1em;">{{.NewsItem.Body}}</div>
+</article>

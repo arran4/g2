@@ -3,9 +3,12 @@ package main
 import (
 	"flag"
 	"fmt"
-	"os"
-	"path/filepath"
-	"strings"
+
+	"github.com/arran4/g2/lints"
+
+	_ "github.com/arran4/g2/lints/ebuild"
+	_ "github.com/arran4/g2/lints/md5cache"
+	_ "github.com/arran4/g2/lints/metadata"
 )
 
 func (cfg *MainArgConfig) cmdLint(args []string) error {
@@ -28,7 +31,8 @@ func (cfg *MainArgConfig) cmdLint(args []string) error {
 
 	for _, cat := range siteData.Categories {
 		for _, pkg := range cat.Packages {
-			lintWarnings := performLinting(location, pkg)
+			pkgCopy := pkg
+			lintWarnings := lints.PerformLinting(location, &pkgCopy)
 			if len(lintWarnings) > 0 {
 				hasErrors = true
 				fmt.Printf("[%s/%s]\n", pkg.Category, pkg.Name)
@@ -45,53 +49,4 @@ func (cfg *MainArgConfig) cmdLint(args []string) error {
 
 	fmt.Println("Linting passed successfully.")
 	return nil
-}
-
-func performLinting(repoDir string, pkg PackageData) []string {
-	var warnings []string
-
-	// Check if metadata exists
-	if pkg.Metadata == nil {
-		warnings = append(warnings, "metadata.xml is missing or invalid")
-	} else {
-		// Collect all metadata USE flags
-		metaUseFlags := make(map[string]bool)
-		for _, use := range pkg.Metadata.Use {
-			for _, flag := range use.Flags {
-				metaUseFlags[flag.Name] = true
-			}
-		}
-
-		// Check ebuilds for IUSE missing in metadata.xml
-		for _, ver := range pkg.Versions {
-			if ver.Ebuild != nil && ver.Ebuild.Vars != nil {
-				iuseRaw := strings.ReplaceAll(ver.Ebuild.Vars["IUSE"], "\"", "")
-				if iuseRaw != "" {
-					iuseFlags := strings.Fields(iuseRaw)
-					for _, f := range iuseFlags {
-						f = strings.TrimPrefix(f, "+")
-						f = strings.TrimPrefix(f, "-")
-
-						// Very basic list of global USE flags we can ignore
-						globalFlags := map[string]bool{"test": true, "doc": true, "debug": true}
-
-						if !metaUseFlags[f] && !globalFlags[f] {
-							warnings = append(warnings, fmt.Sprintf("Ebuild %s uses IUSE flag '%s' which is not documented in metadata.xml", ver.Version, f))
-						}
-					}
-				}
-			}
-		}
-	}
-
-	// Check for missing md5-cache
-	cachePath := filepath.Join(repoDir, "metadata", "md5-cache", pkg.Category, pkg.Name)
-	for _, ver := range pkg.Versions {
-		verCachePath := fmt.Sprintf("%s-%s", cachePath, ver.Version)
-		if _, err := os.Stat(verCachePath); os.IsNotExist(err) {
-			warnings = append(warnings, fmt.Sprintf("Missing md5-cache for version %s", ver.Version))
-		}
-	}
-
-	return warnings
 }
