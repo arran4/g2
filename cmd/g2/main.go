@@ -31,6 +31,7 @@ func main() {
 		fmt.Printf("\t\t %s \t\t %s\n", "overlays", "commands relating to multiple overlays")
 		fmt.Printf("\t\t %s \t\t %s\n", "lint", "lints the repository for errors")
 		fmt.Printf("\t\t %s \t\t %s\n", "site", "commands relating to static sites")
+		fmt.Printf("\t\t %s \t\t %s\n", "cache", "commands relating to md5-dict/cache")
 	}
 	if err := fs.Parse(os.Args); err != nil {
 		log.Printf("Flag parse error: %s", err)
@@ -91,6 +92,12 @@ func main() {
 	case "site":
 		if err := cfg.cmdSite(fs.Args()[2:]); err != nil {
 			log.Printf("site error: %s", err)
+			os.Exit(-1)
+			return
+		}
+	case "cache":
+		if err := cfg.cmdCache(fs.Args()[2:]); err != nil {
+			log.Printf("cache error: %s", err)
 			os.Exit(-1)
 			return
 		}
