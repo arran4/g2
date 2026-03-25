@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"github.com/arran4/g2"
+	"github.com/arran4/g2/lints"
 	"html/template"
 	"io"
 	"log"
@@ -17,73 +18,6 @@ import (
 	"strings"
 	"time"
 )
-
-type RemoteRepositories struct {
-	XMLName xml.Name     `xml:"repositories"`
-	Repos   []RemoteRepo `xml:"repo"`
-}
-
-type RemoteRepo struct {
-	Name    string       `xml:"name"`
-	Sources []RepoSource `xml:"source"`
-}
-
-type RepoSource struct {
-	Type string `xml:"type,attr"`
-	URL  string `xml:",chardata"`
-}
-
-type SiteData struct {
-	Title      string
-	RepoName   string
-	RemoteURL  string
-	Categories []CategoryData
-}
-
-type LicenseData struct {
-	Name     string
-	Count    int
-	Packages []PackageData
-}
-
-type Breadcrumb struct {
-	Name string
-	URL  string
-}
-
-type CategoryData struct {
-	Name     string
-	Packages []PackageData
-}
-
-type FileData struct {
-	Name   string
-	Path   string
-	RawURL string
-}
-
-type PackageData struct {
-	Name     string
-	Category string
-	Versions []VersionData
-	Metadata *g2.PkgMetadata
-	Manifest *g2.Manifest
-	Files    []FileData
-
-	// Git info
-	MetadataRawURL string
-
-	// Lint Info
-	LintWarnings []string
-}
-
-type VersionData struct {
-	Version string
-	Ebuild  *g2.Ebuild
-
-	// Git info
-	EbuildRawURL string
-}
 
 func (cfg *MainArgConfig) cmdOverlay(args []string) error {
 	if len(args) < 1 {
@@ -203,7 +137,7 @@ func (cfg *MainArgConfig) cmdOverlays(args []string) error {
 	return cfg.cmdSiteRemote(location, *outDir)
 }
 
-func parseRepo(repoDir string, defaultTitle string) (*SiteData, error) {
+func parseRepo(repoDir string, defaultTitle string) (*g2.SiteData, error) {
 	title := defaultTitle
 	var repoName string
 
@@ -221,7 +155,7 @@ func parseRepo(repoDir string, defaultTitle string) (*SiteData, error) {
 		repoName = filepath.Base(repoDir)
 	}
 
-	site := &SiteData{
+	site := &g2.SiteData{
 		Title:     title,
 		RepoName:  repoName,
 		RemoteURL: remoteURL,
@@ -257,7 +191,7 @@ func parseRepo(repoDir string, defaultTitle string) (*SiteData, error) {
 			continue
 		}
 
-		catData := CategoryData{Name: name}
+		catData := g2.CategoryData{Name: name}
 		catPath := filepath.Join(repoDir, name)
 
 		pkgEntries, err := os.ReadDir(catPath)
@@ -276,7 +210,7 @@ func parseRepo(repoDir string, defaultTitle string) (*SiteData, error) {
 			}
 
 			pkgPath := filepath.Join(catPath, pkgName)
-			pkgData := PackageData{
+			pkgData := g2.PackageData{
 				Name:     pkgName,
 				Category: name,
 			}
@@ -322,7 +256,7 @@ func parseRepo(repoDir string, defaultTitle string) (*SiteData, error) {
 					}
 				}
 
-				pkgData.Versions = append(pkgData.Versions, VersionData{
+				pkgData.Versions = append(pkgData.Versions, g2.VersionData{
 					Version:      version,
 					Ebuild:       ebuild,
 					EbuildRawURL: ebuildRawURL,
@@ -369,7 +303,7 @@ func parseRepo(repoDir string, defaultTitle string) (*SiteData, error) {
 				if err == nil {
 					for _, fe := range fileEntries {
 						if !fe.IsDir() {
-							fd := FileData{
+							fd := g2.FileData{
 								Name: fe.Name(),
 								Path: filepath.Join(filesDirPath, fe.Name()),
 							}
@@ -386,7 +320,7 @@ func parseRepo(repoDir string, defaultTitle string) (*SiteData, error) {
 				}
 			}
 
-			pkgData.LintWarnings = performLinting(repoDir, pkgData)
+			pkgData.LintWarnings = lints.PerformLinting(repoDir, &pkgData)
 
 			catData.Packages = append(catData.Packages, pkgData)
 		}
@@ -424,7 +358,7 @@ func isIgnoredDir(name string) bool {
 	return ignored[name]
 }
 
-func generateSite(outDir string, site *SiteData) error {
+func generateSite(outDir string, site *g2.SiteData) error {
 	if err := os.MkdirAll(outDir, 0755); err != nil {
 		return err
 	}
@@ -434,8 +368,8 @@ func generateSite(outDir string, site *SiteData) error {
 		return fmt.Errorf("parsing templates: %w", err)
 	}
 
-	var allPackages []PackageData
-	licenseMap := make(map[string]*LicenseData)
+	var allPackages []g2.PackageData
+	licenseMap := make(map[string]*g2.LicenseData)
 
 	for _, cat := range site.Categories {
 		for _, pkg := range cat.Packages {
@@ -445,7 +379,7 @@ func generateSite(outDir string, site *SiteData) error {
 					lic := ver.Ebuild.Vars["LICENSE"]
 					if lic != "" {
 						if _, ok := licenseMap[lic]; !ok {
-							licenseMap[lic] = &LicenseData{Name: lic}
+							licenseMap[lic] = &g2.LicenseData{Name: lic}
 						}
 						// simple deduplication
 						found := false
@@ -472,7 +406,7 @@ func generateSite(outDir string, site *SiteData) error {
 		return allPackages[i].Category < allPackages[j].Category
 	})
 
-	var sortedLicenses []*LicenseData
+	var sortedLicenses []*g2.LicenseData
 	for _, ld := range licenseMap {
 		sortedLicenses = append(sortedLicenses, ld)
 	}
@@ -481,14 +415,14 @@ func generateSite(outDir string, site *SiteData) error {
 	})
 
 	// Generate Feeds for Repo
-	var repoFeedItems []FeedItem
+	var repoFeedItems []g2.FeedItem
 	for _, pkg := range allPackages {
 		for _, ver := range pkg.Versions {
 			desc := ""
 			if ver.Ebuild != nil && ver.Ebuild.Vars != nil {
 				desc = ver.Ebuild.Vars["DESCRIPTION"]
 			}
-			repoFeedItems = append(repoFeedItems, FeedItem{
+			repoFeedItems = append(repoFeedItems, g2.FeedItem{
 				Title:       fmt.Sprintf("%s/%s-%s", pkg.Category, pkg.Name, ver.Version),
 				Link:        fmt.Sprintf("packages/%s/", pkg.Name),
 				Description: desc,
@@ -524,7 +458,7 @@ func generateSite(outDir string, site *SiteData) error {
 		if err := os.MkdirAll(catDir, 0755); err != nil {
 			return err
 		}
-		breadcrumbs := []Breadcrumb{
+		breadcrumbs := []g2.Breadcrumb{
 			{Name: site.Title, URL: "../../"},
 			{Name: "Categories"},
 			{Name: cat.Name},
@@ -547,20 +481,20 @@ func generateSite(outDir string, site *SiteData) error {
 		if err := os.MkdirAll(pkgDir, 0755); err != nil {
 			return err
 		}
-		breadcrumbs := []Breadcrumb{
+		breadcrumbs := []g2.Breadcrumb{
 			{Name: site.Title, URL: "../../"},
 			{Name: "Categories", URL: "../../categories/" + pkg.Category + "/"},
 			{Name: pkg.Category},
 			{Name: pkg.Name},
 		}
 
-		var pkgFeedItems []FeedItem
+		var pkgFeedItems []g2.FeedItem
 		for _, ver := range pkg.Versions {
 			desc := ""
 			if ver.Ebuild != nil && ver.Ebuild.Vars != nil {
 				desc = ver.Ebuild.Vars["DESCRIPTION"]
 			}
-			pkgFeedItems = append(pkgFeedItems, FeedItem{
+			pkgFeedItems = append(pkgFeedItems, g2.FeedItem{
 				Title:       fmt.Sprintf("%s/%s-%s", pkg.Category, pkg.Name, ver.Version),
 				Link:        "",
 				Description: desc,
@@ -589,7 +523,7 @@ func generateSite(outDir string, site *SiteData) error {
 		if err := os.MkdirAll(licDir, 0755); err != nil {
 			return err
 		}
-		breadcrumbs := []Breadcrumb{
+		breadcrumbs := []g2.Breadcrumb{
 			{Name: site.Title, URL: "../../../"},
 			{Name: "Licenses"},
 			{Name: lic.Name},
@@ -652,7 +586,7 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string) 
 		}
 	}
 
-	var repos RemoteRepositories
+	var repos g2.RemoteRepositories
 	if err := xml.Unmarshal(data, &repos); err != nil {
 		return fmt.Errorf("parsing repositories.xml: %w", err)
 	}
@@ -664,7 +598,7 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string) 
 	}
 	defer func() { _ = os.RemoveAll(tmpDir) }()
 
-	overallSiteData := &SiteData{
+	overallSiteData := &g2.SiteData{
 		Title: "Remote Gentoo Repositories",
 	}
 
@@ -712,7 +646,7 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string) 
 			log.Printf("Failed to generate site for repo %s: %v", repo.Name, err)
 		}
 		// Add as a root category simply so we can create an index.html listing the repos
-		overallSiteData.Categories = append(overallSiteData.Categories, CategoryData{
+		overallSiteData.Categories = append(overallSiteData.Categories, g2.CategoryData{
 			Name: repo.Name,
 		})
 	}
