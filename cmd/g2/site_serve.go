@@ -288,9 +288,6 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	for i := 0; i < len(parts); i++ {
 		baseURL += "../"
 	}
-	if len(parts) > 0 && path != "" {
-		baseURL = baseURL
-	}
 
 	// Route based on first part
 	switch parts[0] {
