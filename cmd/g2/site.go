@@ -15,8 +15,40 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 )
+
+var (
+	mainGentooCategories map[string]bool
+	mainGentooOnce       sync.Once
+)
+
+func fetchMainGentooCategories() map[string]bool {
+	mainGentooOnce.Do(func() {
+		mainGentooCategories = make(map[string]bool)
+		client := http.Client{Timeout: 5 * time.Second}
+		resp, err := client.Get("https://raw.githubusercontent.com/gentoo-mirror/gentoo/stable/profiles/categories")
+		if err == nil {
+			defer func() { _ = resp.Body.Close() }()
+			if resp.StatusCode == http.StatusOK {
+				data, err := io.ReadAll(resp.Body)
+				if err == nil {
+					lines := strings.Split(string(data), "\n")
+					for _, line := range lines {
+						cat := strings.TrimSpace(line)
+						if cat != "" && !strings.HasPrefix(cat, "#") {
+							mainGentooCategories[cat] = true
+						}
+					}
+				}
+			}
+		} else {
+			log.Printf("Warning: failed to fetch main gentoo categories: %v", err)
+		}
+	})
+	return mainGentooCategories
+}
 
 type RemoteRepositories struct {
 	XMLName xml.Name     `xml:"repositories"`
@@ -260,10 +292,6 @@ func parseRepo(repoDir string, defaultTitle string) (*SiteData, error) {
 			continue
 		}
 
-		if len(supportedCategories) > 0 && !supportedCategories[name] {
-			continue
-		}
-
 		catData := CategoryData{Name: name}
 		catPath := filepath.Join(repoDir, name)
 
@@ -400,6 +428,14 @@ func parseRepo(repoDir string, defaultTitle string) (*SiteData, error) {
 		}
 
 		if len(catData.Packages) > 0 {
+			if len(supportedCategories) > 0 && !supportedCategories[name] {
+				log.Printf("Warning: category '%s' is not listed in repo's profiles/categories", name)
+			}
+			mainCats := fetchMainGentooCategories()
+			if len(mainCats) > 0 && !mainCats[name] {
+				log.Printf("Warning: category '%s' is not in the main gentoo categories list", name)
+			}
+
 			// Sort packages by name
 			sort.Slice(catData.Packages, func(i, j int) bool {
 				return catData.Packages[i].Name < catData.Packages[j].Name
