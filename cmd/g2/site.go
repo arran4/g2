@@ -635,6 +635,7 @@ func generateSite(outDir string, sites []*SiteData) error {
 			"Title":       "Package Moved: " + oldCat + "/" + oldName,
 			"BaseURL":     "../../../",
 			"Breadcrumbs": []Breadcrumb{{Name: title, URL: "../../../"}, {Name: "Packages", URL: "../../"}, {Name: oldCat}, {Name: oldName}},
+			"OldName":     oldCat + "/" + oldName,
 			"NewName":     move.New,
 			"NewURL":      "../../" + newParts[0] + "/" + newParts[1] + "/",
 			"Version":     version,
@@ -840,11 +841,12 @@ func generateSite(outDir string, sites []*SiteData) error {
 			pkgDir := filepath.Join(repoDir, "categories", oldCat, "packages", oldName)
 			if err := os.MkdirAll(pkgDir, 0755); err != nil { return err }
 
-			if err := renderPage(filepath.Join(pkgDir, "index.html"), tmpl, "repo_moved_package.html", map[string]interface{}{
+			if err := renderPage(filepath.Join(pkgDir, "index.html"), tmpl, "moved_package.html", map[string]interface{}{
 				"Title":       fmt.Sprintf("%s - %s/%s (Moved)", site.RepoName, oldCat, oldName),
 				"BaseURL":     "../../../../../../",
 				"Breadcrumbs": []Breadcrumb{{Name: title, URL: "../../../../../../"}, {Name: site.RepoName, URL: "../../../../"}, {Name: "Categories", URL: "../../../"}, {Name: oldCat}, {Name: oldName}},
 				"Repo":        site,
+				"OldName":     oldCat + "/" + oldName,
 				"NewName":     move.New,
 				"NewURL":      "../../../" + newParts[0] + "/packages/" + newParts[1] + "/",
 				"Version":     version,
