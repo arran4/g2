@@ -639,9 +639,9 @@ func generateSite(outDir string, sites []*SiteData) error {
 		return globalFeedItems[i].Time.After(globalFeedItems[j].Time)
 	})
 	var recentGlobalUpdates []FeedItem
-	dayAgo := time.Now().Add(-24 * time.Hour)
+	recentLimit := time.Now().Add(-24 * 90 * time.Hour) // 90 days = ~3 months
 	for _, item := range globalFeedItems {
-		if item.Time.After(dayAgo) {
+		if item.Time.After(recentLimit) {
 			recentGlobalUpdates = append(recentGlobalUpdates, item)
 			if len(recentGlobalUpdates) >= 10 {
 				break
@@ -828,7 +828,7 @@ func generateSite(outDir string, sites []*SiteData) error {
 		})
 		var recentRepoUpdates []FeedItem
 		for _, item := range repoFeedItems {
-			if item.Time.After(dayAgo) {
+			if item.Time.After(recentLimit) {
 				recentRepoUpdates = append(recentRepoUpdates, item)
 				if len(recentRepoUpdates) >= 10 {
 					break

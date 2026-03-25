@@ -7,20 +7,58 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/go-git/go-git/v5"
+	"github.com/go-git/go-git/v5/plumbing/object"
 )
 
 func getFileModTime(repoDir string, relPath string) time.Time {
-	cmd := exec.Command("git", "log", "-n", "1", "--pretty=format:%aI", "--", relPath)
-	cmd.Dir = repoDir
-	out, err := cmd.Output()
+	repo, err := git.PlainOpen(repoDir)
 	if err == nil {
-		tstr := strings.TrimSpace(string(out))
-		if tstr != "" {
-			if t, err := time.Parse(time.RFC3339, tstr); err == nil {
-				return t
+		head, err := repo.Head()
+		if err == nil {
+			commitIter, err := repo.Log(&git.LogOptions{From: head.Hash()})
+			if err == nil {
+				var modTime time.Time
+				err = commitIter.ForEach(func(c *object.Commit) error {
+					file, err := c.File(relPath)
+					if err != nil {
+						return nil // file not found in this commit
+					}
+
+					if c.NumParents() == 0 {
+						modTime = c.Author.When
+						return fmt.Errorf("found")
+					}
+
+					foundSame := false
+					for i := 0; i < c.NumParents(); i++ {
+						parent, err := c.Parent(i)
+						if err != nil {
+							continue
+						}
+						parentFile, err := parent.File(relPath)
+						if err == nil && parentFile.Hash == file.Hash {
+							foundSame = true
+							break
+						}
+					}
+
+					if !foundSame {
+						modTime = c.Author.When
+						return fmt.Errorf("found")
+					}
+
+					return nil
+				})
+
+				if err != nil && err.Error() == "found" {
+					return modTime
+				}
 			}
 		}
 	}
+
 	info, err := os.Stat(filepath.Join(repoDir, relPath))
 	if err == nil {
 		return info.ModTime()
