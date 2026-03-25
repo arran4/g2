@@ -8,6 +8,24 @@ import (
 	"time"
 )
 
+type FeedItem struct {
+	Title       string
+	Link        string
+	Description string
+	PubDate     string
+	Updated     string
+	Time        time.Time
+}
+
+type FeedData struct {
+	Title         string
+	Link          string
+	Description   string
+	LastBuildDate string
+	Updated       string
+	Items         []FeedItem
+}
+
 func generateFeeds(outPath, feedTitle, feedDescription, linkBase string, items []g2.FeedItem) error {
 	now := time.Now()
 	data := g2.Feed{
