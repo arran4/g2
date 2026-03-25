@@ -1,0 +1,7 @@
+Title: Test News Article
+Author: John Doe <john@doe.com>
+Posted: 2023-11-20
+Revision: 1
+
+This is a test news article.
+It spans multiple lines.

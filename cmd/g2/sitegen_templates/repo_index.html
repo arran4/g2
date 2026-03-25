@@ -13,7 +13,21 @@
     <li><a href="categories/">Categories ({{len .Repo.Categories}})</a></li>
     <li><a href="packages/">Packages ({{.PackageCount}})</a></li>
     <li><a href="../../licenses/">Licenses (Global)</a></li>
+    {{if .RecentNews}}
+    <li><a href="news/">News</a></li>
+    {{end}}
 </ul>
+
+{{if .RecentNews}}
+<h2>Recent News</h2>
+<ul>
+    {{range .RecentNews}}
+    <li><a href="news/archive/{{.DirName}}/">{{.Title}}</a> - {{.Posted.Format "Jan 02, 2006"}}</li>
+    {{end}}
+</ul>
+<p><a href="news/archive/">More... (Archive)</a></p>
+{{end}}
+
 <h2>Recent Updates</h2>
 <ul>
     {{range .Updates}}
