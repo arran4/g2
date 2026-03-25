@@ -1,62 +1,34 @@
 package g2
 
 import (
+	_ "embed"
 	"reflect"
 	"strings"
 	"testing"
 )
 
+//go:embed testdata/authors/authors.txt
+var authorsTestInput string
+
 func TestParseAuthors(t *testing.T) {
-	input := `# This is a partial list of copyright holders for Gentoo packages.
-# It is opt-in and manually maintained, so it will be neither complete
-# nor necessarily up to date. A more exhaustive list can be obtained
-# by additionally extracting author information from the commit history
-# of the Gentoo CVS and git repositories.
-#
-# Requests to be listed below can be filed at https://bugs.gentoo.org/
-# under the "Gentoo Council" product. To be considered, an entity must
-# have made a legally significant contribution, as determined by the
-# Gentoo Council. As a reference, the following guide can be used:
-# https://www.gnu.org/prep/maintain/html_node/Legally-Significant.html
-#
-# Entries are single lines and contain the entity's name and an optional
-# e-mail address. Keep the list sorted (use "LC_ALL=en_US.UTF-8 sort").
-#
-Eli Schwartz <eschwartz@gentoo.org>
-Michał Górny <mgorny@gentoo.org>
-Sam James <sam@gentoo.org>
-Sony Interactive Entertainment Inc.
-
-# The following per https://bugs.gentoo.org/730200
-Robin H. Johnson <robbat2@gentoo.org>
-BC Libraries Cooperative 2009
-Epik Networks Inc
-Experq Oy
-Global NetOptex Inc
-IsoHunt Web Technologies Inc.
-Merkle: The Gallery Group
-Net-Conex Business Solutions Inc
-Simon Fraser University
-Technical University Of British Columbia (TechBC)`
-
 	expected := []Author{
-		{Name: "Eli Schwartz", Email: "eschwartz@gentoo.org"},
-		{Name: "Michał Górny", Email: "mgorny@gentoo.org"},
-		{Name: "Sam James", Email: "sam@gentoo.org"},
-		{Name: "Sony Interactive Entertainment Inc.", Email: ""},
-		{Name: "Robin H. Johnson", Email: "robbat2@gentoo.org"},
-		{Name: "BC Libraries Cooperative 2009", Email: ""},
-		{Name: "Epik Networks Inc", Email: ""},
-		{Name: "Experq Oy", Email: ""},
-		{Name: "Global NetOptex Inc", Email: ""},
-		{Name: "IsoHunt Web Technologies Inc.", Email: ""},
-		{Name: "Merkle: The Gallery Group", Email: ""},
-		{Name: "Net-Conex Business Solutions Inc", Email: ""},
-		{Name: "Simon Fraser University", Email: ""},
-		{Name: "Technical University Of British Columbia (TechBC)", Email: ""},
+		{Name: "Alice Schwartz", Email: "alice@example.com", Line: 16},
+		{Name: "Bob Smith", Email: "bob@example.com", Line: 17},
+		{Name: "Charlie Johnson", Email: "charlie@example.com", Line: 18},
+		{Name: "Global Entertainment Inc.", Email: "", Line: 19},
+		{Name: "Dana H. Williams", Email: "dana@example.com", Line: 22},
+		{Name: "Example Libraries Cooperative 2009", Email: "", Line: 23},
+		{Name: "Test Networks Inc", Email: "", Line: 24},
+		{Name: "Sample Oy", Email: "", Line: 25},
+		{Name: "Global Example Inc", Email: "", Line: 26},
+		{Name: "Web Technologies Inc.", Email: "", Line: 27},
+		{Name: "The Gallery Group", Email: "", Line: 28},
+		{Name: "Business Solutions Inc", Email: "", Line: 29},
+		{Name: "Fraser University", Email: "", Line: 30},
+		{Name: "Technical University (TechBC)", Email: "", Line: 31},
 	}
 
-	authors, err := ParseAuthors(strings.NewReader(input))
+	authors, err := ParseAuthors(strings.NewReader(authorsTestInput))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

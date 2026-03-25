@@ -10,6 +10,7 @@ import (
 type Author struct {
 	Name  string
 	Email string
+	Line  int
 }
 
 // ParseAuthors parses the metadata/AUTHORS file format.
@@ -18,13 +19,15 @@ type Author struct {
 func ParseAuthors(r io.Reader) ([]Author, error) {
 	var authors []Author
 	scanner := bufio.NewScanner(r)
+	lineNumber := 0
 	for scanner.Scan() {
+		lineNumber++
 		line := strings.TrimSpace(scanner.Text())
 		if line == "" || strings.HasPrefix(line, "#") {
 			continue
 		}
 
-		author := Author{}
+		author := Author{Line: lineNumber}
 		startEmail := strings.LastIndex(line, "<")
 		endEmail := strings.LastIndex(line, ">")
 
