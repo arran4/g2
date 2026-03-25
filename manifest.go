@@ -2,6 +2,7 @@ package g2
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"sort"
 	"strconv"
@@ -76,6 +77,15 @@ func (e *ManifestEntry) GetHash(hType string) string {
 		}
 	}
 	return ""
+}
+
+// ParseManifestFromReader parses a Manifest file from an io.Reader
+func ParseManifestFromReader(r io.Reader) (*Manifest, error) {
+	content, err := io.ReadAll(r)
+	if err != nil {
+		return nil, err
+	}
+	return ParseManifestContent(string(content))
 }
 
 func ParseManifest(path string) (*Manifest, error) {

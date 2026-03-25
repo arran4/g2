@@ -5,6 +5,7 @@ import (
 	"encoding/xml"
 	"flag"
 	"fmt"
+	"io/fs"
 	"github.com/arran4/g2"
 	"html/template"
 	"io"
@@ -203,7 +204,7 @@ func (cfg *MainArgConfig) cmdOverlay(args []string) error {
 	}
 	defer cleanup()
 
-	siteData, err := parseRepo(parseLocation, "Gentoo Packages")
+	siteData, err := parseRepo(os.DirFS(parseLocation), ".", "Gentoo Packages")
 	if err != nil {
 		return fmt.Errorf("parsing repo: %w", err)
 	}
@@ -256,7 +257,34 @@ func (cfg *MainArgConfig) cmdOverlays(args []string) error {
 	return cfg.cmdSiteRemote(location, *outDir)
 }
 
-func parseRepo(repoDir string, defaultTitle string) (*SiteData, error) {
+func parseLayoutConfFromFS(sysFS fs.FS, path string) (*g2.LayoutConf, error) {
+	file, err := sysFS.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+	return g2.ParseLayoutConfFromReader(file)
+}
+
+func parseMetadataFromFS(sysFS fs.FS, path string) (interface{}, error) {
+	file, err := sysFS.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+	return g2.ParseMetadataFromReader(file)
+}
+
+func parseManifestFromFS(sysFS fs.FS, path string) (*g2.Manifest, error) {
+	file, err := sysFS.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+	return g2.ParseManifestFromReader(file)
+}
+
+func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string) (*SiteData, error) {
 	title := defaultTitle
 	var repoName string
 
@@ -266,7 +294,7 @@ func parseRepo(repoDir string, defaultTitle string) (*SiteData, error) {
 		log.Printf("Warning: failed to get git origin url: %v", err)
 	}
 
-	repoNameBytes, err := os.ReadFile(filepath.Join(repoDir, "profiles", "repo_name"))
+	repoNameBytes, err := fs.ReadFile(sysFS, filepath.ToSlash(filepath.Join(repoDir, "profiles", "repo_name")))
 	if err == nil && len(repoNameBytes) > 0 {
 		title = strings.TrimSpace(string(repoNameBytes))
 		repoName = title
@@ -275,15 +303,16 @@ func parseRepo(repoDir string, defaultTitle string) (*SiteData, error) {
 	}
 
 	var eapi string
-	eapiBytes, err := os.ReadFile(filepath.Join(repoDir, "profiles", "eapi"))
+	eapiBytes, err := fs.ReadFile(sysFS, filepath.ToSlash(filepath.Join(repoDir, "profiles", "eapi")))
 	if err == nil && len(eapiBytes) > 0 {
 		eapi = strings.TrimSpace(string(eapiBytes))
 	}
 
 	layoutConfPath := filepath.Join(repoDir, "metadata", "layout.conf")
 	var lc *g2.LayoutConf
-	if _, err := os.Stat(layoutConfPath); err == nil {
-		lc, err = g2.ParseLayoutConf(layoutConfPath)
+	if f, err := sysFS.Open(filepath.ToSlash(layoutConfPath)); err == nil {
+		f.Close()
+		lc, err = parseLayoutConfFromFS(sysFS, filepath.ToSlash(layoutConfPath))
 		if err != nil {
 			log.Printf("Warning: failed to parse layout.conf: %v", err)
 			lc = nil
@@ -300,7 +329,7 @@ func parseRepo(repoDir string, defaultTitle string) (*SiteData, error) {
 
 	// Parse News
 	newsDir := filepath.Join(repoDir, "metadata", "news")
-	if entries, err := os.ReadDir(newsDir); err == nil {
+	if entries, err := fs.ReadDir(sysFS, filepath.ToSlash(newsDir)); err == nil {
 		for _, entry := range entries {
 			if !entry.IsDir() {
 				continue
@@ -308,7 +337,7 @@ func parseRepo(repoDir string, defaultTitle string) (*SiteData, error) {
 			dirName := entry.Name()
 			txtFile := filepath.Join(newsDir, dirName, dirName+".en.txt")
 
-			content, err := os.ReadFile(txtFile)
+			content, err := fs.ReadFile(sysFS, filepath.ToSlash(txtFile))
 			if err != nil {
 				continue
 			}
@@ -366,7 +395,7 @@ func parseRepo(repoDir string, defaultTitle string) (*SiteData, error) {
 	}
 
 	supportedCategories := make(map[string]bool)
-	categoriesBytes, err := os.ReadFile(filepath.Join(repoDir, "profiles", "categories"))
+	categoriesBytes, err := fs.ReadFile(sysFS, filepath.ToSlash(filepath.Join(repoDir, "profiles", "categories")))
 	if err == nil {
 		lines := strings.Split(string(categoriesBytes), "\n")
 		for _, line := range lines {
@@ -377,7 +406,7 @@ func parseRepo(repoDir string, defaultTitle string) (*SiteData, error) {
 		}
 	}
 
-	updates, err := g2.ParseUpdatesDir(filepath.Join(repoDir, "profiles", "updates"))
+	updates, err := g2.ParseUpdatesDirFS(sysFS, filepath.ToSlash(filepath.Join(repoDir, "profiles", "updates")))
 	if err != nil && !os.IsNotExist(err) {
 		log.Printf("Warning: failed to parse updates: %v", err)
 	}
@@ -385,7 +414,7 @@ func parseRepo(repoDir string, defaultTitle string) (*SiteData, error) {
 		site.Moves = updates.Moves
 	}
 
-	entries, err := os.ReadDir(repoDir)
+	entries, err := fs.ReadDir(sysFS, filepath.ToSlash(repoDir))
 	if err != nil {
 		return nil, fmt.Errorf("reading repo dir: %w", err)
 	}
@@ -402,7 +431,7 @@ func parseRepo(repoDir string, defaultTitle string) (*SiteData, error) {
 		catData := CategoryData{Name: name}
 		catPath := filepath.Join(repoDir, name)
 
-		pkgEntries, err := os.ReadDir(catPath)
+		pkgEntries, err := fs.ReadDir(sysFS, filepath.ToSlash(catPath))
 		if err != nil {
 			log.Printf("Warning: reading category dir %s: %v", catPath, err)
 			continue
@@ -424,7 +453,7 @@ func parseRepo(repoDir string, defaultTitle string) (*SiteData, error) {
 			}
 
 			// Read ebuilds
-			files, err := os.ReadDir(pkgPath)
+			files, err := fs.ReadDir(sysFS, filepath.ToSlash(pkgPath))
 			if err != nil {
 				log.Printf("Warning: reading package dir %s: %v", pkgPath, err)
 				continue
@@ -436,8 +465,12 @@ func parseRepo(repoDir string, defaultTitle string) (*SiteData, error) {
 				}
 
 				ebuildPath := filepath.Join(pkgPath, file.Name())
-				// Use DirFS for ParseEbuild
-				ebuild, err := g2.ParseEbuild(os.DirFS(filepath.Dir(ebuildPath)), file.Name(), g2.ParseFull)
+				subFS, err := fs.Sub(sysFS, filepath.ToSlash(filepath.Dir(ebuildPath)))
+				if err != nil {
+					log.Printf("Warning: subfs ebuild %s: %v", ebuildPath, err)
+					continue
+				}
+				ebuild, err := g2.ParseEbuild(subFS, file.Name(), g2.ParseFull)
 				if err != nil {
 					log.Printf("Warning: parsing ebuild %s: %v", ebuildPath, err)
 					continue
@@ -482,7 +515,7 @@ func parseRepo(repoDir string, defaultTitle string) (*SiteData, error) {
 
 			// Read metadata.xml
 			metaPath := filepath.Join(pkgPath, "metadata.xml")
-			metadata, err := g2.ParseMetadata(metaPath)
+			metadata, err := parseMetadataFromFS(sysFS, filepath.ToSlash(metaPath))
 			if err == nil {
 				if pkgMd, ok := metadata.(*g2.PkgMetadata); ok {
 					pkgData.Metadata = pkgMd
@@ -499,7 +532,7 @@ func parseRepo(repoDir string, defaultTitle string) (*SiteData, error) {
 
 			// Read Manifest
 			manifestPath := filepath.Join(pkgPath, "Manifest")
-			manifest, err := g2.ParseManifest(manifestPath)
+			manifest, err := parseManifestFromFS(sysFS, filepath.ToSlash(manifestPath))
 			if err == nil {
 				pkgData.Manifest = manifest
 				pkgData.ManifestData = buildManifestData(manifest, pkgData.Versions)
@@ -507,8 +540,8 @@ func parseRepo(repoDir string, defaultTitle string) (*SiteData, error) {
 
 			// Read files/ directory
 			filesDirPath := filepath.Join(pkgPath, "files")
-			if info, err := os.Stat(filesDirPath); err == nil && info.IsDir() {
-				fileEntries, err := os.ReadDir(filesDirPath)
+			if info, err := fs.Stat(sysFS, filepath.ToSlash(filesDirPath)); err == nil && info.IsDir() {
+				fileEntries, err := fs.ReadDir(sysFS, filepath.ToSlash(filesDirPath))
 				if err == nil {
 					for _, fe := range fileEntries {
 						if !fe.IsDir() {
@@ -1340,7 +1373,7 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string) 
 		}
 
 		log.Printf("Parsing repository: %s", repo.Name)
-		siteData, err := parseRepo(repoPath, repo.Name)
+		siteData, err := parseRepo(os.DirFS(repoPath), ".", repo.Name)
 		if err != nil {
 			log.Printf("Failed to parse repo %s: %v", repo.Name, err)
 			continue

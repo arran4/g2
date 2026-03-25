@@ -4,6 +4,8 @@ import (
 	"crypto/md5"
 	"flag"
 	"fmt"
+	"io"
+	"io/fs"
 	"log"
 	"os"
 	"path/filepath"
@@ -11,6 +13,52 @@ import (
 
 	"github.com/arran4/g2"
 )
+
+// CacheFS interface provides read and write abstraction for testability
+type CacheFS interface {
+	fs.FS
+	MkdirAll(path string, perm os.FileMode) error
+	Create(name string) (io.WriteCloser, error)
+	Remove(name string) error
+	Walk(root string, fn filepath.WalkFunc) error
+	Stat(name string) (fs.FileInfo, error)
+}
+
+// OsCacheFS is a CacheFS implementation that interacts with the real OS filesystem
+type OsCacheFS struct {
+	base string
+	fs.FS
+}
+
+func NewOsCacheFS(base string) *OsCacheFS {
+	return &OsCacheFS{
+		base: base,
+		FS:   os.DirFS(base),
+	}
+}
+
+func (o *OsCacheFS) MkdirAll(path string, perm os.FileMode) error {
+	return os.MkdirAll(filepath.Join(o.base, path), perm)
+}
+
+func (o *OsCacheFS) Create(name string) (io.WriteCloser, error) {
+	return os.Create(filepath.Join(o.base, name))
+}
+
+func (o *OsCacheFS) Remove(name string) error {
+	return os.Remove(filepath.Join(o.base, name))
+}
+
+func (o *OsCacheFS) Walk(root string, fn filepath.WalkFunc) error {
+	return filepath.Walk(filepath.Join(o.base, root), func(path string, info fs.FileInfo, err error) error {
+		relPath, _ := filepath.Rel(o.base, path)
+		return fn(relPath, info, err)
+	})
+}
+
+func (o *OsCacheFS) Stat(name string) (fs.FileInfo, error) {
+	return os.Stat(filepath.Join(o.base, name))
+}
 
 func (cfg *MainArgConfig) cmdCache(args []string) error {
 	fs := flag.NewFlagSet("cache", flag.ExitOnError)
@@ -58,16 +106,26 @@ func (cfg *MainArgConfig) cmdCache(args []string) error {
 }
 
 func (cfg *MainArgConfig) cmdCacheVerify(args []string) error {
-	fs := flag.NewFlagSet("verify", flag.ExitOnError)
-	repoDir := fs.String("repo", ".", "Path to the repository root")
-	if err := fs.Parse(args); err != nil {
+	fsFlags := flag.NewFlagSet("verify", flag.ExitOnError)
+	repoDir := fsFlags.String("repo", ".", "Path to the repository root")
+	if err := fsFlags.Parse(args); err != nil {
 		return err
 	}
 
-	layoutConfPath := filepath.Join(*repoDir, "metadata", "layout.conf")
-	lc, err := g2.ParseLayoutConf(layoutConfPath)
-	if err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("failed to parse layout.conf: %w", err)
+	cfs := NewOsCacheFS(*repoDir)
+	return doCacheVerify(cfs, ".")
+}
+
+func doCacheVerify(cfs CacheFS, repoDir string) error {
+	layoutConfPath := filepath.ToSlash(filepath.Join(repoDir, "metadata", "layout.conf"))
+	var lc *g2.LayoutConf
+	if f, err := cfs.Open(layoutConfPath); err == nil {
+		f.Close()
+		lc, err = parseLayoutConfFromFS(cfs, layoutConfPath)
+		if err != nil {
+			log.Printf("Warning: failed to parse layout.conf: %v", err)
+			lc = nil
+		}
 	}
 
 	cacheFormats := []string{"md5-dict"} // Default if not found
@@ -77,7 +135,7 @@ func (cfg *MainArgConfig) cmdCacheVerify(args []string) error {
 		}
 	}
 
-	siteData, err := parseRepo(*repoDir, "Cache Verification")
+	siteData, err := parseRepo(cfs, repoDir, "Cache Verification")
 	if err != nil {
 		return fmt.Errorf("parsing repo: %w", err)
 	}
@@ -89,11 +147,11 @@ func (cfg *MainArgConfig) cmdCacheVerify(args []string) error {
 
 		for _, cat := range siteData.Categories {
 			for _, pkg := range cat.Packages {
-				cachePath := filepath.Join(*repoDir, "metadata", format, pkg.Category, pkg.Name)
+				cachePath := filepath.Join(repoDir, "metadata", format, pkg.Category, pkg.Name)
 
 				for _, ver := range pkg.Versions {
-					verCachePath := fmt.Sprintf("%s-%s", cachePath, ver.Version)
-					if _, err := os.Stat(verCachePath); os.IsNotExist(err) {
+					verCachePath := filepath.ToSlash(fmt.Sprintf("%s-%s", cachePath, ver.Version))
+					if _, err := cfs.Stat(verCachePath); os.IsNotExist(err) || err != nil {
 						fmt.Printf("Missing %s cache for %s/%s-%s\n", format, pkg.Category, pkg.Name, ver.Version)
 						hasErrors = true
 					}
@@ -111,16 +169,26 @@ func (cfg *MainArgConfig) cmdCacheVerify(args []string) error {
 }
 
 func (cfg *MainArgConfig) cmdCacheGenerate(args []string) error {
-	fs := flag.NewFlagSet("generate", flag.ExitOnError)
-	repoDir := fs.String("repo", ".", "Path to the repository root")
-	if err := fs.Parse(args); err != nil {
+	fsFlags := flag.NewFlagSet("generate", flag.ExitOnError)
+	repoDir := fsFlags.String("repo", ".", "Path to the repository root")
+	if err := fsFlags.Parse(args); err != nil {
 		return err
 	}
 
-	layoutConfPath := filepath.Join(*repoDir, "metadata", "layout.conf")
-	lc, err := g2.ParseLayoutConf(layoutConfPath)
-	if err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("failed to parse layout.conf: %w", err)
+	cfs := NewOsCacheFS(*repoDir)
+	return doCacheGenerate(cfs, ".")
+}
+
+func doCacheGenerate(cfs CacheFS, repoDir string) error {
+	layoutConfPath := filepath.ToSlash(filepath.Join(repoDir, "metadata", "layout.conf"))
+	var lc *g2.LayoutConf
+	if f, err := cfs.Open(layoutConfPath); err == nil {
+		f.Close()
+		lc, err = parseLayoutConfFromFS(cfs, layoutConfPath)
+		if err != nil {
+			log.Printf("Warning: failed to parse layout.conf: %v", err)
+			lc = nil
+		}
 	}
 
 	cacheFormats := []string{"md5-dict"} // Default if not found
@@ -130,7 +198,7 @@ func (cfg *MainArgConfig) cmdCacheGenerate(args []string) error {
 		}
 	}
 
-	siteData, err := parseRepo(*repoDir, "Cache Generation")
+	siteData, err := parseRepo(cfs, repoDir, "Cache Generation")
 	if err != nil {
 		return fmt.Errorf("parsing repo: %w", err)
 	}
@@ -145,8 +213,8 @@ func (cfg *MainArgConfig) cmdCacheGenerate(args []string) error {
 
 		for _, cat := range siteData.Categories {
 			for _, pkg := range cat.Packages {
-				cacheDir := filepath.Join(*repoDir, "metadata", format, pkg.Category)
-				if err := os.MkdirAll(cacheDir, 0755); err != nil {
+				cacheDir := filepath.ToSlash(filepath.Join(repoDir, "metadata", format, pkg.Category))
+				if err := cfs.MkdirAll(cacheDir, 0755); err != nil {
 					return fmt.Errorf("creating cache directory %s: %w", cacheDir, err)
 				}
 
@@ -155,9 +223,9 @@ func (cfg *MainArgConfig) cmdCacheGenerate(args []string) error {
 						continue // skip if not properly parsed
 					}
 
-					verCachePath := filepath.Join(cacheDir, fmt.Sprintf("%s-%s", pkg.Name, ver.Version))
+					verCachePath := filepath.ToSlash(filepath.Join(cacheDir, fmt.Sprintf("%s-%s", pkg.Name, ver.Version)))
 
-					f, err := os.Create(verCachePath)
+					f, err := cfs.Create(verCachePath)
 					if err != nil {
 						return fmt.Errorf("creating cache file %s: %w", verCachePath, err)
 					}
@@ -177,8 +245,8 @@ func (cfg *MainArgConfig) cmdCacheGenerate(args []string) error {
 					}
 
 					// Add an md5 entry. To calculate _md5_, we need the md5 of the ebuild file.
-					ebuildPath := filepath.Join(*repoDir, pkg.Category, pkg.Name, fmt.Sprintf("%s-%s.ebuild", pkg.Name, ver.Version))
-					ebuildContent, err := os.ReadFile(ebuildPath)
+					ebuildPath := filepath.ToSlash(filepath.Join(repoDir, pkg.Category, pkg.Name, fmt.Sprintf("%s-%s.ebuild", pkg.Name, ver.Version)))
+					ebuildContent, err := fs.ReadFile(cfs, ebuildPath)
 					if err == nil {
 						// eclass handling is omitted for this simple cache generation
 						md5sum := fmt.Sprintf("%x", md5.Sum(ebuildContent))
@@ -248,16 +316,26 @@ func (cfg *MainArgConfig) cmdCacheListMethods(args []string) error {
 }
 
 func (cfg *MainArgConfig) cmdCacheClean(args []string) error {
-	fs := flag.NewFlagSet("clean", flag.ExitOnError)
-	repoDir := fs.String("repo", ".", "Path to the repository root")
-	if err := fs.Parse(args); err != nil {
+	fsFlags := flag.NewFlagSet("clean", flag.ExitOnError)
+	repoDir := fsFlags.String("repo", ".", "Path to the repository root")
+	if err := fsFlags.Parse(args); err != nil {
 		return err
 	}
 
-	layoutConfPath := filepath.Join(*repoDir, "metadata", "layout.conf")
-	lc, err := g2.ParseLayoutConf(layoutConfPath)
-	if err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("failed to parse layout.conf: %w", err)
+	cfs := NewOsCacheFS(*repoDir)
+	return doCacheClean(cfs, ".")
+}
+
+func doCacheClean(cfs CacheFS, repoDir string) error {
+	layoutConfPath := filepath.ToSlash(filepath.Join(repoDir, "metadata", "layout.conf"))
+	var lc *g2.LayoutConf
+	if f, err := cfs.Open(layoutConfPath); err == nil {
+		f.Close()
+		lc, err = parseLayoutConfFromFS(cfs, layoutConfPath)
+		if err != nil {
+			log.Printf("Warning: failed to parse layout.conf: %v", err)
+			lc = nil
+		}
 	}
 
 	cacheFormats := []string{"md5-dict", "pms"} // check common ones during clean
@@ -267,7 +345,7 @@ func (cfg *MainArgConfig) cmdCacheClean(args []string) error {
 		}
 	}
 
-	siteData, err := parseRepo(*repoDir, "Cache Cleaning")
+	siteData, err := parseRepo(cfs, repoDir, "Cache Cleaning")
 	if err != nil {
 		return fmt.Errorf("parsing repo: %w", err)
 	}
@@ -290,12 +368,12 @@ func (cfg *MainArgConfig) cmdCacheClean(args []string) error {
 	cleanedCount := 0
 
 	for _, format := range cacheFormats {
-		formatDir := filepath.Join(*repoDir, "metadata", format)
-		if _, err := os.Stat(formatDir); os.IsNotExist(err) {
+		formatDir := filepath.ToSlash(filepath.Join(repoDir, "metadata", format))
+		if _, err := cfs.Stat(formatDir); os.IsNotExist(err) || err != nil {
 			continue
 		}
 
-		err = filepath.Walk(formatDir, func(path string, info os.FileInfo, err error) error {
+		err = cfs.Walk(formatDir, func(path string, info fs.FileInfo, err error) error {
 			if err != nil {
 				return err
 			}
@@ -303,12 +381,12 @@ func (cfg *MainArgConfig) cmdCacheClean(args []string) error {
 				return nil
 			}
 
-			relPath, _ := filepath.Rel(*repoDir, path)
+			relPath := filepath.ToSlash(path)
 
 			// If it's not a valid cache entry based on current ebuilds, delete it
 			if !validCacheEntries[relPath] {
 				log.Printf("Removing unused cache entry: %s", relPath)
-				if err := os.Remove(path); err != nil {
+				if err := cfs.Remove(path); err != nil {
 					log.Printf("Failed to remove %s: %v", path, err)
 				} else {
 					cleanedCount++

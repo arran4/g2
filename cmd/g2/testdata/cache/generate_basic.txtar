@@ -1,0 +1,25 @@
+-- input/metadata/layout.conf --
+cache-formats = md5-dict
+-- input/sys-apps/test/test-1.0.ebuild --
+DESCRIPTION="A test ebuild"
+SLOT="0"
+EAPI="8"
+LICENSE="GPL-2"
+SRC_URI="https://example.com/test-1.0.tar.gz"
+
+-- expected/metadata/layout.conf --
+cache-formats = md5-dict
+-- expected/sys-apps/test/test-1.0.ebuild --
+DESCRIPTION="A test ebuild"
+SLOT="0"
+EAPI="8"
+LICENSE="GPL-2"
+SRC_URI="https://example.com/test-1.0.tar.gz"
+
+-- expected/metadata/md5-dict/sys-apps/test-1.0 --
+DESCRIPTION=A test ebuild
+EAPI=8
+LICENSE=GPL-2
+SLOT=0
+SRC_URI=https://example.com/test-1.0.tar.gz
+_md5_=50b18ec4900a68e27c001cfbc8cd5ed3

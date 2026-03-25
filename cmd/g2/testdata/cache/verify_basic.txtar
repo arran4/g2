@@ -1,0 +1,17 @@
+-- input/metadata/layout.conf --
+cache-formats = md5-dict
+-- input/sys-apps/test/test-1.0.ebuild --
+DESCRIPTION="A test ebuild"
+
+-- input/metadata/md5-dict/sys-apps/test-1.0 --
+DESCRIPTION=A test ebuild
+_md5_=abcdef1234567890
+
+-- expected/metadata/layout.conf --
+cache-formats = md5-dict
+-- expected/sys-apps/test/test-1.0.ebuild --
+DESCRIPTION="A test ebuild"
+
+-- expected/metadata/md5-dict/sys-apps/test-1.0 --
+DESCRIPTION=A test ebuild
+_md5_=abcdef1234567890
