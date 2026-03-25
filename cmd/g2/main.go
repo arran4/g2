@@ -51,6 +51,12 @@ func main() {
 			os.Exit(-1)
 			return
 		}
+	case "layout-conf":
+		if err := cfg.cmdLayoutConf(fs.Args()[2:]); err != nil {
+			log.Printf("layout-conf error: %s", err)
+			os.Exit(-1)
+			return
+		}
 	case "metadata":
 		if err := cfg.cmdMetadata(fs.Args()[2:]); err != nil {
 			log.Printf("metadata error: %s", err)

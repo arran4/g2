@@ -39,6 +39,7 @@ type SiteData struct {
 	RemoteURL  string
 	EAPI       string
 	Categories []CategoryData
+	LayoutConf *g2.LayoutConf
 }
 
 type LicenseData struct {
@@ -235,11 +236,22 @@ func parseRepo(repoDir string, defaultTitle string) (*SiteData, error) {
 		eapi = strings.TrimSpace(string(eapiBytes))
 	}
 
+	layoutConfPath := filepath.Join(repoDir, "metadata", "layout.conf")
+	var lc *g2.LayoutConf
+	if _, err := os.Stat(layoutConfPath); err == nil {
+		lc, err = g2.ParseLayoutConf(layoutConfPath)
+		if err != nil {
+			log.Printf("Warning: failed to parse layout.conf: %v", err)
+			lc = nil
+		}
+	}
+
 	site := &SiteData{
-		Title:     title,
-		RepoName:  repoName,
-		RemoteURL: remoteURL,
-		EAPI:      eapi,
+		Title:      title,
+		RepoName:   repoName,
+		RemoteURL:  remoteURL,
+		EAPI:       eapi,
+		LayoutConf: lc,
 	}
 
 	supportedCategories := make(map[string]bool)
