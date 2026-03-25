@@ -39,6 +39,7 @@ type SiteData struct {
 	RemoteURL  string
 	Categories []CategoryData
 	Authors    []g2.Author
+	AuthorsURL string
 }
 
 type LicenseData struct {
@@ -239,6 +240,12 @@ func parseRepo(repoDir string, defaultTitle string) (*SiteData, error) {
 	if err == nil {
 		if authors, err := g2.ParseAuthors(authorsFile); err == nil {
 			site.Authors = authors
+			if remoteURL != "" {
+				commitHash, err := getFileCommit(repoDir, "metadata/AUTHORS")
+				if err == nil && commitHash != "" {
+					site.AuthorsURL = generateGitHubRawURL(remoteURL, commitHash, "metadata/AUTHORS")
+				}
+			}
 		} else {
 			log.Printf("Warning: failed to parse metadata/AUTHORS: %v", err)
 		}
@@ -823,6 +830,7 @@ func generateSite(outDir string, sites []*SiteData) error {
 				"BaseURL":     "../../../",
 				"Breadcrumbs": []Breadcrumb{{Name: title, URL: "../../../"}, {Name: site.RepoName, URL: "../"}, {Name: "Authors"}},
 				"Authors":     site.Authors,
+				"Repo":        site,
 				"Version":     version,
 			}); err != nil { return err }
 		}

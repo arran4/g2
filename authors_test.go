@@ -12,11 +12,11 @@ var authorsTestInput string
 
 func TestParseAuthors(t *testing.T) {
 	expected := []Author{
-		{Name: "Alice Schwartz", Email: "alice@example.com", Line: 16},
-		{Name: "Bob Smith", Email: "bob@example.com", Line: 17},
-		{Name: "Charlie Johnson", Email: "charlie@example.com", Line: 18},
+		{Name: "John Doe", Email: "john@example.com", Line: 16},
+		{Name: "Jane Doe", Email: "jane@example.com", Line: 17},
+		{Name: "Test User", Email: "test@example.com", Line: 18},
 		{Name: "Global Entertainment Inc.", Email: "", Line: 19},
-		{Name: "Dana H. Williams", Email: "dana@example.com", Line: 22},
+		{Name: "Dana Test", Email: "dana@example.com", Line: 22},
 		{Name: "Example Libraries Cooperative 2009", Email: "", Line: 23},
 		{Name: "Test Networks Inc", Email: "", Line: 24},
 		{Name: "Sample Oy", Email: "", Line: 25},

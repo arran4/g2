@@ -13,13 +13,13 @@
 # Entries are single lines and contain the entity's name and an optional
 # e-mail address. Keep the list sorted (use "LC_ALL=en_US.UTF-8 sort").
 #
-Alice Schwartz <alice@example.com>
-Bob Smith <bob@example.com>
-Charlie Johnson <charlie@example.com>
+John Doe <john@example.com>
+Jane Doe <jane@example.com>
+Test User <test@example.com>
 Global Entertainment Inc.
 
 # The following per https://bugs.gentoo.org/730200
-Dana H. Williams <dana@example.com>
+Dana Test <dana@example.com>
 Example Libraries Cooperative 2009
 Test Networks Inc
 Sample Oy
