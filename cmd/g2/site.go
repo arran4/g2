@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"github.com/arran4/g2"
+	"github.com/arran4/g2/lints"
 	"html/template"
 	"io"
 	"log"
@@ -14,10 +15,13 @@ import (
 	"os/exec"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 )
+
+// TODO evaluate the following they should be redundant OR moved to `/`
 
 var (
 	mainGentooCategories map[string]bool
@@ -143,6 +147,7 @@ type PackageData struct {
 
 	// Git info
 	MetadataRawURL string
+	ModTime        time.Time
 
 	// Lint Info
 	LintWarnings []string
@@ -154,7 +159,10 @@ type VersionData struct {
 
 	// Git info
 	EbuildRawURL string
+	ModTime      time.Time
 }
+
+// End model TODO check
 
 func (cfg *MainArgConfig) cmdOverlay(args []string) error {
 	if len(args) < 1 {
@@ -176,9 +184,15 @@ func (cfg *MainArgConfig) cmdOverlay(args []string) error {
 	fs := flag.NewFlagSet("overlay site generate", flag.ExitOnError)
 	outDir := fs.String("out", "site_out", "Output directory for the generated site")
 	clear := fs.Bool("clear", false, "Clear output directory before generation")
+	recentDurOpt := fs.String("recent-duration", "3mo", "Duration to consider an update 'recent' (e.g. 3mo, 14d, 72h)")
+	fastGit := fs.Bool("fast-git-modtime", false, "Use fast (O(1)) but potentially less reliable go-git file log lookup")
 
 	if err := fs.Parse(args[2:]); err != nil {
 		return fmt.Errorf("parsing flags: %w", err)
+	}
+	recentDuration, recentDurationStr, err := parseDuration(*recentDurOpt)
+	if err != nil {
+		return fmt.Errorf("invalid recent-duration: %w", err)
 	}
 
 	location := "."
@@ -221,12 +235,12 @@ func (cfg *MainArgConfig) cmdOverlay(args []string) error {
 	}
 	defer cleanup()
 
-	siteData, err := parseRepo(parseLocation, "Gentoo Packages")
+	siteData, err := parseRepo(parseLocation, "Gentoo Packages", *fastGit)
 	if err != nil {
 		return fmt.Errorf("parsing repo: %w", err)
 	}
 
-	if err := generateSite(*outDir, []*SiteData{siteData}); err != nil {
+	if err := generateSite(*outDir, []*SiteData{siteData}, recentDuration, recentDurationStr); err != nil {
 		return fmt.Errorf("generating site: %w", err)
 	}
 
@@ -254,9 +268,15 @@ func (cfg *MainArgConfig) cmdOverlays(args []string) error {
 	fs := flag.NewFlagSet("overlays site generate", flag.ExitOnError)
 	outDir := fs.String("out", "site_out", "Output directory for the generated site")
 	clear := fs.Bool("clear", false, "Clear output directory before generation")
+	recentDurOpt := fs.String("recent-duration", "3mo", "Duration to consider an update 'recent' (e.g. 3mo, 14d, 72h)")
+	fastGit := fs.Bool("fast-git-modtime", false, "Use fast (O(1)) but potentially less reliable go-git file log lookup")
 
 	if err := fs.Parse(args[2:]); err != nil {
 		return fmt.Errorf("parsing flags: %w", err)
+	}
+	recentDuration, recentDurationStr, err := parseDuration(*recentDurOpt)
+	if err != nil {
+		return fmt.Errorf("invalid recent-duration: %w", err)
 	}
 
 	if fs.NArg() == 0 {
@@ -271,10 +291,10 @@ func (cfg *MainArgConfig) cmdOverlays(args []string) error {
 	}
 
 	log.Printf("Generating site from remote repositories: %s into %s", location, *outDir)
-	return cfg.cmdSiteRemote(location, *outDir)
+	return cfg.cmdSiteRemote(location, *outDir, recentDuration, recentDurationStr, *fastGit)
 }
 
-func parseRepo(repoDir string, defaultTitle string) (*SiteData, error) {
+func parseRepo(repoDir string, defaultTitle string, fastGit bool) (*g2.SiteData, error) {
 	title := defaultTitle
 	var repoName string
 
@@ -292,6 +312,11 @@ func parseRepo(repoDir string, defaultTitle string) (*SiteData, error) {
 		repoName = filepath.Base(repoDir)
 	}
 
+	site := &g2.SiteData{
+		Title:     title,
+		RepoName:  repoName,
+		RemoteURL: remoteURL,
+  }
 	var eapi string
 	eapiBytes, err := os.ReadFile(filepath.Join(repoDir, "profiles", "eapi"))
 	if err == nil && len(eapiBytes) > 0 {
@@ -445,7 +470,11 @@ func parseRepo(repoDir string, defaultTitle string) (*SiteData, error) {
 			continue
 		}
 
-		catData := CategoryData{Name: name}
+		if len(supportedCategories) > 0 && !supportedCategories[name] {
+			continue
+		}
+
+		catData := g2.CategoryData{Name: name}
 		catPath := filepath.Join(repoDir, name)
 
 		pkgEntries, err := os.ReadDir(catPath)
@@ -464,7 +493,7 @@ func parseRepo(repoDir string, defaultTitle string) (*SiteData, error) {
 			}
 
 			pkgPath := filepath.Join(catPath, pkgName)
-			pkgData := PackageData{
+			pkgData := g2.PackageData{
 				Name:     pkgName,
 				Category: name,
 			}
@@ -502,18 +531,24 @@ func parseRepo(repoDir string, defaultTitle string) (*SiteData, error) {
 				}
 
 				var ebuildRawURL string
+				relPath, _ := filepath.Rel(repoDir, ebuildPath)
 				if remoteURL != "" {
-					relPath, _ := filepath.Rel(repoDir, ebuildPath)
 					commitHash, _ := getFileCommit(repoDir, relPath)
 					if commitHash != "" {
 						ebuildRawURL = generateGitHubRawURL(remoteURL, commitHash, relPath)
 					}
 				}
 
-				pkgData.Versions = append(pkgData.Versions, VersionData{
+				modTime := getFileModTime(repoDir, relPath, fastGit)
+				if modTime.After(pkgData.ModTime) {
+					pkgData.ModTime = modTime
+				}
+
+				pkgData.Versions = append(pkgData.Versions, g2.VersionData{
 					Version:      version,
 					Ebuild:       ebuild,
 					EbuildRawURL: ebuildRawURL,
+					ModTime:      modTime,
 				})
 			}
 
@@ -532,7 +567,11 @@ func parseRepo(repoDir string, defaultTitle string) (*SiteData, error) {
 			if err == nil {
 				if pkgMd, ok := metadata.(*g2.PkgMetadata); ok {
 					pkgData.Metadata = pkgMd
+				} else {
+					pkgData.MetadataError = fmt.Errorf("metadata.xml is not a pkgmetadata")
 				}
+			} else {
+				pkgData.MetadataError = err
 			}
 
 			if remoteURL != "" {
@@ -558,7 +597,7 @@ func parseRepo(repoDir string, defaultTitle string) (*SiteData, error) {
 				if err == nil {
 					for _, fe := range fileEntries {
 						if !fe.IsDir() {
-							fd := FileData{
+							fd := g2.FileData{
 								Name: fe.Name(),
 								Path: filepath.Join(filesDirPath, fe.Name()),
 							}
@@ -575,7 +614,7 @@ func parseRepo(repoDir string, defaultTitle string) (*SiteData, error) {
 				}
 			}
 
-			pkgData.LintWarnings = performLinting(repoDir, pkgData)
+			pkgData.LintWarnings = lints.PerformLinting(repoDir, &pkgData)
 
 			catData.Packages = append(catData.Packages, pkgData)
 		}
@@ -766,6 +805,8 @@ func isIgnoredDir(name string) bool {
 }
 
 
+// TODO check model's should be redundant OR migrated to /
+
 type AggCategory struct {
 	Name     string
 	Packages map[string]*AggPackage
@@ -781,6 +822,41 @@ type AggLicense struct {
 	Packages []*AggPackage
 	Text     string
 }
+
+func parseDuration(s string) (time.Duration, string, error) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return 90 * 24 * time.Hour, "3 months", nil
+	}
+	if strings.HasSuffix(s, "mo") {
+		val, err := strconv.Atoi(strings.TrimSuffix(s, "mo"))
+		if err != nil {
+			return 0, "", err
+		}
+		if val == 1 {
+			return time.Duration(val) * 30 * 24 * time.Hour, "1 month", nil
+		}
+		return time.Duration(val) * 30 * 24 * time.Hour, fmt.Sprintf("%d months", val), nil
+	}
+	if strings.HasSuffix(s, "d") {
+		val, err := strconv.Atoi(strings.TrimSuffix(s, "d"))
+		if err != nil {
+			return 0, "", err
+		}
+		if val == 1 {
+			return time.Duration(val) * 24 * time.Hour, "1 day", nil
+		}
+		return time.Duration(val) * 24 * time.Hour, fmt.Sprintf("%d days", val), nil
+	}
+	d, err := time.ParseDuration(s)
+	if err != nil {
+		return 0, "", err
+	}
+	return d, s, nil
+}
+
+
+// TODO migrate to / if it hasn't been done already check for differences
 
 type AggProfileRepo struct {
 	RepoName string
@@ -805,7 +881,7 @@ type AggNewsItem struct {
 	RepoName string
 }
 
-func generateSite(outDir string, sites []*SiteData) error {
+func generateSite(outDir string, sites []*g2.SiteData, recentDuration time.Duration, recentDurationStr string) error {
 	if err := os.MkdirAll(outDir, 0755); err != nil {
 		return err
 	}
@@ -815,6 +891,32 @@ func generateSite(outDir string, sites []*SiteData) error {
 		return fmt.Errorf("parsing templates: %w", err)
 	}
 
+	var allPackages []g2.PackageData
+	licenseMap := make(map[string]*g2.LicenseData)
+  // TODO check this should be redundant or merged with the category loop below.
+	for _, cat := range site.Categories {
+		for _, pkg := range cat.Packages {
+			allPackages = append(allPackages, pkg)
+			for _, ver := range pkg.Versions {
+				if ver.Ebuild != nil && ver.Ebuild.Vars != nil {
+					lic := ver.Ebuild.Vars["LICENSE"]
+					if lic != "" {
+						if _, ok := licenseMap[lic]; !ok {
+							licenseMap[lic] = &g2.LicenseData{Name: lic}
+						}
+						// simple deduplication
+						found := false
+						for _, p := range licenseMap[lic].Packages {
+							if p.Name == pkg.Name && p.Category == pkg.Category {
+								found = true
+								break
+							}
+						}
+					}
+				}
+			}
+		}
+  }
 	aggCategories := make(map[string]*AggCategory)
 	aggPackages := make(map[string]*AggPackage)
 	aggLicenses := make(map[string]*AggLicense)
@@ -910,6 +1012,11 @@ func generateSite(outDir string, sites []*SiteData) error {
 		return sortedPackages[i].Category < sortedPackages[j].Category
 	})
 
+	var sortedLicenses []*g2.LicenseData
+	for _, ld := range licenseMap {
+		sortedLicenses = append(sortedLicenses, ld)
+  }
+  // TODO the above has the correct model location, but below things have moved on. Please re-merge and refactor properly
 	var sortedLicenses []*AggLicense
 	for _, l := range aggLicenses {
 		sortedLicenses = append(sortedLicenses, l)
@@ -925,6 +1032,23 @@ func generateSite(outDir string, sites []*SiteData) error {
 		return globalNews[i].Posted.After(globalNews[j].Posted)
 	})
 
+	// Generate Feeds for Repo
+	var repoFeedItems []g2.FeedItem
+	for _, pkg := range allPackages {
+		for _, ver := range pkg.Versions {
+			desc := ""
+			if ver.Ebuild != nil && ver.Ebuild.Vars != nil {
+				desc = ver.Ebuild.Vars["DESCRIPTION"]
+			}
+			repoFeedItems = append(repoFeedItems, g2.FeedItem{
+				Title:       fmt.Sprintf("%s/%s-%s", pkg.Category, pkg.Name, ver.Version),
+				Link:        fmt.Sprintf("packages/%s/", pkg.Name),
+				Description: desc,
+				PubDate:     time.Now().Format(time.RFC1123Z),
+				Updated:     time.Now().Format(time.RFC3339),
+			})
+    }
+  }
 	var recentNews []AggNewsItem
 	cutoffDate := time.Now().AddDate(0, -3, 0)
 	for _, n := range globalNews {
@@ -1009,17 +1133,56 @@ func generateSite(outDir string, sites []*SiteData) error {
 					if ver.Ebuild != nil && ver.Ebuild.Vars != nil {
 						desc = ver.Ebuild.Vars["DESCRIPTION"]
 					}
+					t := ver.ModTime
+					if t.IsZero() {
+						t = time.Now()
+					}
 					globalFeedItems = append(globalFeedItems, FeedItem{
 						Title:       fmt.Sprintf("%s/%s-%s (%s)", sPkg.Category, sPkg.Name, ver.Version, site.RepoName),
 						Link:        fmt.Sprintf("repos/%s/categories/%s/packages/%s/", site.RepoName, sPkg.Category, sPkg.Name),
 						Description: desc,
-						PubDate:     time.Now().Format(time.RFC1123Z),
-						Updated:     time.Now().Format(time.RFC3339),
+						PubDate:     t.Format(time.RFC1123Z),
+						Updated:     t.Format(time.RFC3339),
+						Time:        t,
 					})
 				}
 			}
 		}
 	}
+	sort.Slice(globalFeedItems, func(i, j int) bool {
+		return globalFeedItems[i].Time.After(globalFeedItems[j].Time)
+	})
+	var recentGlobalUpdates []FeedItem
+	recentLimit := time.Now().Add(-recentDuration)
+	for _, item := range globalFeedItems {
+		if item.Time.After(recentLimit) {
+			recentGlobalUpdates = append(recentGlobalUpdates, item)
+			if len(recentGlobalUpdates) >= 10 {
+				break
+			}
+		}
+	}
+
+	if err := os.MkdirAll(filepath.Join(outDir, "recent"), 0755); err != nil { return err }
+	var allRecentGlobal []FeedItem
+	if len(globalFeedItems) > 500 {
+		allRecentGlobal = append([]FeedItem(nil), globalFeedItems[:500]...)
+	} else {
+		allRecentGlobal = append([]FeedItem(nil), globalFeedItems...)
+	}
+	for i := range allRecentGlobal {
+		if allRecentGlobal[i].Link != "" && !strings.HasPrefix(allRecentGlobal[i].Link, "http") {
+			allRecentGlobal[i].Link = "../" + allRecentGlobal[i].Link
+		}
+	}
+	if err := renderPage(filepath.Join(outDir, "recent", "index.html"), tmpl, "recent.html", map[string]interface{}{
+		"Title":       "Recent Updates",
+		"BaseURL":     "../",
+		"Breadcrumbs": []Breadcrumb{{Name: title, URL: "../"}, {Name: "Recent Updates"}},
+		"Updates":     allRecentGlobal,
+		"Version":     version,
+	}); err != nil { return err }
+
 	if len(globalFeedItems) > 50 {
 		globalFeedItems = globalFeedItems[:50]
 	}
@@ -1029,13 +1192,16 @@ func generateSite(outDir string, sites []*SiteData) error {
 
 	// 1. Root Dashboard
 	if err := renderPage(filepath.Join(outDir, "index.html"), tmpl, "dashboard.html", map[string]interface{}{
-		"Title":      title,
-		"BaseURL":    "",
-		"Repos":      sites,
-		"Categories": sortedCategories,
-		"Packages":   sortedPackages,
-		"Licenses":   sortedLicenses,
-		"Updates":    globalFeedItems,
+		"Title":                title,
+		"BaseURL":              "",
+		"Repos":                sites,
+		"Categories":           sortedCategories,
+		"Packages":             sortedPackages,
+		"Licenses":             sortedLicenses,
+		"Updates":              recentGlobalUpdates,
+		"Version":              version,
+		"RecentDurationString": recentDurationStr,
+    "Updates":    globalFeedItems, // TODO resolve naming conflict, (it could be b/c of a rename too check history)
 		"RecentNews": recentNews,
 		"Version":    version,
 	}); err != nil { return fmt.Errorf("rendering page: %w", err) }
@@ -1109,6 +1275,11 @@ func generateSite(outDir string, sites []*SiteData) error {
 			Name string
 			ReposList []*SiteData
 		}
+		breadcrumbs := []g2.Breadcrumb{
+			{Name: site.Title, URL: "../../"},
+			{Name: "Categories"},
+			{Name: cat.Name},
+    }
 		var tmplPkgs []TmplPkg
 		for _, p := range catPkgs {
 			tmplPkgs = append(tmplPkgs, TmplPkg{Name: p.Name, ReposList: mapToList(p.Repos)})
@@ -1274,6 +1445,27 @@ func generateSite(outDir string, sites []*SiteData) error {
 				"Version":     version,
 			}); err != nil { return fmt.Errorf("rendering page: %w", err) }
 		}
+		breadcrumbs := []g2.Breadcrumb{
+			{Name: site.Title, URL: "../../"},
+			{Name: "Categories", URL: "../../categories/" + pkg.Category + "/"},
+			{Name: pkg.Category},
+			{Name: pkg.Name},
+		}
+
+		var pkgFeedItems []g2.FeedItem
+		for _, ver := range pkg.Versions {
+			desc := ""
+			if ver.Ebuild != nil && ver.Ebuild.Vars != nil {
+				desc = ver.Ebuild.Vars["DESCRIPTION"]
+			}
+			pkgFeedItems = append(pkgFeedItems, g2.FeedItem{
+				Title:       fmt.Sprintf("%s/%s-%s", pkg.Category, pkg.Name, ver.Version),
+				Link:        "",
+				Description: desc,
+				PubDate:     time.Now().Format(time.RFC1123Z),
+				Updated:     time.Now().Format(time.RFC3339),
+			})
+    }
 
 		var repoFeedItems []FeedItem
 		for _, cat := range site.Categories {
@@ -1283,16 +1475,54 @@ func generateSite(outDir string, sites []*SiteData) error {
 					if ver.Ebuild != nil && ver.Ebuild.Vars != nil {
 						desc = ver.Ebuild.Vars["DESCRIPTION"]
 					}
+					t := ver.ModTime
+					if t.IsZero() {
+						t = time.Now()
+					}
 					repoFeedItems = append(repoFeedItems, FeedItem{
 						Title:       fmt.Sprintf("%s/%s-%s", pkg.Category, pkg.Name, ver.Version),
 						Link:        fmt.Sprintf("categories/%s/packages/%s/", pkg.Category, pkg.Name),
 						Description: desc,
-						PubDate:     time.Now().Format(time.RFC1123Z),
-						Updated:     time.Now().Format(time.RFC3339),
+						PubDate:     t.Format(time.RFC1123Z),
+						Updated:     t.Format(time.RFC3339),
+						Time:        t,
 					})
 				}
 			}
 		}
+		sort.Slice(repoFeedItems, func(i, j int) bool {
+			return repoFeedItems[i].Time.After(repoFeedItems[j].Time)
+		})
+		var recentRepoUpdates []FeedItem
+		for _, item := range repoFeedItems {
+			if item.Time.After(recentLimit) {
+				recentRepoUpdates = append(recentRepoUpdates, item)
+				if len(recentRepoUpdates) >= 10 {
+					break
+				}
+			}
+		}
+
+		if err := os.MkdirAll(filepath.Join(repoDir, "recent"), 0755); err != nil { return err }
+		var allRecentRepo []FeedItem
+		if len(repoFeedItems) > 500 {
+			allRecentRepo = append([]FeedItem(nil), repoFeedItems[:500]...)
+		} else {
+			allRecentRepo = append([]FeedItem(nil), repoFeedItems...)
+		}
+		for i := range allRecentRepo {
+			if allRecentRepo[i].Link != "" && !strings.HasPrefix(allRecentRepo[i].Link, "http") {
+				allRecentRepo[i].Link = "../" + allRecentRepo[i].Link
+			}
+		}
+		if err := renderPage(filepath.Join(repoDir, "recent", "index.html"), tmpl, "recent.html", map[string]interface{}{
+			"Title":       site.RepoName + " - Recent Updates",
+			"BaseURL":     "../../../",
+			"Breadcrumbs": []Breadcrumb{{Name: title, URL: "../../../"}, {Name: site.RepoName, URL: "../"}, {Name: "Recent Updates"}},
+			"Updates":     allRecentRepo,
+			"Version":     version,
+		}); err != nil { return err }
+
 		if len(repoFeedItems) > 50 {
 			repoFeedItems = repoFeedItems[:50]
 		}
@@ -1318,12 +1548,15 @@ func generateSite(outDir string, sites []*SiteData) error {
 		}
 
 		if err := renderPage(filepath.Join(repoDir, "index.html"), tmpl, "repo_index.html", map[string]interface{}{
-			"Title":       site.RepoName,
-			"BaseURL":     "../../",
-			"Breadcrumbs": []Breadcrumb{{Name: title, URL: "../../"}, {Name: "Overlays", URL: "../../overlays/"}, {Name: site.RepoName}},
-			"Repo":        site,
-			"PackageCount": pkgCount,
-			"Updates":     repoFeedItems,
+			"Title":                site.RepoName,
+			"BaseURL":              "../../",
+			"Breadcrumbs":          []Breadcrumb{{Name: title, URL: "../../"}, {Name: "Overlays", URL: "../../overlays/"}, {Name: site.RepoName}},
+			"Repo":                 site,
+			"PackageCount":         pkgCount,
+			"Updates":              recentRepoUpdates,
+			"Version":              version,
+			"RecentDurationString": recentDurationStr,
+			"Updates":     repoFeedItems, // TODO check reason for conflict, check history, could be a rename could be a conflict and require more specific naming.
 			"RecentNews":  repoRecentNews,
 			"Version":     version,
 		}); err != nil { return fmt.Errorf("rendering page: %w", err) }
@@ -1412,6 +1645,11 @@ func generateSite(outDir string, sites []*SiteData) error {
 				"Version":     version,
 			}); err != nil { return fmt.Errorf("rendering page: %w", err) }
 		}
+		breadcrumbs := []g2.Breadcrumb{
+			{Name: site.Title, URL: "../../../"},
+			{Name: "Licenses"},
+			{Name: lic.Name},
+    }
 
 		for _, cat := range site.Categories {
 			catDir := filepath.Join(repoDir, "categories", cat.Name)
@@ -1462,14 +1700,22 @@ func generateSite(outDir string, sites []*SiteData) error {
 				if ver.Ebuild != nil && ver.Ebuild.Vars != nil {
 					desc = ver.Ebuild.Vars["DESCRIPTION"]
 				}
+				t := ver.ModTime
+				if t.IsZero() {
+					t = time.Now()
+				}
 				pkgFeedItems = append(pkgFeedItems, FeedItem{
 					Title:       fmt.Sprintf("%s/%s-%s", pkg.Category, pkg.Name, ver.Version),
 					Link:        "",
 					Description: desc,
-					PubDate:     time.Now().Format(time.RFC1123Z),
-					Updated:     time.Now().Format(time.RFC3339),
+					PubDate:     t.Format(time.RFC1123Z),
+					Updated:     t.Format(time.RFC3339),
+					Time:        t,
 				})
 			}
+			sort.Slice(pkgFeedItems, func(i, j int) bool {
+				return pkgFeedItems[i].Time.After(pkgFeedItems[j].Time)
+			})
 			if err := generateFeeds(filepath.Join(pkgDir, "index"), pkg.Category+"/"+pkg.Name, "Latest updates to package", "", pkgFeedItems); err != nil {
 				log.Printf("Warning: failed to generate package feed: %v", err)
 			}
@@ -1522,7 +1768,7 @@ func renderPage(path string, tmpl *template.Template, name string, data map[stri
 	return nil
 }
 
-func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string) error {
+func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, recentDuration time.Duration, recentDurationStr string, fastGit bool) error {
 	var data []byte
 	var err error
 
@@ -1548,7 +1794,7 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string) 
 		}
 	}
 
-	var repos RemoteRepositories
+	var repos g2.RemoteRepositories
 	if err := xml.Unmarshal(data, &repos); err != nil {
 		return fmt.Errorf("parsing repositories.xml: %w", err)
 	}
@@ -1560,6 +1806,9 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string) 
 	}
 	defer func() { _ = os.RemoveAll(tmpDir) }()
 
+	overallSiteData := &g2.SiteData{
+		Title: "Remote Gentoo Repositories",
+	}
 	var allSites []*SiteData
 
 	for _, repo := range repos.Repos {
@@ -1592,17 +1841,44 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string) 
 		}
 
 		log.Printf("Parsing repository: %s", repo.Name)
-		siteData, err := parseRepo(repoPath, repo.Name)
+		siteData, err := parseRepo(repoPath, repo.Name, fastGit)
 		if err != nil {
 			log.Printf("Failed to parse repo %s: %v", repo.Name, err)
 			continue
 		}
 
+		// Since user requested a "list of overlays" we should put each repo in a subfolder
+		// generateSite will write into outDir/repo.Name
+		repoOutDir := filepath.Join(outDir, repo.Name)
+		log.Printf("Generating site for repo: %s", repo.Name)
+		if err := generateSite(repoOutDir, siteData); err != nil {
+			log.Printf("Failed to generate site for repo %s: %v", repo.Name, err)
+		}
+		// Add as a root category simply so we can create an index.html listing the repos
+		overallSiteData.Categories = append(overallSiteData.Categories, g2.CategoryData{
+			Name: repo.Name,
+		})
+	}
+
+	// Sort categories (which are now repos in this context)
+	sort.Slice(overallSiteData.Categories, func(i, j int) bool {
+		return overallSiteData.Categories[i].Name < overallSiteData.Categories[j].Name
+	})
+
+	// Generate the root index.html listing the overlays
+	if err := os.MkdirAll(outDir, 0755); err != nil {
+		return err
+	}
+
+	tmpl, err := template.ParseFS(siteTemplates, "sitegen_templates/*.html")
+	if err != nil {
+		return fmt.Errorf("parsing templates: %w", err)
+  }
 		allSites = append(allSites, siteData)
 	}
 
 	log.Printf("Generating site for %d repositories", len(allSites))
-	if err := generateSite(outDir, allSites); err != nil {
+	if err := generateSite(outDir, allSites, recentDuration, recentDurationStr); err != nil {
 		return fmt.Errorf("generating multi-repo site: %w", err)
 	}
 

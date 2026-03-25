@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"fmt"
+	"github.com/arran4/g2"
 	"html/template"
 	"log"
 	"os"
@@ -15,6 +16,7 @@ type FeedItem struct {
 	Description string
 	PubDate     string
 	Updated     string
+	Time        time.Time
 }
 
 type FeedData struct {
@@ -26,10 +28,10 @@ type FeedData struct {
 	Items         []FeedItem
 }
 
-func generateFeeds(outPath, feedTitle, feedDescription, linkBase string, items []FeedItem) error {
+func generateFeeds(outPath, feedTitle, feedDescription, linkBase string, items []g2.FeedItem) error {
 	log.Printf("Generating feeds for %s at %s", feedTitle, outPath)
 	now := time.Now()
-	data := FeedData{
+	data := g2.Feed{
 		Title:         feedTitle,
 		Link:          linkBase,
 		Description:   feedDescription,

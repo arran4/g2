@@ -7,6 +7,7 @@ import (
 	"github.com/arran4/g2"
 	"log"
 	"os"
+	"path/filepath"
 	"strings"
 )
 
@@ -59,6 +60,10 @@ func (u *UseFlagFlag) Set(value string) error {
 }
 
 func (cfg *MainArgConfig) cmdMetadata(args []string) error {
+	if len(args) > 0 && args[0] == "discover" {
+		return cfg.cmdMetadataDiscover(args[1:])
+	}
+
 	fs := flag.NewFlagSet("metadata", flag.ExitOnError)
 
 	var maintainers MaintainerFlag
@@ -311,4 +316,110 @@ func (cfg *MainArgConfig) cmdMetadata(args []string) error {
 	}
 
 	return nil
+}
+
+func (cfg *MainArgConfig) cmdMetadataDiscover(args []string) error {
+	fs := flag.NewFlagSet("discover", flag.ExitOnError)
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+
+	targetDir := "."
+	if fs.NArg() > 0 {
+		targetDir = fs.Arg(0)
+	}
+
+	return filepath.Walk(targetDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if info.IsDir() {
+			return nil
+		}
+		if !strings.HasSuffix(path, ".ebuild") {
+			return nil
+		}
+
+		vars := g2.ParseEbuildVariables(path)
+		if vars == nil {
+			return nil
+		}
+
+		ebuild, err := g2.ParseEbuild(os.DirFS(filepath.Dir(path)), filepath.Base(path), g2.ParseVariables)
+		if err != nil {
+			return nil // ignore parsing errors for discover
+		}
+
+		iuse, ok := ebuild.Vars["IUSE"]
+		if !ok || iuse == "" {
+			return nil
+		}
+
+		// determine metadata.xml path
+		metadataPath := filepath.Join(filepath.Dir(path), "metadata.xml")
+
+		// Parse metadata.xml
+		var pkgMd *g2.PkgMetadata
+		if _, err := os.Stat(metadataPath); err == nil {
+			data, parseErr := g2.ParseMetadata(metadataPath)
+			if parseErr != nil {
+				return nil
+			}
+			var typeOk bool
+			pkgMd, typeOk = data.(*g2.PkgMetadata)
+			if !typeOk {
+				return nil
+			}
+		} else {
+			pkgMd = &g2.PkgMetadata{XMLName: xml.Name{Local: "pkgmetadata"}}
+		}
+
+		parsedFlags := g2.ParseIUSE(iuse)
+		added := 0
+		for _, flagName := range parsedFlags {
+			// Check if flag is global? We'll just add them all and it won't hurt
+			// The issue asks to "update the corresponding metadata.xml to ensure all these flags are listed."
+
+			targetLang := "en" // Default to english block
+			var useBlockIdx = -1
+			for i, u := range pkgMd.Use {
+				if u.Lang == targetLang || (u.Lang == "" && targetLang == "en") {
+					useBlockIdx = i
+					break
+				}
+			}
+
+			if useBlockIdx == -1 {
+				pkgMd.Use = append(pkgMd.Use, g2.Use{Lang: targetLang})
+				useBlockIdx = len(pkgMd.Use) - 1
+			}
+
+			found := false
+			for _, f := range pkgMd.Use[useBlockIdx].Flags {
+				if f.Name == flagName {
+					found = true
+					break
+				}
+			}
+
+			if !found {
+				pkgMd.Use[useBlockIdx].Flags = append(pkgMd.Use[useBlockIdx].Flags, g2.Flag{
+					Name: flagName,
+					Text: "", // Keep description empty since ebuild doesn't have it
+				})
+				added++
+			}
+		}
+
+		if added > 0 {
+			if err := g2.WriteMetadata(metadataPath, pkgMd); err != nil {
+				// Don't error out on single files for discover, just log
+				log.Printf("Error writing metadata for %s: %v", metadataPath, err)
+			} else {
+				log.Printf("Discovered %d new USE flags for %s", added, metadataPath)
+			}
+		}
+
+		return nil
+	})
 }
