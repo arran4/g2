@@ -120,7 +120,7 @@ func doCacheVerify(cfs CacheFS, repoDir string) error {
 	layoutConfPath := filepath.ToSlash(filepath.Join(repoDir, "metadata", "layout.conf"))
 	var lc *g2.LayoutConf
 	if f, err := cfs.Open(layoutConfPath); err == nil {
-		f.Close()
+		_ = f.Close()
 		lc, err = parseLayoutConfFromFS(cfs, layoutConfPath)
 		if err != nil {
 			log.Printf("Warning: failed to parse layout.conf: %v", err)
@@ -183,7 +183,7 @@ func doCacheGenerate(cfs CacheFS, repoDir string) error {
 	layoutConfPath := filepath.ToSlash(filepath.Join(repoDir, "metadata", "layout.conf"))
 	var lc *g2.LayoutConf
 	if f, err := cfs.Open(layoutConfPath); err == nil {
-		f.Close()
+		_ = f.Close()
 		lc, err = parseLayoutConfFromFS(cfs, layoutConfPath)
 		if err != nil {
 			log.Printf("Warning: failed to parse layout.conf: %v", err)
@@ -330,7 +330,7 @@ func doCacheClean(cfs CacheFS, repoDir string) error {
 	layoutConfPath := filepath.ToSlash(filepath.Join(repoDir, "metadata", "layout.conf"))
 	var lc *g2.LayoutConf
 	if f, err := cfs.Open(layoutConfPath); err == nil {
-		f.Close()
+		_ = f.Close()
 		lc, err = parseLayoutConfFromFS(cfs, layoutConfPath)
 		if err != nil {
 			log.Printf("Warning: failed to parse layout.conf: %v", err)

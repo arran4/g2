@@ -301,7 +301,7 @@ func parseLayoutConfFromFS(sysFS fs.FS, path string) (*g2.LayoutConf, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 	return g2.ParseLayoutConfFromReader(file)
 }
 
@@ -310,7 +310,7 @@ func parseMetadataFromFS(sysFS fs.FS, path string) (interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 	return g2.ParseMetadataFromReader(file)
 }
 
@@ -319,7 +319,7 @@ func parseManifestFromFS(sysFS fs.FS, path string) (*g2.Manifest, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 	return g2.ParseManifestFromReader(file)
 }
 
