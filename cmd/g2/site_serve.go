@@ -102,19 +102,19 @@ func isOverlayDir(dir string) bool {
 }
 
 type SiteServer struct {
-	tmpl             *template.Template
-	Title            string
-	Sites            []*SiteData
-	AggCategories    []*AggCategory
-	AggPackages      []*AggPackage
-	AggLicenses      []*AggLicense
-	GlobalUpdates    []FeedItem
+	tmpl          *template.Template
+	Title         string
+	Sites         []*SiteData
+	AggCategories []*AggCategory
+	AggPackages   []*AggPackage
+	AggLicenses   []*AggLicense
+	GlobalUpdates []FeedItem
 
 	// Mappings for faster lookup
-	CatMap           map[string]*AggCategory
-	PkgMap           map[string]*AggPackage
-	LicMap           map[string]*AggLicense
-	RepoMap          map[string]*SiteData
+	CatMap  map[string]*AggCategory
+	PkgMap  map[string]*AggPackage
+	LicMap  map[string]*AggLicense
+	RepoMap map[string]*SiteData
 }
 
 func newSiteServer(sites []*SiteData) (*SiteServer, error) {
@@ -177,16 +177,24 @@ func newSiteServer(sites []*SiteData) (*SiteServer, error) {
 		}
 	}
 
-	for _, c := range aggCategories { server.AggCategories = append(server.AggCategories, c) }
+	for _, c := range aggCategories {
+		server.AggCategories = append(server.AggCategories, c)
+	}
 	sort.Slice(server.AggCategories, func(i, j int) bool { return server.AggCategories[i].Name < server.AggCategories[j].Name })
 
-	for _, p := range aggPackages { server.AggPackages = append(server.AggPackages, p) }
+	for _, p := range aggPackages {
+		server.AggPackages = append(server.AggPackages, p)
+	}
 	sort.Slice(server.AggPackages, func(i, j int) bool {
-		if server.AggPackages[i].Category == server.AggPackages[j].Category { return server.AggPackages[i].Name < server.AggPackages[j].Name }
+		if server.AggPackages[i].Category == server.AggPackages[j].Category {
+			return server.AggPackages[i].Name < server.AggPackages[j].Name
+		}
 		return server.AggPackages[i].Category < server.AggPackages[j].Category
 	})
 
-	for _, l := range aggLicenses { server.AggLicenses = append(server.AggLicenses, l) }
+	for _, l := range aggLicenses {
+		server.AggLicenses = append(server.AggLicenses, l)
+	}
 	sort.Slice(server.AggLicenses, func(i, j int) bool { return server.AggLicenses[i].Name < server.AggLicenses[j].Name })
 
 	server.CatMap = aggCategories
@@ -247,15 +255,18 @@ func mapToList(m map[string]*SiteData) []*SiteData {
 }
 
 func (s *SiteServer) renderPageHTTP(w http.ResponseWriter, name string, data map[string]interface{}) {
+	log.Printf("Serving page using template %s", name)
 	var buf bytes.Buffer
 	if err := s.tmpl.ExecuteTemplate(&buf, name, data); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		errWrapped := fmt.Errorf("executing template %s: %w", name, err)
+		log.Printf("Error: %v", errWrapped)
+		http.Error(w, errWrapped.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	data["Content"] = template.HTML(buf.String())
 	if err := s.tmpl.ExecuteTemplate(w, "layout.html", data); err != nil {
-		log.Printf("Error rendering layout: %v", err)
+		log.Printf("Error rendering layout template for %s: %v", name, err)
 	}
 }
 
@@ -322,11 +333,13 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			}
 
 			var catPkgs []*AggPackage
-			for _, p := range cat.Packages { catPkgs = append(catPkgs, p) }
+			for _, p := range cat.Packages {
+				catPkgs = append(catPkgs, p)
+			}
 			sort.Slice(catPkgs, func(i, j int) bool { return catPkgs[i].Name < catPkgs[j].Name })
 
 			type TmplPkg struct {
-				Name string
+				Name      string
 				ReposList []*SiteData
 			}
 			var tmplPkgs []TmplPkg
@@ -402,8 +415,8 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			}
 
 			type TmplPkg struct {
-				Name string
-				Category string
+				Name      string
+				Category  string
 				ReposList []*SiteData
 			}
 			var tmplPkgs []TmplPkg
@@ -456,13 +469,13 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				}
 
 				s.renderPageHTTP(w, "repo_index.html", map[string]interface{}{
-					"Title":       site.RepoName,
-					"BaseURL":     baseURL,
-					"Breadcrumbs": []Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: "Overlays", URL: baseURL + "overlays/"}, {Name: site.RepoName}},
-					"Repo":        site,
+					"Title":        site.RepoName,
+					"BaseURL":      baseURL,
+					"Breadcrumbs":  []Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: "Overlays", URL: baseURL + "overlays/"}, {Name: site.RepoName}},
+					"Repo":         site,
 					"PackageCount": pkgCount,
-					"Updates":     repoFeedItems,
-					"Version":     version,
+					"Updates":      repoFeedItems,
+					"Version":      version,
 				})
 				return
 			}
@@ -494,7 +507,7 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 						}
 
 						type TmplPkg struct {
-							Name string
+							Name      string
 							ReposList []*SiteData
 						}
 						var tmplPkgs []TmplPkg
@@ -544,9 +557,13 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				case "packages":
 					if len(parts) == 3 {
 						var repoPkgs []PackageData
-						for _, c := range site.Categories { repoPkgs = append(repoPkgs, c.Packages...) }
+						for _, c := range site.Categories {
+							repoPkgs = append(repoPkgs, c.Packages...)
+						}
 						sort.Slice(repoPkgs, func(i, j int) bool {
-							if repoPkgs[i].Category == repoPkgs[j].Category { return repoPkgs[i].Name < repoPkgs[j].Name }
+							if repoPkgs[i].Category == repoPkgs[j].Category {
+								return repoPkgs[i].Name < repoPkgs[j].Name
+							}
 							return repoPkgs[i].Category < repoPkgs[j].Category
 						})
 

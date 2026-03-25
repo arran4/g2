@@ -294,6 +294,22 @@ jobs:
           cache: true
       - run: go vet ./...
 
+  test-site-generation:
+    name: Test Site Generation
+    needs: [route, discover]
+    if: ${{ needs.discover.outputs.has_go == 'true' && needs.route.outputs.run_code_checks == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Build g2
+        run: go build -o g2 cmd/g2/*.go
+      - name: Test site generation
+        run: go run ./cmd/g2 overlay site generate https://github.com/arran4/arrans_overlay
+
   go-fmt-pr:
     name: go fmt -> PR (manual dispatch)
     needs: [route, discover]

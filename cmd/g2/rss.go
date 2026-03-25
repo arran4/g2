@@ -2,7 +2,10 @@ package main
 
 import (
 	"bytes"
+	"fmt"
+	"github.com/arran4/g2"
 	"html/template"
+	"log"
 	"os"
 	"time"
 )
@@ -13,6 +16,7 @@ type FeedItem struct {
 	Description string
 	PubDate     string
 	Updated     string
+	Time        time.Time
 }
 
 type FeedData struct {
@@ -24,9 +28,10 @@ type FeedData struct {
 	Items         []FeedItem
 }
 
-func generateFeeds(outPath, feedTitle, feedDescription, linkBase string, items []FeedItem) error {
+func generateFeeds(outPath, feedTitle, feedDescription, linkBase string, items []g2.FeedItem) error {
+	log.Printf("Generating feeds for %s at %s", feedTitle, outPath)
 	now := time.Now()
-	data := FeedData{
+	data := g2.Feed{
 		Title:         feedTitle,
 		Link:          linkBase,
 		Description:   feedDescription,
@@ -37,23 +42,23 @@ func generateFeeds(outPath, feedTitle, feedDescription, linkBase string, items [
 
 	tmpl, err := template.ParseFS(siteTemplates, "sitegen_templates/*.xml")
 	if err != nil {
-		return err
+		return fmt.Errorf("parsing feed templates for %s: %w", feedTitle, err)
 	}
 
 	var rssBuf bytes.Buffer
 	if err := tmpl.ExecuteTemplate(&rssBuf, "rss.xml", data); err != nil {
-		return err
+		return fmt.Errorf("executing rss template for %s: %w", feedTitle, err)
 	}
 	if err := os.WriteFile(outPath+".rss", rssBuf.Bytes(), 0644); err != nil {
-		return err
+		return fmt.Errorf("writing rss file for %s at %s.rss: %w", feedTitle, outPath, err)
 	}
 
 	var atomBuf bytes.Buffer
 	if err := tmpl.ExecuteTemplate(&atomBuf, "atom.xml", data); err != nil {
-		return err
+		return fmt.Errorf("executing atom template for %s: %w", feedTitle, err)
 	}
 	if err := os.WriteFile(outPath+".atom", atomBuf.Bytes(), 0644); err != nil {
-		return err
+		return fmt.Errorf("writing atom file for %s at %s.atom: %w", feedTitle, outPath, err)
 	}
 
 	return nil
