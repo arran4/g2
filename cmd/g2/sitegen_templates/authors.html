@@ -4,7 +4,7 @@
     <li>
         {{.Name}}
         {{if .Email}}
-        &lt;<a href="{{if $.Repo.AuthorsURL}}{{$.Repo.AuthorsURL}}#L{{.Line}}{{else}}https://github.com/gentoo-mirror/gentoo/blob/stable/metadata/AUTHORS#L{{.Line}}{{end}}">Email</a>&gt;
+        &lt;{{if and $.Repo (not (eq $.Repo.AuthorsURL ""))}}<a href="{{$.Repo.AuthorsURL}}#L{{.Line}}">Email</a>{{else}}<a href="https://github.com/gentoo-mirror/gentoo/blob/stable/metadata/AUTHORS#L{{.Line}}">Email</a>{{end}}&gt;
         {{end}}
     </li>
     {{end}}
