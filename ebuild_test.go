@@ -233,3 +233,66 @@ func TestBlackbox(t *testing.T) {
 		t.Error("Public Path field not accessible/settable")
 	}
 }
+
+func TestParseIUSE(t *testing.T) {
+	tests := []struct {
+		name     string
+		iuse     string
+		expected []string
+	}{
+		{
+			name:     "Empty string",
+			iuse:     "",
+			expected: nil,
+		},
+		{
+			name:     "Single flag",
+			iuse:     "foo",
+			expected: []string{"foo"},
+		},
+		{
+			name:     "Multiple flags",
+			iuse:     "foo bar baz",
+			expected: []string{"foo", "bar", "baz"},
+		},
+		{
+			name:     "Flags with plus",
+			iuse:     "+foo bar +baz",
+			expected: []string{"foo", "bar", "baz"},
+		},
+		{
+			name:     "Flags with minus",
+			iuse:     "-foo bar -baz",
+			expected: []string{"foo", "bar", "baz"},
+		},
+		{
+			name:     "Flags with mixed prefixes",
+			iuse:     "+foo -bar baz -qux",
+			expected: []string{"foo", "bar", "baz", "qux"},
+		},
+		{
+			name:     "Multi-line string with extra whitespace",
+			iuse:     "\n\t+foo  \n\t -bar \n\tbaz\t\n",
+			expected: []string{"foo", "bar", "baz"},
+		},
+		{
+			name:     "Arch specifiers (currently handled as normal flags without stripping arch specific chars)",
+			iuse:     "foo ( amd64 ) -bar", // The script should strip + and -, not parens for arch limits in IUSE
+			expected: []string{"foo", "(", "amd64", ")", "bar"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := ParseIUSE(tt.iuse)
+			if len(result) != len(tt.expected) {
+				t.Fatalf("ParseIUSE() len = %v, want %v", len(result), len(tt.expected))
+			}
+			for i, v := range result {
+				if v != tt.expected[i] {
+					t.Errorf("ParseIUSE()[%d] = %v, want %v", i, v, tt.expected[i])
+				}
+			}
+		})
+	}
+}

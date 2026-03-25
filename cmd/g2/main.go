@@ -30,6 +30,7 @@ func main() {
 		fmt.Printf("\t\t %s \t\t %s\n", "overlay", "commands relating to a single overlay")
 		fmt.Printf("\t\t %s \t\t %s\n", "overlays", "commands relating to multiple overlays")
 		fmt.Printf("\t\t %s \t\t %s\n", "lint", "lints the repository for errors")
+		fmt.Printf("\t\t %s \t\t %s\n", "use", "commands relating to USE flags, use.desc, and use.local.desc")
 		fmt.Printf("\t\t %s \t\t %s\n", "site", "commands relating to static sites")
 	}
 	if err := fs.Parse(os.Args); err != nil {
@@ -85,6 +86,12 @@ func main() {
 	case "lint":
 		if err := cfg.cmdLint(fs.Args()[2:]); err != nil {
 			log.Printf("lint error: %s", err)
+			os.Exit(-1)
+			return
+		}
+	case "use":
+		if err := cfg.cmdUse(fs.Args()[2:]); err != nil {
+			log.Printf("use error: %s", err)
 			os.Exit(-1)
 			return
 		}

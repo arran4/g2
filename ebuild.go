@@ -310,6 +310,21 @@ func ParseEbuild(fsys fs.FS, path string, mode ParsingMode) (*Ebuild, error) {
 	return e, nil
 }
 
+// ParseIUSE extracts the actual USE flag names from an IUSE string,
+// stripping prefixes like + and -.
+func ParseIUSE(iuseStr string) []string {
+	flags := strings.Fields(iuseStr)
+	var parsed []string
+	for _, flagName := range flags {
+		flagName = strings.TrimPrefix(flagName, "+")
+		flagName = strings.TrimPrefix(flagName, "-")
+		if flagName != "" {
+			parsed = append(parsed, flagName)
+		}
+	}
+	return parsed
+}
+
 // ParseEbuildVariables extracts PN, PV, P from the ebuild filename.
 func ParseEbuildVariables(filename string) map[string]string {
 	basename := filepath.Base(filename)
