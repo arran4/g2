@@ -4,3 +4,6 @@
 /g2
 /*.log
 /test_site_out/
+/*.sh
+/*.py
+/test_*

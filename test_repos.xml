@@ -1,6 +1,0 @@
-<repositories>
-  <repo>
-    <name>test_repo</name>
-    <source type="local">/home/jules/test_repo</source>
-  </repo>
-</repositories>
