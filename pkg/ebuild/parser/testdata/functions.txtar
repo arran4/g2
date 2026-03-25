@@ -1,0 +1,25 @@
+-- ebuild.ebuild --
+DEPEND="
+  a/b
+"
+
+src_prepare() {
+    emake foo \
+        bar \
+        # baz
+        # ignore
+        baz
+}
+
+post_src_prepare() {
+    echo "done"
+}
+
+RDEPEND="
+  c/d
+"
+-- output.json --
+{
+	"DEPEND": "a/b",
+	"RDEPEND": "c/d"
+}

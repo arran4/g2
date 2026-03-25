@@ -1,0 +1,13 @@
+-- ebuild.ebuild --
+    my_var = "spaced assignment"
+    array_with_comment=(
+       "string" # inline comment
+       bareword
+    )
+    unquoted_brackets[args]=value
+-- output.json --
+{
+	"my_var": "spaced assignment",
+	"array_with_comment": "( \"string\" bareword )",
+	"unquoted_brackets[args]": "value"
+}

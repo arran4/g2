@@ -1,0 +1,33 @@
+-- ebuild.ebuild --
+EAPI=8
+DESCRIPTION="Test ebuild"
+HOMEPAGE="https://example.com"
+SRC_URI="https://example.com/${P}.tar.gz"
+
+inherit toolchain-funcs git-r3
+
+myarray=(
+    one
+    # comment
+    two
+)
+
+src_test() {
+	epytest \
+		test/test_encryption.py::test_symmetric_encrypt[clean-encrypt_exists-bad_phrase] # hangs in sandbox
+}
+
+src_install() {
+    emake DESTDIR="${D}" install
+}
+
+inherit autotools
+-- output.json --
+{
+	"EAPI": "8",
+	"DESCRIPTION": "Test ebuild",
+	"HOMEPAGE": "https://example.com",
+	"SRC_URI": "https://example.com/${P}.tar.gz",
+	"INHERITED": "toolchain-funcs git-r3 autotools",
+	"myarray": "( one two )"
+}
