@@ -762,11 +762,22 @@ func generateSite(outDir string, sites []*SiteData) error {
 			redirectHTML := fmt.Sprintf(`<!DOCTYPE html><html><head><meta http-equiv="refresh" content="0; url=%s"></head><body><a href="%s">Redirecting...</a></body></html>`, targetURL, targetURL)
 			if err := os.WriteFile(filepath.Join(pkgDir, "index.html"), []byte(redirectHTML), 0644); err != nil { return err }
 		} else {
+			var movedToName, movedToURL string
+			if move, ok := aggMoves[pkg.Category+"/"+pkg.Name]; ok {
+				newParts := strings.Split(move.New, "/")
+				if len(newParts) == 2 {
+					movedToName = move.New
+					movedToURL = "../../" + newParts[0] + "/" + newParts[1] + "/"
+				}
+			}
+
 			if err := renderPage(filepath.Join(pkgDir, "index.html"), tmpl, "package_picker.html", map[string]interface{}{
 				"Title":       "Package: " + pkg.Category + "/" + pkg.Name,
 				"BaseURL":     "../../../",
 				"Breadcrumbs": []Breadcrumb{{Name: title, URL: "../../../"}, {Name: "Packages", URL: "../../"}, {Name: pkg.Category}, {Name: pkg.Name}},
 				"Package":     map[string]interface{}{"Category": pkg.Category, "Name": pkg.Name, "ReposList": reposList},
+				"MovedToName": movedToName,
+				"MovedToURL":  movedToURL,
 				"Version":     version,
 			}); err != nil { return err }
 		}
@@ -961,12 +972,26 @@ func generateSite(outDir string, sites []*SiteData) error {
 				log.Printf("Warning: failed to generate package feed: %v", err)
 			}
 
+			var movedToName, movedToURL string
+			for _, move := range site.Moves {
+				if move.Old == pkg.Category+"/"+pkg.Name {
+					newParts := strings.Split(move.New, "/")
+					if len(newParts) == 2 {
+						movedToName = move.New
+						movedToURL = "../../../" + newParts[0] + "/packages/" + newParts[1] + "/"
+					}
+					break
+				}
+			}
+
 			if err := renderPage(filepath.Join(pkgDir, "index.html"), tmpl, "repo_package.html", map[string]interface{}{
 				"Title":       fmt.Sprintf("%s - %s/%s", site.RepoName, pkg.Category, pkg.Name),
 				"BaseURL":     "../../../../../../",
 				"Breadcrumbs": []Breadcrumb{{Name: title, URL: "../../../../../../"}, {Name: site.RepoName, URL: "../../../../"}, {Name: "Categories", URL: "../../../"}, {Name: pkg.Category}, {Name: pkg.Name}},
 				"Repo":        site,
 				"Package":     pkg,
+				"MovedToName": movedToName,
+				"MovedToURL":  movedToURL,
 				"Version":     version,
 			}); err != nil { return err }
 		}
