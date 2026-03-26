@@ -1,5 +1,5 @@
 
-<h2>{{.Package.Category}}/{{.Package.Name}} ({{.Repo.RepoName}})</h2>
+<h2><a href="../../">{{.Package.Category}}</a>/<a href="">{{.Package.Name}}</a> (<a href="../../../../">{{.Repo.RepoName}}</a>)</h2>
 
 {{if .Package.Deprecated}}
 <div class="alert alert-danger" style="border-color: #ff4c4c; background-color: #ffe6e6;">
@@ -32,7 +32,7 @@
             <td>{{.Ebuild.Vars.EAPI}}</td>
             <td>{{.Ebuild.Vars.KEYWORDS}}</td>
             <td>{{.Ebuild.Vars.SLOT}}</td>
-            <td>{{.Ebuild.Vars.LICENSE}}</td>
+            <td>{{if and .Ebuild.Vars.LICENSE (index $.ValidLicenses .Ebuild.Vars.LICENSE)}}<a href="../../../../../../licenses/{{.Ebuild.Vars.LICENSE}}/">{{.Ebuild.Vars.LICENSE}}</a>{{else}}{{.Ebuild.Vars.LICENSE}}{{end}}</td>
             <td>{{.Ebuild.Vars.DESCRIPTION}}</td>
         </tr>
         {{end}}
@@ -128,19 +128,15 @@
             <th>File</th>
             <th>Size</th>
             <th>Versions</th>
-            <th>Source URLs</th>
         </tr>
         {{range .Package.ManifestData}}
         {{if .Versions}}
         <tr>
             <td>{{.Entry.Type}}</td>
-            <td>{{.Entry.Filename}}</td>
+            <td><a href="manifest/{{.Entry.Filename}}/">{{.Entry.Filename}}</a></td>
             <td>{{.Entry.Size}} bytes</td>
             <td>
-                {{range $i, $v := .Versions}}{{if $i}}, {{end}}{{$v}}{{end}}
-            </td>
-            <td>
-                {{range $i, $u := .URLs}}{{if $i}}<br>{{end}}<a href="{{$u}}">{{$u}}</a>{{end}}
+                {{range $i, $v := .Versions}}{{if $i}}, {{end}}<a href="ebuild/{{$v}}/">{{$v}}</a>{{end}}
             </td>
         </tr>
         {{end}}
