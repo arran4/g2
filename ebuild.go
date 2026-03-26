@@ -3,6 +3,7 @@ package g2
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"fmt"
 	"io/fs"
 	"path/filepath"
@@ -180,122 +181,32 @@ func ParseEbuild(fsys fs.FS, path string, mode ParsingMode) (*Ebuild, error) {
 	content := string(contentBytes)
 
 	if mode >= ParseVariables {
-		// Simple variable parsing
-		// This extends ParseEbuildVariables logic
-		sc := bufio.NewScanner(strings.NewReader(content))
-		for sc.Scan() {
-			line := sc.Text()
-			line = strings.TrimSpace(line)
-			if strings.HasPrefix(line, "#") {
-				continue
+		// Use the recursive descent parser
+		parser := NewEbuildParser(context.Background(), strings.NewReader(content))
+		parsedVars, err := parser.Parse()
+		if err != nil {
+			return nil, fmt.Errorf("parsing ebuild variables: %w", err)
+		}
+
+		// Since variables might depend on each other, we need to iterate
+		// or at least resolve using the whole parsedVars map.
+		// Add parsed vars to e.Vars
+		for k, v := range parsedVars {
+			e.Vars[k] = v
+		}
+		// Resolve all values now that all vars are added
+		// Using a multi-pass approach to resolve nested variables
+		for pass := 0; pass < 5; pass++ {
+			changed := false
+			for k, v := range e.Vars {
+				resolved := ResolveVariables(v, e.Vars)
+				if resolved != v {
+					e.Vars[k] = resolved
+					changed = true
+				}
 			}
-			// Look for KEY="VAL" or KEY=VAL
-			// Very basic parser
-			if idx := strings.Index(line, "="); idx > 0 {
-				key := strings.TrimSpace(line[:idx])
-				val := strings.TrimSpace(line[idx+1:])
-
-				// Remove quotes if present
-				if len(val) >= 2 && strings.HasPrefix(val, "\"") && strings.HasSuffix(val, "\"") {
-					val = val[1 : len(val)-1]
-				} else if len(val) >= 2 && strings.HasPrefix(val, "'") && strings.HasSuffix(val, "'") {
-					val = val[1 : len(val)-1]
-				} else if strings.Count(val, "\"")%2 != 0 || strings.Count(val, "'")%2 != 0 || strings.HasPrefix(val, "(") {
-					// Likely multi-line strings, arrays, or unbalanced quotes.
-					// Handle simple multi-line double-quoted string
-					if strings.HasPrefix(val, "\"") {
-						// Keep reading lines until we find the closing quote
-						var sb strings.Builder
-						sb.WriteString(val[1:])
-						foundEnd := false
-						for sc.Scan() {
-							nextLine := sc.Text()
-							// Check if line ends with quote
-							trimmedNext := strings.TrimSpace(nextLine)
-							if strings.HasSuffix(trimmedNext, "\"") {
-								sb.WriteString("\n")
-								// Find the last quote index in the ORIGINAL line (not trimmed)
-								lastQuoteIdx := strings.LastIndex(nextLine, "\"")
-								if lastQuoteIdx >= 0 {
-									sb.WriteString(nextLine[:lastQuoteIdx])
-								}
-								foundEnd = true
-								break
-							} else {
-								sb.WriteString("\n")
-								sb.WriteString(nextLine)
-							}
-						}
-						if foundEnd {
-							val = sb.String()
-						} else {
-							continue // Unbalanced
-						}
-					} else if strings.HasPrefix(val, "(") {
-						// Handle array definitions: VAR=( ... )
-						// We'll capture the content including the parens as a string for now.
-						// We need to find the closing ')'
-						// This is naive and doesn't handle nested parens or strings containing parens properly,
-						// but sufficient for basic cases.
-						var sb strings.Builder
-						sb.WriteString(val)
-						// Check if closing paren is on the same line
-						if strings.HasSuffix(strings.TrimSpace(val), ")") {
-							val = sb.String()
-						} else {
-							foundEnd := false
-							for sc.Scan() {
-								nextLine := sc.Text()
-								sb.WriteString("\n")
-								sb.WriteString(nextLine)
-								if strings.HasSuffix(strings.TrimSpace(nextLine), ")") {
-									foundEnd = true
-									break
-								}
-							}
-							if foundEnd {
-								val = sb.String()
-							} else {
-								continue // Unbalanced
-							}
-						}
-					} else {
-						// Ignore other unbalanced cases
-						continue
-					}
-				}
-
-				// Resolve variables in value if possible
-				val = ResolveVariables(val, e.Vars)
-
-				// Only add if key looks like a variable (uppercase, underscores)
-				// Ebuild vars are typically UPPER_CASE.
-				// But some local vars might be lower.
-				// Let's accept things that look like identifiers.
-				// Ebuild variable names are essentially shell variable names.
-				// They must start with a letter or underscore, followed by letters, numbers, or underscores.
-				isIdentifier := true
-				if len(key) == 0 {
-					isIdentifier = false
-				} else {
-					for i, r := range key {
-						if i == 0 {
-							if (r < 'a' || r > 'z') && (r < 'A' || r > 'Z') && r != '_' {
-								isIdentifier = false
-								break
-							}
-						} else {
-							if (r < 'a' || r > 'z') && (r < 'A' || r > 'Z') && (r < '0' || r > '9') && r != '_' {
-								isIdentifier = false
-								break
-							}
-						}
-					}
-				}
-
-				if isIdentifier {
-					e.Vars[key] = val
-				}
+			if !changed {
+				break
 			}
 		}
 	}
