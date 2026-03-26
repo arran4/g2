@@ -67,10 +67,10 @@ func TestParserTxtar(t *testing.T) {
 				t.Fatalf("Parse error: %v", err)
 			}
 
-            // Normalize spaces in arrays/values to make json assertions easier in txtar
-            for k, v := range ebuild.Variables {
-                ebuild.Variables[k] = normalize(v)
-            }
+			// Normalize spaces in arrays/values to make json assertions easier in txtar
+			for k, v := range ebuild.Variables {
+				ebuild.Variables[k] = normalize(v)
+			}
 
 			var expected map[string]string
 			if err := json.Unmarshal(expectedData, &expected); err != nil {
