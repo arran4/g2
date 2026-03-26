@@ -21,10 +21,24 @@
             <li>EAPIs Deprecated: {{.Repo.LayoutConf.GetValue "eapis-deprecated"}}</li>
         {{end}}
     {{end}}
+    {{if gt (len .Repo.Categories) 0}}
     <li><a href="categories/">Categories ({{len .Repo.Categories}})</a></li>
+    {{else if gt .GlobalCategoriesCount 0}}
+    <li><a href="../../categories/">Categories (Global)</a></li>
+    {{end}}
+    {{if gt .PackageCount 0}}
     <li><a href="packages/">Packages ({{.PackageCount}})</a></li>
+    {{else if gt .GlobalPackagesCount 0}}
+    <li><a href="../../packages/">Packages (Global)</a></li>
+    {{end}}
+    {{if gt .GlobalLicensesCount 0}}
     <li><a href="../../licenses/">Licenses (Global)</a></li>
+    {{end}}
+    {{if gt (len .Repo.Profiles) 0}}
     <li><a href="profiles/">Profiles</a></li>
+    {{else if gt .GlobalProfilesCount 0}}
+    <li><a href="../../profiles/">Profiles (Global)</a></li>
+    {{end}}
     {{if gt (len .Repo.Authors) 0}}
     <li><a href="authors/">Authors ({{len .Repo.Authors}})</a></li>
     {{end}}
