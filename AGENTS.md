@@ -10,3 +10,5 @@
 * When `readme.md` is modified, you must regenerate the man page `g2.1` using `go run github.com/cpuguy83/go-md2man/v2@latest -in readme.md -out g2.1`.
 
 - When creating or modifying test data, **always anonymize individuals and strip real email addresses**. Use generic names (e.g., "Jane Doe") and example domains (e.g., "example.com").
+
+- When adding new commands or features to the `g2` application, ensure that you update the `readme.md` file to reflect these additions. The `readme.md` should be considered the central reference for available commands, usage instructions, and examples.
