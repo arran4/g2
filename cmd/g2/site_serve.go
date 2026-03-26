@@ -398,10 +398,26 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			type TmplPkg struct {
 				Name      string
 				ReposList []*SiteData
+				EbuildCount int
+				HighestStableVersion template.HTML
+				HighestTestingVersion template.HTML
 			}
 			var tmplPkgs []TmplPkg
 			for _, p := range catPkgs {
-				tmplPkgs = append(tmplPkgs, TmplPkg{Name: p.Name, ReposList: mapToList(p.Repos)})
+				var allVersions []VersionData
+				for _, r := range p.Repos {
+					for _, c := range r.Categories {
+						if c.Name == catName {
+							for _, pkgData := range c.Packages {
+								if pkgData.Name == p.Name {
+                                    allVersions = append(allVersions, pkgData.Versions...)
+								}
+							}
+						}
+					}
+				}
+                hs, ht, count := getHighestVersionsAndCount(allVersions)
+				tmplPkgs = append(tmplPkgs, TmplPkg{Name: p.Name, ReposList: mapToList(p.Repos), EbuildCount: count, HighestStableVersion: hs, HighestTestingVersion: ht})
 			}
 
 			s.renderPageHTTP(w, "category.html", map[string]interface{}{
@@ -605,10 +621,13 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 						type TmplPkg struct {
 							Name      string
 							ReposList []*SiteData
+							EbuildCount int
+							HighestStableVersion template.HTML
+							HighestTestingVersion template.HTML
 						}
 						var tmplPkgs []TmplPkg
 						for _, p := range catData.Packages {
-							tmplPkgs = append(tmplPkgs, TmplPkg{Name: p.Name, ReposList: []*SiteData{site}})
+							tmplPkgs = append(tmplPkgs, TmplPkg{Name: p.Name, ReposList: []*SiteData{site}, EbuildCount: p.EbuildCount, HighestStableVersion: p.HighestStableVersion, HighestTestingVersion: p.HighestTestingVersion})
 						}
 
 						s.renderPageHTTP(w, "category.html", map[string]interface{}{

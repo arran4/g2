@@ -150,6 +150,9 @@ type PackageData struct {
 	Manifest      *g2.Manifest
 	ManifestData  []ManifestEntryData
 	Files         []FileData
+	HighestStableVersion  template.HTML
+	HighestTestingVersion template.HTML
+	EbuildCount           int
 
 	// Git info
 	MetadataRawURL string
@@ -331,6 +334,91 @@ func parseManifestFromFS(sysFS fs.FS, path string) (*g2.Manifest, error) {
 	}
 	defer func() { _ = file.Close() }()
 	return g2.ParseManifestFromReader(file)
+}
+
+
+
+func getHighestVersionsAndCount(versions []VersionData) (template.HTML, template.HTML, int) {
+	// Parse KEYWORDS and group versions
+
+	stableMap := make(map[string]string)
+	testingMap := make(map[string]string)
+
+	for _, ver := range versions {
+		if ver.Ebuild == nil || ver.Ebuild.Vars == nil {
+			continue
+		}
+
+		keywords := ver.Ebuild.Vars["KEYWORDS"]
+		parts := strings.Fields(keywords)
+
+		for _, p := range parts {
+			if strings.HasPrefix(p, "-") {
+				continue
+			}
+			if strings.HasPrefix(p, "~") {
+				arch := p[1:]
+				if current, ok := testingMap[arch]; !ok || g2.CompareVersions(ver.Version, current) > 0 {
+					testingMap[arch] = ver.Version
+				}
+			} else {
+				arch := p
+				if current, ok := stableMap[arch]; !ok || g2.CompareVersions(ver.Version, current) > 0 {
+					stableMap[arch] = ver.Version
+				}
+			}
+		}
+	}
+
+	// Group archs by version
+	stableGroup := make(map[string][]string)
+	for arch, ver := range stableMap {
+		stableGroup[ver] = append(stableGroup[ver], arch)
+	}
+
+	testingGroup := make(map[string][]string)
+	for arch, ver := range testingMap {
+		testingGroup[ver] = append(testingGroup[ver], arch)
+	}
+
+	formatGroups := func(groups map[string][]string) string {
+		if len(groups) == 0 {
+			return ""
+		}
+
+		var sortedVersions []string
+		for ver := range groups {
+			sortedVersions = append(sortedVersions, ver)
+		}
+
+		// Sort descending
+		for i := 0; i < len(sortedVersions); i++ {
+		    for j := i+1; j < len(sortedVersions); j++ {
+		        if g2.CompareVersions(sortedVersions[i], sortedVersions[j]) < 0 {
+		            sortedVersions[i], sortedVersions[j] = sortedVersions[j], sortedVersions[i]
+		        }
+		    }
+		}
+
+		var parts []string
+		for _, ver := range sortedVersions {
+			archs := groups[ver]
+
+			// sort archs
+			for i := 0; i < len(archs); i++ {
+			    for j := i+1; j < len(archs); j++ {
+			        if archs[i] > archs[j] {
+			            archs[i], archs[j] = archs[j], archs[i]
+			        }
+			    }
+			}
+			parts = append(parts, "<span title=\"" + strings.Join(archs, " ") + "\">" + ver + "</span>")
+		}
+
+		return strings.Join(parts, ", ")
+	}
+
+	return template.HTML(formatGroups(stableGroup)), template.HTML(formatGroups(testingGroup)), len(versions)
 }
 
 func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool) (*SiteData, error) {
@@ -643,6 +731,8 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool) (
 			if len(pkgData.Versions) == 0 {
 				continue // No ebuilds, skip package
 			}
+
+			pkgData.HighestStableVersion, pkgData.HighestTestingVersion, pkgData.EbuildCount = getHighestVersionsAndCount(pkgData.Versions)
 
 			// Sort versions descending
 			sort.Slice(pkgData.Versions, func(i, j int) bool {
@@ -1494,10 +1584,26 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 		type TmplPkg struct {
 			Name      string
 			ReposList []*SiteData
+			EbuildCount int
+			HighestStableVersion template.HTML
+			HighestTestingVersion template.HTML
 		}
 		var tmplPkgs []TmplPkg
 		for _, p := range catPkgs {
-			tmplPkgs = append(tmplPkgs, TmplPkg{Name: p.Name, ReposList: mapToList(p.Repos)})
+			var allVersions []VersionData
+			for _, r := range p.Repos {
+			    for _, c := range r.Categories {
+			        if c.Name == cat.Name {
+			            for _, pkgData := range c.Packages {
+			                if pkgData.Name == p.Name {
+                                allVersions = append(allVersions, pkgData.Versions...)
+			                }
+			            }
+			        }
+			    }
+			}
+			hs, ht, count := getHighestVersionsAndCount(allVersions)
+			tmplPkgs = append(tmplPkgs, TmplPkg{Name: p.Name, ReposList: mapToList(p.Repos), EbuildCount: count, HighestStableVersion: hs, HighestTestingVersion: ht})
 		}
 
 		if err := renderPage(filepath.Join(catDir, "index.html"), tmpl, "category.html", map[string]interface{}{
@@ -1982,10 +2088,13 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 			type TmplPkg struct {
 				Name      string
 				ReposList []*SiteData
+				EbuildCount int
+				HighestStableVersion template.HTML
+				HighestTestingVersion template.HTML
 			}
 			var tmplPkgs []TmplPkg
 			for _, p := range cat.Packages {
-				tmplPkgs = append(tmplPkgs, TmplPkg{Name: p.Name, ReposList: []*SiteData{site}})
+				tmplPkgs = append(tmplPkgs, TmplPkg{Name: p.Name, ReposList: []*SiteData{site}, EbuildCount: p.EbuildCount, HighestStableVersion: p.HighestStableVersion, HighestTestingVersion: p.HighestTestingVersion})
 			}
 
 			if err := renderPage(filepath.Join(catDir, "index.html"), tmpl, "category.html", map[string]interface{}{
