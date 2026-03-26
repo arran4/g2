@@ -369,8 +369,8 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool) (
 			log.Printf("Warning: failed to parse license-mapping.conf: %v", err)
 		} else {
 			licenseMapping = mapping
-    }
-  }
+		}
+	}
 	qaPolicyPath := filepath.Join(repoDir, "metadata", "qa-policy.conf")
 	var qa *g2.QAPolicy
 	if f, err := sysFS.Open(filepath.ToSlash(qaPolicyPath)); err == nil {

@@ -6,6 +6,8 @@ import (
 
 	"github.com/arran4/g2"
 	"github.com/arran4/g2/lints"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 )
 
 func init() {
@@ -25,7 +27,7 @@ func (r *IUSELintRule) LintWithQA(repoDir string, pkg *g2.PackageData, qa *g2.QA
 	if qa != nil && qa.Policies != nil {
 		if val, ok := qa.Policies["PG0801"]; ok { // Arbitrary PG code mapping for IUSE for example, or general
 			if val == "notice" || val == "error" || val == "warning" {
-				severity = strings.ToUpper(val[:1]) + strings.ToLower(val[1:])
+				severity = cases.Title(language.English).String(val)
 			}
 		}
 	}
