@@ -8,6 +8,12 @@
 </div>
 {{end}}
 
+{{if .VersionData.MovedToSlot}}
+<div class="alert alert-warning">
+    <strong>Notice:</strong> This slot has been moved to slot <strong>{{.VersionData.MovedToSlot}}</strong>.
+</div>
+{{end}}
+
 <div class="metadata-section">
     <h3>Ebuild Details</h3>
     <table>

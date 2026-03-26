@@ -106,6 +106,7 @@ type SiteData struct {
 	Authors        []g2.Author
 	AuthorsURL     string
 	Moves          []g2.PackageMove
+	SlotMoves      []g2.PackageSlotMove
 	News           []NewsItem
 	LayoutConf     *g2.LayoutConf
 	LicenseMapping map[string][]string
@@ -172,6 +173,9 @@ type VersionData struct {
 
 	// Deprecation
 	Deprecated *g2.PackageDeprecated
+
+	// Moves
+	MovedToSlot string
 }
 
 // End model TODO check
@@ -181,6 +185,9 @@ func (cfg *MainArgConfig) cmdOverlay(args []string) error {
 		return fmt.Errorf("missing subcommand for overlay (e.g., site)")
 	}
 	subcmd := args[0]
+	if subcmd == "ebuild" {
+		return cfg.cmdOverlayEbuild(args[1:])
+	}
 	if subcmd != "site" {
 		return fmt.Errorf("unknown overlay subcommand: %s", subcmd)
 	}
@@ -522,6 +529,7 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool) (
 	}
 	if updates != nil {
 		site.Moves = updates.Moves
+		site.SlotMoves = updates.SlotMoves
 	}
 
 	pf, err := sysFS.Open(filepath.ToSlash(filepath.Join(repoDir, "metadata", "projects.xml")))
@@ -632,12 +640,26 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool) (
 					pkgData.ModTime = modTime
 				}
 
-				pkgData.Versions = append(pkgData.Versions, VersionData{
+				vd := VersionData{
 					Version:      version,
 					Ebuild:       ebuild,
 					EbuildRawURL: ebuildRawURL,
 					ModTime:      modTime,
-				})
+				}
+
+				if site.SlotMoves != nil {
+					slot := ebuild.Vars["SLOT"]
+					if slot != "" {
+						for _, sm := range site.SlotMoves {
+							if sm.Package == name+"/"+pkgName && sm.Old == slot {
+								vd.MovedToSlot = sm.New
+								break
+							}
+						}
+					}
+				}
+
+				pkgData.Versions = append(pkgData.Versions, vd)
 			}
 
 			if len(pkgData.Versions) == 0 {
