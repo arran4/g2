@@ -1820,8 +1820,6 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, 
 	overallSiteData := &g2.SiteData{
 		Title: "Remote Gentoo Repositories",
 	}
-	var allSites []*SiteData
-
 	for _, repo := range repos.Repos {
 		if len(repo.Sources) == 0 {
 			continue
