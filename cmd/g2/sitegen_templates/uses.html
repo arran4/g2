@@ -1,0 +1,9 @@
+<h2>All USE Flags</h2>
+<ul>
+    {{range .UseFlags}}
+    <li>
+        <a href="{{.Name}}/">{{.Name}}</a> - {{.Count}} package(s)
+        {{if .GlobalDesc}}<br><small>{{.GlobalDesc}}</small>{{end}}
+    </li>
+    {{end}}
+</ul>

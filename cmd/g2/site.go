@@ -110,6 +110,8 @@ type SiteData struct {
 	LayoutConf     *g2.LayoutConf
 	LicenseMapping map[string][]string
 	QAPolicy       *g2.QAPolicy
+	UseDesc        *g2.UseDesc
+	UseLocalDesc   *g2.UseLocalDesc
 }
 
 type LicenseData struct {
@@ -383,6 +385,22 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool) (
 		}
 	}
 
+	var useDesc *g2.UseDesc
+	if f, err := sysFS.Open(filepath.ToSlash(filepath.Join(repoDir, "profiles", "use.desc"))); err == nil {
+		defer func() { _ = f.Close() }()
+		if ud, err := g2.ParseUseDesc(f); err == nil {
+			useDesc = ud
+		}
+	}
+
+	var useLocalDesc *g2.UseLocalDesc
+	if f, err := sysFS.Open(filepath.ToSlash(filepath.Join(repoDir, "profiles", "use.local.desc"))); err == nil {
+		defer func() { _ = f.Close() }()
+		if uld, err := g2.ParseUseLocalDesc(f); err == nil {
+			useLocalDesc = uld
+		}
+	}
+
 	site := &SiteData{
 		Title:          title,
 		RepoName:       repoName,
@@ -391,6 +409,8 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool) (
 		LayoutConf:     lc,
 		LicenseMapping: licenseMapping,
 		QAPolicy:       qa,
+		UseDesc:        useDesc,
+		UseLocalDesc:   useLocalDesc,
 	}
 
 	// Parse News
@@ -915,6 +935,16 @@ type AggLicense struct {
 	Aliases  []string
 }
 
+type AggUseFlag struct {
+	Name             string
+	Count            int
+	GlobalDesc       string
+	LocalDescs       map[string]string
+	MetadataDescs    map[string]string
+	Packages         []*AggPackage
+	Warnings         []string
+}
+
 func parseDuration(s string) (time.Duration, string, error) {
 	s = strings.TrimSpace(s)
 	if s == "" {
@@ -979,6 +1009,7 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 
 	tmpl, err := template.New("").Funcs(template.FuncMap{
 		"join": strings.Join,
+		"parseIUSEFlags": parseIUSEFlagsFunc,
 	}).ParseFS(siteTemplates, "sitegen_templates/*.html")
 	if err != nil {
 		return fmt.Errorf("parsing templates: %w", err)
@@ -989,6 +1020,7 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 	aggLicenses := make(map[string]*AggLicense)
 	aggProjects := make(map[string]*AggProject)
 	aggProfiles := make(map[string]*AggProfile)
+	aggUseFlags := make(map[string]*AggUseFlag)
 	aggMoves := make(map[string]*AggPackageMove)
 	var globalNews []AggNewsItem
 
@@ -1128,6 +1160,12 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 		}
 		return sortedPackages[i].Category < sortedPackages[j].Category
 	})
+
+	var sortedUseFlags []*AggUseFlag
+	for _, flag := range aggUseFlags {
+		sortedUseFlags = append(sortedUseFlags, flag)
+	}
+	sort.Slice(sortedUseFlags, func(i, j int) bool { return sortedUseFlags[i].Name < sortedUseFlags[j].Name })
 
 	var sortedLicenses []*AggLicense
 	for _, l := range aggLicenses {
@@ -1544,6 +1582,37 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 	if err := os.MkdirAll(filepath.Join(outDir, "licenses"), 0755); err != nil {
 		return fmt.Errorf("creating directory: %w", err)
 	}
+	if err := os.MkdirAll(filepath.Join(outDir, "uses"), 0755); err != nil {
+		return fmt.Errorf("creating directory: %w", err)
+	}
+	if err := renderPage(filepath.Join(outDir, "uses", "index.html"), tmpl, "uses.html", map[string]interface{}{
+		"Title":       "USE Flags",
+		"BaseURL":     "../",
+		"Breadcrumbs": []Breadcrumb{{Name: title, URL: "../"}, {Name: "USE Flags"}},
+		"UseFlags":    sortedUseFlags,
+		"Version":     version,
+	}); err != nil {
+		return err
+	}
+
+	for _, f := range sortedUseFlags {
+		safeName := strings.ReplaceAll(f.Name, "/", "_")
+		useDir := filepath.Join(outDir, "uses", safeName)
+		if err := os.MkdirAll(useDir, 0755); err != nil {
+			return fmt.Errorf("creating directory %s: %w", useDir, err)
+		}
+
+		if err := renderPage(filepath.Join(useDir, "index.html"), tmpl, "use.html", map[string]interface{}{
+			"Title":       "USE Flag: " + f.Name,
+			"BaseURL":     "../../",
+			"Breadcrumbs": []Breadcrumb{{Name: title, URL: "../../"}, {Name: "USE Flags", URL: "../"}, {Name: f.Name}},
+			"UseFlag":     f,
+			"Version":     version,
+		}); err != nil {
+			return err
+		}
+	}
+
 	if err := renderPage(filepath.Join(outDir, "licenses", "index.html"), tmpl, "licenses.html", map[string]interface{}{
 		"Title":       "Licenses",
 		"BaseURL":     "../",

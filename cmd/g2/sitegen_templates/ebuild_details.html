@@ -22,13 +22,30 @@
     </table>
 </div>
 
+<style>
+    .iuse-flag { display: inline-block; margin-right: 15px; font-family: monospace; }
+    .iuse-tooltip { position: relative; display: inline-block; cursor: help; }
+    .iuse-tooltip .tooltiptext { visibility: hidden; width: max-content; background-color: #555; color: #fff; text-align: center; border-radius: 6px; padding: 5px 8px; position: absolute; z-index: 1; bottom: 125%; left: 50%; transform: translateX(-50%); opacity: 0; transition: opacity 0.3s; font-family: sans-serif; font-size: 0.9em; }
+    .iuse-tooltip:hover .tooltiptext { visibility: visible; opacity: 1; }
+    .iuse-tooltip .tooltiptext::after { content: ""; position: absolute; top: 100%; left: 50%; margin-left: -5px; border-width: 5px; border-style: solid; border-color: #555 transparent transparent transparent; }
+</style>
+
 {{if .VersionData.Ebuild.Vars.IUSE}}
 <div class="metadata-section">
     <h3>USE Flags</h3>
-    <ul>
-        <!-- TODO format better later -->
-        <li>{{.VersionData.Ebuild.Vars.IUSE}}</li>
-    </ul>
+    <div>
+        {{range parseIUSEFlags .VersionData.Ebuild.Vars.IUSE}}
+        <div class="iuse-flag">
+            <a href="../../../../../../uses/{{.Name}}/">{{.Name}}</a>
+            {{if .Conditional}}
+            <div class="iuse-tooltip" title="{{.ConditionStr}}">
+                &#10067;
+                <span class="tooltiptext">{{.ConditionStr}}</span>
+            </div>
+            {{end}}
+        </div>
+        {{end}}
+    </div>
 </div>
 {{end}}
 
