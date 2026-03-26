@@ -1842,15 +1842,19 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 		}
 
 		if err := renderPage(filepath.Join(repoDir, "index.html"), tmpl, "repo_index.html", map[string]interface{}{
-			"Title":                site.RepoName,
-			"BaseURL":              "../../",
-			"Breadcrumbs":          []Breadcrumb{{Name: title, URL: "../../"}, {Name: "Overlays", URL: "../../overlays/"}, {Name: site.RepoName}},
-			"Repo":                 site,
-			"PackageCount":         pkgCount,
-			"Updates":              recentRepoUpdates,
-			"Version":              version,
-			"RecentDurationString": recentDurationStr,
-			"RecentNews":           repoRecentNews,
+			"Title":                 site.RepoName,
+			"BaseURL":               "../../",
+			"Breadcrumbs":           []Breadcrumb{{Name: title, URL: "../../"}, {Name: "Overlays", URL: "../../overlays/"}, {Name: site.RepoName}},
+			"Repo":                  site,
+			"PackageCount":          pkgCount,
+			"Updates":               recentRepoUpdates,
+			"Version":               version,
+			"RecentDurationString":  recentDurationStr,
+			"RecentNews":            repoRecentNews,
+			"GlobalCategoriesCount": len(sortedCategories),
+			"GlobalPackagesCount":   totalPackages,
+			"GlobalLicensesCount":   len(sortedLicenses),
+			"GlobalProfilesCount":   len(sortedProfiles),
 		}); err != nil {
 			return fmt.Errorf("rendering page: %w", err)
 		}
