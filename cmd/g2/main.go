@@ -33,6 +33,7 @@ func main() {
 		fmt.Printf("\t\t %s \t\t %s\n", "use", "commands relating to USE flags, use.desc, and use.local.desc")
 		fmt.Printf("\t\t %s \t\t %s\n", "site", "commands relating to static sites")
 		fmt.Printf("\t\t %s \t\t %s\n", "cache", "commands relating to md5-dict/cache")
+		fmt.Printf("\t\t %s \t\t %s\n", "pkg-desc-index", "commands relating to pkg_desc_index")
 	}
 	if err := fs.Parse(os.Args); err != nil {
 		log.Printf("Flag parse error: %s", err)
@@ -105,6 +106,12 @@ func main() {
 	case "cache":
 		if err := cfg.cmdCache(fs.Args()[2:]); err != nil {
 			log.Printf("cache error: %s", err)
+			os.Exit(-1)
+			return
+		}
+	case "pkg-desc-index":
+		if err := cfg.cmdPkgDescIndex(fs.Args()[2:]); err != nil {
+			log.Printf("pkg-desc-index error: %s", err)
 			os.Exit(-1)
 			return
 		}
