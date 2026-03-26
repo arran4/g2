@@ -195,5 +195,12 @@ func (cfg *MainArgConfig) cmdOverlayEbuildInstall(args []string) error {
 		return fmt.Errorf("failed to update pkg_desc_index: %w", err)
 	}
 
+	// Update metadata.xml (discover updates info_vars)
+	log.Printf("Discovering metadata.xml info_vars in overlay %s", overlayPath)
+	err = cfg.cmdMetadataDiscover([]string{overlayPath})
+	if err != nil {
+		return fmt.Errorf("failed to update metadata info_vars: %w", err)
+	}
+
 	return nil
 }
