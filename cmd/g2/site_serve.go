@@ -932,6 +932,40 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 								"Version":          version,
 							})
 							return
+						} else if len(parts) == 8 && parts[6] == "manifest" {
+							manifestName := strings.TrimSuffix(parts[7], ".html")
+
+							var targetMD *ManifestEntryData
+							for _, md := range pkgData.ManifestData {
+								if md.Entry.Filename == manifestName {
+									targetMD = &md
+									break
+								}
+							}
+							if targetMD == nil {
+								http.NotFound(w, r)
+								return
+							}
+
+							s.renderPageHTTP(w, "repo_package_manifest.html", map[string]interface{}{
+								"Title":       fmt.Sprintf("%s - %s/%s-Manifest-%s", site.RepoName, pkgData.Category, pkgData.Name, manifestName),
+								"BaseURL":     baseURL,
+								"Breadcrumbs": []Breadcrumb{
+									{Name: s.Title, URL: baseURL},
+									{Name: site.RepoName, URL: "../../../../../../"},
+									{Name: "Categories", URL: "../../../../../"},
+									{Name: pkgData.Category, URL: "../../../../"},
+									{Name: "Packages", URL: "../../../"},
+									{Name: pkgData.Name, URL: "../../"},
+									{Name: "Manifest"},
+									{Name: manifestName},
+								},
+								"Repo":        site,
+								"Package":     *pkgData,
+								"Manifest":    *targetMD,
+								"Version":     version,
+							})
+							return
 						}
 
 					}
