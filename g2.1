@@ -1,0 +1,154 @@
+.nh
+.TH g2
+Some Gentoo CLI tools I wrote for myself.
+
+.SH Manifest Tools
+\fBg2\fR includes a set of tools for working with Gentoo \fBManifest\fR files.
+
+.SS \fBmanifest\fR
+The \fBmanifest\fR command group handles operations related to Manifest files.
+
+.SS \fBupsert-from-url\fR
+Updates or inserts a \fBManifest\fR entry for a file downloaded from a URL. This command streams the file, calculates the specified checksums, and updates the \fBManifest\fR file in the specified directory (or specific file path).
+
+.PP
+\fBUsage:\fP
+
+.EX
+g2 manifest [flags] upsert-from-url <url> <filename> <manifestFileOrDir>
+.EE
+
+.PP
+\fBArguments:\fP
+.IP \(bu 2
+\fB<url>\fR: The HTTP/HTTPS URL of the file to download.
+.IP \(bu 2
+\fB<filename>\fR: The filename to record in the \fBManifest\fR (typically the distfile name).
+.IP \(bu 2
+\fB<manifestFileOrDir>\fR: The path to the \fBManifest\fR file or the directory containing it (e.g., the ebuild directory).
+
+.PP
+\fBFlags:\fP
+
+.PP
+The following flags control which checksums are calculated. Note that \fBBLAKE2B\fR and \fBSHA512\fR are enabled by default.
+.IP \(bu 2
+\fB-blake2b\fR (default: \fBtrue\fR): Calculate BLAKE2B checksum.
+.IP \(bu 2
+\fB-blake2s\fR (default: \fBfalse\fR): Calculate BLAKE2S checksum.
+.IP \(bu 2
+\fB-md5\fR (default: \fBfalse\fR): Calculate MD5 checksum.
+.IP \(bu 2
+\fB-rmd160\fR (default: \fBfalse\fR): Calculate RMD160 checksum.
+.IP \(bu 2
+\fB-sha1\fR (default: \fBfalse\fR): Calculate SHA1 checksum.
+.IP \(bu 2
+\fB-sha256\fR (default: \fBfalse\fR): Calculate SHA256 checksum.
+.IP \(bu 2
+\fB-sha3_256\fR (default: \fBfalse\fR): Calculate SHA3-256 checksum.
+.IP \(bu 2
+\fB-sha3_512\fR (default: \fBfalse\fR): Calculate SHA3-512 checksum.
+.IP \(bu 2
+\fB-sha512\fR (default: \fBtrue\fR): Calculate SHA512 checksum.
+
+.PP
+\fBExample:\fP
+
+.PP
+To download a package, calculate SHA256 in addition to defaults, and update the Manifest in the current directory:
+
+.EX
+g2 manifest -sha256=true upsert-from-url https://example.com/software-1.0.tar.gz software-1.0.tar.gz .
+.EE
+
+.SH Site Generation
+\fBg2\fR can generate a static HTML website representing your Gentoo overlay, including categories, packages, metadata, and git commit history. It also supports aggregating multiple remote overlays.
+
+.SS \fBoverlay site generate\fR
+Generates a static site for a single overlay.
+
+.PP
+\fBUsage:\fP
+
+.EX
+g2 overlay site generate [-out <dir>] [-clear] [<location>]
+.EE
+
+.PP
+\fBArguments:\fP
+.IP \(bu 2
+\fB<location>\fR: Path to the overlay directory, or a Git URL (defaults to \fB\&.\fR).
+
+.PP
+\fBFlags:\fP
+.IP \(bu 2
+\fB-out\fR: Output directory for the generated site (default: \fBsite_out\fR).
+.IP \(bu 2
+\fB-clear\fR: Clear output directory before generation.
+
+.SS \fBoverlays site generate\fR
+Generates an aggregated static site for multiple remote repositories from a \fBrepositories.xml\fR file.
+
+.PP
+\fBUsage:\fP
+
+.EX
+g2 overlays site generate [-out <dir>] [-clear] <repositoriesFile>
+.EE
+
+.PP
+\fBArguments:\fP
+.IP \(bu 2
+\fB<repositoriesFile>\fR: Path or URL to a Gentoo \fBrepositories.xml\fR file, or \fB-\fR for stdin.
+
+.SH Linting
+\fBg2\fR provides linting to ensure overlay consistency.
+
+.SS \fBlint\fR
+Checks the repository for errors such as ebuild \fBIUSE\fR variables missing in \fBmetadata.xml\fR and missing \fBmd5-cache\fR files.
+
+.PP
+\fBUsage:\fP
+
+.EX
+g2 lint [<location>]
+.EE
+
+.PP
+\fBArguments:\fP
+.IP \(bu 2
+\fB<location>\fR: Path to the overlay directory (defaults to \fB\&.\fR).
+
+.SH GitHub Action
+You can use the g2 GitHub Action
+\[la]https://github.com/arran4/g2\-action\[ra] to integrate \fBg2\fR into your CI/CD workflows. It automatically downloads and installs \fBg2\fR for use in your workflow steps.
+
+.SS Example Usage
+.EX
+name: Example workflow
+on: [push]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install g2
+        uses: arran4/g2-action@v1
+        with:
+          # Optional: specify a version. Defaults to 'latest'
+          version: 'latest'
+
+      - name: Use g2
+        run: |
+          g2 lint .
+
+      - name: Use g2 Action
+        uses: arran4/g2-action@v1.2
+        with:
+          # Optional: specify an action
+          action: 'lint .'
+          # Optional: skip installation if already installed
+          mode: 'run'
+.EE
