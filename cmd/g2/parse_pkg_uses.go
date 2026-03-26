@@ -41,9 +41,10 @@ func populatePkgUseFlags(site *SiteData) {
 							}
 
 							symbol := "✓"
-							if f.ConditionStr == "Default: Enabled (+)" {
+							switch f.ConditionStr {
+							case "Default: Enabled (+)":
 								symbol = "⊕"
-							} else if f.ConditionStr == "Default: Disabled (-)" {
+							case "Default: Disabled (-)":
 								symbol = "⊖"
 							}
 
