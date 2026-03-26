@@ -32,8 +32,7 @@ func TestPerformLintingWithQA(t *testing.T) {
 	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	metaDir := filepath.Join(tmpDir, "metadata")
-	err = os.MkdirAll(metaDir, 0755)
-	if err != nil {
+	if err := os.MkdirAll(metaDir, 0755); err != nil {
 		t.Fatal(err)
 	}
 
