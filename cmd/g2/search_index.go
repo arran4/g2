@@ -93,9 +93,7 @@ func generateSearchIndex(outDir string, sites []*SiteData) error {
 						desc = ver.Ebuild.Vars["DESCRIPTION"]
 
 						homepage := ver.Ebuild.Vars["HOMEPAGE"]
-						for _, u := range strings.Fields(homepage) {
-							urls = append(urls, u)
-						}
+						urls = append(urls, strings.Fields(homepage)...)
 
 						licenseStr := ver.Ebuild.Vars["LICENSE"]
 						for _, l := range strings.Fields(licenseStr) {
