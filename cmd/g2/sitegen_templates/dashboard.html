@@ -7,7 +7,9 @@
         <li><a href="packages/">Packages ({{len .Packages}})</a></li>
         <li><a href="licenses/">Licenses ({{len .Licenses}})</a></li>
         <li><a href="projects/">Projects ({{len .Projects}})</a></li>
+        {{if gt (len .Profiles) 0}}
         <li><a href="profiles/">Profiles</a></li>
+        {{end}}
     </ul>
 </div>
 {{if .RecentNews}}

@@ -1376,6 +1376,7 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 		"Packages":             sortedPackages,
 		"Licenses":             sortedLicenses,
 		"Projects":             sortedProjects,
+		"Profiles":             sortedProfiles,
 		"Updates":              recentGlobalUpdates,
 		"Version":              version,
 		"RecentDurationString": recentDurationStr,
@@ -1511,39 +1512,41 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 	}
 
 	// Profiles
-	if err := os.MkdirAll(filepath.Join(outDir, "profiles"), 0755); err != nil {
-		return fmt.Errorf("creating directory: %w", err)
-	}
-	if err := renderPage(filepath.Join(outDir, "profiles", "index.html"), tmpl, "profiles.html", map[string]interface{}{
-		"Title":       "Profiles",
-		"BaseURL":     "../",
-		"Breadcrumbs": []Breadcrumb{{Name: title, URL: "../"}, {Name: "Profiles"}},
-		"Profiles":    sortedProfiles,
-		"Version":     version,
-	}); err != nil {
-		return fmt.Errorf("rendering page: %w", err)
-	}
-
-	for _, p := range sortedProfiles {
-		profDir := filepath.Join(outDir, "profiles", p.Path)
-		if err := os.MkdirAll(profDir, 0755); err != nil {
-			return fmt.Errorf("creating directory %s: %w", profDir, err)
+	if len(sortedProfiles) > 0 {
+		if err := os.MkdirAll(filepath.Join(outDir, "profiles"), 0755); err != nil {
+			return fmt.Errorf("creating directory: %w", err)
 		}
-
-		relToRoot := "../../"
-		for i := 0; i < strings.Count(p.Path, "/"); i++ {
-			relToRoot += "../"
-		}
-
-		if err := renderPage(filepath.Join(profDir, "index.html"), tmpl, "profile.html", map[string]interface{}{
-			"Title":       "Profile: " + p.Path,
-			"BaseURL":     relToRoot,
-			"Breadcrumbs": []Breadcrumb{{Name: title, URL: relToRoot}, {Name: "Profiles", URL: relToRoot + "profiles/"}, {Name: p.Path}},
-			"ProfilePath": p.Path,
-			"ProfileList": p.Repos,
+		if err := renderPage(filepath.Join(outDir, "profiles", "index.html"), tmpl, "profiles.html", map[string]interface{}{
+			"Title":       "Profiles",
+			"BaseURL":     "../",
+			"Breadcrumbs": []Breadcrumb{{Name: title, URL: "../"}, {Name: "Profiles"}},
+			"Profiles":    sortedProfiles,
 			"Version":     version,
 		}); err != nil {
 			return fmt.Errorf("rendering page: %w", err)
+		}
+
+		for _, p := range sortedProfiles {
+			profDir := filepath.Join(outDir, "profiles", p.Path)
+			if err := os.MkdirAll(profDir, 0755); err != nil {
+				return fmt.Errorf("creating directory %s: %w", profDir, err)
+			}
+
+			relToRoot := "../../"
+			for i := 0; i < strings.Count(p.Path, "/"); i++ {
+				relToRoot += "../"
+			}
+
+			if err := renderPage(filepath.Join(profDir, "index.html"), tmpl, "profile.html", map[string]interface{}{
+				"Title":       "Profile: " + p.Path,
+				"BaseURL":     relToRoot,
+				"Breadcrumbs": []Breadcrumb{{Name: title, URL: relToRoot}, {Name: "Profiles", URL: relToRoot + "profiles/"}, {Name: p.Path}},
+				"ProfilePath": p.Path,
+				"ProfileList": p.Repos,
+				"Version":     version,
+			}); err != nil {
+				return fmt.Errorf("rendering page: %w", err)
+			}
 		}
 	}
 
@@ -1852,40 +1855,42 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 			return fmt.Errorf("rendering page: %w", err)
 		}
 
-		if err := os.MkdirAll(filepath.Join(repoDir, "profiles"), 0755); err != nil {
-			return fmt.Errorf("creating directory: %w", err)
-		}
-		if err := renderPage(filepath.Join(repoDir, "profiles", "index.html"), tmpl, "repo_profiles.html", map[string]interface{}{
-			"Title":       site.RepoName + " - Profiles",
-			"BaseURL":     "../../../",
-			"Breadcrumbs": []Breadcrumb{{Name: title, URL: "../../../"}, {Name: site.RepoName, URL: "../"}, {Name: "Profiles"}},
-			"Repo":        site,
-			"Version":     version,
-		}); err != nil {
-			return fmt.Errorf("rendering page: %w", err)
-		}
-
-		for _, p := range site.Profiles {
-			profDir := filepath.Join(repoDir, "profiles", p.Path)
-			if err := os.MkdirAll(profDir, 0755); err != nil {
-				return fmt.Errorf("creating directory %s: %w", profDir, err)
+		if len(site.Profiles) > 0 {
+			if err := os.MkdirAll(filepath.Join(repoDir, "profiles"), 0755); err != nil {
+				return fmt.Errorf("creating directory: %w", err)
 			}
-
-			relToRoot := "../../../../"
-			for i := 0; i < strings.Count(p.Path, "/"); i++ {
-				relToRoot += "../"
-			}
-
-			if err := renderPage(filepath.Join(profDir, "index.html"), tmpl, "repo_profile.html", map[string]interface{}{
-				"Title":       site.RepoName + " - Profile: " + p.Path,
-				"BaseURL":     relToRoot,
-				"Breadcrumbs": []Breadcrumb{{Name: title, URL: relToRoot}, {Name: site.RepoName, URL: relToRoot + "repos/" + site.RepoName + "/"}, {Name: "Profiles", URL: relToRoot + "repos/" + site.RepoName + "/profiles/"}, {Name: p.Path}},
-				"RepoName":    site.RepoName,
-				"ProfilePath": p.Path,
-				"Profile":     p,
+			if err := renderPage(filepath.Join(repoDir, "profiles", "index.html"), tmpl, "repo_profiles.html", map[string]interface{}{
+				"Title":       site.RepoName + " - Profiles",
+				"BaseURL":     "../../../",
+				"Breadcrumbs": []Breadcrumb{{Name: title, URL: "../../../"}, {Name: site.RepoName, URL: "../"}, {Name: "Profiles"}},
+				"Repo":        site,
 				"Version":     version,
 			}); err != nil {
 				return fmt.Errorf("rendering page: %w", err)
+			}
+
+			for _, p := range site.Profiles {
+				profDir := filepath.Join(repoDir, "profiles", p.Path)
+				if err := os.MkdirAll(profDir, 0755); err != nil {
+					return fmt.Errorf("creating directory %s: %w", profDir, err)
+				}
+
+				relToRoot := "../../../../"
+				for i := 0; i < strings.Count(p.Path, "/"); i++ {
+					relToRoot += "../"
+				}
+
+				if err := renderPage(filepath.Join(profDir, "index.html"), tmpl, "repo_profile.html", map[string]interface{}{
+					"Title":       site.RepoName + " - Profile: " + p.Path,
+					"BaseURL":     relToRoot,
+					"Breadcrumbs": []Breadcrumb{{Name: title, URL: relToRoot}, {Name: site.RepoName, URL: relToRoot + "repos/" + site.RepoName + "/"}, {Name: "Profiles", URL: relToRoot + "repos/" + site.RepoName + "/profiles/"}, {Name: p.Path}},
+					"RepoName":    site.RepoName,
+					"ProfilePath": p.Path,
+					"Profile":     p,
+					"Version":     version,
+				}); err != nil {
+					return fmt.Errorf("rendering page: %w", err)
+				}
 			}
 		}
 
