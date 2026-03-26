@@ -508,7 +508,6 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool) (
 		site.Moves = updates.Moves
 	}
 
-
 	pf, err := sysFS.Open(filepath.ToSlash(filepath.Join(repoDir, "metadata", "projects.xml")))
 	if err != nil {
 		if fastGit {
@@ -1583,18 +1582,24 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 
 	// 5b. Global Projects
 	if len(sortedProjects) > 0 {
-		if err := os.MkdirAll(filepath.Join(outDir, "projects"), 0755); err != nil { return fmt.Errorf("creating directory: %w", err) }
+		if err := os.MkdirAll(filepath.Join(outDir, "projects"), 0755); err != nil {
+			return fmt.Errorf("creating directory: %w", err)
+		}
 		if err := renderPage(filepath.Join(outDir, "projects", "index.html"), tmpl, "projects.html", map[string]interface{}{
 			"Title":       "Projects",
 			"BaseURL":     "../",
 			"Breadcrumbs": []Breadcrumb{{Name: title, URL: "../"}, {Name: "Projects"}},
 			"Projects":    sortedProjects,
 			"Version":     version,
-		}); err != nil { return fmt.Errorf("rendering page: %w", err) }
+		}); err != nil {
+			return fmt.Errorf("rendering page: %w", err)
+		}
 
 		for _, proj := range sortedProjects {
 			projDir := filepath.Join(outDir, "projects", proj.Project.Email)
-			if err := os.MkdirAll(projDir, 0755); err != nil { return fmt.Errorf("creating directory %s: %w", projDir, err) }
+			if err := os.MkdirAll(projDir, 0755); err != nil {
+				return fmt.Errorf("creating directory %s: %w", projDir, err)
+			}
 
 			type TmplPkg struct {
 				Name      string
@@ -1613,7 +1618,9 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 				"Project":     proj,
 				"Packages":    tmplPkgs,
 				"Version":     version,
-			}); err != nil { return fmt.Errorf("rendering page: %w", err) }
+			}); err != nil {
+				return fmt.Errorf("rendering page: %w", err)
+			}
 		}
 	}
 
