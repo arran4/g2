@@ -423,3 +423,9 @@ func ExtractURIs(content string, variables map[string]string) ([]URIEntry, error
 
 	return uris, nil
 }
+
+
+// CompareVersions compares two gentoo versions. Returns > 0 if v1 > v2, < 0 if v1 < v2, and 0 if equal.
+func CompareVersions(v1, v2 string) int {
+	return strings.Compare(v1, v2)
+}
