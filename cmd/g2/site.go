@@ -369,8 +369,8 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool) (
 			log.Printf("Warning: failed to parse license-mapping.conf: %v", err)
 		} else {
 			licenseMapping = mapping
-    }
-  }
+		}
+	}
 	qaPolicyPath := filepath.Join(repoDir, "metadata", "qa-policy.conf")
 	var qa *g2.QAPolicy
 	if f, err := sysFS.Open(filepath.ToSlash(qaPolicyPath)); err == nil {
@@ -2028,7 +2028,6 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, 
 		// generateSite will write into outDir/repo.Name
 		repoOutDir := filepath.Join(outDir, repo.Name)
 		log.Printf("Generating site for repo: %s", repo.Name)
-		_ = append(allSites, siteData)
 		if err := generateSite(repoOutDir, []*SiteData{siteData}, recentDuration, recentDurationStr); err != nil {
 			log.Printf("Failed to generate site for repo %s: %v", repo.Name, err)
 		}

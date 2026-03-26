@@ -3,10 +3,11 @@ package metadata
 import (
 	"fmt"
 	"os"
-	"strings"
 
 	"github.com/arran4/g2"
 	"github.com/arran4/g2/lints"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 )
 
 func init() {
@@ -25,7 +26,7 @@ func (r *MetadataLintRule) LintWithQA(repoDir string, pkg *g2.PackageData, qa *g
 	if qa != nil && qa.Policies != nil {
 		if val, ok := qa.Policies["PG0701"]; ok { // Map to some PG rule for missing metadata
 			if val == "notice" || val == "error" || val == "warning" {
-				severity = strings.Title(val)
+				severity = cases.Title(language.English).String(val)
 			}
 		}
 	}
