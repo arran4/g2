@@ -362,7 +362,7 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool) (
 	qaPolicyPath := filepath.Join(repoDir, "metadata", "qa-policy.conf")
 	var qa *g2.QAPolicy
 	if f, err := sysFS.Open(filepath.ToSlash(qaPolicyPath)); err == nil {
-		defer f.Close()
+		defer func() { _ = f.Close() }()
 		qa, err = g2.ParseQAPolicyFromReader(f)
 		if err != nil {
 			log.Printf("Warning: failed to parse qa-policy.conf: %v", err)
