@@ -1388,6 +1388,7 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 			}); err != nil {
 				return fmt.Errorf("rendering page: %w", err)
 			}
+
 		}
 	}
 
@@ -1537,6 +1538,7 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 			}); err != nil {
 				return fmt.Errorf("rendering page: %w", err)
 			}
+
 		}
 	}
 
@@ -2012,6 +2014,43 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 				"Version":     version,
 			}); err != nil {
 				return fmt.Errorf("rendering page: %w", err)
+			}
+
+			for _, v := range pkg.Versions {
+				versionStr := v.Version
+				if v.Ebuild != nil && v.Ebuild.Vars != nil && v.Ebuild.Vars["PV"] != "" {
+					versionStr = v.Ebuild.Vars["PV"]
+				}
+
+				ebuildDir := filepath.Join(pkgDir, "ebuild", versionStr)
+				if err := os.MkdirAll(ebuildDir, 0755); err != nil {
+					return fmt.Errorf("creating directory %s: %w", ebuildDir, err)
+				}
+
+				var filteredManifest []ManifestEntryData
+				if pkg.Manifest != nil {
+					for _, md := range pkg.ManifestData {
+						for _, mv := range md.Versions {
+							if mv == v.Version || mv == versionStr {
+								filteredManifest = append(filteredManifest, md)
+								break
+							}
+						}
+					}
+				}
+
+				if err := renderPage(filepath.Join(ebuildDir, "index.html"), tmpl, "ebuild_details.html", map[string]interface{}{
+					"Title":            fmt.Sprintf("%s - %s/%s-%s", site.RepoName, pkg.Category, pkg.Name, versionStr),
+					"BaseURL":          "../../../../../../../../",
+					"Breadcrumbs":      []Breadcrumb{{Name: title, URL: "../../../../../../../../"}, {Name: site.RepoName, URL: "../../../../../../"}, {Name: "Categories", URL: "../../../../../"}, {Name: pkg.Category, URL: "../../../../"}, {Name: "Packages", URL: "../../../"}, {Name: pkg.Name, URL: "../../"}, {Name: "Ebuild", URL: "../"}, {Name: versionStr}},
+					"Repo":             site,
+					"Package":          pkg,
+					"VersionData":      v,
+					"FilteredManifest": filteredManifest,
+					"Version":          version,
+				}); err != nil {
+					return fmt.Errorf("rendering page: %w", err)
+				}
 			}
 		}
 	}
