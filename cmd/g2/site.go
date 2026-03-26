@@ -1129,10 +1129,12 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 		return sortedPackages[i].Category < sortedPackages[j].Category
 	})
 
+	validLicenses := make(map[string]bool)
 	var sortedLicenses []*AggLicense
 	for _, l := range aggLicenses {
 		sort.Strings(l.Aliases)
 		sortedLicenses = append(sortedLicenses, l)
+		validLicenses[l.Name] = true
 	}
 	sort.Slice(sortedLicenses, func(i, j int) bool { return sortedLicenses[i].Name < sortedLicenses[j].Name })
 
@@ -2002,16 +2004,38 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 			}
 
 			if err := renderPage(filepath.Join(pkgDir, "index.html"), tmpl, "repo_package.html", map[string]interface{}{
-				"Title":       fmt.Sprintf("%s - %s/%s", site.RepoName, pkg.Category, pkg.Name),
-				"BaseURL":     "../../../../../../",
-				"Breadcrumbs": []Breadcrumb{{Name: title, URL: "../../../../../../"}, {Name: site.RepoName, URL: "../../../../"}, {Name: "Categories", URL: "../../../"}, {Name: pkg.Category}, {Name: pkg.Name}},
-				"Repo":        site,
-				"Package":     pkg,
-				"MovedToName": movedToName,
-				"MovedToURL":  movedToURL,
-				"Version":     version,
+				"Title":         fmt.Sprintf("%s - %s/%s", site.RepoName, pkg.Category, pkg.Name),
+				"BaseURL":       "../../../../../../",
+				"Breadcrumbs":   []Breadcrumb{{Name: title, URL: "../../../../../../"}, {Name: site.RepoName, URL: "../../../../"}, {Name: "Categories", URL: "../../../"}, {Name: pkg.Category}, {Name: pkg.Name}},
+				"Repo":          site,
+				"Package":       pkg,
+				"MovedToName":   movedToName,
+				"MovedToURL":    movedToURL,
+				"Version":       version,
+				"ValidLicenses": validLicenses,
 			}); err != nil {
 				return fmt.Errorf("rendering page: %w", err)
+			}
+
+			for _, md := range pkg.ManifestData {
+				if len(md.Versions) > 0 {
+					mdDir := filepath.Join(pkgDir, "manifest", md.Entry.Filename)
+					if err := os.MkdirAll(mdDir, 0755); err != nil {
+						return fmt.Errorf("creating directory %s: %w", mdDir, err)
+					}
+
+					if err := renderPage(filepath.Join(mdDir, "index.html"), tmpl, "repo_package_manifest.html", map[string]interface{}{
+						"Title":       fmt.Sprintf("%s - %s/%s - Manifest: %s", site.RepoName, pkg.Category, pkg.Name, md.Entry.Filename),
+						"BaseURL":     "../../../../../../../../",
+						"Breadcrumbs": []Breadcrumb{{Name: title, URL: "../../../../../../../../"}, {Name: site.RepoName, URL: "../../../../../../"}, {Name: "Categories", URL: "../../../../../"}, {Name: pkg.Category, URL: "../../../../"}, {Name: pkg.Name, URL: "../../"}, {Name: "Manifest"}, {Name: md.Entry.Filename}},
+						"Repo":        site,
+						"Package":     pkg,
+						"Manifest":    md,
+						"Version":     version,
+					}); err != nil {
+						return fmt.Errorf("rendering page: %w", err)
+					}
+				}
 			}
 		}
 	}
