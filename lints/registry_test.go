@@ -29,10 +29,12 @@ func TestPerformLintingWithQA(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	metaDir := filepath.Join(tmpDir, "metadata")
-	os.MkdirAll(metaDir, 0755)
+	if err := os.MkdirAll(metaDir, 0755); err != nil {
+		t.Fatal(err)
+	}
 
 	err = os.WriteFile(filepath.Join(metaDir, "qa-policy.conf"), []byte("[policy]\nPG123 = yes"), 0644)
 	if err != nil {

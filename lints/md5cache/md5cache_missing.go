@@ -28,7 +28,7 @@ func (r *MD5CacheLintRule) LintWithQA(repoDir string, pkg *g2.PackageData, qa *g
 	if qa != nil && qa.Policies != nil {
 		if val, ok := qa.Policies["PG0000"]; ok { // placeholder if there was one
 			if val == "notice" || val == "error" || val == "warning" {
-				severity = strings.Title(val)
+				severity = strings.ToUpper(val[:1]) + strings.ToLower(val[1:])
 			}
 		}
 	}

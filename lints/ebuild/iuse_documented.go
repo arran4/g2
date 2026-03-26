@@ -25,7 +25,7 @@ func (r *IUSELintRule) LintWithQA(repoDir string, pkg *g2.PackageData, qa *g2.QA
 	if qa != nil && qa.Policies != nil {
 		if val, ok := qa.Policies["PG0801"]; ok { // Arbitrary PG code mapping for IUSE for example, or general
 			if val == "notice" || val == "error" || val == "warning" {
-				severity = strings.Title(val)
+				severity = strings.ToUpper(val[:1]) + strings.ToLower(val[1:])
 			}
 		}
 	}
