@@ -7,6 +7,7 @@ toolchain go1.24.1
 require (
 	github.com/go-git/go-git/v5 v5.17.0
 	golang.org/x/crypto v0.46.0
+	golang.org/x/text v0.32.0
 	golang.org/x/tools v0.40.0
 )
 
@@ -29,10 +30,4 @@ require (
 	golang.org/x/net v0.48.0 // indirect
 	golang.org/x/sys v0.39.0 // indirect
 	gopkg.in/warnings.v0 v0.1.2 // indirect
-)
-
-require (
-	github.com/inconshreveable/mousetrap v1.1.0 // indirect
-	github.com/spf13/cobra v1.10.2 // indirect
-	github.com/spf13/pflag v1.0.9 // indirect
 )

@@ -120,7 +120,9 @@ type SiteServer struct {
 }
 
 func newSiteServer(sites []*SiteData) (*SiteServer, error) {
-	tmpl, err := template.ParseFS(siteTemplates, "sitegen_templates/*.html")
+	tmpl, err := template.New("").Funcs(template.FuncMap{
+		"join": strings.Join,
+	}).ParseFS(siteTemplates, "sitegen_templates/*.html")
 	if err != nil {
 		return nil, fmt.Errorf("parsing templates: %w", err)
 	}
@@ -199,6 +201,24 @@ func newSiteServer(sites []*SiteData) (*SiteServer, error) {
 								aggLicenses[lic].Packages = append(aggLicenses[lic].Packages, aggPackages[pkgKey])
 								aggLicenses[lic].Count++
 							}
+
+							// Add aliases from this site's license mapping
+							if site.LicenseMapping != nil {
+								if aliases, ok := site.LicenseMapping[lic]; ok {
+									for _, alias := range aliases {
+										hasAlias := false
+										for _, existing := range aggLicenses[lic].Aliases {
+											if existing == alias {
+												hasAlias = true
+												break
+											}
+										}
+										if !hasAlias {
+											aggLicenses[lic].Aliases = append(aggLicenses[lic].Aliases, alias)
+										}
+									}
+								}
+							}
 						}
 					}
 				}
@@ -222,6 +242,7 @@ func newSiteServer(sites []*SiteData) (*SiteServer, error) {
 	})
 
 	for _, l := range aggLicenses {
+		sort.Strings(l.Aliases)
 		server.AggLicenses = append(server.AggLicenses, l)
 	}
 	sort.Slice(server.AggLicenses, func(i, j int) bool { return server.AggLicenses[i].Name < server.AggLicenses[j].Name })
@@ -464,7 +485,7 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				"Title":       "License: " + lic.Name,
 				"BaseURL":     baseURL,
 				"Breadcrumbs": []Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: "Licenses", URL: "../"}, {Name: lic.Name}},
-				"License":     map[string]interface{}{"Name": lic.Name, "Packages": tmplPkgs, "Text": lic.Text},
+				"License":     map[string]interface{}{"Name": lic.Name, "Packages": tmplPkgs, "Text": lic.Text, "Aliases": lic.Aliases},
 				"Version":     version,
 			})
 			return
