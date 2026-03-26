@@ -114,13 +114,13 @@ func (cfg *MainArgConfig) cmdOverlayEbuildInstall(args []string) error {
 		if err != nil {
 			return fmt.Errorf("failed to open source ebuild: %w", err)
 		}
-		defer source.Close()
+		defer func() { _ = source.Close() }()
 
 		dest, err := os.Create(targetEbuild)
 		if err != nil {
 			return fmt.Errorf("failed to create target ebuild: %w", err)
 		}
-		defer dest.Close()
+		defer func() { _ = dest.Close() }()
 
 		_, err = io.Copy(dest, source)
 		if err != nil {
@@ -153,12 +153,12 @@ func (cfg *MainArgConfig) cmdOverlayEbuildInstall(args []string) error {
 				}
 				df, err := os.Create(targetFile)
 				if err != nil {
-					sf.Close()
+					_ = sf.Close()
 					return fmt.Errorf("failed to create file %s: %w", targetFile, err)
 				}
 				_, err = io.Copy(df, sf)
-				sf.Close()
-				df.Close()
+				_ = sf.Close()
+				_ = df.Close()
 				if err != nil {
 					return fmt.Errorf("failed to copy file %s: %w", file, err)
 				}
