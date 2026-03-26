@@ -1,4 +1,4 @@
-package parser
+package g2
 
 import (
 	"bufio"
@@ -72,7 +72,7 @@ func (r *Reader) UnreadRune() error {
 	return err
 }
 
-type Ebuild struct {
+type EbuildParserData struct {
 	Variables map[string]string
 }
 
@@ -148,8 +148,8 @@ func (p *EbuildParser) consumeWhitespaceAndComments() error {
 
 // Parse extracts variables from the ebuild using a recursive descent approach
 // tailored specifically for ebuilds, bypassing full bash posix rules.
-func (p *EbuildParser) Parse() (*Ebuild, error) {
-	ebuild := &Ebuild{
+func (p *EbuildParser) Parse() (*EbuildParserData, error) {
+	ebuild := &EbuildParserData{
 		Variables: make(map[string]string),
 	}
 
