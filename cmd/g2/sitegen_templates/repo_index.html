@@ -5,22 +5,22 @@
     <pre><code>eselect repository enable {{.Repo.RepoName}}</code></pre>
     <p>And sync it:</p>
     <pre><code>emerge --sync {{.Repo.RepoName}}</code></pre>
+</div>
+<ul>
     {{if .Repo.RemoteURL}}
-    <p>Git Source: <a href="{{.Repo.RemoteURL}}">{{.Repo.RemoteURL}}</a></p>
+    <li>Git Source: <a href="{{.Repo.RemoteURL}}">{{.Repo.RemoteURL}}</a></li>
     {{end}}
     {{if .Repo.EAPI}}
-    <p>EAPI: {{.Repo.EAPI}}</p>
+    <li>EAPI: {{.Repo.EAPI}}</li>
     {{end}}
     {{if .Repo.LayoutConf}}
         {{if .Repo.LayoutConf.GetValue "eapis-banned"}}
-            <p>EAPIs Banned: {{.Repo.LayoutConf.GetValue "eapis-banned"}}</p>
+            <li>EAPIs Banned: {{.Repo.LayoutConf.GetValue "eapis-banned"}}</li>
         {{end}}
         {{if .Repo.LayoutConf.GetValue "eapis-deprecated"}}
-            <p>EAPIs Deprecated: {{.Repo.LayoutConf.GetValue "eapis-deprecated"}}</p>
+            <li>EAPIs Deprecated: {{.Repo.LayoutConf.GetValue "eapis-deprecated"}}</li>
         {{end}}
     {{end}}
-</div>
-<ul>
     <li><a href="categories/">Categories ({{len .Repo.Categories}})</a></li>
     <li><a href="packages/">Packages ({{.PackageCount}})</a></li>
     <li><a href="../../licenses/">Licenses (Global)</a></li>
