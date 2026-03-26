@@ -508,7 +508,6 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool) (
 		site.Moves = updates.Moves
 	}
 
-
 	pf, err := sysFS.Open(filepath.ToSlash(filepath.Join(repoDir, "metadata", "projects.xml")))
 	if err != nil {
 		if fastGit {
@@ -1225,7 +1224,7 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 		if err := renderPage(filepath.Join(pkgDir, "index.html"), tmpl, "moved_package.html", map[string]interface{}{
 			"Title":       "Package Moved: " + oldCat + "/" + oldName,
 			"BaseURL":     "../../../",
-			"Breadcrumbs": []Breadcrumb{{Name: title, URL: "../../../"}, {Name: "Packages", URL: "../../"}, {Name: oldCat}, {Name: oldName}},
+			"Breadcrumbs": []Breadcrumb{{Name: title, URL: "../../../"}, {Name: "Packages", URL: "../../"}, {Name: oldCat, URL: "../../../categories/" + oldCat + "/"}, {Name: oldName}},
 			"OldName":     oldCat + "/" + oldName,
 			"NewName":     move.New,
 			"NewURL":      "../../" + newParts[0] + "/" + newParts[1] + "/",
@@ -1530,7 +1529,7 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 			if err := renderPage(filepath.Join(pkgDir, "index.html"), tmpl, "package_picker.html", map[string]interface{}{
 				"Title":       "Package: " + pkg.Category + "/" + pkg.Name,
 				"BaseURL":     "../../../",
-				"Breadcrumbs": []Breadcrumb{{Name: title, URL: "../../../"}, {Name: "Packages", URL: "../../"}, {Name: pkg.Category}, {Name: pkg.Name}},
+				"Breadcrumbs": []Breadcrumb{{Name: title, URL: "../../../"}, {Name: "Packages", URL: "../../"}, {Name: pkg.Category, URL: "../../../categories/" + pkg.Category + "/"}, {Name: pkg.Name}},
 				"Package":     map[string]interface{}{"Category": pkg.Category, "Name": pkg.Name, "ReposList": reposList},
 				"MovedToName": movedToName,
 				"MovedToURL":  movedToURL,
@@ -1585,18 +1584,24 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 
 	// 5b. Global Projects
 	if len(sortedProjects) > 0 {
-		if err := os.MkdirAll(filepath.Join(outDir, "projects"), 0755); err != nil { return fmt.Errorf("creating directory: %w", err) }
+		if err := os.MkdirAll(filepath.Join(outDir, "projects"), 0755); err != nil {
+			return fmt.Errorf("creating directory: %w", err)
+		}
 		if err := renderPage(filepath.Join(outDir, "projects", "index.html"), tmpl, "projects.html", map[string]interface{}{
 			"Title":       "Projects",
 			"BaseURL":     "../",
 			"Breadcrumbs": []Breadcrumb{{Name: title, URL: "../"}, {Name: "Projects"}},
 			"Projects":    sortedProjects,
 			"Version":     version,
-		}); err != nil { return fmt.Errorf("rendering page: %w", err) }
+		}); err != nil {
+			return fmt.Errorf("rendering page: %w", err)
+		}
 
 		for _, proj := range sortedProjects {
 			projDir := filepath.Join(outDir, "projects", proj.Project.Email)
-			if err := os.MkdirAll(projDir, 0755); err != nil { return fmt.Errorf("creating directory %s: %w", projDir, err) }
+			if err := os.MkdirAll(projDir, 0755); err != nil {
+				return fmt.Errorf("creating directory %s: %w", projDir, err)
+			}
 
 			type TmplPkg struct {
 				Name      string
@@ -1615,7 +1620,9 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 				"Project":     proj,
 				"Packages":    tmplPkgs,
 				"Version":     version,
-			}); err != nil { return fmt.Errorf("rendering page: %w", err) }
+			}); err != nil {
+				return fmt.Errorf("rendering page: %w", err)
+			}
 		}
 	}
 
@@ -1666,7 +1673,7 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 			if err := renderPage(filepath.Join(pkgDir, "index.html"), tmpl, "moved_package.html", map[string]interface{}{
 				"Title":       fmt.Sprintf("%s - %s/%s (Moved)", site.RepoName, oldCat, oldName),
 				"BaseURL":     "../../../../../../",
-				"Breadcrumbs": []Breadcrumb{{Name: title, URL: "../../../../../../"}, {Name: site.RepoName, URL: "../../../../"}, {Name: "Categories", URL: "../../../"}, {Name: oldCat}, {Name: oldName}},
+				"Breadcrumbs": []Breadcrumb{{Name: title, URL: "../../../../../../"}, {Name: site.RepoName, URL: "../../../../"}, {Name: "Categories", URL: "../../../"}, {Name: oldCat, URL: "../../"}, {Name: oldName}},
 				"Repo":        site,
 				"OldName":     oldCat + "/" + oldName,
 				"NewName":     move.New,
@@ -2006,7 +2013,7 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 			if err := renderPage(filepath.Join(pkgDir, "index.html"), tmpl, "repo_package.html", map[string]interface{}{
 				"Title":       fmt.Sprintf("%s - %s/%s", site.RepoName, pkg.Category, pkg.Name),
 				"BaseURL":     "../../../../../../",
-				"Breadcrumbs": []Breadcrumb{{Name: title, URL: "../../../../../../"}, {Name: site.RepoName, URL: "../../../../"}, {Name: "Categories", URL: "../../../"}, {Name: pkg.Category}, {Name: pkg.Name}},
+				"Breadcrumbs": []Breadcrumb{{Name: title, URL: "../../../../../../"}, {Name: site.RepoName, URL: "../../../../"}, {Name: "Categories", URL: "../../../"}, {Name: pkg.Category, URL: "../../"}, {Name: pkg.Name}},
 				"Repo":        site,
 				"Package":     pkg,
 				"MovedToName": movedToName,
