@@ -13,7 +13,7 @@ import (
 	"golang.org/x/tools/txtar"
 )
 
-//go:embed testdata/models/*.txtar
+//go:embed testdata/models/*.txtar testdata/models_json/*.txtar
 var modelsTestdataFS embed.FS
 
 func assertStableParse(t *testing.T, xmlData []byte, model interface{}) {
@@ -62,16 +62,22 @@ func TestModelsTxtar(t *testing.T) {
 			}
 			ar := txtar.Parse(raw)
 
-			var inputData []byte
+			var inputXMLData []byte
+			var inputJSONData []byte
+			var expectedXMLData []byte
+
 			for _, f := range ar.Files {
 				if f.Name == "input.xml" {
-					inputData = f.Data
-					break
+					inputXMLData = f.Data
+				} else if f.Name == "input.json" {
+					inputJSONData = f.Data
+				} else if f.Name == "expected.xml" {
+					expectedXMLData = f.Data
 				}
 			}
 
-			if inputData == nil {
-				t.Fatalf("input.xml not found in fixture")
+			if inputXMLData == nil && inputJSONData == nil {
+				t.Fatalf("neither input.xml nor input.json found in fixture")
 			}
 
 			var model interface{}
@@ -91,20 +97,36 @@ func TestModelsTxtar(t *testing.T) {
 				t.Fatalf("unhandled model type for %s", fixture)
 			}
 
-			assertStableParse(t, inputData, model)
+			if inputXMLData != nil {
+				assertStableParse(t, inputXMLData, model)
 
-			var expectedJSON []byte
-			for _, f := range ar.Files {
-				if f.Name == "expected.json" {
-					expectedJSON = f.Data
-					break
+				var expectedJSON []byte
+				for _, f := range ar.Files {
+					if f.Name == "expected.json" {
+						expectedJSON = f.Data
+						break
+					}
 				}
-			}
 
-			if expectedJSON != nil {
-				importJSON, _ := json.MarshalIndent(model, "", "\t")
-				if strings.TrimSpace(string(importJSON)) != strings.TrimSpace(string(expectedJSON)) {
-					t.Fatalf("JSON mismatch\nWanted:\n%s\nGot:\n%s", string(expectedJSON), string(importJSON))
+				if expectedJSON != nil {
+					importJSON, _ := json.MarshalIndent(model, "", "\t")
+					if strings.TrimSpace(string(importJSON)) != strings.TrimSpace(string(expectedJSON)) {
+						t.Fatalf("JSON mismatch\nWanted:\n%s\nGot:\n%s", string(expectedJSON), string(importJSON))
+					}
+				}
+			} else if inputJSONData != nil && expectedXMLData != nil {
+				err = json.Unmarshal(inputJSONData, model)
+				if err != nil {
+					t.Fatalf("unmarshal error: %v", err)
+				}
+
+				importXML, err := xml.MarshalIndent(model, "", "\t")
+				if err != nil {
+					t.Fatalf("marshal error: %v", err)
+				}
+
+				if strings.TrimSpace(string(importXML)) != strings.TrimSpace(string(expectedXMLData)) {
+					t.Fatalf("XML mismatch\nWanted:\n%s\nGot:\n%s", string(expectedXMLData), string(importXML))
 				}
 			}
 		})
