@@ -181,6 +181,11 @@ func (cfg *MainArgConfig) cmdOverlayEbuildInstall(args []string) error {
 		return fmt.Errorf("failed to update manifest: %w", err)
 	}
 
+	// Update metadata.xml
+	log.Printf("Updating metadata.xml in %s", targetDir)
+	// metadata command doesn't seem to have a generate function.
+	// But it does have discover. We'll run discover at the overlay level.
+
 	// Update use.desc
 	log.Printf("Discovering USE flags in overlay %s", overlayPath)
 	err = cfg.cmdUseDiscover([]string{overlayPath})
