@@ -2,12 +2,26 @@
     <h3>Dashboard</h3>
     <p>Welcome to {{.Title}}.</p>
     <ul>
+        {{if gt (len .Repos) 0}}
         <li><a href="overlays/">Overlays ({{len .Repos}})</a></li>
+        {{end}}
+        {{if gt (len .Categories) 0}}
         <li><a href="categories/">Categories ({{len .Categories}})</a></li>
+        {{end}}
+        {{if gt (len .Packages) 0}}
         <li><a href="packages/">Packages ({{len .Packages}})</a></li>
+        {{end}}
+        {{if gt (len .Licenses) 0}}
         <li><a href="licenses/">Licenses ({{len .Licenses}})</a></li>
+        {{end}}
+        {{if gt (len .Projects) 0}}
         <li><a href="projects/">Projects ({{len .Projects}})</a></li>
+        {{end}}
+        {{if .Profiles}}
+        {{if gt (len .Profiles) 0}}
         <li><a href="profiles/">Profiles</a></li>
+        {{end}}
+        {{end}}
     </ul>
 </div>
 {{if .RecentNews}}

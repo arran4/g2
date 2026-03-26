@@ -1,0 +1,16 @@
+&lt;?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>Gentoo Packages</title>
+  <link href=""/>
+  <updated>2026-03-26T06:22:46Z</updated>
+  <id></id>
+
+  <entry>
+    <title>app-misc/foo-1.0 (.)</title>
+    <link href="repos/./categories/app-misc/packages/foo/"/>
+    <id>repos/./categories/app-misc/packages/foo/</id>
+    <updated>2026-03-26T06:22:46Z</updated>
+    <summary></summary>
+  </entry>
+
+</feed>
