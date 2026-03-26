@@ -1,0 +1,38 @@
+{{if .Project.Project.Description}}
+    <p><strong>Description:</strong> {{.Project.Project.Description}}</p>
+{{end}}
+
+{{if .Project.Project.Email}}
+    <p><strong>Email:</strong> <a href="mailto:{{.Project.Project.Email}}">{{.Project.Project.Email}}</a></p>
+{{end}}
+
+{{if .Project.Project.URL}}
+    <p><strong>URL:</strong> <a href="{{.Project.Project.URL}}">{{.Project.Project.URL}}</a></p>
+{{end}}
+
+{{if .Project.Project.Members}}
+<h3>Members</h3>
+<ul>
+    {{range .Project.Project.Members}}
+    <li>
+        {{if .IsLead}}<strong>[Lead]</strong>{{end}}
+        {{.Name}} (&lt;{{.Email}}&gt;)
+        {{if .Role}} - <em>{{.Role}}</em>{{end}}
+    </li>
+    {{end}}
+</ul>
+{{end}}
+
+<h3>Packages maintained by this project</h3>
+<ul>
+    {{range .Packages}}
+    <li>
+        {{if eq (len .ReposList) 1}}
+            {{$repo := index .ReposList 0}}
+            <a href="{{$.BaseURL}}repos/{{$repo.RepoName}}/categories/{{.Category}}/packages/{{.Name}}/">{{.Category}}/{{.Name}}</a>
+        {{else}}
+            <a href="{{$.BaseURL}}packages/{{.Category}}/{{.Name}}/">{{.Category}}/{{.Name}}</a>
+        {{end}}
+    </li>
+    {{end}}
+</ul>

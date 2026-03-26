@@ -108,12 +108,14 @@ type SiteServer struct {
 	AggCategories []*AggCategory
 	AggPackages   []*AggPackage
 	AggLicenses   []*AggLicense
+	AggProjects   []*AggProject
 	GlobalUpdates []FeedItem
 
 	// Mappings for faster lookup
 	CatMap  map[string]*AggCategory
 	PkgMap  map[string]*AggPackage
 	LicMap  map[string]*AggLicense
+	ProjMap map[string]*AggProject
 	RepoMap map[string]*SiteData
 }
 
@@ -129,6 +131,7 @@ func newSiteServer(sites []*SiteData) (*SiteServer, error) {
 		CatMap:  make(map[string]*AggCategory),
 		PkgMap:  make(map[string]*AggPackage),
 		LicMap:  make(map[string]*AggLicense),
+		ProjMap: make(map[string]*AggProject),
 		RepoMap: make(map[string]*SiteData),
 	}
 
@@ -136,8 +139,17 @@ func newSiteServer(sites []*SiteData) (*SiteServer, error) {
 	aggCategories := make(map[string]*AggCategory)
 	aggPackages := make(map[string]*AggPackage)
 	aggLicenses := make(map[string]*AggLicense)
+	aggProjects := make(map[string]*AggProject)
 
 	for _, site := range sites {
+		if site.Projects != nil {
+			for i := range site.Projects.Projects {
+				proj := &site.Projects.Projects[i]
+				if _, ok := aggProjects[proj.Email]; !ok {
+					aggProjects[proj.Email] = &AggProject{Project: proj}
+				}
+			}
+		}
 		server.RepoMap[site.RepoName] = site
 		for _, cat := range site.Categories {
 			if _, ok := aggCategories[cat.Name]; !ok {
@@ -150,6 +162,23 @@ func newSiteServer(sites []*SiteData) (*SiteServer, error) {
 				}
 				aggPackages[pkgKey].Repos[site.RepoName] = site
 				aggCategories[cat.Name].Packages[pkg.Name] = aggPackages[pkgKey]
+
+				if pkg.Metadata != nil {
+					for _, maint := range pkg.Metadata.Maintainers {
+						if proj, ok := aggProjects[maint.Email]; ok {
+							found := false
+							for _, p := range proj.Packages {
+								if p.Name == pkg.Name && p.Category == pkg.Category {
+									found = true
+									break
+								}
+							}
+							if !found {
+								proj.Packages = append(proj.Packages, aggPackages[pkgKey])
+							}
+						}
+					}
+				}
 
 				for _, ver := range pkg.Versions {
 					if ver.Ebuild != nil && ver.Ebuild.Vars != nil {
@@ -197,9 +226,15 @@ func newSiteServer(sites []*SiteData) (*SiteServer, error) {
 	}
 	sort.Slice(server.AggLicenses, func(i, j int) bool { return server.AggLicenses[i].Name < server.AggLicenses[j].Name })
 
+	for _, p := range aggProjects {
+		server.AggProjects = append(server.AggProjects, p)
+	}
+	sort.Slice(server.AggProjects, func(i, j int) bool { return server.AggProjects[i].Project.Name < server.AggProjects[j].Project.Name })
+
 	server.CatMap = aggCategories
 	server.PkgMap = aggPackages
 	server.LicMap = aggLicenses
+	server.ProjMap = aggProjects
 
 	server.Title = "Gentoo Packages"
 	if len(sites) == 1 {
@@ -288,6 +323,7 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			"Categories": s.AggCategories,
 			"Packages":   s.AggPackages,
 			"Licenses":   s.AggLicenses,
+			"Projects":   s.AggProjects,
 			"Updates":    s.GlobalUpdates,
 			"Version":    version,
 		})
@@ -429,6 +465,45 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				"BaseURL":     baseURL,
 				"Breadcrumbs": []Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: "Licenses", URL: "../"}, {Name: lic.Name}},
 				"License":     map[string]interface{}{"Name": lic.Name, "Packages": tmplPkgs, "Text": lic.Text},
+				"Version":     version,
+			})
+			return
+		}
+
+	case "projects":
+		if len(parts) == 1 {
+			s.renderPageHTTP(w, "projects.html", map[string]interface{}{
+				"Title":       "Projects",
+				"BaseURL":     baseURL,
+				"Breadcrumbs": []Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: "Projects"}},
+				"Projects":    s.AggProjects,
+				"Version":     version,
+			})
+			return
+		} else if len(parts) == 2 {
+			projEmail := parts[1]
+			proj, ok := s.ProjMap[projEmail]
+			if !ok {
+				http.NotFound(w, r)
+				return
+			}
+
+			type TmplPkg struct {
+				Name      string
+				Category  string
+				ReposList []*SiteData
+			}
+			var tmplPkgs []TmplPkg
+			for _, p := range proj.Packages {
+				tmplPkgs = append(tmplPkgs, TmplPkg{Name: p.Name, Category: p.Category, ReposList: mapToList(p.Repos)})
+			}
+
+			s.renderPageHTTP(w, "project.html", map[string]interface{}{
+				"Title":       "Project: " + proj.Project.Name,
+				"BaseURL":     baseURL,
+				"Breadcrumbs": []Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: "Projects", URL: "../"}, {Name: proj.Project.Name}},
+				"Project":     proj,
+				"Packages":    tmplPkgs,
 				"Version":     version,
 			})
 			return
