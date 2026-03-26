@@ -1,10 +1,12 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"strings"
 	"text/tabwriter"
 
@@ -252,12 +254,12 @@ func (cfg *CmdEbuildArgConfig) cmdEbuildShParseToJson(args []string) error {
 	}
 	defer func() { _ = f.Close() }()
 
-	data, err := g2.ShParseEbuild(f, filename)
+	ebuild, err := g2.ParseEbuild(os.DirFS(filepath.Dir(filename)), filepath.Base(filename), g2.ParseVariables)
 	if err != nil {
 		return fmt.Errorf("parsing ebuild: %w", err)
 	}
 
-	jsonBytes, err := g2.ShParseDataToJSON(data)
+	jsonBytes, err := json.MarshalIndent(ebuild.Vars, "", "\t")
 	if err != nil {
 		return fmt.Errorf("serializing to json: %w", err)
 	}
