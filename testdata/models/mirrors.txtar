@@ -1,0 +1,41 @@
+test: Mirrors serialization
+-- input.xml --
+<mirrors>
+	<mirrorgroup region="Europe" country="DE" countryname="Germany">
+		<mirror city="Berlin" coordinates="52.5200, 13.4050" gentoo-bug="123">
+			<name>Test Mirror</name>
+			<uri ipv4="Y" ipv6="N" partial="N" protocol="http">http://mirror.example.com/</uri>
+		</mirror>
+	</mirrorgroup>
+</mirrors>
+-- expected.json --
+{
+	"XMLName": {
+		"Space": "",
+		"Local": "mirrors"
+	},
+	"MirrorGroups": [
+		{
+			"Region": "Europe",
+			"Country": "DE",
+			"CountryName": "Germany",
+			"Mirrors": [
+				{
+					"City": "Berlin",
+					"Coordinates": "52.5200, 13.4050",
+					"GentooBug": "123",
+					"Name": "Test Mirror",
+					"URIs": [
+						{
+							"Text": "http://mirror.example.com/",
+							"IPv4": "Y",
+							"IPv6": "N",
+							"Partial": "N",
+							"Protocol": "http"
+						}
+					]
+				}
+			]
+		}
+	]
+}

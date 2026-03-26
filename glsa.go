@@ -22,7 +22,7 @@ type GLSA struct {
 	Access      string         `xml:"access,omitempty"`
 	Affected    Affected       `xml:"affected"`
 	Background  *Background    `xml:"background"`
-	Description Description    `xml:"description"`
+	Description GLSADescription    `xml:"description"`
 	Impact      Impact         `xml:"impact"`
 	Workaround  Workaround     `xml:"workaround"`
 	Resolution  Resolution     `xml:"resolution"`

@@ -1,0 +1,46 @@
+test: Projects JSON to XML serialization
+-- input.json --
+{
+	"XMLName": {
+		"Space": "",
+		"Local": "projects"
+	},
+	"Projects": [
+		{
+			"Email": "test@gentoo.org",
+			"Name": "Test Project",
+			"URL": "https://wiki.gentoo.org/wiki/Test",
+			"Description": "A test project",
+			"Subprojects": [
+				{
+					"Text": "Sub",
+					"InheritMembers": "1",
+					"Ref": "sub@gentoo.org"
+				}
+			],
+			"Members": [
+				{
+					"IsLead": "1",
+					"Email": "member@gentoo.org",
+					"Name": "Member",
+					"Role": "Dev"
+				}
+			]
+		}
+	]
+}
+-- expected.xml --
+<projects>
+	<project>
+		<email>test@gentoo.org</email>
+		<name>Test Project</name>
+		<url>https://wiki.gentoo.org/wiki/Test</url>
+		<description>A test project</description>
+		<subproject inherit-members="1" ref="sub@gentoo.org">Sub</subproject>
+		<member is-lead="1">
+			<email>member@gentoo.org</email>
+			<name>Member</name>
+			<role>Dev</role>
+		</member>
+	</project>
+</projects>
