@@ -56,10 +56,10 @@
 {{if .Repo.QAPolicy}}
 <h2>QA Policies</h2>
 <div class="metadata-section">
-    <p>This repository has configured QA policies. For full descriptions, see the <a href="https://projects.gentoo.org/qa/policy-guide/std-policy-index.html">Gentoo Policy Guide</a>.</p>
+    <p>This repository has configured QA policies.</p>
     <ul>
         {{range $key, $value := .Repo.QAPolicy.Policies}}
-        <li><a href="https://projects.gentoo.org/qa/policy-guide/std-policy-index.html#pg{{slice $key 2}}">{{$key}}</a>: {{$value}}</li>
+        <li>{{$key}}: {{$value}}</li>
         {{end}}
     </ul>
 </div>
