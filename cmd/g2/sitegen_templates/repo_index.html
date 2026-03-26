@@ -52,3 +52,15 @@
     {{end}}
 </ul>
 <p><a href="recent/">View all recent updates</a></p>
+
+{{if .Repo.QAPolicy}}
+<h2>QA Policies</h2>
+<div class="metadata-section">
+    <p>This repository has configured QA policies.</p>
+    <ul>
+        {{range $key, $value := .Repo.QAPolicy.Policies}}
+        <li>{{$key}}: {{$value}}</li>
+        {{end}}
+    </ul>
+</div>
+{{end}}

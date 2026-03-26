@@ -15,7 +15,20 @@ func init() {
 type IUSELintRule struct{}
 
 func (r *IUSELintRule) Lint(repoDir string, pkg *g2.PackageData) []string {
+	return r.LintWithQA(repoDir, pkg, nil)
+}
+
+func (r *IUSELintRule) LintWithQA(repoDir string, pkg *g2.PackageData, qa *g2.QAPolicy) []string {
 	var warnings []string
+
+	severity := "Warning"
+	if qa != nil && qa.Policies != nil {
+		if val, ok := qa.Policies["PG0801"]; ok { // Arbitrary PG code mapping for IUSE for example, or general
+			if val == "notice" || val == "error" || val == "warning" {
+				severity = strings.ToUpper(val[:1]) + val[1:]
+			}
+		}
+	}
 	if pkg.Metadata == nil {
 		return warnings
 	}
@@ -39,7 +52,7 @@ func (r *IUSELintRule) Lint(repoDir string, pkg *g2.PackageData) []string {
 					globalFlags := map[string]bool{"test": true, "doc": true, "debug": true}
 
 					if !metaUseFlags[f] && !globalFlags[f] {
-						warnings = append(warnings, fmt.Sprintf("Ebuild %s uses IUSE flag '%s' which is not documented in metadata.xml. Add the flag to metadata.xml <use> section.", ver.Version, f))
+						warnings = append(warnings, fmt.Sprintf("[%s] Ebuild %s uses IUSE flag '%s' which is not documented in metadata.xml. Add the flag to metadata.xml <use> section.", severity, ver.Version, f))
 					}
 				}
 			}
