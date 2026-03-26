@@ -1,5 +1,8 @@
 
 <h2>License: {{.License.Name}}</h2>
+{{if .License.Aliases}}
+<p><strong>Aliases:</strong> {{join .License.Aliases ", "}}</p>
+{{end}}
 {{if .License.Text}}
 <details>
     <summary>License Text</summary>
