@@ -1,0 +1,104 @@
+test: PkgMetadata JSON to XML serialization
+-- input.json --
+{
+	"XMLName": {
+		"Space": "",
+		"Local": "pkgmetadata"
+	},
+	"Maintainers": [
+		{
+			"Email": "foo@gentoo.org",
+			"Name": "Foo",
+			"Description": "",
+			"Type": "person",
+			"Proxied": "no",
+			"Status": "",
+			"Restrict": "test"
+		}
+	],
+	"LongDescription": [
+		{
+			"Body": "This is a package.",
+			"Lang": "en",
+			"Restrict": "test"
+		}
+	],
+	"Slots": {
+		"Slot": [
+			{
+				"Name": "0",
+				"Text": "Main slot"
+			}
+		],
+		"Subslots": "sub",
+		"Lang": "en"
+	},
+	"StabilizeAllArches": {
+		"Restrict": "test"
+	},
+	"Use": [
+		{
+			"Flags": [
+				{
+					"Name": "foo",
+					"Text": "Enable foo",
+					"Restrict": "test"
+				}
+			],
+			"Lang": "en"
+		}
+	],
+	"Upstream": {
+		"Maintainers": [
+			{
+				"Email": "",
+				"Name": "Upstream Foo",
+				"Description": "",
+				"Type": "",
+				"Proxied": "",
+				"Status": "active",
+				"Restrict": ""
+			}
+		],
+		"Changelog": "http://example.com/changelog",
+		"Doc": [
+			{
+				"URL": "http://example.com/doc",
+				"Lang": "en"
+			}
+		],
+		"BugsTo": "http://example.com/bugs",
+		"RemoteID": [
+			{
+				"Text": "foo/bar",
+				"Type": "github"
+			}
+		]
+	}
+}
+-- expected.xml --
+<pkgmetadata>
+	<maintainer type="person" proxied="no" restrict="test">
+		<email>foo@gentoo.org</email>
+		<name>Foo</name>
+	</maintainer>
+	<longdescription lang="en" restrict="test">This is a package.</longdescription>
+	<slots lang="en">
+		<slot name="0">Main slot</slot>
+		<subslots>sub</subslots>
+	</slots>
+	<stabilize-allarches></stabilize-allarches>
+	<use lang="en">
+		<flag name="foo" restrict="test">Enable foo</flag>
+	</use>
+	<upstream>
+		<maintainer status="active">
+			<email></email>
+			<name>Upstream Foo</name>
+		</maintainer>
+		<changelog>http://example.com/changelog</changelog>
+		<doc lang="en">http://example.com/doc</doc>
+		<bugs-to>http://example.com/bugs</bugs-to>
+		<remote-id type="github">foo/bar</remote-id>
+	</upstream>
+</pkgmetadata>
