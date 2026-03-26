@@ -13,13 +13,13 @@ func TestParsePackageDeprecatedReader(t *testing.T) {
 # This file specifies packages that are considered deprecated (but not
 # masked yet).
 
-# Michał Górny <mgorny@gentoo.org> (2026-03-25)
+# Jane Doe <jane.doe@example.com> (2026-03-25)
 # Backwards compatibility package for pkg_resources that have been
 # removed from >=dev-python/setuptools-82.  Please migrate to
 # importlib.{metadata,resources} and/or dev-python/packaging.
 dev-python/pkg-resources
 
-# Michał Górny <mgorny@gentoo.org> (2025-11-25)
+# John Smith <john.smith@example.com> (2025-11-25)
 # The package has turned into complete AI slop.  Every subsequent
 # release introduces serious quality issues, and potential security
 # concerns.  Please ask upstreams to move away from it.
@@ -31,15 +31,15 @@ dev-python/autobahn
 			Package:     "dev-python/pkg-resources",
 			Reason:      "Backwards compatibility package for pkg_resources that have been removed from >=dev-python/setuptools-82. Please migrate to importlib.{metadata,resources} and/or dev-python/packaging.",
 			Date:        "2026-03-25",
-			Author:      "Michał Górny",
-			AuthorEmail: "mgorny@gentoo.org",
+			Author:      "Jane Doe",
+			AuthorEmail: "jane.doe@example.com",
 		},
 		{
 			Package:     "dev-python/autobahn",
 			Reason:      "The package has turned into complete AI slop. Every subsequent release introduces serious quality issues, and potential security concerns. Please ask upstreams to move away from it.",
 			Date:        "2025-11-25",
-			Author:      "Michał Górny",
-			AuthorEmail: "mgorny@gentoo.org",
+			Author:      "John Smith",
+			AuthorEmail: "john.smith@example.com",
 		},
 	}
 
@@ -65,15 +65,15 @@ func TestSerializePackageDeprecated(t *testing.T) {
 			Package:     "dev-python/pkg-resources",
 			Reason:      "Backwards compatibility package for pkg_resources that have been removed from >=dev-python/setuptools-82. Please migrate to importlib.{metadata,resources} and/or dev-python/packaging.",
 			Date:        "2026-03-25",
-			Author:      "Michał Górny",
-			AuthorEmail: "mgorny@gentoo.org",
+			Author:      "Jane Doe",
+			AuthorEmail: "jane.doe@example.com",
 		},
 		{
 			Package:     "dev-python/autobahn",
 			Reason:      "The package has turned into complete AI slop. Every subsequent release introduces serious quality issues, and potential security concerns. Please ask upstreams to move away from it.",
 			Date:        "2025-11-25",
-			Author:      "Michał Górny",
-			AuthorEmail: "mgorny@gentoo.org",
+			Author:      "John Smith",
+			AuthorEmail: "john.smith@example.com",
 		},
 	}
 
