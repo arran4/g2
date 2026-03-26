@@ -68,8 +68,8 @@ func TestParserTxtar(t *testing.T) {
 			}
 
 			// Normalize spaces in arrays/values to make json assertions easier in txtar
-			for k, v := range ebuild.Variables {
-				ebuild.Variables[k] = normalize(v)
+            for k, v := range ebuild.Vars {
+                ebuild.Vars[k] = normalize(v)
 			}
 
 			var expected map[string]string
@@ -77,8 +77,8 @@ func TestParserTxtar(t *testing.T) {
 				t.Fatalf("unmarshal expected JSON: %v", err)
 			}
 
-			if !reflect.DeepEqual(ebuild.Variables, expected) {
-				t.Errorf("Mismatch.\nGot:\n%v\nExpected:\n%v", ebuild.Variables, expected)
+			if !reflect.DeepEqual(ebuild.Vars, expected) {
+				t.Errorf("Mismatch.\nGot:\n%v\nExpected:\n%v", ebuild.Vars, expected)
 			}
 		})
 	}

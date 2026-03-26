@@ -264,7 +264,7 @@ func (cfg *CmdEbuildArgConfig) cmdEbuildShParseToJson(args []string) error {
 	data := &struct {
 		Vars map[string]string `json:"Vars"`
 	}{
-		Vars: ebuild.Variables,
+		Vars: ebuild.Vars,
 	}
 
 	jsonBytes, err := json.MarshalIndent(data, "", "\t")

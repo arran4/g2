@@ -72,10 +72,6 @@ func (r *Reader) UnreadRune() error {
 	return err
 }
 
-type EbuildNode struct {
-	Variables map[string]string
-}
-
 // EbuildParser implements a recursive descent parser for Gentoo ebuild files.
 type EbuildParser struct {
 	ctx context.Context
@@ -148,9 +144,9 @@ func (p *EbuildParser) consumeWhitespaceAndComments() error {
 
 // Parse extracts variables from the ebuild using a recursive descent approach
 // tailored specifically for ebuilds, bypassing full bash posix rules.
-func (p *EbuildParser) Parse() (*EbuildNode, error) {
-	ebuild := &EbuildNode{
-		Variables: make(map[string]string),
+func (p *EbuildParser) Parse() (*Ebuild, error) {
+	ebuild := &Ebuild{
+		Vars: make(map[string]string),
 	}
 
 	for {
@@ -195,7 +191,7 @@ func (p *EbuildParser) Parse() (*EbuildNode, error) {
 				if err != nil && !errors.Is(err, io.EOF) {
 					return nil, err
 				}
-				ebuild.Variables[ident] = val
+				ebuild.Vars[ident] = val
 			case '(':
 				// Function declaration e.g. `src_prepare() {`
 				_, _ = p.nextRune() // '('
@@ -214,10 +210,10 @@ func (p *EbuildParser) Parse() (*EbuildNode, error) {
 					if err != nil && !errors.Is(err, io.EOF) {
 						return nil, err
 					}
-					if ebuild.Variables["INHERITED"] != "" {
-						ebuild.Variables["INHERITED"] += " " + val
+					if ebuild.Vars["INHERITED"] != "" {
+						ebuild.Vars["INHERITED"] += " " + val
 					} else {
-						ebuild.Variables["INHERITED"] = val
+						ebuild.Vars["INHERITED"] = val
 					}
 				} else {
 					// Bare command or reserved word. Skip line.
