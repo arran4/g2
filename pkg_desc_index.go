@@ -79,7 +79,7 @@ func ParsePkgDescIndexFile(path string) (*PkgDescIndex, error) {
 	if err != nil {
 		return nil, fmt.Errorf("opening file: %w", err)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 	return ParsePkgDescIndex(file)
 }
 
