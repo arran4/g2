@@ -13,8 +13,15 @@ type PackageMove struct {
 	New string
 }
 
+type PackageSlotMove struct {
+	Package string
+	Old     string
+	New     string
+}
+
 type PackageUpdate struct {
-	Moves []PackageMove
+	Moves     []PackageMove
+	SlotMoves []PackageSlotMove
 }
 
 func ParseUpdatesDirFS(sysFS fs.FS, dir string) (*PackageUpdate, error) {
@@ -59,6 +66,12 @@ func parseUpdateFileFS(sysFS fs.FS, path string, update *PackageUpdate) error {
 			update.Moves = append(update.Moves, PackageMove{
 				Old: parts[1],
 				New: parts[2],
+			})
+		} else if len(parts) >= 4 && parts[0] == "slotmove" {
+			update.SlotMoves = append(update.SlotMoves, PackageSlotMove{
+				Package: parts[1],
+				Old:     parts[2],
+				New:     parts[3],
 			})
 		}
 	}
@@ -108,7 +121,34 @@ func parseUpdateFile(path string, update *PackageUpdate) error {
 				Old: parts[1],
 				New: parts[2],
 			})
+		} else if len(parts) >= 4 && parts[0] == "slotmove" {
+			update.SlotMoves = append(update.SlotMoves, PackageSlotMove{
+				Package: parts[1],
+				Old:     parts[2],
+				New:     parts[3],
+			})
 		}
 	}
 	return scanner.Err()
+}
+
+func WriteUpdatesFile(path string, update *PackageUpdate) error {
+	f, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = f.Close() }()
+
+	w := bufio.NewWriter(f)
+	for _, m := range update.Moves {
+		if _, err := w.WriteString("move " + m.Old + " " + m.New + "\n"); err != nil {
+			return err
+		}
+	}
+	for _, m := range update.SlotMoves {
+		if _, err := w.WriteString("slotmove " + m.Package + " " + m.Old + " " + m.New + "\n"); err != nil {
+			return err
+		}
+	}
+	return w.Flush()
 }

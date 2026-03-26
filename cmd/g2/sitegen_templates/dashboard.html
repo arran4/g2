@@ -1,7 +1,16 @@
 <div class="metadata-section">
     <h3>Dashboard</h3>
     <p>Welcome to {{.Title}}.</p>
+
+    <div style="margin: 1em 0;">
+        <form action="search/" method="GET">
+            <input type="text" name="q" placeholder="Search packages..." style="width: 60%; padding: 8px;">
+            <button type="submit" style="padding: 8px;">Search</button>
+        </form>
+    </div>
+
     <ul>
+        <li><a href="search/">Search</a></li>
         {{if gt (len .Repos) 0}}
         <li><a href="overlays/">Overlays ({{len .Repos}})</a></li>
         {{end}}
@@ -10,6 +19,11 @@
         {{end}}
         {{if gt (len .Packages) 0}}
         <li><a href="packages/">Packages ({{len .Packages}})</a></li>
+        {{end}}
+        {{if .Uses}}
+        {{if gt (len .Uses) 0}}
+        <li><a href="uses/">USE Flags ({{len .Uses}})</a></li>
+        {{end}}
         {{end}}
         {{if gt (len .Licenses) 0}}
         <li><a href="licenses/">Licenses ({{len .Licenses}})</a></li>

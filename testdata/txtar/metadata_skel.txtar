@@ -99,7 +99,7 @@
     }
   ],
   "Slots": null,
-  "StabilizeAllArches": false,
+  "StabilizeAllArches": null,
   "Use": [
     {
       "Flags": [

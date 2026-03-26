@@ -23,7 +23,13 @@
 <body>
     <div class="container">
         <div class="nav">
-            <h1><a href="{{.BaseURL}}">{{.Title}}</a></h1>
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <h1 style="margin: 0;"><a href="{{.BaseURL}}">{{.Title}}</a></h1>
+                <form action="{{.BaseURL}}search/" method="GET" style="display: flex; align-items: center;">
+                    <input type="text" name="q" placeholder="Search..." style="padding: 4px;">
+                    <button type="submit" style="padding: 4px;">Go</button>
+                </form>
+            </div>
             {{if .Breadcrumbs}}
             <nav style="font-size: 0.9em; margin-top: 10px;">
                 {{range $i, $bc := .Breadcrumbs}}
