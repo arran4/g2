@@ -1,0 +1,11 @@
+<h2>All Projects</h2>
+<ul>
+    {{range .Projects}}
+    <li>
+        <a href="{{.Project.Email}}/">{{.Project.Name}} ({{len .Packages}})</a>
+        {{if .Project.Description}}
+        - {{.Project.Description}}
+        {{end}}
+    </li>
+    {{end}}
+</ul>

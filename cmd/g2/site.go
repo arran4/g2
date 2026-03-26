@@ -100,6 +100,7 @@ type SiteData struct {
 	RepoName       string
 	RemoteURL      string
 	EAPI           string
+	Projects       *g2.Projects
 	Categories     []CategoryData
 	Profiles       []ProfileData
 	Authors        []g2.Author
@@ -507,6 +508,23 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool) (
 		site.Moves = updates.Moves
 	}
 
+
+	pf, err := sysFS.Open(filepath.ToSlash(filepath.Join(repoDir, "metadata", "projects.xml")))
+	if err != nil {
+		if fastGit {
+			// fastGit uses an actual os path underneath when overlay is given
+			pf, err = os.Open(filepath.Join(repoDir, "metadata", "projects.xml"))
+		}
+	}
+	if err == nil {
+		if projects, err := g2.ParseProjectsFromReader(pf); err == nil {
+			site.Projects = projects
+		} else {
+			log.Printf("Warning: failed to parse projects.xml: %v", err)
+		}
+		_ = pf.Close()
+	}
+
 	entries, err := fs.ReadDir(sysFS, filepath.ToSlash(repoDir))
 	if err != nil {
 		return nil, fmt.Errorf("reading repo dir: %w", err)
@@ -884,6 +902,11 @@ type AggPackage struct {
 	Category string
 	Repos    map[string]*SiteData
 }
+type AggProject struct {
+	Project  *g2.Project
+	Packages []*AggPackage
+}
+
 type AggLicense struct {
 	Name     string
 	Count    int
@@ -961,19 +984,28 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 		return fmt.Errorf("parsing templates: %w", err)
 	}
 
-	var allPackages []PackageData
-	for _, site := range sites {
-		for _, cat := range site.Categories {
-			allPackages = append(allPackages, cat.Packages...)
-		}
-	}
 	aggCategories := make(map[string]*AggCategory)
 	aggPackages := make(map[string]*AggPackage)
 	aggLicenses := make(map[string]*AggLicense)
+	aggProjects := make(map[string]*AggProject)
 	aggProfiles := make(map[string]*AggProfile)
 	aggMoves := make(map[string]*AggPackageMove)
 	var globalNews []AggNewsItem
 
+	var allPackages []PackageData
+	for _, site := range sites {
+		if site.Projects != nil {
+			for i := range site.Projects.Projects {
+				proj := &site.Projects.Projects[i]
+				if _, ok := aggProjects[proj.Email]; !ok {
+					aggProjects[proj.Email] = &AggProject{Project: proj}
+				}
+			}
+		}
+		for _, cat := range site.Categories {
+			allPackages = append(allPackages, cat.Packages...)
+		}
+	}
 	totalPackages := 0
 
 	for _, site := range sites {
@@ -1012,6 +1044,23 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 				}
 				aggPackages[pkgKey].Repos[site.RepoName] = site
 				aggCategories[cat.Name].Packages[pkg.Name] = aggPackages[pkgKey]
+
+				if pkg.Metadata != nil {
+					for _, maint := range pkg.Metadata.Maintainers {
+						if proj, ok := aggProjects[maint.Email]; ok {
+							found := false
+							for _, p := range proj.Packages {
+								if p.Name == pkg.Name && p.Category == pkg.Category {
+									found = true
+									break
+								}
+							}
+							if !found {
+								proj.Packages = append(proj.Packages, aggPackages[pkgKey])
+							}
+						}
+					}
+				}
 
 				for _, ver := range pkg.Versions {
 					if ver.Ebuild != nil && ver.Ebuild.Vars != nil {
@@ -1086,6 +1135,12 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 		sortedLicenses = append(sortedLicenses, l)
 	}
 	sort.Slice(sortedLicenses, func(i, j int) bool { return sortedLicenses[i].Name < sortedLicenses[j].Name })
+
+	var sortedProjects []*AggProject
+	for _, p := range aggProjects {
+		sortedProjects = append(sortedProjects, p)
+	}
+	sort.Slice(sortedProjects, func(i, j int) bool { return sortedProjects[i].Project.Name < sortedProjects[j].Project.Name })
 
 	var sortedProfiles []*AggProfile
 	for _, p := range aggProfiles {
@@ -1280,6 +1335,7 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 		"Categories":           sortedCategories,
 		"Packages":             sortedPackages,
 		"Licenses":             sortedLicenses,
+		"Projects":             sortedProjects,
 		"Updates":              recentGlobalUpdates,
 		"Version":              version,
 		"RecentDurationString": recentDurationStr,
@@ -1522,6 +1578,42 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 			"Version":     version,
 		}); err != nil {
 			return fmt.Errorf("rendering page: %w", err)
+		}
+	}
+
+	// 5b. Global Projects
+	if len(sortedProjects) > 0 {
+		if err := os.MkdirAll(filepath.Join(outDir, "projects"), 0755); err != nil { return fmt.Errorf("creating directory: %w", err) }
+		if err := renderPage(filepath.Join(outDir, "projects", "index.html"), tmpl, "projects.html", map[string]interface{}{
+			"Title":       "Projects",
+			"BaseURL":     "../",
+			"Breadcrumbs": []Breadcrumb{{Name: title, URL: "../"}, {Name: "Projects"}},
+			"Projects":    sortedProjects,
+			"Version":     version,
+		}); err != nil { return fmt.Errorf("rendering page: %w", err) }
+
+		for _, proj := range sortedProjects {
+			projDir := filepath.Join(outDir, "projects", proj.Project.Email)
+			if err := os.MkdirAll(projDir, 0755); err != nil { return fmt.Errorf("creating directory %s: %w", projDir, err) }
+
+			type TmplPkg struct {
+				Name      string
+				Category  string
+				ReposList []*SiteData
+			}
+			var tmplPkgs []TmplPkg
+			for _, p := range proj.Packages {
+				tmplPkgs = append(tmplPkgs, TmplPkg{Name: p.Name, Category: p.Category, ReposList: mapToList(p.Repos)})
+			}
+
+			if err := renderPage(filepath.Join(projDir, "index.html"), tmpl, "project.html", map[string]interface{}{
+				"Title":       "Project: " + proj.Project.Name,
+				"BaseURL":     "../../",
+				"Breadcrumbs": []Breadcrumb{{Name: title, URL: "../../"}, {Name: "Projects", URL: "../"}, {Name: proj.Project.Name}},
+				"Project":     proj,
+				"Packages":    tmplPkgs,
+				"Version":     version,
+			}); err != nil { return fmt.Errorf("rendering page: %w", err) }
 		}
 	}
 
