@@ -1,4 +1,4 @@
-package parser
+package g2
 
 import (
 	"bytes"
@@ -14,7 +14,7 @@ import (
 	"golang.org/x/tools/txtar"
 )
 
-//go:embed testdata/*.txtar
+//go:embed testdata/ebuild_parser/*.txtar
 var testdata embed.FS
 
 // Normalize spacing in expected array output for tests since parser might keep some newlines
@@ -28,7 +28,7 @@ func normalize(s string) string {
 }
 
 func TestParserTxtar(t *testing.T) {
-	files, err := testdata.ReadDir("testdata")
+	files, err := testdata.ReadDir("testdata/ebuild_parser")
 	if err != nil {
 		t.Fatalf("reading testdata: %v", err)
 	}
@@ -39,7 +39,7 @@ func TestParserTxtar(t *testing.T) {
 		}
 
 		t.Run(file.Name(), func(t *testing.T) {
-			content, err := testdata.ReadFile(filepath.Join("testdata", file.Name()))
+			content, err := testdata.ReadFile(filepath.Join("testdata/ebuild_parser", file.Name()))
 			if err != nil {
 				t.Fatalf("reading file: %v", err)
 			}

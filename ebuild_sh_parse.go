@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/arran4/g2/pkg/ebuild/parser"
 )
 
 // ShParseData represents the data extracted from an ebuild using the custom parser.
@@ -18,7 +17,7 @@ type ShParseData struct {
 // ShParseEbuild parses the ebuild using the recursive descent ebuild parser.
 func ShParseEbuild(r io.Reader, filename string) (*ShParseData, error) {
 	ctx := context.Background() // Can be passed in later for robust timeout control
-	p := parser.NewEbuildParser(ctx, r)
+	p := NewEbuildParser(ctx, r)
 	ebuild, err := p.Parse()
 	if err != nil {
 		return nil, fmt.Errorf("ebuild parsing failed: %w", err)
