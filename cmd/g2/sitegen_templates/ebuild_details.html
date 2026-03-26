@@ -36,7 +36,7 @@
     <div>
         {{range parseIUSEFlags .VersionData.Ebuild.Vars.IUSE}}
         <div class="iuse-flag">
-            <a href="../../../../../../uses/{{.Name}}/">{{.Name}}</a>
+            <a href="../../../../uses/{{.Name}}/">{{.Name}}</a>
             {{if .Conditional}}
             <div class="iuse-tooltip" title="{{.ConditionStr}}">
                 &#10067;
