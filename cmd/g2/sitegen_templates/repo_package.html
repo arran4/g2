@@ -1,6 +1,14 @@
 
 <h2>{{.Package.Category}}/{{.Package.Name}} ({{.Repo.RepoName}})</h2>
 
+{{if .Package.Deprecated}}
+<div class="alert alert-danger" style="border-color: #ff4c4c; background-color: #ffe6e6;">
+    <strong>Deprecated:</strong> This package is deprecated.
+    <p><em>Reason:</em> {{.Package.Deprecated.Reason}}</p>
+    <p><small>Deprecated by {{.Package.Deprecated.Author}} on {{.Package.Deprecated.Date}}</small></p>
+</div>
+{{end}}
+
 {{if .MovedToName}}
 <div class="alert alert-warning">
     <strong>Notice:</strong> Older versions of this package were moved to <a href="{{.MovedToURL}}">{{.MovedToName}}</a>.
