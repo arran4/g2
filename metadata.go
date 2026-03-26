@@ -25,14 +25,22 @@ func (c *CatMetadata) String() string {
 
 // PkgMetadata represents metadata for a package.
 // Source: https://github.com/gentoo-mirror/gentoo/blob/stable/metadata/dtd/metadata.dtd
+type StabilizeAllArches struct {
+	Restrict string `xml:"restrict,attr,omitempty"`
+}
+
+func (s *StabilizeAllArches) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
+	return e.EncodeElement("", start)
+}
+
 type PkgMetadata struct {
-	XMLName            xml.Name          `xml:"pkgmetadata"`
-	Maintainers        []Maintainer      `xml:"maintainer"`
-	LongDescription    []LongDescription `xml:"longdescription"`
-	Slots              *Slots            `xml:"slots"`
-	StabilizeAllArches bool              `xml:"stabilize-allarches,omitempty"`
-	Use                []Use             `xml:"use"`
-	Upstream           *Upstream         `xml:"upstream"`
+	XMLName            xml.Name            `xml:"pkgmetadata"`
+	Maintainers        []Maintainer        `xml:"maintainer"`
+	LongDescription    []LongDescription   `xml:"longdescription"`
+	Slots              *Slots              `xml:"slots"`
+	StabilizeAllArches *StabilizeAllArches `xml:"stabilize-allarches"`
+	Use                []Use               `xml:"use"`
+	Upstream           *Upstream           `xml:"upstream"`
 }
 
 func (p *PkgMetadata) String() string {

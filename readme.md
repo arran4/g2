@@ -165,6 +165,22 @@ g2 overlay site generate [-out <dir>] [-clear] [<location>]
 g2 overlay site generate -out my_site_dir .
 ```
 
+### `overlay ebuild`
+
+Tools to modify the overlay with ebuilds.
+
+**Subcommands:**
+*   `move <from> <to>`: Record a package move in profiles/updates.
+*   `slotmove <package> <from> <to>`: Record a slot move in profiles/updates.
+*   `install [-category <string>] <ebuild.ebuild> [overlay_path] [-- <files...>]`: Install an ebuild into the overlay, optionally providing a specific category or additional files for the `files/` directory. Automatically triggers manifest, cache, use desc, and pkg_desc_index generation.
+
+**Example:**
+
+Install a package into a specific category with some files:
+```bash
+g2 overlay ebuild install -category sys-apps my-app-1.0.ebuild . -- app.conf app.service
+```
+
 ### `overlays site generate`
 
 Generates an aggregated static site for multiple remote repositories from a `repositories.xml` file.
