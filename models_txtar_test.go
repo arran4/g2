@@ -67,11 +67,12 @@ func TestModelsTxtar(t *testing.T) {
 			var expectedXMLData []byte
 
 			for _, f := range ar.Files {
-				if f.Name == "input.xml" {
+				switch f.Name {
+				case "input.xml":
 					inputXMLData = f.Data
-				} else if f.Name == "input.json" {
+				case "input.json":
 					inputJSONData = f.Data
-				} else if f.Name == "expected.xml" {
+				case "expected.xml":
 					expectedXMLData = f.Data
 				}
 			}
