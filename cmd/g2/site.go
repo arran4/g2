@@ -178,17 +178,25 @@ type VersionData struct {
 
 func (cfg *MainArgConfig) cmdOverlay(args []string) error {
 	if len(args) < 1 {
-		return fmt.Errorf("missing subcommand for overlay (e.g., site)")
+		return fmt.Errorf("missing subcommand for overlay (e.g., site, ebuild)")
 	}
 	subcmd := args[0]
-	if subcmd != "site" {
+
+	switch subcmd {
+	case "site":
+		return cfg.cmdOverlaySite(args[1:])
+	case "ebuild":
+		return cfg.cmdOverlayEbuild(args[1:])
+	default:
 		return fmt.Errorf("unknown overlay subcommand: %s", subcmd)
 	}
+}
 
-	if len(args) < 2 {
+func (cfg *MainArgConfig) cmdOverlaySite(args []string) error {
+	if len(args) < 1 {
 		return fmt.Errorf("missing subcommand for overlay site (e.g., generate)")
 	}
-	subcmd2 := args[1]
+	subcmd2 := args[0]
 	if subcmd2 != "generate" {
 		return fmt.Errorf("unknown overlay site subcommand: %s", subcmd2)
 	}
@@ -199,7 +207,7 @@ func (cfg *MainArgConfig) cmdOverlay(args []string) error {
 	recentDurOpt := fs.String("recent-duration", "3mo", "Duration to consider an update 'recent' (e.g. 3mo, 14d, 72h)")
 	fastGit := fs.Bool("fast-git-modtime", false, "Use fast (O(1)) but potentially less reliable go-git file log lookup")
 
-	if err := fs.Parse(args[2:]); err != nil {
+	if err := fs.Parse(args[1:]); err != nil {
 		return fmt.Errorf("parsing flags: %w", err)
 	}
 	recentDuration, recentDurationStr, err := parseDuration(*recentDurOpt)
