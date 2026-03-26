@@ -3,7 +3,9 @@ package main
 import (
 	"flag"
 	"fmt"
+	"os"
 
+	"github.com/arran4/g2"
 	"github.com/arran4/g2/lints"
 
 	_ "github.com/arran4/g2/lints/ebuild"
@@ -31,7 +33,21 @@ func (cfg *MainArgConfig) cmdLint(args []string) error {
 
 	for _, cat := range siteData.Categories {
 		for _, pkg := range cat.Packages {
-			pkgCopy := pkg
+			// Create a *g2.PackageData struct mapping for lint
+			pkgCopy := g2.PackageData{
+				Name: pkg.Name,
+				Category: pkg.Category,
+				Metadata: pkg.Metadata,
+				MetadataError: pkg.MetadataError,
+				Manifest: pkg.Manifest,
+			}
+			for _, v := range pkg.Versions {
+				pkgCopy.Versions = append(pkgCopy.Versions, g2.VersionData{
+					Version: v.Version,
+					Ebuild: v.Ebuild,
+					EbuildRawURL: v.EbuildRawURL,
+				})
+			}
 			lintWarnings := lints.PerformLinting(location, &pkgCopy)
 			if len(lintWarnings) > 0 {
 				hasErrors = true

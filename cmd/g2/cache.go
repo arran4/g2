@@ -120,7 +120,7 @@ func doCacheVerify(cfs CacheFS, repoDir string) error {
 	layoutConfPath := filepath.ToSlash(filepath.Join(repoDir, "metadata", "layout.conf"))
 	var lc *g2.LayoutConf
 	if f, err := cfs.Open(layoutConfPath); err == nil {
-		f.Close()
+		_ = f.Close()
 		lc, err = parseLayoutConfFromFS(cfs, layoutConfPath)
 		if err != nil {
 			log.Printf("Warning: failed to parse layout.conf: %v", err)
@@ -135,7 +135,7 @@ func doCacheVerify(cfs CacheFS, repoDir string) error {
 		}
 	}
 
-	siteData, err := parseRepo(cfs, repoDir, "Cache Verification")
+	siteData, err := parseRepo(cfs, repoDir, "Cache Verification", false)
 	if err != nil {
 		return fmt.Errorf("parsing repo: %w", err)
 	}
@@ -183,7 +183,7 @@ func doCacheGenerate(cfs CacheFS, repoDir string) error {
 	layoutConfPath := filepath.ToSlash(filepath.Join(repoDir, "metadata", "layout.conf"))
 	var lc *g2.LayoutConf
 	if f, err := cfs.Open(layoutConfPath); err == nil {
-		f.Close()
+		_ = f.Close()
 		lc, err = parseLayoutConfFromFS(cfs, layoutConfPath)
 		if err != nil {
 			log.Printf("Warning: failed to parse layout.conf: %v", err)
@@ -198,7 +198,7 @@ func doCacheGenerate(cfs CacheFS, repoDir string) error {
 		}
 	}
 
-	siteData, err := parseRepo(cfs, repoDir, "Cache Generation")
+	siteData, err := parseRepo(cfs, repoDir, "Cache Generation", false)
 	if err != nil {
 		return fmt.Errorf("parsing repo: %w", err)
 	}
@@ -330,7 +330,7 @@ func doCacheClean(cfs CacheFS, repoDir string) error {
 	layoutConfPath := filepath.ToSlash(filepath.Join(repoDir, "metadata", "layout.conf"))
 	var lc *g2.LayoutConf
 	if f, err := cfs.Open(layoutConfPath); err == nil {
-		f.Close()
+		_ = f.Close()
 		lc, err = parseLayoutConfFromFS(cfs, layoutConfPath)
 		if err != nil {
 			log.Printf("Warning: failed to parse layout.conf: %v", err)
@@ -345,7 +345,7 @@ func doCacheClean(cfs CacheFS, repoDir string) error {
 		}
 	}
 
-	siteData, err := parseRepo(cfs, repoDir, "Cache Cleaning")
+	siteData, err := parseRepo(cfs, repoDir, "Cache Cleaning", false)
 	if err != nil {
 		return fmt.Errorf("parsing repo: %w", err)
 	}
