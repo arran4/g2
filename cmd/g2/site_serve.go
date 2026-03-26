@@ -445,7 +445,7 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				s.renderPageHTTP(w, "package_picker.html", map[string]interface{}{
 					"Title":       "Package: " + pkg.Category + "/" + pkg.Name,
 					"BaseURL":     baseURL,
-					"Breadcrumbs": []Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: "Packages", URL: "../../"}, {Name: pkg.Category}, {Name: pkg.Name}},
+					"Breadcrumbs": []Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: "Packages", URL: "../../"}, {Name: pkg.Category, URL: "../../../categories/" + pkg.Category + "/"}, {Name: pkg.Name}},
 					"Package":     map[string]interface{}{"Category": pkg.Category, "Name": pkg.Name, "ReposList": reposList},
 					"Version":     version,
 				})
@@ -642,7 +642,7 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 						s.renderPageHTTP(w, "repo_package.html", map[string]interface{}{
 							"Title":       fmt.Sprintf("%s - %s/%s", site.RepoName, pkgData.Category, pkgData.Name),
 							"BaseURL":     baseURL,
-							"Breadcrumbs": []Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: site.RepoName, URL: "../../../../"}, {Name: "Categories", URL: "../../../"}, {Name: pkgData.Category}, {Name: pkgData.Name}},
+							"Breadcrumbs": []Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: site.RepoName, URL: "../../../../"}, {Name: "Categories", URL: "../../../"}, {Name: pkgData.Category, URL: "../../"}, {Name: pkgData.Name}},
 							"Repo":        site,
 							"Package":     *pkgData,
 							"Version":     version,
