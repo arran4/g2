@@ -1,0 +1,15 @@
+test: Repositories serialization
+-- input.xml --
+<repositories version="1.0">
+	<repo priority="10" quality="testing" status="unofficial">
+		<name>test-repo</name>
+		<description lang="en">A test repository</description>
+		<homepage>https://example.com</homepage>
+		<owner type="person">
+			<email>owner@example.com</email>
+			<name>Owner</name>
+		</owner>
+		<source type="git">https://example.com/repo.git</source>
+		<feed>https://example.com/feed.xml</feed>
+	</repo>
+</repositories>

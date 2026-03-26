@@ -1,0 +1,16 @@
+test: Projects serialization
+-- input.xml --
+<projects>
+	<project>
+		<email>test@gentoo.org</email>
+		<name>Test Project</name>
+		<url>https://wiki.gentoo.org/wiki/Test</url>
+		<description>A test project</description>
+		<subproject inherit-members="1" ref="sub@gentoo.org">Sub</subproject>
+		<member is-lead="1">
+			<email>member@gentoo.org</email>
+			<name>Member</name>
+			<role>Dev</role>
+		</member>
+	</project>
+</projects>

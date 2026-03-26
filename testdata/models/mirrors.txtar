@@ -1,0 +1,10 @@
+test: Mirrors serialization
+-- input.xml --
+<mirrors>
+	<mirrorgroup region="Europe" country="DE" countryname="Germany">
+		<mirror city="Berlin" coordinates="52.5200, 13.4050" gentoo-bug="123">
+			<name>Test Mirror</name>
+			<uri ipv4="Y" ipv6="N" partial="N" protocol="http">http://mirror.example.com/</uri>
+		</mirror>
+	</mirrorgroup>
+</mirrors>

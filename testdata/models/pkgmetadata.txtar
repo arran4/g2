@@ -1,0 +1,26 @@
+test: PkgMetadata serialization
+-- input.xml --
+<pkgmetadata>
+	<maintainer type="person" proxied="no" restrict="test">
+		<email>foo@gentoo.org</email>
+		<name>Foo</name>
+	</maintainer>
+	<longdescription lang="en" restrict="test">This is a package.</longdescription>
+	<slots lang="en">
+		<slot name="0">Main slot</slot>
+		<subslots>sub</subslots>
+	</slots>
+	<stabilize-allarches restrict="test"></stabilize-allarches>
+	<use lang="en">
+		<flag name="foo" restrict="test">Enable foo</flag>
+	</use>
+	<upstream>
+		<maintainer status="active">
+			<name>Upstream Foo</name>
+		</maintainer>
+		<changelog>http://example.com/changelog</changelog>
+		<doc lang="en">http://example.com/doc</doc>
+		<bugs-to>http://example.com/bugs</bugs-to>
+		<remote-id type="github">foo/bar</remote-id>
+	</upstream>
+</pkgmetadata>

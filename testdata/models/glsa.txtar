@@ -1,0 +1,37 @@
+test: GLSA serialization
+-- input.xml --
+<glsa id="200311-01">
+	<title>Buffer overflow</title>
+	<synopsis>Small description</synopsis>
+	<product type="ebuild">openssl</product>
+	<announced>2003-11-20</announced>
+	<revised count="01">2003-11-20</revised>
+	<bug>12345</bug>
+	<access>Remote</access>
+	<affected>
+		<package name="dev-libs/openssl" auto="yes" arch="*">
+			<vulnerable range="lt" slot="*">0.9.6k</vulnerable>
+			<unaffected range="ge" slot="*">0.9.6k</unaffected>
+		</package>
+	</affected>
+	<background>
+		<p>Background desc</p>
+	</background>
+	<description>
+		<p>Security issue</p>
+	</description>
+	<impact type="normal">
+		<p>Impact desc</p>
+	</impact>
+	<workaround>
+		<p>Workaround desc</p>
+	</workaround>
+	<resolution>
+		<p>Resolution desc</p>
+	</resolution>
+	<references>
+		<uri link="http://example.com">Example</uri>
+	</references>
+	<license>GPL-2</license>
+	<metadata tag="approved">Level 1<metadata tag="nested">true</metadata></metadata>
+</glsa>
