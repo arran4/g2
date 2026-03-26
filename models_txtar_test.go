@@ -2,6 +2,7 @@ package g2
 
 import (
 	"embed"
+	"encoding/json"
 	"encoding/xml"
 	"io/fs"
 	"path"
@@ -73,20 +74,38 @@ func TestModelsTxtar(t *testing.T) {
 				t.Fatalf("input.xml not found in fixture")
 			}
 
+			var model interface{}
 			if strings.Contains(fixture, "glsa") {
-				assertStableParse(t, inputData, &GLSA{})
+				model = &GLSA{}
 			} else if strings.Contains(fixture, "pkgmetadata") {
-				assertStableParse(t, inputData, &PkgMetadata{})
+				model = &PkgMetadata{}
 			} else if strings.Contains(fixture, "mirrors") {
-				assertStableParse(t, inputData, &Mirrors{})
+				model = &Mirrors{}
 			} else if strings.Contains(fixture, "projects") {
-				assertStableParse(t, inputData, &Projects{})
+				model = &Projects{}
 			} else if strings.Contains(fixture, "repositories") {
-				assertStableParse(t, inputData, &Repositories{})
+				model = &Repositories{}
 			} else if strings.Contains(fixture, "userinfo") {
-				assertStableParse(t, inputData, &UserList{})
+				model = &UserList{}
 			} else {
 				t.Fatalf("unhandled model type for %s", fixture)
+			}
+
+			assertStableParse(t, inputData, model)
+
+			var expectedJSON []byte
+			for _, f := range ar.Files {
+				if f.Name == "expected.json" {
+					expectedJSON = f.Data
+					break
+				}
+			}
+
+			if expectedJSON != nil {
+				importJSON, _ := json.MarshalIndent(model, "", "\t")
+				if strings.TrimSpace(string(importJSON)) != strings.TrimSpace(string(expectedJSON)) {
+					t.Fatalf("JSON mismatch\nWanted:\n%s\nGot:\n%s", string(expectedJSON), string(importJSON))
+				}
 			}
 		})
 	}

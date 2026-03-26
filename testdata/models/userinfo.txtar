@@ -16,3 +16,45 @@ test: Userinfo serialization
 		<location latitude="0.0" longitude="0.0">Earth</location>
 	</user>
 </userlist>
+-- expected.json --
+{
+	"XMLName": {
+		"Space": "",
+		"Local": "userlist"
+	},
+	"Users": [
+		{
+			"Username": "testuser",
+			"Realname": {
+				"Fullname": "Test User",
+				"Firstname": "Test",
+				"Familyname": {
+					"Text": "User",
+					"Sort": "User, Test"
+				}
+			},
+			"PGPKeys": [
+				"0x12345678"
+			],
+			"Aliases": [
+				"tester"
+			],
+			"Emails": [
+				"testuser@gentoo.org"
+			],
+			"Joined": [
+				"2020-01-01"
+			],
+			"Retired": [
+				"2025-01-01"
+			],
+			"Status": "active",
+			"Roles": "Developer",
+			"Location": {
+				"Text": "Earth",
+				"Latitude": "0.0",
+				"Longitude": "0.0"
+			}
+		}
+	]
+}

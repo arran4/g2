@@ -14,3 +14,33 @@ test: Projects serialization
 		</member>
 	</project>
 </projects>
+-- expected.json --
+{
+	"XMLName": {
+		"Space": "",
+		"Local": "projects"
+	},
+	"Projects": [
+		{
+			"Email": "test@gentoo.org",
+			"Name": "Test Project",
+			"URL": "https://wiki.gentoo.org/wiki/Test",
+			"Description": "A test project",
+			"Subprojects": [
+				{
+					"Text": "Sub",
+					"InheritMembers": "1",
+					"Ref": "sub@gentoo.org"
+				}
+			],
+			"Members": [
+				{
+					"IsLead": "1",
+					"Email": "member@gentoo.org",
+					"Name": "Member",
+					"Role": "Dev"
+				}
+			]
+		}
+	]
+}

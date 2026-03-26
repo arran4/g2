@@ -13,3 +13,43 @@ test: Repositories serialization
 		<feed>https://example.com/feed.xml</feed>
 	</repo>
 </repositories>
+-- expected.json --
+{
+	"XMLName": {
+		"Space": "",
+		"Local": "repositories"
+	},
+	"Version": "1.0",
+	"Repositories": [
+		{
+			"Priority": "10",
+			"Quality": "testing",
+			"Status": "unofficial",
+			"Name": "test-repo",
+			"Descriptions": [
+				{
+					"Text": "A test repository",
+					"Lang": "en"
+				}
+			],
+			"LongDescriptions": null,
+			"Homepage": "https://example.com",
+			"Owners": [
+				{
+					"Type": "person",
+					"Email": "owner@example.com",
+					"Name": "Owner"
+				}
+			],
+			"Sources": [
+				{
+					"Text": "https://example.com/repo.git",
+					"Type": "git"
+				}
+			],
+			"Feeds": [
+				"https://example.com/feed.xml"
+			]
+		}
+	]
+}

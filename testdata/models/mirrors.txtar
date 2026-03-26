@@ -8,3 +8,34 @@ test: Mirrors serialization
 		</mirror>
 	</mirrorgroup>
 </mirrors>
+-- expected.json --
+{
+	"XMLName": {
+		"Space": "",
+		"Local": "mirrors"
+	},
+	"MirrorGroups": [
+		{
+			"Region": "Europe",
+			"Country": "DE",
+			"CountryName": "Germany",
+			"Mirrors": [
+				{
+					"City": "Berlin",
+					"Coordinates": "52.5200, 13.4050",
+					"GentooBug": "123",
+					"Name": "Test Mirror",
+					"URIs": [
+						{
+							"Text": "http://mirror.example.com/",
+							"IPv4": "Y",
+							"IPv6": "N",
+							"Partial": "N",
+							"Protocol": "http"
+						}
+					]
+				}
+			]
+		}
+	]
+}

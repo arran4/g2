@@ -35,3 +35,87 @@ test: GLSA serialization
 	<license>GPL-2</license>
 	<metadata tag="approved">Level 1<metadata tag="nested">true</metadata></metadata>
 </glsa>
+-- expected.json --
+{
+	"XMLName": {
+		"Space": "",
+		"Local": "glsa"
+	},
+	"ID": "200311-01",
+	"Title": "Buffer overflow",
+	"Synopsis": "Small description",
+	"Product": {
+		"Text": "openssl",
+		"Type": "ebuild"
+	},
+	"Announced": "2003-11-20",
+	"Revised": {
+		"Text": "2003-11-20",
+		"Count": "01"
+	},
+	"Bugs": [
+		"12345"
+	],
+	"Access": "Remote",
+	"Affected": {
+		"Packages": [
+			{
+				"Name": "dev-libs/openssl",
+				"Auto": "yes",
+				"Arch": "*",
+				"Vulnerable": [
+					{
+						"Text": "0.9.6k",
+						"Range": "lt",
+						"Slot": "*"
+					}
+				],
+				"Unaffected": [
+					{
+						"Text": "0.9.6k",
+						"Range": "ge",
+						"Slot": "*",
+						"Name": ""
+					}
+				]
+			}
+		],
+		"Services": null
+	},
+	"Background": {
+		"Text": "\n\t\t\u003cp\u003eBackground desc\u003c/p\u003e\n\t"
+	},
+	"Description": {
+		"Text": "\n\t\t\u003cp\u003eSecurity issue\u003c/p\u003e\n\t"
+	},
+	"Impact": {
+		"Text": "\n\t\t\u003cp\u003eImpact desc\u003c/p\u003e\n\t",
+		"Type": "normal"
+	},
+	"Workaround": {
+		"Text": "\n\t\t\u003cp\u003eWorkaround desc\u003c/p\u003e\n\t"
+	},
+	"Resolution": {
+		"Text": "\n\t\t\u003cp\u003eResolution desc\u003c/p\u003e\n\t"
+	},
+	"References": {
+		"URIs": [
+			{
+				"Text": "Example",
+				"Link": "http://example.com"
+			}
+		]
+	},
+	"License": {
+		"Text": "GPL-2"
+	},
+	"Metadata": [
+		{
+			"Text": "Level 1\u003cmetadata tag=\"nested\"\u003etrue\u003c/metadata\u003e",
+			"Tag": "approved",
+			"Revision": "",
+			"Author": "",
+			"Timestamp": ""
+		}
+	]
+}

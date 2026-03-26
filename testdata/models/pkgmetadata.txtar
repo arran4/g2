@@ -24,3 +24,80 @@ test: PkgMetadata serialization
 		<remote-id type="github">foo/bar</remote-id>
 	</upstream>
 </pkgmetadata>
+-- expected.json --
+{
+	"XMLName": {
+		"Space": "",
+		"Local": "pkgmetadata"
+	},
+	"Maintainers": [
+		{
+			"Email": "foo@gentoo.org",
+			"Name": "Foo",
+			"Description": "",
+			"Type": "person",
+			"Proxied": "no",
+			"Status": "",
+			"Restrict": "test"
+		}
+	],
+	"LongDescription": [
+		{
+			"Body": "This is a package.",
+			"Lang": "en",
+			"Restrict": "test"
+		}
+	],
+	"Slots": {
+		"Slot": [
+			{
+				"Name": "0",
+				"Text": "Main slot"
+			}
+		],
+		"Subslots": "sub",
+		"Lang": "en"
+	},
+	"StabilizeAllArches": {
+		"Restrict": "test"
+	},
+	"Use": [
+		{
+			"Flags": [
+				{
+					"Name": "foo",
+					"Text": "Enable foo",
+					"Restrict": "test"
+				}
+			],
+			"Lang": "en"
+		}
+	],
+	"Upstream": {
+		"Maintainers": [
+			{
+				"Email": "",
+				"Name": "Upstream Foo",
+				"Description": "",
+				"Type": "",
+				"Proxied": "",
+				"Status": "active",
+				"Restrict": ""
+			}
+		],
+		"Changelog": "http://example.com/changelog",
+		"Doc": [
+			{
+				"URL": "http://example.com/doc",
+				"Lang": "en"
+			}
+		],
+		"BugsTo": "http://example.com/bugs",
+		"RemoteID": [
+			{
+				"Text": "foo/bar",
+				"Type": "github"
+			}
+		]
+	}
+}
