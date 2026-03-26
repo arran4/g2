@@ -1,10 +1,12 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"strings"
 	"text/tabwriter"
 
@@ -23,6 +25,7 @@ func (cfg *MainArgConfig) cmdEbuild(args []string) error {
 		fmt.Printf("\t\t %s \t\t %s\n", "init", "Initialize an ebuild from a template")
 		fmt.Printf("\t\t %s \t\t %s\n", "templates", "Manage ebuild templates")
 		fmt.Printf("\t\t %s \t\t %s\n", "sh-parse-to-json", "Parse ebuild using shell parser and output JSON")
+		fmt.Printf("\t\t %s \t\t %s\n", "as-json", "Parse ebuild using native parser and output JSON")
 	}
 
 	config := &CmdEbuildArgConfig{
@@ -45,6 +48,10 @@ func (cfg *MainArgConfig) cmdEbuild(args []string) error {
 	case "init":
 		if err := config.cmdEbuildInit(fs.Args()[1:]); err != nil {
 			return fmt.Errorf("ebuild init: %w", err)
+		}
+	case "as-json":
+		if err := config.cmdEbuildAsJson(fs.Args()[1:]); err != nil {
+			return fmt.Errorf("ebuild as-json: %w", err)
 		}
 	case "sh-parse-to-json":
 		if err := config.cmdEbuildShParseToJson(fs.Args()[1:]); err != nil {
@@ -258,6 +265,44 @@ func (cfg *CmdEbuildArgConfig) cmdEbuildShParseToJson(args []string) error {
 	}
 
 	jsonBytes, err := g2.ShParseDataToJSON(data)
+	if err != nil {
+		return fmt.Errorf("serializing to json: %w", err)
+	}
+
+	fmt.Println(string(jsonBytes))
+	return nil
+}
+func (cfg *CmdEbuildArgConfig) cmdEbuildAsJson(args []string) error {
+	fs := flag.NewFlagSet("as-json", flag.ExitOnError)
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if fs.NArg() == 0 {
+		return fmt.Errorf("usage: g2 ebuild as-json <ebuild files...>")
+	}
+
+	var ebuilds []*g2.Ebuild
+	for _, filename := range fs.Args() {
+		// ebuild parser expects fs.FS and filename.
+		// we can use os.DirFS of the file's directory and its base name.
+		dir := filepath.Dir(filename)
+		base := filepath.Base(filename)
+
+		ebuild, err := g2.ParseEbuild(os.DirFS(dir), base, g2.ParseFull)
+		if err != nil {
+			return fmt.Errorf("parsing ebuild %s: %w", filename, err)
+		}
+		ebuilds = append(ebuilds, ebuild)
+	}
+
+	var jsonBytes []byte
+	var err error
+	if len(ebuilds) == 1 {
+		jsonBytes, err = json.MarshalIndent(ebuilds[0], "", "\t")
+	} else {
+		jsonBytes, err = json.MarshalIndent(ebuilds, "", "\t")
+	}
+
 	if err != nil {
 		return fmt.Errorf("serializing to json: %w", err)
 	}
