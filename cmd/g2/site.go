@@ -110,6 +110,7 @@ type SiteData struct {
 	LayoutConf     *g2.LayoutConf
 	LicenseMapping map[string][]string
 	QAPolicy       *g2.QAPolicy
+	Deprecated     []g2.PackageDeprecated
 }
 
 type LicenseData struct {
@@ -156,6 +157,9 @@ type PackageData struct {
 
 	// Lint Info
 	LintWarnings []string
+
+	// Deprecation
+	Deprecated *g2.PackageDeprecated
 }
 
 type VersionData struct {
@@ -165,6 +169,9 @@ type VersionData struct {
 	// Git info
 	EbuildRawURL string
 	ModTime      time.Time
+
+	// Deprecation
+	Deprecated *g2.PackageDeprecated
 }
 
 // End model TODO check
@@ -383,6 +390,14 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool) (
 		}
 	}
 
+	packageDeprecatedPath := filepath.Join(repoDir, "profiles", "package.deprecated")
+	var deprecated []g2.PackageDeprecated
+	if parsedDeprecated, err := g2.ParsePackageDeprecatedFS(sysFS, filepath.ToSlash(packageDeprecatedPath)); err == nil {
+		deprecated = parsedDeprecated
+	} else if !os.IsNotExist(err) {
+		log.Printf("Warning: failed to parse package.deprecated: %v", err)
+	}
+
 	site := &SiteData{
 		Title:          title,
 		RepoName:       repoName,
@@ -391,6 +406,7 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool) (
 		LayoutConf:     lc,
 		LicenseMapping: licenseMapping,
 		QAPolicy:       qa,
+		Deprecated:     deprecated,
 	}
 
 	// Parse News
@@ -693,11 +709,34 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool) (
 				MetadataError: pkgData.MetadataError,
 				Manifest:      pkgData.Manifest,
 			}
-			for _, v := range pkgData.Versions {
+
+			// Assign deprecation data
+			pkgStr := pkgData.Category + "/" + pkgData.Name
+			for i := range site.Deprecated {
+				depPkg := site.Deprecated[i].Package
+				// Handle versions and operators in deprecation package strings (e.g. >=dev-python/autobahn-21)
+				// A simple check is if it contains the category/name
+				if strings.Contains(depPkg, pkgStr) {
+					pkgData.Deprecated = &site.Deprecated[i]
+					break
+				}
+			}
+
+			for i, v := range pkgData.Versions {
+				for j := range site.Deprecated {
+					// Add deprecation note if the package string matches.
+					// We match if it contains "category/name" which works for versioned atoms too.
+					if strings.Contains(site.Deprecated[j].Package, pkgStr) {
+						pkgData.Versions[i].Deprecated = &site.Deprecated[j]
+						break
+					}
+				}
+
 				g2PkgData.Versions = append(g2PkgData.Versions, g2.VersionData{
 					Version:      v.Version,
 					Ebuild:       v.Ebuild,
 					EbuildRawURL: v.EbuildRawURL,
+					Deprecated:   pkgData.Versions[i].Deprecated,
 				})
 			}
 			pkgData.LintWarnings = lints.PerformLinting(repoDir, &g2PkgData)
@@ -1388,6 +1427,24 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 				return fmt.Errorf("rendering page: %w", err)
 			}
 
+		}
+	}
+
+	for _, site := range sites {
+		repoDir := filepath.Join(outDir, "repos", site.RepoName)
+
+		if len(site.Deprecated) > 0 {
+			if err := os.MkdirAll(filepath.Join(repoDir, "deprecated"), 0755); err != nil {
+				return fmt.Errorf("creating directory: %w", err)
+			}
+			if err := renderPage(filepath.Join(repoDir, "deprecated", "index.html"), tmpl, "repo_deprecated.html", map[string]interface{}{
+				"Title":       site.RepoName + " - Deprecated",
+				"BaseURL":     "../../../",
+				"Breadcrumbs": []Breadcrumb{{Name: title, URL: "../../../"}, {Name: site.RepoName, URL: "../"}, {Name: "Deprecated Packages"}},
+				"Repo":        site,
+			}); err != nil {
+				return fmt.Errorf("rendering page: %w", err)
+			}
 		}
 	}
 

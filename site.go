@@ -52,4 +52,7 @@ type VersionData struct {
 
 	// Git info
 	EbuildRawURL string
+
+	// Deprecation
+	Deprecated *PackageDeprecated
 }
