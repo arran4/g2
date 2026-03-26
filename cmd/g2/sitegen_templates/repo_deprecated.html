@@ -1,0 +1,24 @@
+{{define "content"}}
+<h2>Deprecated Packages in {{.Repo.RepoName}}</h2>
+
+{{if .Repo.Deprecated}}
+<table>
+    <tr>
+        <th>Package</th>
+        <th>Reason</th>
+        <th>Date</th>
+        <th>Author</th>
+    </tr>
+    {{range .Repo.Deprecated}}
+    <tr>
+        <td><a href="../../packages/{{.Package}}/">{{.Package}}</a></td>
+        <td>{{.Reason}}</td>
+        <td>{{.Date}}</td>
+        <td>{{.Author}}</td>
+    </tr>
+    {{end}}
+</table>
+{{else}}
+<p>No deprecated packages found in this repository.</p>
+{{end}}
+{{end}}

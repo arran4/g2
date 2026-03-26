@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-
 )
 
 // ShParseData represents the data extracted from an ebuild using the custom parser.
