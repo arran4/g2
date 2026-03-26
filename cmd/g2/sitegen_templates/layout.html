@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{$pageTitle := .Title}}{{if .Breadcrumbs}}{{$pageTitle = ""}}{{range $i, $bc := .Breadcrumbs}}{{if $i}}{{$pageTitle = printf "%s | %s" $bc.Name $pageTitle}}{{else}}{{$pageTitle = $bc.Name}}{{end}}{{end}}{{end}}{{$pageTitle}}</title>
+    <title>{{$pageTitle := .Title}}{{if .Breadcrumbs}}{{$pageTitle = ""}}{{range $i, $bc := .Breadcrumbs}}{{if $i}}{{$pageTitle = printf "%s | %s" $pageTitle $bc.Name}}{{else}}{{$pageTitle = $bc.Name}}{{end}}{{end}}{{end}}{{$pageTitle}}</title>
     <link rel="alternate" type="application/rss+xml" title="RSS" href="index.rss" />
     <link rel="alternate" type="application/atom+xml" title="Atom" href="index.atom" />
     <style>
