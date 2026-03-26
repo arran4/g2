@@ -188,17 +188,18 @@ func (p *EbuildParser) Parse() (*Ebuild, error) {
 				return nil, err
 			}
 
-			if nextR == '=' {
+			switch nextR {
+			case '=':
 				_, _ = p.nextRune() // consume '='
 				val, err := p.consumeValue()
 				if err != nil && !errors.Is(err, io.EOF) {
 					return nil, err
 				}
 				ebuild.Variables[ident] = val
-			} else if nextR == '(' {
+			case '(':
 				// Function declaration e.g. `src_prepare() {`
 				_, _ = p.nextRune() // '('
-				r, err = p.nextRune() // ')'
+				r, _ = p.nextRune() // ')'
 				if r != ')' {
 					return nil, fmt.Errorf("%w: expected ')' at %s", ErrSyntaxError, p.r.Pos)
 				}
@@ -206,7 +207,7 @@ func (p *EbuildParser) Parse() (*Ebuild, error) {
 				if err != nil {
 					return nil, err
 				}
-			} else {
+			default:
 				if ident == "inherit" {
 					// Collect inherited eclasses
 					val, err := p.consumeLine()
@@ -271,9 +272,10 @@ func (p *EbuildParser) consumeValue() (string, error) {
 		return "", err
 	}
 
-	if r == '"' || r == '\'' {
+	switch r {
+	case '"', '\'':
 		return p.consumeQuotedString()
-	} else if r == '(' {
+	case '(':
 		return p.consumeArray()
 	}
 

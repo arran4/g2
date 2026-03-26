@@ -934,14 +934,6 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 		return fmt.Errorf("parsing templates: %w", err)
 	}
 
-	var allPackages []PackageData
-	for _, site := range sites {
-		for _, cat := range site.Categories {
-			for _, pkg := range cat.Packages {
-				allPackages = append(allPackages, pkg)
-			}
-		}
-	}
 	aggCategories := make(map[string]*AggCategory)
 	aggPackages := make(map[string]*AggPackage)
 	aggLicenses := make(map[string]*AggLicense)
@@ -1052,23 +1044,6 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 		return globalNews[i].Posted.After(globalNews[j].Posted)
 	})
 
-	// Generate Feeds for Repo
-	var repoFeedItems []g2.FeedItem
-	for _, pkg := range allPackages {
-		for _, ver := range pkg.Versions {
-			desc := ""
-			if ver.Ebuild != nil && ver.Ebuild.Vars != nil {
-				desc = ver.Ebuild.Vars["DESCRIPTION"]
-			}
-			repoFeedItems = append(repoFeedItems, g2.FeedItem{
-				Title:       fmt.Sprintf("%s/%s-%s", pkg.Category, pkg.Name, ver.Version),
-				Link:        fmt.Sprintf("packages/%s/", pkg.Name),
-				Description: desc,
-				PubDate:     time.Now().Format(time.RFC1123Z),
-				Updated:     time.Now().Format(time.RFC3339),
-			})
-    }
-  }
 	var recentNews []AggNewsItem
 	cutoffDate := time.Now().AddDate(0, -3, 0)
 	for _, n := range globalNews {
@@ -1822,8 +1797,6 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, 
 	overallSiteData := &g2.SiteData{
 		Title: "Remote Gentoo Repositories",
 	}
-	var allSites []*SiteData
-
 	for _, repo := range repos.Repos {
 		if len(repo.Sources) == 0 {
 			continue
@@ -1864,7 +1837,6 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, 
 		// generateSite will write into outDir/repo.Name
 		repoOutDir := filepath.Join(outDir, repo.Name)
 		log.Printf("Generating site for repo: %s", repo.Name)
-		allSites = append(allSites, siteData)
 		if err := generateSite(repoOutDir, []*SiteData{siteData}, recentDuration, recentDurationStr); err != nil {
 			log.Printf("Failed to generate site for repo %s: %v", repo.Name, err)
 		}
