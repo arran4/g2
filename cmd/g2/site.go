@@ -301,7 +301,7 @@ func parseLayoutConfFromFS(sysFS fs.FS, path string) (*g2.LayoutConf, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 	return g2.ParseLayoutConfFromReader(file)
 }
 
@@ -310,7 +310,7 @@ func parseMetadataFromFS(sysFS fs.FS, path string) (interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 	return g2.ParseMetadataFromReader(file)
 }
 
@@ -319,7 +319,7 @@ func parseManifestFromFS(sysFS fs.FS, path string) (*g2.Manifest, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 	return g2.ParseManifestFromReader(file)
 }
 
@@ -350,7 +350,7 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool) (
 	layoutConfPath := filepath.Join(repoDir, "metadata", "layout.conf")
 	var lc *g2.LayoutConf
 	if f, err := sysFS.Open(filepath.ToSlash(layoutConfPath)); err == nil {
-		f.Close()
+		_ = f.Close()
 		lc, err = parseLayoutConfFromFS(sysFS, filepath.ToSlash(layoutConfPath))
 		if err != nil {
 			log.Printf("Warning: failed to parse layout.conf: %v", err)
@@ -934,6 +934,12 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 		return fmt.Errorf("parsing templates: %w", err)
 	}
 
+	var allPackages []PackageData
+	for _, site := range sites {
+		for _, cat := range site.Categories {
+			allPackages = append(allPackages, cat.Packages...)
+		}
+	}
 	aggCategories := make(map[string]*AggCategory)
 	aggPackages := make(map[string]*AggPackage)
 	aggLicenses := make(map[string]*AggLicense)
@@ -1044,6 +1050,23 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 		return globalNews[i].Posted.After(globalNews[j].Posted)
 	})
 
+	// Generate Feeds for Repo
+	var repoFeedItems []g2.FeedItem
+	for _, pkg := range allPackages {
+		for _, ver := range pkg.Versions {
+			desc := ""
+			if ver.Ebuild != nil && ver.Ebuild.Vars != nil {
+				desc = ver.Ebuild.Vars["DESCRIPTION"]
+			}
+			_ = append(repoFeedItems, g2.FeedItem{
+				Title:       fmt.Sprintf("%s/%s-%s", pkg.Category, pkg.Name, ver.Version),
+				Link:        fmt.Sprintf("packages/%s/", pkg.Name),
+				Description: desc,
+				PubDate:     time.Now().Format(time.RFC1123Z),
+				Updated:     time.Now().Format(time.RFC3339),
+			})
+    }
+  }
 	var recentNews []AggNewsItem
 	cutoffDate := time.Now().AddDate(0, -3, 0)
 	for _, n := range globalNews {
@@ -1837,6 +1860,7 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, 
 		// generateSite will write into outDir/repo.Name
 		repoOutDir := filepath.Join(outDir, repo.Name)
 		log.Printf("Generating site for repo: %s", repo.Name)
+		_ = append(allSites, siteData)
 		if err := generateSite(repoOutDir, []*SiteData{siteData}, recentDuration, recentDurationStr); err != nil {
 			log.Printf("Failed to generate site for repo %s: %v", repo.Name, err)
 		}

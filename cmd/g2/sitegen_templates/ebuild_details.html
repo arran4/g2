@@ -1,0 +1,75 @@
+<h2><a href="../../../">{{.Package.Category}}</a>/<a href="../../">{{.Package.Name}}</a> - {{.VersionData.Version}}</h2>
+
+<div class="metadata-section">
+    <h3>Ebuild Details</h3>
+    <table>
+        <tr>
+            <th>Version</th>
+            <th>EAPI</th>
+            <th>Keywords</th>
+            <th>Slot</th>
+            <th>License</th>
+            <th>Description</th>
+        </tr>
+        <tr>
+            <td>{{if .VersionData.Ebuild.Vars.PV}}{{.VersionData.Ebuild.Vars.PV}}{{else}}{{.VersionData.Version}}{{end}}{{if .VersionData.EbuildRawURL}} <a href="{{.VersionData.EbuildRawURL}}" style="font-size: 0.8em; font-weight: normal; color: #888;">(raw)</a>{{end}}</td>
+            <td>{{.VersionData.Ebuild.Vars.EAPI}}</td>
+            <td>{{.VersionData.Ebuild.Vars.KEYWORDS}}</td>
+            <td>{{.VersionData.Ebuild.Vars.SLOT}}</td>
+            <td>{{.VersionData.Ebuild.Vars.LICENSE}}</td>
+            <td>{{.VersionData.Ebuild.Vars.DESCRIPTION}}</td>
+        </tr>
+    </table>
+</div>
+
+{{if .VersionData.Ebuild.Vars.IUSE}}
+<div class="metadata-section">
+    <h3>USE Flags</h3>
+    <ul>
+        <!-- TODO format better later -->
+        <li>{{.VersionData.Ebuild.Vars.IUSE}}</li>
+    </ul>
+</div>
+{{end}}
+
+{{if or .VersionData.Ebuild.Vars.DEPEND .VersionData.Ebuild.Vars.RDEPEND .VersionData.Ebuild.Vars.BDEPEND}}
+<div class="metadata-section">
+    <h3>Dependencies</h3>
+    {{if .VersionData.Ebuild.Vars.DEPEND}}
+    <h4>DEPEND</h4>
+    <pre>{{.VersionData.Ebuild.Vars.DEPEND}}</pre>
+    {{end}}
+    {{if .VersionData.Ebuild.Vars.RDEPEND}}
+    <h4>RDEPEND</h4>
+    <pre>{{.VersionData.Ebuild.Vars.RDEPEND}}</pre>
+    {{end}}
+    {{if .VersionData.Ebuild.Vars.BDEPEND}}
+    <h4>BDEPEND</h4>
+    <pre>{{.VersionData.Ebuild.Vars.BDEPEND}}</pre>
+    {{end}}
+</div>
+{{end}}
+
+{{if .FilteredManifest}}
+<div class="metadata-section">
+    <h3>Manifest for {{.VersionData.Version}}</h3>
+    <table>
+        <tr>
+            <th>Type</th>
+            <th>File</th>
+            <th>Size</th>
+            <th>Source URLs</th>
+        </tr>
+        {{range .FilteredManifest}}
+        <tr>
+            <td>{{.Entry.Type}}</td>
+            <td>{{.Entry.Filename}}</td>
+            <td>{{.Entry.Size}} bytes</td>
+            <td>
+                {{range $i, $u := .URLs}}{{if $i}}<br>{{end}}<a href="{{$u}}">{{$u}}</a>{{end}}
+            </td>
+        </tr>
+        {{end}}
+    </table>
+</div>
+{{end}}
