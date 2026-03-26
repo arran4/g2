@@ -187,8 +187,8 @@ func (cfg *MainArgConfig) cmdOverlayEbuildInstall(args []string) error {
 	// But it does have discover. We'll run discover at the overlay level.
 
 	// Update use.desc
-	log.Printf("Discovering USE flags in overlay %s", overlayPath)
-	err = cfg.cmdUseDiscover([]string{overlayPath})
+	log.Printf("Discovering USE flags in overlay %s for target %s", overlayPath, targetDir)
+	err = cfg.cmdUseDiscover([]string{targetDir})
 	if err != nil {
 		return fmt.Errorf("failed to update use.desc: %w", err)
 	}
@@ -201,8 +201,8 @@ func (cfg *MainArgConfig) cmdOverlayEbuildInstall(args []string) error {
 	}
 
 	// Update metadata.xml (discover updates info_vars)
-	log.Printf("Discovering metadata.xml info_vars in overlay %s", overlayPath)
-	err = cfg.cmdMetadataDiscover([]string{overlayPath})
+	log.Printf("Discovering metadata.xml info_vars in overlay %s for target %s", overlayPath, targetDir)
+	err = cfg.cmdMetadataDiscover([]string{targetDir})
 	if err != nil {
 		return fmt.Errorf("failed to update metadata info_vars: %w", err)
 	}
