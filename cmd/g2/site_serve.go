@@ -619,7 +619,7 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 							"Version":     version,
 						})
 						return
-					} else if len(parts) == 6 && parts[4] == "packages" {
+					} else if len(parts) >= 6 && parts[4] == "packages" {
 						catName := parts[3]
 						pkgName := parts[5]
 
@@ -639,15 +639,52 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 							return
 						}
 
-						s.renderPageHTTP(w, "repo_package.html", map[string]interface{}{
-							"Title":       fmt.Sprintf("%s - %s/%s", site.RepoName, pkgData.Category, pkgData.Name),
-							"BaseURL":     baseURL,
-							"Breadcrumbs": []Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: site.RepoName, URL: "../../../../"}, {Name: "Categories", URL: "../../../"}, {Name: pkgData.Category, URL: "../../"}, {Name: pkgData.Name}},
-							"Repo":        site,
-							"Package":     *pkgData,
-							"Version":     version,
-						})
-						return
+						if len(parts) == 6 {
+							s.renderPageHTTP(w, "repo_package.html", map[string]interface{}{
+								"Title":       fmt.Sprintf("%s - %s/%s", site.RepoName, pkgData.Category, pkgData.Name),
+								"BaseURL":     baseURL,
+								"Breadcrumbs": []Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: site.RepoName, URL: "../../../../"}, {Name: "Categories", URL: "../../../"}, {Name: pkgData.Category}, {Name: pkgData.Name}},
+								"Repo":        site,
+								"Package":     *pkgData,
+								"Version":     version,
+							})
+							return
+						} else if len(parts) == 8 && parts[6] == "ebuild" {
+							versionName := parts[7]
+							var versionData *VersionData
+							for _, v := range pkgData.Versions {
+								if v.Version == versionName || (v.Ebuild != nil && v.Ebuild.Vars != nil && v.Ebuild.Vars["PV"] == versionName) {
+									versionData = &v
+									break
+								}
+							}
+							if versionData == nil {
+								http.NotFound(w, r)
+								return
+							}
+
+							var filteredManifest []ManifestEntryData
+							for _, md := range pkgData.ManifestData {
+								for _, v := range md.Versions {
+									if v == versionData.Version || (versionData.Ebuild != nil && versionData.Ebuild.Vars != nil && v == versionData.Ebuild.Vars["PV"]) {
+										filteredManifest = append(filteredManifest, md)
+										break
+									}
+								}
+							}
+
+							s.renderPageHTTP(w, "ebuild_details.html", map[string]interface{}{
+								"Title":            fmt.Sprintf("%s - %s/%s-%s", site.RepoName, pkgData.Category, pkgData.Name, versionName),
+								"BaseURL":          baseURL,
+								"Breadcrumbs":      []Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: site.RepoName, URL: "../../../../../../"}, {Name: "Categories", URL: "../../../../../"}, {Name: pkgData.Category, URL: "../../../../"}, {Name: "Packages", URL: "../../../"}, {Name: pkgData.Name, URL: "../../"}, {Name: "Ebuild"}, {Name: versionName}},
+								"Repo":             site,
+								"Package":          *pkgData,
+								"VersionData":      *versionData,
+								"FilteredManifest": filteredManifest,
+								"Version":          version,
+							})
+							return
+						}
 					}
 
 				case "packages":
