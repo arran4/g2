@@ -1,10 +1,11 @@
 package g2
 
 type SiteData struct {
-	Title      string
-	RepoName   string
-	RemoteURL  string
-	Categories []CategoryData
+	Title          string
+	RepoName       string
+	RemoteURL      string
+	Categories     []CategoryData
+	LicenseMapping map[string][]string
 }
 
 type LicenseData struct {

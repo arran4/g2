@@ -96,18 +96,19 @@ type NewsItem struct {
 }
 
 type SiteData struct {
-	Title      string
-	RepoName   string
-	RemoteURL  string
-	EAPI       string
-	Categories []CategoryData
-	Profiles   []ProfileData
-	Authors    []g2.Author
-	AuthorsURL string
-	Moves      []g2.PackageMove
-	News       []NewsItem
-	LayoutConf *g2.LayoutConf
-	QAPolicy   *g2.QAPolicy
+	Title          string
+	RepoName       string
+	RemoteURL      string
+	EAPI           string
+	Categories     []CategoryData
+	Profiles       []ProfileData
+	Authors        []g2.Author
+	AuthorsURL     string
+	Moves          []g2.PackageMove
+	News           []NewsItem
+	LayoutConf     *g2.LayoutConf
+	LicenseMapping map[string][]string
+	QAPolicy       *g2.QAPolicy
 }
 
 type LicenseData struct {
@@ -359,6 +360,17 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool) (
 		}
 	}
 
+	var licenseMapping map[string][]string
+	licenseMappingPath := filepath.Join(repoDir, "metadata", "license-mapping.conf")
+	if f, err := sysFS.Open(filepath.ToSlash(licenseMappingPath)); err == nil {
+		mapping, err := g2.ParseLicenseMapping(f)
+		_ = f.Close()
+		if err != nil {
+			log.Printf("Warning: failed to parse license-mapping.conf: %v", err)
+		} else {
+			licenseMapping = mapping
+    }
+  }
 	qaPolicyPath := filepath.Join(repoDir, "metadata", "qa-policy.conf")
 	var qa *g2.QAPolicy
 	if f, err := sysFS.Open(filepath.ToSlash(qaPolicyPath)); err == nil {
@@ -371,12 +383,13 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool) (
 	}
 
 	site := &SiteData{
-		Title:      title,
-		RepoName:   repoName,
-		RemoteURL:  remoteURL,
-		EAPI:       eapi,
-		LayoutConf: lc,
-		QAPolicy:   qa,
+		Title:          title,
+		RepoName:       repoName,
+		RemoteURL:      remoteURL,
+		EAPI:           eapi,
+		LayoutConf:     lc,
+		LicenseMapping: licenseMapping,
+		QAPolicy:       qa,
 	}
 
 	// Parse News
@@ -876,6 +889,7 @@ type AggLicense struct {
 	Count    int
 	Packages []*AggPackage
 	Text     string
+	Aliases  []string
 }
 
 func parseDuration(s string) (time.Duration, string, error) {
@@ -940,7 +954,9 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 		return err
 	}
 
-	tmpl, err := template.ParseFS(siteTemplates, "sitegen_templates/*.html")
+	tmpl, err := template.New("").Funcs(template.FuncMap{
+		"join": strings.Join,
+	}).ParseFS(siteTemplates, "sitegen_templates/*.html")
 	if err != nil {
 		return fmt.Errorf("parsing templates: %w", err)
 	}
@@ -1016,6 +1032,24 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 								aggLicenses[lic].Packages = append(aggLicenses[lic].Packages, aggPackages[pkgKey])
 								aggLicenses[lic].Count++
 							}
+
+							// Add aliases from this site's license mapping
+							if site.LicenseMapping != nil {
+								if aliases, ok := site.LicenseMapping[lic]; ok {
+									for _, alias := range aliases {
+										hasAlias := false
+										for _, existing := range aggLicenses[lic].Aliases {
+											if existing == alias {
+												hasAlias = true
+												break
+											}
+										}
+										if !hasAlias {
+											aggLicenses[lic].Aliases = append(aggLicenses[lic].Aliases, alias)
+										}
+									}
+								}
+							}
 						}
 					}
 				}
@@ -1048,6 +1082,7 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 
 	var sortedLicenses []*AggLicense
 	for _, l := range aggLicenses {
+		sort.Strings(l.Aliases)
 		sortedLicenses = append(sortedLicenses, l)
 	}
 	sort.Slice(sortedLicenses, func(i, j int) bool { return sortedLicenses[i].Name < sortedLicenses[j].Name })
@@ -1483,7 +1518,7 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 			"Title":       "License: " + lic.Name,
 			"BaseURL":     "../../",
 			"Breadcrumbs": []Breadcrumb{{Name: title, URL: "../../"}, {Name: "Licenses", URL: "../"}, {Name: lic.Name}},
-			"License":     map[string]interface{}{"Name": lic.Name, "Packages": tmplPkgs, "Text": lic.Text},
+			"License":     map[string]interface{}{"Name": lic.Name, "Packages": tmplPkgs, "Text": lic.Text, "Aliases": lic.Aliases},
 			"Version":     version,
 		}); err != nil {
 			return fmt.Errorf("rendering page: %w", err)
@@ -2013,7 +2048,9 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, 
 		return err
 	}
 
-	tmpl, err := template.ParseFS(siteTemplates, "sitegen_templates/*.html")
+	tmpl, err := template.New("").Funcs(template.FuncMap{
+		"join": strings.Join,
+	}).ParseFS(siteTemplates, "sitegen_templates/*.html")
 	if err != nil {
 		return fmt.Errorf("parsing templates: %w", err)
 	}
