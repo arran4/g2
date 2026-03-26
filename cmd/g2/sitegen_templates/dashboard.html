@@ -11,18 +11,18 @@
         {{if gt (len .Packages) 0}}
         <li><a href="packages/">Packages ({{len .Packages}})</a></li>
         {{end}}
-        {{if .Licenses}}{{if gt (len .Licenses) 0}}
+        {{if and .Licenses (gt (len .Licenses) 0)}}
         <li><a href="licenses/">Licenses ({{len .Licenses}})</a></li>
-        {{end}}{{end}}
-        {{if .UseFlags}}{{if gt (len .UseFlags) 0}}
+        {{end}}
+        {{if and .UseFlags (gt (len .UseFlags) 0)}}
         <li><a href="uses/">USE Flags ({{len .UseFlags}})</a></li>
-        {{end}}{{end}}
-        {{if .Projects}}{{if gt (len .Projects) 0}}
+        {{end}}
+        {{if and .Projects (gt (len .Projects) 0)}}
         <li><a href="projects/">Projects ({{len .Projects}})</a></li>
-        {{end}}{{end}}
-        {{if .Profiles}}{{if gt (len .Profiles) 0}}
+        {{end}}
+        {{if and .Profiles (gt (len .Profiles) 0)}}
         <li><a href="profiles/">Profiles</a></li>
-        {{end}}{{end}}
+        {{end}}
     </ul>
 </div>
 {{if .RecentNews}}
