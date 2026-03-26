@@ -1,0 +1,44 @@
+<h2>USE Flag: {{.UseFlag.Name}}</h2>
+
+{{if .UseFlag.GlobalDesc}}
+<div class="metadata-section">
+    <h3>Global Description</h3>
+    <p>{{.UseFlag.GlobalDesc}}</p>
+</div>
+{{end}}
+
+{{if .UseFlag.Warnings}}
+<div class="metadata-section" style="border: 1px solid #cc0000; padding: 10px; margin-bottom: 20px;">
+    <h3 style="color: #cc0000;">Warnings</h3>
+    <ul>
+        {{range .UseFlag.Warnings}}
+        <li style="color: #cc0000;">{{.}}</li>
+        {{end}}
+    </ul>
+</div>
+{{end}}
+
+<div class="metadata-section">
+    <h3>Packages Using This Flag</h3>
+    <table>
+        <tr>
+            <th>Package</th>
+            <th>Local Description (use.local.desc)</th>
+            <th>Metadata Description (metadata.xml)</th>
+        </tr>
+        {{range .UseFlag.Packages}}
+        {{$pkgKey := printf "%s/%s" .Category .Name}}
+        <tr>
+            <td><a href="../../repos/{{(index .Repos 0).RepoName}}/categories/{{.Category}}/packages/{{.Name}}/">{{$pkgKey}}</a></td>
+            <td>
+                {{$localDesc := index $.UseFlag.LocalDescs $pkgKey}}
+                {{if $localDesc}}{{$localDesc}}{{else}}<em>-</em>{{end}}
+            </td>
+            <td>
+                {{$metaDesc := index $.UseFlag.MetadataDescs $pkgKey}}
+                {{if $metaDesc}}{{$metaDesc}}{{else}}<em>-</em>{{end}}
+            </td>
+        </tr>
+        {{end}}
+    </table>
+</div>
