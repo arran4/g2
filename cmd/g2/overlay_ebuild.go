@@ -12,14 +12,50 @@ import (
 
 func (cfg *MainArgConfig) cmdOverlayEbuild(args []string) error {
 	if len(args) < 1 {
-		return fmt.Errorf("missing subcommand for overlay ebuild (e.g., install)")
+		return fmt.Errorf("missing subcommand for overlay ebuild (e.g., install, use)")
 	}
 	subcmd := args[0]
-	if subcmd != "install" {
+
+	switch subcmd {
+	case "install":
+		return cfg.cmdOverlayEbuildInstall(args[1:])
+	case "use":
+		return cfg.cmdOverlayEbuildUse(args[1:])
+	default:
 		return fmt.Errorf("unknown overlay ebuild subcommand: %s", subcmd)
 	}
+}
 
-	return cfg.cmdOverlayEbuildInstall(args[1:])
+func (cfg *MainArgConfig) cmdOverlayEbuildUse(args []string) error {
+	if len(args) < 1 {
+		return fmt.Errorf("missing subcommand for overlay ebuild use (e.g., discover)")
+	}
+	subcmd := args[0]
+
+	switch subcmd {
+	case "discover":
+		// `g2 overlay ebuild use discover <ebuild> [overlay_path]`
+		// we pass the arguments to cmdUseDiscover, but it expects directories.
+		// So we actually want to parse the specific ebuild, or just pass it to cmdUseDiscover since it handles files too.
+		return cfg.cmdUseDiscover(args[1:])
+	default:
+		return fmt.Errorf("unknown overlay ebuild use subcommand: %s", subcmd)
+	}
+}
+
+func (cfg *CmdEbuildArgConfig) cmdEbuildUse(args []string) error {
+	if len(args) < 1 {
+		return fmt.Errorf("missing subcommand for ebuild use (e.g., discover)")
+	}
+	subcmd := args[0]
+
+	switch subcmd {
+	case "discover":
+		// `g2 ebuild use discover <ebuild>`
+		return cfg.cmdUseDiscover(args[1:])
+	default:
+		return fmt.Errorf("unknown ebuild use subcommand: %s", subcmd)
+	}
 }
 
 func (cfg *MainArgConfig) cmdOverlayEbuildInstall(args []string) error {

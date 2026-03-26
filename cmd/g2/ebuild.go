@@ -61,6 +61,10 @@ func (cfg *MainArgConfig) cmdEbuild(args []string) error {
 		if err := config.cmdEbuildTemplates(fs.Args()[1:]); err != nil {
 			return fmt.Errorf("ebuild templates: %w", err)
 		}
+	case "use":
+		if err := config.cmdEbuildUse(fs.Args()[1:]); err != nil {
+			return fmt.Errorf("ebuild use: %w", err)
+		}
 	case "help", "-help", "--help":
 		fs.Usage()
 		os.Exit(-1)
