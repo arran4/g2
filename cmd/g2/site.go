@@ -1524,10 +1524,26 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 		type TmplPkg struct {
 			Name      string
 			ReposList []*SiteData
+			EbuildCount int
+			HighestStableVersion template.HTML
+			HighestTestingVersion template.HTML
 		}
 		var tmplPkgs []TmplPkg
 		for _, p := range catPkgs {
-			tmplPkgs = append(tmplPkgs, TmplPkg{Name: p.Name, ReposList: mapToList(p.Repos)})
+			var allVersions []VersionData
+			for _, r := range p.Repos {
+			    for _, c := range r.Categories {
+			        if c.Name == cat.Name {
+			            for _, pkgData := range c.Packages {
+			                if pkgData.Name == p.Name {
+                                allVersions = append(allVersions, pkgData.Versions...)
+			                }
+			            }
+			        }
+			    }
+			}
+			hs, ht, count := getHighestVersionsAndCount(allVersions)
+			tmplPkgs = append(tmplPkgs, TmplPkg{Name: p.Name, ReposList: mapToList(p.Repos), EbuildCount: count, HighestStableVersion: hs, HighestTestingVersion: ht})
 		}
 
 		if err := renderPage(filepath.Join(catDir, "index.html"), tmpl, "category.html", map[string]interface{}{
@@ -1995,10 +2011,13 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 			type TmplPkg struct {
 				Name      string
 				ReposList []*SiteData
+				EbuildCount int
+				HighestStableVersion template.HTML
+				HighestTestingVersion template.HTML
 			}
 			var tmplPkgs []TmplPkg
 			for _, p := range cat.Packages {
-				tmplPkgs = append(tmplPkgs, TmplPkg{Name: p.Name, ReposList: []*SiteData{site}})
+				tmplPkgs = append(tmplPkgs, TmplPkg{Name: p.Name, ReposList: []*SiteData{site}, EbuildCount: p.EbuildCount, HighestStableVersion: p.HighestStableVersion, HighestTestingVersion: p.HighestTestingVersion})
 			}
 
 			if err := renderPage(filepath.Join(catDir, "index.html"), tmpl, "category.html", map[string]interface{}{

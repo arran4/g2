@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"github.com/hashicorp/go-version"
 	"text/template"
 )
 
@@ -427,5 +428,23 @@ func ExtractURIs(content string, variables map[string]string) ([]URIEntry, error
 
 // CompareVersions compares two gentoo versions. Returns > 0 if v1 > v2, < 0 if v1 < v2, and 0 if equal.
 func CompareVersions(v1, v2 string) int {
+	// Attempt parsing via go-version, fallback to strings.Compare
+	parseGentooVersion := func(v string) string {
+		v = regexp.MustCompile(`-r(\d+)$`).ReplaceAllString(v, "+r$1")
+		return v
+	}
+
+	ver1, err1 := version.NewVersion(parseGentooVersion(v1))
+	ver2, err2 := version.NewVersion(parseGentooVersion(v2))
+
+	if err1 == nil && err2 == nil {
+		if ver1.LessThan(ver2) {
+			return -1
+		} else if ver2.LessThan(ver1) {
+			return 1
+		}
+		return 0
+	}
+
 	return strings.Compare(v1, v2)
 }
