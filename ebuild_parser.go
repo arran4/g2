@@ -72,10 +72,6 @@ func (r *Reader) UnreadRune() error {
 	return err
 }
 
-type EbuildParserData struct {
-	Variables map[string]string
-}
-
 // EbuildParser implements a recursive descent parser for Gentoo ebuild files.
 type EbuildParser struct {
 	ctx context.Context
@@ -148,10 +144,8 @@ func (p *EbuildParser) consumeWhitespaceAndComments() error {
 
 // Parse extracts variables from the ebuild using a recursive descent approach
 // tailored specifically for ebuilds, bypassing full bash posix rules.
-func (p *EbuildParser) Parse() (*EbuildParserData, error) {
-	ebuild := &EbuildParserData{
-		Variables: make(map[string]string),
-	}
+func (p *EbuildParser) Parse() (map[string]string, error) {
+	variables := make(map[string]string)
 
 	for {
 		err := p.consumeWhitespaceAndComments()
@@ -195,13 +189,25 @@ func (p *EbuildParser) Parse() (*EbuildParserData, error) {
 				if err != nil && !errors.Is(err, io.EOF) {
 					return nil, err
 				}
-				ebuild.Variables[ident] = val
+				if strings.HasSuffix(ident, "+") {
+					ident = strings.TrimSuffix(ident, "+")
+					if variables[ident] != "" {
+						variables[ident] += " " + val
+					} else {
+						variables[ident] = val
+					}
+				} else {
+					variables[ident] = val
+				}
 			case '(':
 				// Function declaration e.g. `src_prepare() {`
 				_, _ = p.nextRune() // '('
 				r, _ = p.nextRune() // ')'
 				if r != ')' {
-					return nil, fmt.Errorf("%w: expected ')' at %s", ErrSyntaxError, p.r.Pos)
+					// It's not a function declaration, probably part of a bash command like `if (( PLEVEL < 0 ))`
+					// We'll just skip the line.
+					p.skipLine()
+					continue
 				}
 				err = p.skipFunctionBody()
 				if err != nil {
@@ -214,10 +220,10 @@ func (p *EbuildParser) Parse() (*EbuildParserData, error) {
 					if err != nil && !errors.Is(err, io.EOF) {
 						return nil, err
 					}
-					if ebuild.Variables["INHERITED"] != "" {
-						ebuild.Variables["INHERITED"] += " " + val
+					if variables["INHERITED"] != "" {
+						variables["INHERITED"] += " " + val
 					} else {
-						ebuild.Variables["INHERITED"] = val
+						variables["INHERITED"] = val
 					}
 				} else {
 					// Bare command or reserved word. Skip line.
@@ -230,7 +236,7 @@ func (p *EbuildParser) Parse() (*EbuildParserData, error) {
 		}
 	}
 
-	return ebuild, nil
+	return variables, nil
 }
 
 func (p *EbuildParser) consumeIdent() (string, error) {
@@ -243,7 +249,7 @@ func (p *EbuildParser) consumeIdent() (string, error) {
 			}
 			return "", err
 		}
-		if unicode.IsLetter(r) || unicode.IsDigit(r) || r == '_' || r == '[' || r == ']' {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) || r == '_' || r == '[' || r == ']' || r == '+' {
 			sb.WriteRune(r)
 			_, _ = p.nextRune()
 		} else {
@@ -374,6 +380,10 @@ func (p *EbuildParser) skipFunctionBody() error {
 	for {
 		r, err := p.nextRune()
 		if err != nil {
+			// If we hit EOF, it's just the end of the file. Ignore unterminated function for best-effort parsing.
+			if errors.Is(err, io.EOF) {
+				return nil
+			}
 			return fmt.Errorf("%w: unterminated function %v", ErrSyntaxError, err)
 		}
 		if r == '{' {
@@ -385,9 +395,34 @@ func (p *EbuildParser) skipFunctionBody() error {
 			}
 		} else if r == '"' || r == '\'' {
 			// Skip strings inside functions so we don't accidentally match braces
-			p.peekRune = r
-			p.hasPeek = true
-			_, _ = p.consumeQuotedString()
+			// We cannot just use consumeQuotedString if we don't handle backslashes over newlines properly in all cases
+			quote := r
+			escape := false
+			for {
+				nr, nerr := p.nextRune()
+				if nerr != nil {
+					break
+				}
+				if escape {
+					escape = false
+					continue
+				}
+				if nr == '\\' {
+					escape = true
+					continue
+				}
+				if nr == quote {
+					break
+				}
+			}
+		} else if r == '`' {
+			// Skip backticks as well
+			for {
+				br, berr := p.nextRune()
+				if berr != nil || br == '`' {
+					break
+				}
+			}
 		} else if r == '#' {
 			// skip comments
 			for {

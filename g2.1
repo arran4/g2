@@ -1,0 +1,395 @@
+.nh
+.TH g2
+Some Gentoo CLI tools I wrote for myself.
+
+.SH Manifest Tools
+\fBg2\fR includes a set of tools for working with Gentoo \fBManifest\fR files.
+
+.SS \fBmanifest\fR
+The \fBmanifest\fR command group handles operations related to Manifest files.
+
+.SS \fBupsert-from-url\fR
+Updates or inserts a \fBManifest\fR entry for a file downloaded from a URL. This command streams the file, calculates the specified checksums, and updates the \fBManifest\fR file in the specified directory (or specific file path).
+
+.PP
+\fBUsage:\fP
+
+.EX
+g2 manifest [flags] upsert-from-url <url> <filename> <manifestFileOrDir>
+.EE
+
+.PP
+\fBArguments:\fP
+.IP \(bu 2
+\fB<url>\fR: The HTTP/HTTPS URL of the file to download.
+.IP \(bu 2
+\fB<filename>\fR: The filename to record in the \fBManifest\fR (typically the distfile name).
+.IP \(bu 2
+\fB<manifestFileOrDir>\fR: The path to the \fBManifest\fR file or the directory containing it (e.g., the ebuild directory).
+
+.PP
+\fBFlags:\fP
+
+.PP
+The following flags control which checksums are calculated. Note that \fBBLAKE2B\fR and \fBSHA512\fR are enabled by default.
+.IP \(bu 2
+\fB-blake2b\fR (default: \fBtrue\fR): Calculate BLAKE2B checksum.
+.IP \(bu 2
+\fB-blake2s\fR (default: \fBfalse\fR): Calculate BLAKE2S checksum.
+.IP \(bu 2
+\fB-md5\fR (default: \fBfalse\fR): Calculate MD5 checksum.
+.IP \(bu 2
+\fB-rmd160\fR (default: \fBfalse\fR): Calculate RMD160 checksum.
+.IP \(bu 2
+\fB-sha1\fR (default: \fBfalse\fR): Calculate SHA1 checksum.
+.IP \(bu 2
+\fB-sha256\fR (default: \fBfalse\fR): Calculate SHA256 checksum.
+.IP \(bu 2
+\fB-sha3_256\fR (default: \fBfalse\fR): Calculate SHA3-256 checksum.
+.IP \(bu 2
+\fB-sha3_512\fR (default: \fBfalse\fR): Calculate SHA3-512 checksum.
+.IP \(bu 2
+\fB-sha512\fR (default: \fBtrue\fR): Calculate SHA512 checksum.
+
+.PP
+\fBExample:\fP
+
+.PP
+To download a package, calculate SHA256 in addition to defaults, and update the Manifest in the current directory:
+
+.EX
+g2 manifest -sha256=true upsert-from-url https://example.com/software-1.0.tar.gz software-1.0.tar.gz .
+.EE
+
+.SS \fBverify\fR
+Verifies the \fBManifest\fR against the actual ebuild files.
+
+.PP
+\fBUsage:\fP
+
+.EX
+g2 manifest verify [location]
+.EE
+
+.SS \fBclean\fR
+Cleans up unused entries from the \fBManifest\fR file.
+
+.PP
+\fBUsage:\fP
+
+.EX
+g2 manifest clean [location]
+.EE
+
+.SH Metadata Tools
+\fBg2\fR includes tools to manage \fBmetadata.xml\fR files.
+
+.SS \fBmetadata\fR
+Commands relating to modifying \fBmetadata.xml\fR files.
+
+.PP
+\fBUsage:\fP
+
+.EX
+g2 metadata [flags] [location]
+.EE
+
+.PP
+\fBFlags:\fP
+.IP \(bu 2
+\fB-force\fR: Force overwrite if type mismatches or other errors
+.IP \(bu 2
+\fB-l, -longdescription <string>\fR: Set long description
+.IP \(bu 2
+\fB-m, -maintainer, -maintainer-add <email[:name[:type]]>\fR: Add/Update maintainer
+.IP \(bu 2
+\fB-maintainer-remove <email>\fR: Remove maintainer
+.IP \(bu 2
+\fB-u, -upstream-id, -upstream-add <type:id>\fR: Add upstream remote ID
+.IP \(bu 2
+\fB-upstream-remove <type:id>\fR: Remove upstream remote ID
+.IP \(bu 2
+\fB-use, -use-add <name:description>\fR: Add/Update USE flag
+.IP \(bu 2
+\fB-use-remove <name>\fR: Remove USE flag
+
+.PP
+\fBExample:\fP
+
+.PP
+Add a maintainer to \fBmetadata.xml\fR:
+
+.EX
+g2 metadata -maintainer-add "dev@example.com:Developer Name:person" .
+.EE
+
+.PP
+Add a USE flag description:
+
+.EX
+g2 metadata -use-add "custom-flag:Enables a custom feature" .
+.EE
+
+.SH Ebuild Tools
+Tools for working with \fB\&.ebuild\fR files.
+
+.SS \fBebuild\fR
+\fBSubcommands:\fP
+.IP \(bu 2
+\fBinit <template_name>\fR: Initialize an ebuild from a template.
+.IP \(bu 2
+\fBtemplates\fR: Manage ebuild templates.
+.IP \(bu 2
+\fBsh-parse-to-json <ebuild_file>\fR: Parse an ebuild using the shell parser and output JSON.
+.IP \(bu 2
+\fBas-json <ebuild_file>\fR: Parse an ebuild using the native parser and output JSON.
+
+.PP
+\fBUsage Examples:\fP
+
+.PP
+Parse an ebuild natively into JSON format:
+
+.EX
+g2 ebuild as-json my-package-1.0.ebuild
+.EE
+
+.PP
+Initialize a new ebuild from the generic template:
+
+.EX
+g2 ebuild init generic my-new-package-1.0.ebuild
+.EE
+
+.SH Site Generation
+\fBg2\fR can generate a static HTML website representing your Gentoo overlay, including categories, packages, metadata, and git commit history. It also supports aggregating multiple remote overlays.
+
+.SS \fBoverlay site generate\fR
+Generates a static site for a single overlay.
+
+.PP
+\fBUsage:\fP
+
+.EX
+g2 overlay site generate [-out <dir>] [-clear] [<location>]
+.EE
+
+.PP
+\fBArguments:\fP
+.IP \(bu 2
+\fB<location>\fR: Path to the overlay directory, or a Git URL (defaults to \fB\&.\fR).
+
+.PP
+\fBFlags:\fP
+.IP \(bu 2
+\fB-out\fR: Output directory for the generated site (default: \fBsite_out\fR).
+.IP \(bu 2
+\fB-clear\fR: Clear output directory before generation.
+.IP \(bu 2
+\fB-fast-git-modtime\fR: Use fast (O(1)) but potentially less reliable go-git file log lookup.
+.IP \(bu 2
+\fB-recent-duration\fR: Duration to consider an update 'recent' (e.g., 3mo, 14d, 72h) (default "3mo").
+
+.PP
+\fBExample:\fP
+
+.EX
+g2 overlay site generate -out my_site_dir .
+.EE
+
+.SS \fBoverlay ebuild\fR
+Tools to modify the overlay with ebuilds.
+
+.PP
+\fBSubcommands:\fP
+*   \fBmove <from> <to>\fR: Record a package move in profiles/updates.
+*   \fBslotmove <package> <from> <to>\fR: Record a slot move in profiles/updates.
+*   \fBinstall [-category <string>] <ebuild.ebuild> [overlay_path] [-- <files...>]\fR: Install an ebuild into the overlay, optionally providing a specific category or additional files for the \fBfiles/\fR directory. Automatically triggers manifest, cache, use desc, and pkg_desc_index generation.
+
+.PP
+\fBExample:\fP
+
+.PP
+Install a package into a specific category with some files:
+
+.EX
+g2 overlay ebuild install -category sys-apps my-app-1.0.ebuild . -- app.conf app.service
+.EE
+
+.SS \fBoverlays site generate\fR
+Generates an aggregated static site for multiple remote repositories from a \fBrepositories.xml\fR file.
+
+.PP
+\fBUsage:\fP
+
+.EX
+g2 overlays site generate [-out <dir>] [-clear] <repositoriesFile>
+.EE
+
+.PP
+\fBArguments:\fP
+.IP \(bu 2
+\fB<repositoriesFile>\fR: Path or URL to a Gentoo \fBrepositories.xml\fR file, or \fB-\fR for stdin.
+
+.SS \fBsite serve\fR
+Serves the generated static site locally for previewing.
+
+.PP
+\fBUsage:\fP
+
+.EX
+g2 site serve [-port <int>] [path_to_overlay]
+.EE
+
+.PP
+\fBExample:\fP
+
+.EX
+g2 site serve -port 8080 .
+.EE
+
+.SH Linting
+\fBg2\fR provides linting to ensure overlay consistency.
+
+.SS \fBlint\fR
+Checks the repository for errors such as ebuild \fBIUSE\fR variables missing in \fBmetadata.xml\fR and missing \fBmd5-cache\fR files.
+
+.PP
+\fBUsage:\fP
+
+.EX
+g2 lint [<location>]
+.EE
+
+.PP
+\fBArguments:\fP
+.IP \(bu 2
+\fB<location>\fR: Path to the overlay directory (defaults to \fB\&.\fR).
+
+.PP
+\fBExample:\fP
+
+.EX
+g2 lint /var/db/repos/my-overlay
+.EE
+
+.SH USE Flag Tools
+Manage and discover USE flags, \fBuse.desc\fR, and \fBuse.local.desc\fR\&.
+
+.SS \fBuse\fR
+\fBSubcommands:\fP
+.IP \(bu 2
+\fBdiscover [location]\fR: Discover USE flags from ebuilds and \fBmetadata.xml\fR to regenerate \fBuse.desc\fR, \fBuse.local.desc\fR, and \fBmetadata.xml\fR\&.
+.IP \(bu 2
+\fBdesc-add <name> <description>\fR: Add a USE flag description to \fBuse.desc\fR\&.
+.IP \(bu 2
+\fBdesc-remove <name>\fR: Remove a USE flag description from \fBuse.desc\fR\&.
+.IP \(bu 2
+\fBdesc-edit <name> <description>\fR: Edit a USE flag description in \fBuse.desc\fR\&.
+.IP \(bu 2
+\fBdesc-list\fR: List all USE flag descriptions from \fBuse.desc\fR\&.
+.IP \(bu 2
+\fBlocal-desc-add <pkg> <name> <description>\fR: Add a USE local flag description to \fBuse.local.desc\fR\&.
+.IP \(bu 2
+\fBlocal-desc-remove <pkg> <name>\fR: Remove a USE local flag description from \fBuse.local.desc\fR\&.
+.IP \(bu 2
+\fBlocal-desc-edit <pkg> <name> <description>\fR: Edit a USE local flag description in \fBuse.local.desc\fR\&.
+.IP \(bu 2
+\fBlocal-desc-list\fR: List all USE local flag descriptions from \fBuse.local.desc\fR\&.
+
+.PP
+\fBExample Usage:\fP
+
+.PP
+Discover and populate USE flags automatically:
+
+.EX
+g2 use discover .
+.EE
+
+.PP
+List all local USE descriptions:
+
+.EX
+g2 use local-desc-list
+.EE
+
+.SH Cache Tools
+Manage \fBmd5-dict\fR cache files.
+
+.SS \fBcache\fR
+\fBSubcommands:\fP
+.IP \(bu 2
+\fBverify [location]\fR: Verify cache exists for ebuilds.
+.IP \(bu 2
+\fBgenerate [location]\fR: Generate cache for ebuilds.
+.IP \(bu 2
+\fBset-method <method>\fR: Set the cache method in \fBlayout.conf\fR\&.
+.IP \(bu 2
+\fBlist-methods\fR: List available cache methods.
+.IP \(bu 2
+\fBclean [location]\fR: Clean up unused cache entries.
+
+.PP
+\fBExample Usage:\fP
+
+.PP
+Generate the ebuild cache for the current overlay:
+
+.EX
+g2 cache generate .
+.EE
+
+.SH Package Description Index
+Tools relating to generating and verifying \fBpkg_desc_index\fR\&.
+
+.SS \fBpkg-desc-index\fR
+\fBSubcommands:\fP
+.IP \(bu 2
+\fBgenerate [location]\fR: Generate \fBpkg_desc_index\fR file from the repository.
+.IP \(bu 2
+\fBverify [location]\fR: Verify existing \fBpkg_desc_index\fR file matches the repository.
+
+.PP
+\fBExample Usage:\fP
+
+.PP
+Generate the package description index for the current overlay:
+
+.EX
+g2 pkg-desc-index generate .
+.EE
+
+.SH GitHub Action
+You can use the g2 GitHub Action
+\[la]https://github.com/arran4/g2\-action\[ra] to integrate \fBg2\fR into your CI/CD workflows. It automatically downloads and installs \fBg2\fR for use in your workflow steps.
+
+.SS Example Usage
+.EX
+name: Example workflow
+on: [push]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install g2
+        uses: arran4/g2-action@v1
+        with:
+          # Optional: specify a version. Defaults to 'latest'
+          version: 'latest'
+
+      - name: Use g2
+        run: |
+          g2 lint .
+
+      - name: Use g2 Action
+        uses: arran4/g2-action@v1.2
+        with:
+          # Optional: specify an action
+          action: 'lint .'
+          # Optional: skip installation if already installed
+          mode: 'run'
+.EE

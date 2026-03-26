@@ -106,12 +106,14 @@ type SiteData struct {
 	Authors        []g2.Author
 	AuthorsURL     string
 	Moves          []g2.PackageMove
+	SlotMoves      []g2.PackageSlotMove
 	News           []NewsItem
 	LayoutConf     *g2.LayoutConf
 	LicenseMapping map[string][]string
 	QAPolicy       *g2.QAPolicy
 	UseDesc        *g2.UseDesc
 	UseLocalDesc   *g2.UseLocalDesc
+	Deprecated     []g2.PackageDeprecated
 }
 
 type LicenseData struct {
@@ -151,6 +153,9 @@ type PackageData struct {
 	Manifest      *g2.Manifest
 	ManifestData  []ManifestEntryData
 	Files         []FileData
+	HighestStableVersion  template.HTML
+	HighestTestingVersion template.HTML
+	EbuildCount           int
 
 	// Git info
 	MetadataRawURL string
@@ -158,6 +163,9 @@ type PackageData struct {
 
 	// Lint Info
 	LintWarnings []string
+
+	// Deprecation
+	Deprecated *g2.PackageDeprecated
 }
 
 type VersionData struct {
@@ -167,6 +175,12 @@ type VersionData struct {
 	// Git info
 	EbuildRawURL string
 	ModTime      time.Time
+
+	// Deprecation
+	Deprecated *g2.PackageDeprecated
+
+	// Moves
+	MovedToSlot string
 }
 
 // End model TODO check
@@ -176,6 +190,9 @@ func (cfg *MainArgConfig) cmdOverlay(args []string) error {
 		return fmt.Errorf("missing subcommand for overlay (e.g., site)")
 	}
 	subcmd := args[0]
+	if subcmd == "ebuild" {
+		return cfg.cmdOverlayEbuild(args[1:])
+	}
 	if subcmd != "site" {
 		return fmt.Errorf("unknown overlay subcommand: %s", subcmd)
 	}
@@ -328,6 +345,91 @@ func parseManifestFromFS(sysFS fs.FS, path string) (*g2.Manifest, error) {
 	return g2.ParseManifestFromReader(file)
 }
 
+
+
+func getHighestVersionsAndCount(versions []VersionData) (template.HTML, template.HTML, int) {
+	// Parse KEYWORDS and group versions
+
+	stableMap := make(map[string]string)
+	testingMap := make(map[string]string)
+
+	for _, ver := range versions {
+		if ver.Ebuild == nil || ver.Ebuild.Vars == nil {
+			continue
+		}
+
+		keywords := ver.Ebuild.Vars["KEYWORDS"]
+		parts := strings.Fields(keywords)
+
+		for _, p := range parts {
+			if strings.HasPrefix(p, "-") {
+				continue
+			}
+			if strings.HasPrefix(p, "~") {
+				arch := p[1:]
+				if current, ok := testingMap[arch]; !ok || g2.CompareVersions(ver.Version, current) > 0 {
+					testingMap[arch] = ver.Version
+				}
+			} else {
+				arch := p
+				if current, ok := stableMap[arch]; !ok || g2.CompareVersions(ver.Version, current) > 0 {
+					stableMap[arch] = ver.Version
+				}
+			}
+		}
+	}
+
+	// Group archs by version
+	stableGroup := make(map[string][]string)
+	for arch, ver := range stableMap {
+		stableGroup[ver] = append(stableGroup[ver], arch)
+	}
+
+	testingGroup := make(map[string][]string)
+	for arch, ver := range testingMap {
+		testingGroup[ver] = append(testingGroup[ver], arch)
+	}
+
+	formatGroups := func(groups map[string][]string) string {
+		if len(groups) == 0 {
+			return ""
+		}
+
+		var sortedVersions []string
+		for ver := range groups {
+			sortedVersions = append(sortedVersions, ver)
+		}
+
+		// Sort descending
+		for i := 0; i < len(sortedVersions); i++ {
+		    for j := i+1; j < len(sortedVersions); j++ {
+		        if g2.CompareVersions(sortedVersions[i], sortedVersions[j]) < 0 {
+		            sortedVersions[i], sortedVersions[j] = sortedVersions[j], sortedVersions[i]
+		        }
+		    }
+		}
+
+		var parts []string
+		for _, ver := range sortedVersions {
+			archs := groups[ver]
+
+			// sort archs
+			for i := 0; i < len(archs); i++ {
+			    for j := i+1; j < len(archs); j++ {
+			        if archs[i] > archs[j] {
+			            archs[i], archs[j] = archs[j], archs[i]
+			        }
+			    }
+			}
+			parts = append(parts, "<span title=\"" + strings.Join(archs, " ") + "\">" + ver + "</span>")
+		}
+
+		return strings.Join(parts, ", ")
+	}
+
+	return template.HTML(formatGroups(stableGroup)), template.HTML(formatGroups(testingGroup)), len(versions)
+}
+
 func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool) (*SiteData, error) {
 	title := defaultTitle
 	var repoName string
@@ -399,6 +501,13 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool) (
 		if uld, err := g2.ParseUseLocalDesc(f); err == nil {
 			useLocalDesc = uld
 		}
+  }
+	packageDeprecatedPath := filepath.Join(repoDir, "profiles", "package.deprecated")
+	var deprecated []g2.PackageDeprecated
+	if parsedDeprecated, err := g2.ParsePackageDeprecatedFS(sysFS, filepath.ToSlash(packageDeprecatedPath)); err == nil {
+		deprecated = parsedDeprecated
+	} else if !os.IsNotExist(err) {
+		log.Printf("Warning: failed to parse package.deprecated: %v", err)
 	}
 
 	site := &SiteData{
@@ -411,6 +520,7 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool) (
 		QAPolicy:       qa,
 		UseDesc:        useDesc,
 		UseLocalDesc:   useLocalDesc,
+		Deprecated:     deprecated,
 	}
 
 	// Parse News
@@ -526,8 +636,8 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool) (
 	}
 	if updates != nil {
 		site.Moves = updates.Moves
+		site.SlotMoves = updates.SlotMoves
 	}
-
 
 	pf, err := sysFS.Open(filepath.ToSlash(filepath.Join(repoDir, "metadata", "projects.xml")))
 	if err != nil {
@@ -637,17 +747,33 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool) (
 					pkgData.ModTime = modTime
 				}
 
-				pkgData.Versions = append(pkgData.Versions, VersionData{
+				vd := VersionData{
 					Version:      version,
 					Ebuild:       ebuild,
 					EbuildRawURL: ebuildRawURL,
 					ModTime:      modTime,
-				})
+				}
+
+				if site.SlotMoves != nil {
+					slot := ebuild.Vars["SLOT"]
+					if slot != "" {
+						for _, sm := range site.SlotMoves {
+							if sm.Package == name+"/"+pkgName && sm.Old == slot {
+								vd.MovedToSlot = sm.New
+								break
+							}
+						}
+					}
+				}
+
+				pkgData.Versions = append(pkgData.Versions, vd)
 			}
 
 			if len(pkgData.Versions) == 0 {
 				continue // No ebuilds, skip package
 			}
+
+			pkgData.HighestStableVersion, pkgData.HighestTestingVersion, pkgData.EbuildCount = getHighestVersionsAndCount(pkgData.Versions)
 
 			// Sort versions descending
 			sort.Slice(pkgData.Versions, func(i, j int) bool {
@@ -714,11 +840,34 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool) (
 				MetadataError: pkgData.MetadataError,
 				Manifest:      pkgData.Manifest,
 			}
-			for _, v := range pkgData.Versions {
+
+			// Assign deprecation data
+			pkgStr := pkgData.Category + "/" + pkgData.Name
+			for i := range site.Deprecated {
+				depPkg := site.Deprecated[i].Package
+				// Handle versions and operators in deprecation package strings (e.g. >=dev-python/autobahn-21)
+				// A simple check is if it contains the category/name
+				if strings.Contains(depPkg, pkgStr) {
+					pkgData.Deprecated = &site.Deprecated[i]
+					break
+				}
+			}
+
+			for i, v := range pkgData.Versions {
+				for j := range site.Deprecated {
+					// Add deprecation note if the package string matches.
+					// We match if it contains "category/name" which works for versioned atoms too.
+					if strings.Contains(site.Deprecated[j].Package, pkgStr) {
+						pkgData.Versions[i].Deprecated = &site.Deprecated[j]
+						break
+					}
+				}
+
 				g2PkgData.Versions = append(g2PkgData.Versions, g2.VersionData{
 					Version:      v.Version,
 					Ebuild:       v.Ebuild,
 					EbuildRawURL: v.EbuildRawURL,
+					Deprecated:   pkgData.Versions[i].Deprecated,
 				})
 			}
 			pkgData.LintWarnings = lints.PerformLinting(repoDir, &g2PkgData)
@@ -1167,10 +1316,12 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 	}
 	sort.Slice(sortedUseFlags, func(i, j int) bool { return sortedUseFlags[i].Name < sortedUseFlags[j].Name })
 
+	validLicenses := make(map[string]bool)
 	var sortedLicenses []*AggLicense
 	for _, l := range aggLicenses {
 		sort.Strings(l.Aliases)
 		sortedLicenses = append(sortedLicenses, l)
+		validLicenses[l.Name] = true
 	}
 	sort.Slice(sortedLicenses, func(i, j int) bool { return sortedLicenses[i].Name < sortedLicenses[j].Name })
 
@@ -1263,7 +1414,7 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 		if err := renderPage(filepath.Join(pkgDir, "index.html"), tmpl, "moved_package.html", map[string]interface{}{
 			"Title":       "Package Moved: " + oldCat + "/" + oldName,
 			"BaseURL":     "../../../",
-			"Breadcrumbs": []Breadcrumb{{Name: title, URL: "../../../"}, {Name: "Packages", URL: "../../"}, {Name: oldCat}, {Name: oldName}},
+			"Breadcrumbs": []Breadcrumb{{Name: title, URL: "../../../"}, {Name: "Packages", URL: "../../"}, {Name: oldCat, URL: "../../../categories/" + oldCat + "/"}, {Name: oldName}},
 			"OldName":     oldCat + "/" + oldName,
 			"NewName":     move.New,
 			"NewURL":      "../../" + newParts[0] + "/" + newParts[1] + "/",
@@ -1374,6 +1525,7 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 		"Packages":             sortedPackages,
 		"Licenses":             sortedLicenses,
 		"Projects":             sortedProjects,
+		"Profiles":             sortedProfiles,
 		"Updates":              recentGlobalUpdates,
 		"Version":              version,
 		"RecentDurationString": recentDurationStr,
@@ -1426,6 +1578,25 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 			}); err != nil {
 				return fmt.Errorf("rendering page: %w", err)
 			}
+
+		}
+	}
+
+	for _, site := range sites {
+		repoDir := filepath.Join(outDir, "repos", site.RepoName)
+
+		if len(site.Deprecated) > 0 {
+			if err := os.MkdirAll(filepath.Join(repoDir, "deprecated"), 0755); err != nil {
+				return fmt.Errorf("creating directory: %w", err)
+			}
+			if err := renderPage(filepath.Join(repoDir, "deprecated", "index.html"), tmpl, "repo_deprecated.html", map[string]interface{}{
+				"Title":       site.RepoName + " - Deprecated",
+				"BaseURL":     "../../../",
+				"Breadcrumbs": []Breadcrumb{{Name: title, URL: "../../../"}, {Name: site.RepoName, URL: "../"}, {Name: "Deprecated Packages"}},
+				"Repo":        site,
+			}); err != nil {
+				return fmt.Errorf("rendering page: %w", err)
+			}
 		}
 	}
 
@@ -1472,10 +1643,26 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 		type TmplPkg struct {
 			Name      string
 			ReposList []*SiteData
+			EbuildCount int
+			HighestStableVersion template.HTML
+			HighestTestingVersion template.HTML
 		}
 		var tmplPkgs []TmplPkg
 		for _, p := range catPkgs {
-			tmplPkgs = append(tmplPkgs, TmplPkg{Name: p.Name, ReposList: mapToList(p.Repos)})
+			var allVersions []VersionData
+			for _, r := range p.Repos {
+			    for _, c := range r.Categories {
+			        if c.Name == cat.Name {
+			            for _, pkgData := range c.Packages {
+			                if pkgData.Name == p.Name {
+                                allVersions = append(allVersions, pkgData.Versions...)
+			                }
+			            }
+			        }
+			    }
+			}
+			hs, ht, count := getHighestVersionsAndCount(allVersions)
+			tmplPkgs = append(tmplPkgs, TmplPkg{Name: p.Name, ReposList: mapToList(p.Repos), EbuildCount: count, HighestStableVersion: hs, HighestTestingVersion: ht})
 		}
 
 		if err := renderPage(filepath.Join(catDir, "index.html"), tmpl, "category.html", map[string]interface{}{
@@ -1490,39 +1677,41 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 	}
 
 	// Profiles
-	if err := os.MkdirAll(filepath.Join(outDir, "profiles"), 0755); err != nil {
-		return fmt.Errorf("creating directory: %w", err)
-	}
-	if err := renderPage(filepath.Join(outDir, "profiles", "index.html"), tmpl, "profiles.html", map[string]interface{}{
-		"Title":       "Profiles",
-		"BaseURL":     "../",
-		"Breadcrumbs": []Breadcrumb{{Name: title, URL: "../"}, {Name: "Profiles"}},
-		"Profiles":    sortedProfiles,
-		"Version":     version,
-	}); err != nil {
-		return fmt.Errorf("rendering page: %w", err)
-	}
-
-	for _, p := range sortedProfiles {
-		profDir := filepath.Join(outDir, "profiles", p.Path)
-		if err := os.MkdirAll(profDir, 0755); err != nil {
-			return fmt.Errorf("creating directory %s: %w", profDir, err)
+	if len(sortedProfiles) > 0 {
+		if err := os.MkdirAll(filepath.Join(outDir, "profiles"), 0755); err != nil {
+			return fmt.Errorf("creating directory: %w", err)
 		}
-
-		relToRoot := "../../"
-		for i := 0; i < strings.Count(p.Path, "/"); i++ {
-			relToRoot += "../"
-		}
-
-		if err := renderPage(filepath.Join(profDir, "index.html"), tmpl, "profile.html", map[string]interface{}{
-			"Title":       "Profile: " + p.Path,
-			"BaseURL":     relToRoot,
-			"Breadcrumbs": []Breadcrumb{{Name: title, URL: relToRoot}, {Name: "Profiles", URL: relToRoot + "profiles/"}, {Name: p.Path}},
-			"ProfilePath": p.Path,
-			"ProfileList": p.Repos,
+		if err := renderPage(filepath.Join(outDir, "profiles", "index.html"), tmpl, "profiles.html", map[string]interface{}{
+			"Title":       "Profiles",
+			"BaseURL":     "../",
+			"Breadcrumbs": []Breadcrumb{{Name: title, URL: "../"}, {Name: "Profiles"}},
+			"Profiles":    sortedProfiles,
 			"Version":     version,
 		}); err != nil {
 			return fmt.Errorf("rendering page: %w", err)
+		}
+
+		for _, p := range sortedProfiles {
+			profDir := filepath.Join(outDir, "profiles", p.Path)
+			if err := os.MkdirAll(profDir, 0755); err != nil {
+				return fmt.Errorf("creating directory %s: %w", profDir, err)
+			}
+
+			relToRoot := "../../"
+			for i := 0; i < strings.Count(p.Path, "/"); i++ {
+				relToRoot += "../"
+			}
+
+			if err := renderPage(filepath.Join(profDir, "index.html"), tmpl, "profile.html", map[string]interface{}{
+				"Title":       "Profile: " + p.Path,
+				"BaseURL":     relToRoot,
+				"Breadcrumbs": []Breadcrumb{{Name: title, URL: relToRoot}, {Name: "Profiles", URL: relToRoot + "profiles/"}, {Name: p.Path}},
+				"ProfilePath": p.Path,
+				"ProfileList": p.Repos,
+				"Version":     version,
+			}); err != nil {
+				return fmt.Errorf("rendering page: %w", err)
+			}
 		}
 	}
 
@@ -1567,7 +1756,7 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 			if err := renderPage(filepath.Join(pkgDir, "index.html"), tmpl, "package_picker.html", map[string]interface{}{
 				"Title":       "Package: " + pkg.Category + "/" + pkg.Name,
 				"BaseURL":     "../../../",
-				"Breadcrumbs": []Breadcrumb{{Name: title, URL: "../../../"}, {Name: "Packages", URL: "../../"}, {Name: pkg.Category}, {Name: pkg.Name}},
+				"Breadcrumbs": []Breadcrumb{{Name: title, URL: "../../../"}, {Name: "Packages", URL: "../../"}, {Name: pkg.Category, URL: "../../../categories/" + pkg.Category + "/"}, {Name: pkg.Name}},
 				"Package":     map[string]interface{}{"Category": pkg.Category, "Name": pkg.Name, "ReposList": reposList},
 				"MovedToName": movedToName,
 				"MovedToURL":  movedToURL,
@@ -1575,6 +1764,7 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 			}); err != nil {
 				return fmt.Errorf("rendering page: %w", err)
 			}
+
 		}
 	}
 
@@ -1652,18 +1842,24 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 
 	// 5b. Global Projects
 	if len(sortedProjects) > 0 {
-		if err := os.MkdirAll(filepath.Join(outDir, "projects"), 0755); err != nil { return fmt.Errorf("creating directory: %w", err) }
+		if err := os.MkdirAll(filepath.Join(outDir, "projects"), 0755); err != nil {
+			return fmt.Errorf("creating directory: %w", err)
+		}
 		if err := renderPage(filepath.Join(outDir, "projects", "index.html"), tmpl, "projects.html", map[string]interface{}{
 			"Title":       "Projects",
 			"BaseURL":     "../",
 			"Breadcrumbs": []Breadcrumb{{Name: title, URL: "../"}, {Name: "Projects"}},
 			"Projects":    sortedProjects,
 			"Version":     version,
-		}); err != nil { return fmt.Errorf("rendering page: %w", err) }
+		}); err != nil {
+			return fmt.Errorf("rendering page: %w", err)
+		}
 
 		for _, proj := range sortedProjects {
 			projDir := filepath.Join(outDir, "projects", proj.Project.Email)
-			if err := os.MkdirAll(projDir, 0755); err != nil { return fmt.Errorf("creating directory %s: %w", projDir, err) }
+			if err := os.MkdirAll(projDir, 0755); err != nil {
+				return fmt.Errorf("creating directory %s: %w", projDir, err)
+			}
 
 			type TmplPkg struct {
 				Name      string
@@ -1682,7 +1878,9 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 				"Project":     proj,
 				"Packages":    tmplPkgs,
 				"Version":     version,
-			}); err != nil { return fmt.Errorf("rendering page: %w", err) }
+			}); err != nil {
+				return fmt.Errorf("rendering page: %w", err)
+			}
 		}
 	}
 
@@ -1733,7 +1931,7 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 			if err := renderPage(filepath.Join(pkgDir, "index.html"), tmpl, "moved_package.html", map[string]interface{}{
 				"Title":       fmt.Sprintf("%s - %s/%s (Moved)", site.RepoName, oldCat, oldName),
 				"BaseURL":     "../../../../../../",
-				"Breadcrumbs": []Breadcrumb{{Name: title, URL: "../../../../../../"}, {Name: site.RepoName, URL: "../../../../"}, {Name: "Categories", URL: "../../../"}, {Name: oldCat}, {Name: oldName}},
+				"Breadcrumbs": []Breadcrumb{{Name: title, URL: "../../../../../../"}, {Name: site.RepoName, URL: "../../../../"}, {Name: "Categories", URL: "../../../"}, {Name: oldCat, URL: "../../"}, {Name: oldName}},
 				"Repo":        site,
 				"OldName":     oldCat + "/" + oldName,
 				"NewName":     move.New,
@@ -1840,53 +2038,59 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 		}
 
 		if err := renderPage(filepath.Join(repoDir, "index.html"), tmpl, "repo_index.html", map[string]interface{}{
-			"Title":                site.RepoName,
-			"BaseURL":              "../../",
-			"Breadcrumbs":          []Breadcrumb{{Name: title, URL: "../../"}, {Name: "Overlays", URL: "../../overlays/"}, {Name: site.RepoName}},
-			"Repo":                 site,
-			"PackageCount":         pkgCount,
-			"Updates":              recentRepoUpdates,
-			"Version":              version,
-			"RecentDurationString": recentDurationStr,
-			"RecentNews":           repoRecentNews,
+			"Title":                 site.RepoName,
+			"BaseURL":               "../../",
+			"Breadcrumbs":           []Breadcrumb{{Name: title, URL: "../../"}, {Name: "Overlays", URL: "../../overlays/"}, {Name: site.RepoName}},
+			"Repo":                  site,
+			"PackageCount":          pkgCount,
+			"Updates":               recentRepoUpdates,
+			"Version":               version,
+			"RecentDurationString":  recentDurationStr,
+			"RecentNews":            repoRecentNews,
+			"GlobalCategoriesCount": len(sortedCategories),
+			"GlobalPackagesCount":   totalPackages,
+			"GlobalLicensesCount":   len(sortedLicenses),
+			"GlobalProfilesCount":   len(sortedProfiles),
 		}); err != nil {
 			return fmt.Errorf("rendering page: %w", err)
 		}
 
-		if err := os.MkdirAll(filepath.Join(repoDir, "profiles"), 0755); err != nil {
-			return fmt.Errorf("creating directory: %w", err)
-		}
-		if err := renderPage(filepath.Join(repoDir, "profiles", "index.html"), tmpl, "repo_profiles.html", map[string]interface{}{
-			"Title":       site.RepoName + " - Profiles",
-			"BaseURL":     "../../../",
-			"Breadcrumbs": []Breadcrumb{{Name: title, URL: "../../../"}, {Name: site.RepoName, URL: "../"}, {Name: "Profiles"}},
-			"Repo":        site,
-			"Version":     version,
-		}); err != nil {
-			return fmt.Errorf("rendering page: %w", err)
-		}
-
-		for _, p := range site.Profiles {
-			profDir := filepath.Join(repoDir, "profiles", p.Path)
-			if err := os.MkdirAll(profDir, 0755); err != nil {
-				return fmt.Errorf("creating directory %s: %w", profDir, err)
+		if len(site.Profiles) > 0 {
+			if err := os.MkdirAll(filepath.Join(repoDir, "profiles"), 0755); err != nil {
+				return fmt.Errorf("creating directory: %w", err)
 			}
-
-			relToRoot := "../../../../"
-			for i := 0; i < strings.Count(p.Path, "/"); i++ {
-				relToRoot += "../"
-			}
-
-			if err := renderPage(filepath.Join(profDir, "index.html"), tmpl, "repo_profile.html", map[string]interface{}{
-				"Title":       site.RepoName + " - Profile: " + p.Path,
-				"BaseURL":     relToRoot,
-				"Breadcrumbs": []Breadcrumb{{Name: title, URL: relToRoot}, {Name: site.RepoName, URL: relToRoot + "repos/" + site.RepoName + "/"}, {Name: "Profiles", URL: relToRoot + "repos/" + site.RepoName + "/profiles/"}, {Name: p.Path}},
-				"RepoName":    site.RepoName,
-				"ProfilePath": p.Path,
-				"Profile":     p,
+			if err := renderPage(filepath.Join(repoDir, "profiles", "index.html"), tmpl, "repo_profiles.html", map[string]interface{}{
+				"Title":       site.RepoName + " - Profiles",
+				"BaseURL":     "../../../",
+				"Breadcrumbs": []Breadcrumb{{Name: title, URL: "../../../"}, {Name: site.RepoName, URL: "../"}, {Name: "Profiles"}},
+				"Repo":        site,
 				"Version":     version,
 			}); err != nil {
 				return fmt.Errorf("rendering page: %w", err)
+			}
+
+			for _, p := range site.Profiles {
+				profDir := filepath.Join(repoDir, "profiles", p.Path)
+				if err := os.MkdirAll(profDir, 0755); err != nil {
+					return fmt.Errorf("creating directory %s: %w", profDir, err)
+				}
+
+				relToRoot := "../../../../"
+				for i := 0; i < strings.Count(p.Path, "/"); i++ {
+					relToRoot += "../"
+				}
+
+				if err := renderPage(filepath.Join(profDir, "index.html"), tmpl, "repo_profile.html", map[string]interface{}{
+					"Title":       site.RepoName + " - Profile: " + p.Path,
+					"BaseURL":     relToRoot,
+					"Breadcrumbs": []Breadcrumb{{Name: title, URL: relToRoot}, {Name: site.RepoName, URL: relToRoot + "repos/" + site.RepoName + "/"}, {Name: "Profiles", URL: relToRoot + "repos/" + site.RepoName + "/profiles/"}, {Name: p.Path}},
+					"RepoName":    site.RepoName,
+					"ProfilePath": p.Path,
+					"Profile":     p,
+					"Version":     version,
+				}); err != nil {
+					return fmt.Errorf("rendering page: %w", err)
+				}
 			}
 		}
 
@@ -1974,10 +2178,13 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 			type TmplPkg struct {
 				Name      string
 				ReposList []*SiteData
+				EbuildCount int
+				HighestStableVersion template.HTML
+				HighestTestingVersion template.HTML
 			}
 			var tmplPkgs []TmplPkg
 			for _, p := range cat.Packages {
-				tmplPkgs = append(tmplPkgs, TmplPkg{Name: p.Name, ReposList: []*SiteData{site}})
+				tmplPkgs = append(tmplPkgs, TmplPkg{Name: p.Name, ReposList: []*SiteData{site}, EbuildCount: p.EbuildCount, HighestStableVersion: p.HighestStableVersion, HighestTestingVersion: p.HighestTestingVersion})
 			}
 
 			if err := renderPage(filepath.Join(catDir, "index.html"), tmpl, "category.html", map[string]interface{}{
@@ -2071,16 +2278,74 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 			}
 
 			if err := renderPage(filepath.Join(pkgDir, "index.html"), tmpl, "repo_package.html", map[string]interface{}{
-				"Title":       fmt.Sprintf("%s - %s/%s", site.RepoName, pkg.Category, pkg.Name),
-				"BaseURL":     "../../../../../../",
-				"Breadcrumbs": []Breadcrumb{{Name: title, URL: "../../../../../../"}, {Name: site.RepoName, URL: "../../../../"}, {Name: "Categories", URL: "../../../"}, {Name: pkg.Category}, {Name: pkg.Name}},
-				"Repo":        site,
-				"Package":     pkg,
-				"MovedToName": movedToName,
-				"MovedToURL":  movedToURL,
-				"Version":     version,
+				"Title":         fmt.Sprintf("%s - %s/%s", site.RepoName, pkg.Category, pkg.Name),
+				"BaseURL":       "../../../../../../",
+				"Breadcrumbs":   []Breadcrumb{{Name: title, URL: "../../../../../../"}, {Name: site.RepoName, URL: "../../../../"}, {Name: "Categories", URL: "../../../"}, {Name: pkg.Category, URL: "../../"}, {Name: pkg.Name}},
+				"Repo":          site,
+				"Package":       pkg,
+				"MovedToName":   movedToName,
+				"MovedToURL":    movedToURL,
+				"Version":       version,
+				"ValidLicenses": validLicenses,
 			}); err != nil {
 				return fmt.Errorf("rendering page: %w", err)
+			}
+
+			for _, md := range pkg.ManifestData {
+				if len(md.Versions) > 0 {
+					mdDir := filepath.Join(pkgDir, "manifest", md.Entry.Filename)
+					if err := os.MkdirAll(mdDir, 0755); err != nil {
+						return fmt.Errorf("creating directory %s: %w", mdDir, err)
+					}
+
+					if err := renderPage(filepath.Join(mdDir, "index.html"), tmpl, "repo_package_manifest.html", map[string]interface{}{
+						"Title":       fmt.Sprintf("%s - %s/%s - Manifest: %s", site.RepoName, pkg.Category, pkg.Name, md.Entry.Filename),
+						"BaseURL":     "../../../../../../../../",
+						"Breadcrumbs": []Breadcrumb{{Name: title, URL: "../../../../../../../../"}, {Name: site.RepoName, URL: "../../../../../../"}, {Name: "Categories", URL: "../../../../../"}, {Name: pkg.Category, URL: "../../../../"}, {Name: pkg.Name, URL: "../../"}, {Name: "Manifest"}, {Name: md.Entry.Filename}},
+						"Repo":        site,
+						"Package":     pkg,
+						"Manifest":    md,
+						"Version":     version,
+					}); err != nil {
+						return fmt.Errorf("rendering page: %w", err)
+					}
+				}
+      }
+			for _, v := range pkg.Versions {
+				versionStr := v.Version
+				if v.Ebuild != nil && v.Ebuild.Vars != nil && v.Ebuild.Vars["PV"] != "" {
+					versionStr = v.Ebuild.Vars["PV"]
+				}
+
+				ebuildDir := filepath.Join(pkgDir, "ebuild", versionStr)
+				if err := os.MkdirAll(ebuildDir, 0755); err != nil {
+					return fmt.Errorf("creating directory %s: %w", ebuildDir, err)
+				}
+
+				var filteredManifest []ManifestEntryData
+				if pkg.Manifest != nil {
+					for _, md := range pkg.ManifestData {
+						for _, mv := range md.Versions {
+							if mv == v.Version || mv == versionStr {
+								filteredManifest = append(filteredManifest, md)
+								break
+							}
+						}
+					}
+				}
+
+				if err := renderPage(filepath.Join(ebuildDir, "index.html"), tmpl, "ebuild_details.html", map[string]interface{}{
+					"Title":            fmt.Sprintf("%s - %s/%s-%s", site.RepoName, pkg.Category, pkg.Name, versionStr),
+					"BaseURL":          "../../../../../../../../",
+					"Breadcrumbs":      []Breadcrumb{{Name: title, URL: "../../../../../../../../"}, {Name: site.RepoName, URL: "../../../../../../"}, {Name: "Categories", URL: "../../../../../"}, {Name: pkg.Category, URL: "../../../../"}, {Name: "Packages", URL: "../../../"}, {Name: pkg.Name, URL: "../../"}, {Name: "Ebuild", URL: "../"}, {Name: versionStr}},
+					"Repo":             site,
+					"Package":          pkg,
+					"VersionData":      v,
+					"FilteredManifest": filteredManifest,
+					"Version":          version,
+				}); err != nil {
+					return fmt.Errorf("rendering page: %w", err)
+				}
 			}
 		}
 	}

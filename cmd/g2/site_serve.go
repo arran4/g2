@@ -565,10 +565,26 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			type TmplPkg struct {
 				Name      string
 				ReposList []*SiteData
+				EbuildCount int
+				HighestStableVersion template.HTML
+				HighestTestingVersion template.HTML
 			}
 			var tmplPkgs []TmplPkg
 			for _, p := range catPkgs {
-				tmplPkgs = append(tmplPkgs, TmplPkg{Name: p.Name, ReposList: mapToList(p.Repos)})
+				var allVersions []VersionData
+				for _, r := range p.Repos {
+					for _, c := range r.Categories {
+						if c.Name == catName {
+							for _, pkgData := range c.Packages {
+								if pkgData.Name == p.Name {
+                                    allVersions = append(allVersions, pkgData.Versions...)
+								}
+							}
+						}
+					}
+				}
+                hs, ht, count := getHighestVersionsAndCount(allVersions)
+				tmplPkgs = append(tmplPkgs, TmplPkg{Name: p.Name, ReposList: mapToList(p.Repos), EbuildCount: count, HighestStableVersion: hs, HighestTestingVersion: ht})
 			}
 
 			s.renderPageHTTP(w, "category.html", map[string]interface{}{
@@ -612,7 +628,7 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				s.renderPageHTTP(w, "package_picker.html", map[string]interface{}{
 					"Title":       "Package: " + pkg.Category + "/" + pkg.Name,
 					"BaseURL":     baseURL,
-					"Breadcrumbs": []Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: "Packages", URL: "../../"}, {Name: pkg.Category}, {Name: pkg.Name}},
+					"Breadcrumbs": []Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: "Packages", URL: "../../"}, {Name: pkg.Category, URL: "../../../categories/" + pkg.Category + "/"}, {Name: pkg.Name}},
 					"Package":     map[string]interface{}{"Category": pkg.Category, "Name": pkg.Name, "ReposList": reposList},
 					"Version":     version,
 				})
@@ -799,10 +815,13 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 						type TmplPkg struct {
 							Name      string
 							ReposList []*SiteData
+							EbuildCount int
+							HighestStableVersion template.HTML
+							HighestTestingVersion template.HTML
 						}
 						var tmplPkgs []TmplPkg
 						for _, p := range catData.Packages {
-							tmplPkgs = append(tmplPkgs, TmplPkg{Name: p.Name, ReposList: []*SiteData{site}})
+							tmplPkgs = append(tmplPkgs, TmplPkg{Name: p.Name, ReposList: []*SiteData{site}, EbuildCount: p.EbuildCount, HighestStableVersion: p.HighestStableVersion, HighestTestingVersion: p.HighestTestingVersion})
 						}
 
 						s.renderPageHTTP(w, "category.html", map[string]interface{}{
@@ -813,7 +832,26 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 							"Version":     version,
 						})
 						return
-					} else if len(parts) == 6 && parts[4] == "packages" {
+					} else if len(parts) >= 6 && parts[4] == "packages" {
+						catName := parts[3]
+						pkgName := parts[5]
+
+						var pkgData *PackageData
+						for _, c := range site.Categories {
+							if c.Name == catName {
+								for _, p := range c.Packages {
+									if p.Name == pkgName {
+										pkgData = &p
+										break
+									}
+								}
+							}
+						}
+						if pkgData == nil {
+							http.NotFound(w, r)
+							return
+						}
+					} else if len(parts) >= 6 && parts[4] == "packages" {
 						catName := parts[3]
 						pkgName := parts[5]
 
@@ -833,66 +871,69 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 							return
 						}
 
-						s.renderPageHTTP(w, "repo_package.html", map[string]interface{}{
-							"Title":       fmt.Sprintf("%s - %s/%s", site.RepoName, pkgData.Category, pkgData.Name),
-							"BaseURL":     baseURL,
-							"Breadcrumbs": []Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: site.RepoName, URL: "../../../../"}, {Name: "Categories", URL: "../../../"}, {Name: pkgData.Category}, {Name: pkgData.Name}},
-							"Repo":        site,
-							"Package":     *pkgData,
-							"Version":     version,
-						})
-						return
-					} else if len(parts) == 8 && parts[4] == "packages" && parts[6] == "ebuild" {
-						catName := parts[3]
-						pkgName := parts[5]
-						verName := parts[7]
-						verName = strings.TrimSuffix(verName, ".html")
+						if len(parts) == 6 {
+							s.renderPageHTTP(w, "repo_package.html", map[string]interface{}{
+								"Title":       fmt.Sprintf("%s - %s/%s", site.RepoName, pkgData.Category, pkgData.Name),
+								"BaseURL":     baseURL,
+								"Breadcrumbs": []Breadcrumb{
+									{Name: s.Title, URL: baseURL},
+									{Name: site.RepoName, URL: "../../../../"},
+									{Name: "Categories", URL: "../../../"},
+									{Name: pkgData.Category},
+									{Name: pkgData.Name},
+								},
+								"Repo":    site,
+								"Package": *pkgData,
+								"Version": version,
+							})
+							return
+						} else if len(parts) == 8 && parts[6] == "ebuild" {
+							versionName := strings.TrimSuffix(parts[7], ".html")
 
-						var pkgData *PackageData
-						for _, c := range site.Categories {
-							if c.Name == catName {
-								for _, p := range c.Packages {
-									if p.Name == pkgName {
-										pkgData = &p
+							var versionData *VersionData
+							for _, v := range pkgData.Versions {
+								if v.Version == versionName || (v.Ebuild != nil && v.Ebuild.Vars != nil && v.Ebuild.Vars["PV"] == versionName) {
+									versionData = &v
+									break
+								}
+							}
+							if versionData == nil {
+								http.NotFound(w, r)
+								return
+							}
+
+							var filteredManifest []ManifestEntryData
+							for _, md := range pkgData.ManifestData {
+								for _, v := range md.Versions {
+									if v == versionData.Version || (versionData.Ebuild != nil && versionData.Ebuild.Vars != nil && v == versionData.Ebuild.Vars["PV"]) {
+										filteredManifest = append(filteredManifest, md)
 										break
 									}
 								}
 							}
-						}
-						if pkgData == nil {
-							http.NotFound(w, r)
+
+							s.renderPageHTTP(w, "ebuild_details.html", map[string]interface{}{
+								"Title":       fmt.Sprintf("%s - %s/%s-%s", site.RepoName, pkgData.Category, pkgData.Name, versionName),
+								"BaseURL":     baseURL,
+								"Breadcrumbs": []Breadcrumb{
+									{Name: s.Title, URL: baseURL},
+									{Name: site.RepoName, URL: "../../../../../../"},
+									{Name: "Categories", URL: "../../../../../"},
+									{Name: pkgData.Category, URL: "../../../../"},
+									{Name: "Packages", URL: "../../../"},
+									{Name: pkgData.Name, URL: "../../"},
+									{Name: "Ebuild"},
+									{Name: versionName},
+								},
+								"Repo":             site,
+								"Package":          *pkgData,
+								"VersionData":      *versionData,
+								"FilteredManifest": filteredManifest,
+								"Version":          version,
+							})
 							return
 						}
 
-						var verData *VersionData
-						for _, v := range pkgData.Versions {
-							if v.Version == verName {
-								verData = &v
-								break
-							}
-						}
-
-						if verData == nil {
-							http.NotFound(w, r)
-							return
-						}
-
-												var manifestData []ManifestEntryData
-						if pkgData.Manifest != nil {
-							manifestData = buildManifestData(pkgData.Manifest, []VersionData{*verData})
-						}
-
-						s.renderPageHTTP(w, "ebuild_details.html", map[string]interface{}{
-							"Title":       fmt.Sprintf("%s - %s/%s-%s", site.RepoName, pkgData.Category, pkgData.Name, verData.Version),
-							"BaseURL":     baseURL,
-							"Breadcrumbs": []Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: site.RepoName, URL: "../../../../../../"}, {Name: "Categories", URL: "../../../../../"}, {Name: pkgData.Category, URL: "../../../"}, {Name: pkgData.Name, URL: "../../"}, {Name: verData.Version}},
-							"Repo":        site,
-							"Package":     *pkgData,
-							"VersionData": *verData,
-							"FilteredManifest": manifestData,
-							"Version":     version,
-						})
-						return
 					}
 
 				case "packages":

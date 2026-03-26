@@ -7,3 +7,8 @@
 * All test data should be in `/testdata` if it is required for tests. Otherwise, test generated data must be git ignored and not added to the repo.
 * Do not hardcode specific remote URLs (e.g. `https://github.com/gentoo-mirror/gentoo/blob/stable/` etc) in generic generation templates since the application is used against many different overlays. Ensure variables or configuration dictate correct URLs dynamically.
 * Ensure generated site features remain repository neutral (e.g. do not hardcode links to Gentoo's GitHub or policy guide) as this tool supports importing multiple independent overlay repositories.
+* When `readme.md` is modified, you must regenerate the man page `g2.1` using `go run github.com/cpuguy83/go-md2man/v2@latest -in readme.md -out g2.1`.
+
+- When creating or modifying test data, **always anonymize individuals and strip real email addresses**. Use generic names (e.g., "Jane Doe") and example domains (e.g., "example.com").
+
+- When adding new commands or features to the `g2` application, ensure that you update the `readme.md` file to reflect these additions. The `readme.md` should be considered the central reference for available commands, usage instructions, and examples.

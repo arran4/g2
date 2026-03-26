@@ -1,0 +1,60 @@
+test: Userinfo serialization
+-- input.xml --
+<userlist>
+	<user username="testuser">
+		<realname fullname="Test User">
+			<firstname>Test</firstname>
+			<familyname sort="User, Test">User</familyname>
+		</realname>
+		<pgpkey>0x12345678</pgpkey>
+		<alias>tester</alias>
+		<email>testuser@gentoo.org</email>
+		<joined>2020-01-01</joined>
+		<retired>2025-01-01</retired>
+		<status>active</status>
+		<roles>Developer</roles>
+		<location latitude="0.0" longitude="0.0">Earth</location>
+	</user>
+</userlist>
+-- expected.json --
+{
+	"XMLName": {
+		"Space": "",
+		"Local": "userlist"
+	},
+	"Users": [
+		{
+			"Username": "testuser",
+			"Realname": {
+				"Fullname": "Test User",
+				"Firstname": "Test",
+				"Familyname": {
+					"Text": "User",
+					"Sort": "User, Test"
+				}
+			},
+			"PGPKeys": [
+				"0x12345678"
+			],
+			"Aliases": [
+				"tester"
+			],
+			"Emails": [
+				"testuser@gentoo.org"
+			],
+			"Joined": [
+				"2020-01-01"
+			],
+			"Retired": [
+				"2025-01-01"
+			],
+			"Status": "active",
+			"Roles": "Developer",
+			"Location": {
+				"Text": "Earth",
+				"Latitude": "0.0",
+				"Longitude": "0.0"
+			}
+		}
+	]
+}

@@ -9,6 +9,7 @@
             {{else}}
                 <a href="{{$.BaseURL}}packages/{{$.Category.Name}}/{{.Name}}/">{{.Name}}</a> (ambiguous, available in {{len .ReposList}} overlays)
             {{end}}
+            - Ebuilds: {{.EbuildCount}}, Stable: {{.HighestStableVersion}}, Testing: {{.HighestTestingVersion}}
         </li>
     {{end}}
 </ul>

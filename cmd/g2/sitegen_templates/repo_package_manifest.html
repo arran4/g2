@@ -1,0 +1,38 @@
+<h2><a href="../../../../">{{.Package.Category}}</a>/<a href="../../">{{.Package.Name}}</a> - Manifest: {{.Manifest.Entry.Filename}}</h2>
+
+<div class="metadata-section">
+    <h3>Details</h3>
+    <table>
+        <tr><th>Type</th><td>{{.Manifest.Entry.Type}}</td></tr>
+        <tr><th>File</th><td>{{.Manifest.Entry.Filename}}</td></tr>
+        <tr><th>Size</th><td>{{.Manifest.Entry.Size}} bytes</td></tr>
+    </table>
+</div>
+
+<div class="metadata-section">
+    <h3>Hashes</h3>
+    <table>
+        <tr><th>Type</th><th>Value</th></tr>
+        {{range .Manifest.Entry.Hashes}}
+        <tr><td>{{.Type}}</td><td>{{.Value}}</td></tr>
+        {{end}}
+    </table>
+</div>
+
+<div class="metadata-section">
+    <h3>Versions</h3>
+    <ul>
+        {{range .Manifest.Versions}}
+        <li><a href="../../ebuild/{{.}}/">{{.}}</a></li>
+        {{end}}
+    </ul>
+</div>
+
+<div class="metadata-section">
+    <h3>Source URLs</h3>
+    <ul>
+        {{range .Manifest.URLs}}
+        <li><a href="{{.}}">{{.}}</a></li>
+        {{end}}
+    </ul>
+</div>
