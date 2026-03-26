@@ -1,6 +1,8 @@
 package main
 
 import (
+	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
@@ -252,12 +254,20 @@ func (cfg *CmdEbuildArgConfig) cmdEbuildShParseToJson(args []string) error {
 	}
 	defer func() { _ = f.Close() }()
 
-	data, err := g2.ShParseEbuild(f, filename)
+	ctx := context.Background() // Can be passed in later for robust timeout control
+	p := g2.NewEbuildParser(ctx, f)
+	ebuild, err := p.Parse()
 	if err != nil {
-		return fmt.Errorf("parsing ebuild: %w", err)
+		return fmt.Errorf("ebuild parsing failed: %w", err)
 	}
 
-	jsonBytes, err := g2.ShParseDataToJSON(data)
+	data := &struct {
+		Vars map[string]string `json:"Vars"`
+	}{
+		Vars: ebuild.Variables,
+	}
+
+	jsonBytes, err := json.MarshalIndent(data, "", "\t")
 	if err != nil {
 		return fmt.Errorf("serializing to json: %w", err)
 	}

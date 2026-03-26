@@ -1,4 +1,4 @@
-package parser
+package g2
 
 import (
 	"bytes"
@@ -14,8 +14,8 @@ import (
 	"golang.org/x/tools/txtar"
 )
 
-//go:embed testdata/*.txtar
-var testdata embed.FS
+//go:embed testdata/ebuild_parser/*.txtar
+var ebuildParserTestdata embed.FS
 
 // Normalize spacing in expected array output for tests since parser might keep some newlines
 func normalize(s string) string {
@@ -28,7 +28,7 @@ func normalize(s string) string {
 }
 
 func TestParserTxtar(t *testing.T) {
-	files, err := testdata.ReadDir("testdata")
+	files, err := ebuildParserTestdata.ReadDir("testdata/ebuild_parser")
 	if err != nil {
 		t.Fatalf("reading testdata: %v", err)
 	}
@@ -39,7 +39,7 @@ func TestParserTxtar(t *testing.T) {
 		}
 
 		t.Run(file.Name(), func(t *testing.T) {
-			content, err := testdata.ReadFile(filepath.Join("testdata", file.Name()))
+			content, err := ebuildParserTestdata.ReadFile(filepath.Join("testdata/ebuild_parser", file.Name()))
 			if err != nil {
 				t.Fatalf("reading file: %v", err)
 			}
@@ -67,10 +67,10 @@ func TestParserTxtar(t *testing.T) {
 				t.Fatalf("Parse error: %v", err)
 			}
 
-            // Normalize spaces in arrays/values to make json assertions easier in txtar
-            for k, v := range ebuild.Variables {
-                ebuild.Variables[k] = normalize(v)
-            }
+			// Normalize spaces in arrays/values to make json assertions easier in txtar
+			for k, v := range ebuild.Variables {
+				ebuild.Variables[k] = normalize(v)
+			}
 
 			var expected map[string]string
 			if err := json.Unmarshal(expectedData, &expected); err != nil {

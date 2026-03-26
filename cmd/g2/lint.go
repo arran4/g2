@@ -35,16 +35,16 @@ func (cfg *MainArgConfig) cmdLint(args []string) error {
 		for _, pkg := range cat.Packages {
 			// Create a *g2.PackageData struct mapping for lint
 			pkgCopy := g2.PackageData{
-				Name: pkg.Name,
-				Category: pkg.Category,
-				Metadata: pkg.Metadata,
+				Name:          pkg.Name,
+				Category:      pkg.Category,
+				Metadata:      pkg.Metadata,
 				MetadataError: pkg.MetadataError,
-				Manifest: pkg.Manifest,
+				Manifest:      pkg.Manifest,
 			}
 			for _, v := range pkg.Versions {
 				pkgCopy.Versions = append(pkgCopy.Versions, g2.VersionData{
-					Version: v.Version,
-					Ebuild: v.Ebuild,
+					Version:      v.Version,
+					Ebuild:       v.Ebuild,
 					EbuildRawURL: v.EbuildRawURL,
 				})
 			}
