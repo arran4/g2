@@ -167,10 +167,8 @@ func ParseEbuild(fsys fs.FS, path string, mode ParsingMode) (*Ebuild, error) {
 
 	// Always parse metadata from filename
 	vars := ParseEbuildVariables(path)
-	if vars != nil {
-		e.Vars["P"] = vars.P
-		e.Vars["PN"] = vars.PN
-		e.Vars["PV"] = vars.PV
+	for k, v := range vars {
+		e.Vars[k] = v
 	}
 
 	if mode == ParseMetadataOnly {
@@ -239,15 +237,8 @@ func ParseIUSE(iuseStr string) []string {
 	return parsed
 }
 
-// EbuildVariables represents standard variables parsed from an ebuild filename.
-type EbuildVariables struct {
-	P  string
-	PN string
-	PV string
-}
-
 // ParseEbuildVariables extracts PN, PV, P from the ebuild filename.
-func ParseEbuildVariables(filename string) *EbuildVariables {
+func ParseEbuildVariables(filename string) map[string]string {
 	basename := filepath.Base(filename)
 	if !strings.HasSuffix(basename, ".ebuild") {
 		return nil
@@ -265,10 +256,10 @@ func ParseEbuildVariables(filename string) *EbuildVariables {
 		gv := ParseGentooVersion(pvCandidate)
 		if gv.IsValid {
 			pn := strings.Join(parts[:i], "-")
-			return &EbuildVariables{
-				P:  pn + "-" + pvCandidate,
-				PN: pn,
-				PV: pvCandidate,
+			return map[string]string{
+				"P":  pn + "-" + pvCandidate,
+				"PN": pn,
+				"PV": pvCandidate,
 			}
 		}
 	}

@@ -13,30 +13,30 @@ var testData embed.FS
 func TestParseEbuildVariables(t *testing.T) {
 	tests := []struct {
 		filename string
-		want     *EbuildVariables
+		want     map[string]string
 	}{
 		{
 			filename: "ollama-bin-0.10.1.ebuild",
-			want: &EbuildVariables{
-				P:  "ollama-bin-0.10.1",
-				PN: "ollama-bin",
-				PV: "0.10.1",
+			want: map[string]string{
+				"P":  "ollama-bin-0.10.1",
+				"PN": "ollama-bin",
+				"PV": "0.10.1",
 			},
 		},
 		{
 			filename: "g2-bin-0.0.2.ebuild",
-			want: &EbuildVariables{
-				P:  "g2-bin-0.0.2",
-				PN: "g2-bin",
-				PV: "0.0.2",
+			want: map[string]string{
+				"P":  "g2-bin-0.0.2",
+				"PN": "g2-bin",
+				"PV": "0.0.2",
 			},
 		},
 		{
 			filename: "app-1.2.3_rc4-r1.ebuild",
-			want: &EbuildVariables{
-				P:  "app-1.2.3_rc4-r1",
-				PN: "app",
-				PV: "1.2.3_rc4-r1",
+			want: map[string]string{
+				"P":  "app-1.2.3_rc4-r1",
+				"PN": "app",
+				"PV": "1.2.3_rc4-r1",
 			},
 		},
 		{
