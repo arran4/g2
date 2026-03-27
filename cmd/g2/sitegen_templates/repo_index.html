@@ -6,6 +6,83 @@
     <p>And sync it:</p>
     <pre><code>emerge --sync {{.Repo.RepoName}}</code></pre>
 </div>
+
+{{if .Repo.Repository}}
+<div class="metadata-section">
+    <h3>Repository Details</h3>
+    <table class="table">
+        <tbody>
+            {{if .Repo.Repository.Quality}}
+            <tr>
+                <th>Quality</th>
+                <td>{{.Repo.Repository.Quality}}</td>
+            </tr>
+            {{end}}
+            {{if .Repo.Repository.Status}}
+            <tr>
+                <th>Status</th>
+                <td>{{.Repo.Repository.Status}}</td>
+            </tr>
+            {{end}}
+            {{if .Repo.Repository.Homepage}}
+            <tr>
+                <th>Homepage</th>
+                <td><a href="{{.Repo.Repository.Homepage}}">{{.Repo.Repository.Homepage}}</a></td>
+            </tr>
+            {{end}}
+            {{if .Repo.Repository.Owners}}
+            <tr>
+                <th>Owners</th>
+                <td>
+                    <ul>
+                        {{range .Repo.Repository.Owners}}
+                        <li>{{if .Name}}{{.Name}}{{else}}Unknown{{end}} {{if .Email}}({{.Email}}){{end}} {{if .Type}}[{{.Type}}]{{end}}</li>
+                        {{end}}
+                    </ul>
+                </td>
+            </tr>
+            {{end}}
+            {{if .Repo.Repository.Sources}}
+            <tr>
+                <th>Sources</th>
+                <td>
+                    <ul>
+                        {{range .Repo.Repository.Sources}}
+                        <li>[{{.Type}}] <a href="{{.Text}}">{{.Text}}</a></li>
+                        {{end}}
+                    </ul>
+                </td>
+            </tr>
+            {{end}}
+            {{if .Repo.Repository.Descriptions}}
+            <tr>
+                <th>Description</th>
+                <td>
+                    <ul>
+                        {{range .Repo.Repository.Descriptions}}
+                        <li>{{if .Lang}}[{{.Lang}}] {{end}}{{.Text}}</li>
+                        {{end}}
+                    </ul>
+                </td>
+            </tr>
+            {{end}}
+            {{if .Repo.Repository.LongDescriptions}}
+            <tr>
+                <th>Long Description</th>
+                <td>
+                    <ul>
+                        {{range .Repo.Repository.LongDescriptions}}
+                        <li>{{if .Lang}}[{{.Lang}}] {{end}}{{.Text}}</li>
+                        {{end}}
+                    </ul>
+                </td>
+            </tr>
+            {{end}}
+        </tbody>
+    </table>
+</div>
+{{end}}
+
 <ul>
     {{if .Repo.RemoteURL}}
     <li>Git Source: <a href="{{.Repo.RemoteURL}}">{{.Repo.RemoteURL}}</a></li>
