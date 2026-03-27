@@ -21,6 +21,16 @@ document.addEventListener('DOMContentLoaded', async () => {
         window.history.pushState({}, '', newUrl);
     });
 
+    function escapeHTML(str) {
+        if (!str) return '';
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+    }
+
     async function performSearch(query) {
         if (!query || !query.trim()) {
             searchResults.innerHTML = '';
@@ -44,94 +54,55 @@ document.addEventListener('DOMContentLoaded', async () => {
             return;
         }
 
-        const fragment = document.createDocumentFragment();
+        const html = results.map(doc => {
+            const overlay = escapeHTML(doc.overlay);
+            const category = escapeHTML(doc.category);
+            const pkg = escapeHTML(doc.package);
+            const version = escapeHTML(doc.version);
+            const pageUrl = escapeHTML(doc.page_url);
+            const description = escapeHTML(doc.description);
+            const eapi = escapeHTML(doc.eapi);
+            const slot = escapeHTML(doc.slot);
+            const mask = escapeHTML(doc.mask);
 
-        results.forEach(doc => {
-            const resultDiv = document.createElement('div');
-            resultDiv.style.border = '1px solid #eee';
-            resultDiv.style.padding = '1em';
-            resultDiv.style.marginBottom = '1em';
-            resultDiv.style.borderRadius = '5px';
-            resultDiv.style.backgroundColor = '#fcfcfc';
-
-            const title = document.createElement('h3');
-            title.style.marginTop = '0';
-
-            const catLink = document.createElement('a');
-            catLink.href = `../repos/${doc.overlay}/categories/${doc.category}/`;
-            catLink.textContent = doc.category;
-            title.appendChild(catLink);
-
-            title.appendChild(document.createTextNode('/'));
-
-            const pkgLink = document.createElement('a');
-            pkgLink.href = `../repos/${doc.overlay}/categories/${doc.category}/packages/${doc.package}/`;
-            pkgLink.textContent = doc.package;
-            title.appendChild(pkgLink);
-
-            title.appendChild(document.createTextNode('-'));
-
-            const verLink = document.createElement('a');
-            verLink.href = doc.page_url;
-            verLink.textContent = doc.version;
-            title.appendChild(verLink);
-
-            resultDiv.appendChild(title);
-
-            const meta = document.createElement('p');
-            meta.style.fontSize = '0.9em';
-            meta.style.color = '#666';
-            meta.style.margin = '0 0 0.5em 0';
-
+            let badgesHtml = '';
             const badges = [];
-            if (doc.overlay) badges.push(`<span style="background: #e0e0e0; padding: 2px 6px; border-radius: 4px; margin-right: 5px;">${doc.overlay}</span>`);
-            if (doc.eapi) badges.push(`EAPI: ${doc.eapi}`);
-            if (doc.slot) badges.push(`SLOT: ${doc.slot}`);
-            if (doc.mask && doc.mask !== 'none') badges.push(`<span style="color: red;">MASK: ${doc.mask}</span>`);
+            if (overlay) badges.push(`<span style="background: #e0e0e0; padding: 2px 6px; border-radius: 4px; margin-right: 5px;">${overlay}</span>`);
+            if (eapi) badges.push(`EAPI: ${eapi}`);
+            if (slot) badges.push(`SLOT: ${slot}`);
+            if (mask && mask !== 'none') badges.push(`<span style="color: red;">MASK: ${mask}</span>`);
+            badgesHtml = badges.join(' | ');
 
-            meta.innerHTML = badges.join(' | ');
-            resultDiv.appendChild(meta);
-
-            const desc = document.createElement('p');
-            desc.textContent = doc.description;
-            desc.style.marginBottom = '0.5em';
-            resultDiv.appendChild(desc);
-
+            let kwHtml = '';
             if (doc.keywords && doc.keywords.length > 0) {
-                const kw = document.createElement('p');
-                kw.style.fontSize = '0.8em';
-                kw.style.color = '#888';
-                kw.innerHTML = `<strong>Keywords:</strong> ${doc.keywords.join(' ')}`;
-                resultDiv.appendChild(kw);
+                const escapedKw = doc.keywords.map(escapeHTML).join(' ');
+                kwHtml = `<p style="font-size: 0.8em; color: #888;"><strong>Keywords:</strong> ${escapedKw}</p>`;
             }
 
+            let usesHtml = '';
             if (doc.uses && doc.uses.length > 0) {
-                const uses = document.createElement('p');
-                uses.style.fontSize = '0.8em';
-                uses.style.color = '#888';
-
-                const usesLabel = document.createElement('strong');
-                usesLabel.textContent = 'USE: ';
-                uses.appendChild(usesLabel);
-
-                doc.uses.forEach((use, index) => {
-                    const useLink = document.createElement('a');
-                    useLink.href = `../uses/${use}/`;
-                    useLink.textContent = use;
-                    uses.appendChild(useLink);
-
-                    if (index < doc.uses.length - 1) {
-                        uses.appendChild(document.createTextNode(' '));
-                    }
-                });
-
-                resultDiv.appendChild(uses);
+                const usesLinks = doc.uses.map(use => {
+                    const escUse = escapeHTML(use);
+                    return `<a href="../uses/${escUse}/">${escUse}</a>`;
+                }).join(' ');
+                usesHtml = `<p style="font-size: 0.8em; color: #888;"><strong>USE:</strong> ${usesLinks}</p>`;
             }
 
-            fragment.appendChild(resultDiv);
-        });
+            return `
+<div style="border: 1px solid #eee; padding: 1em; margin-bottom: 1em; border-radius: 5px; background-color: #fcfcfc;">
+    <h3 style="margin-top: 0;">
+        <a href="../repos/${overlay}/categories/${category}/">${category}</a>/` +
+        `<a href="../repos/${overlay}/categories/${category}/packages/${pkg}/">${pkg}</a>-` +
+        `<a href="${pageUrl}">${version}</a>
+    </h3>
+    <p style="font-size: 0.9em; color: #666; margin: 0 0 0.5em 0;">${badgesHtml}</p>
+    <p style="margin-bottom: 0.5em;">${description}</p>
+    ${kwHtml}
+    ${usesHtml}
+</div>`;
+        }).join('');
 
-        searchResults.appendChild(fragment);
+        searchResults.innerHTML = html;
     }
 
     if (initialQuery) {
