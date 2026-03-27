@@ -198,6 +198,15 @@ func newSiteServer(sites []*SiteData) (*SiteServer, error) {
 					aggPackages[pkgKey] = &AggPackage{Name: pkg.Name, Category: cat.Name, Repos: make(map[string]*SiteData)}
 				}
 				aggPackages[pkgKey].Repos[site.RepoName] = site
+				if aggPackages[pkgKey].DominantDescription == "" {
+					aggPackages[pkgKey].DominantDescription = pkg.DominantDescription
+				}
+				if aggPackages[pkgKey].DominantHomepage == "" {
+					aggPackages[pkgKey].DominantHomepage = pkg.DominantHomepage
+				}
+				if aggPackages[pkgKey].DominantLicense == "" {
+					aggPackages[pkgKey].DominantLicense = pkg.DominantLicense
+				}
 				aggCategories[cat.Name].Packages[pkg.Name] = aggPackages[pkgKey]
 
 				if pkg.Metadata != nil {
@@ -566,11 +575,14 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			sort.Slice(catPkgs, func(i, j int) bool { return catPkgs[i].Name < catPkgs[j].Name })
 
 			type TmplPkg struct {
-				Name      string
-				ReposList []*SiteData
-				EbuildCount int
-				HighestStableVersion template.HTML
+				Name                  string
+				ReposList             []*SiteData
+				EbuildCount           int
+				HighestStableVersion  template.HTML
 				HighestTestingVersion template.HTML
+				DominantDescription   string
+				DominantHomepage      string
+				DominantLicense       string
 			}
 			var tmplPkgs []TmplPkg
 			for _, p := range catPkgs {
@@ -587,7 +599,7 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					}
 				}
                 hs, ht, count := getHighestVersionsAndCount(allVersions)
-				tmplPkgs = append(tmplPkgs, TmplPkg{Name: p.Name, ReposList: mapToList(p.Repos), EbuildCount: count, HighestStableVersion: hs, HighestTestingVersion: ht})
+				tmplPkgs = append(tmplPkgs, TmplPkg{Name: p.Name, ReposList: mapToList(p.Repos), EbuildCount: count, HighestStableVersion: hs, HighestTestingVersion: ht, DominantDescription: p.DominantDescription, DominantHomepage: p.DominantHomepage, DominantLicense: p.DominantLicense})
 			}
 
 			s.renderPageHTTP(w, "category.html", map[string]interface{}{
@@ -827,15 +839,18 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 						}
 
 						type TmplPkg struct {
-							Name      string
-							ReposList []*SiteData
-							EbuildCount int
-							HighestStableVersion template.HTML
+							Name                  string
+							ReposList             []*SiteData
+							EbuildCount           int
+							HighestStableVersion  template.HTML
 							HighestTestingVersion template.HTML
+							DominantDescription   string
+							DominantHomepage      string
+							DominantLicense       string
 						}
 						var tmplPkgs []TmplPkg
 						for _, p := range catData.Packages {
-							tmplPkgs = append(tmplPkgs, TmplPkg{Name: p.Name, ReposList: []*SiteData{site}, EbuildCount: p.EbuildCount, HighestStableVersion: p.HighestStableVersion, HighestTestingVersion: p.HighestTestingVersion})
+							tmplPkgs = append(tmplPkgs, TmplPkg{Name: p.Name, ReposList: []*SiteData{site}, EbuildCount: p.EbuildCount, HighestStableVersion: p.HighestStableVersion, HighestTestingVersion: p.HighestTestingVersion, DominantDescription: p.DominantDescription, DominantHomepage: p.DominantHomepage, DominantLicense: p.DominantLicense})
 						}
 
 						s.renderPageHTTP(w, "category.html", map[string]interface{}{
@@ -851,11 +866,11 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 						pkgName := parts[5]
 
 						var pkgData *PackageData
-						for i := range site.Categories {
-							if site.Categories[i].Name == catName {
-								for j := range site.Categories[i].Packages {
-									if site.Categories[i].Packages[j].Name == pkgName {
-										pkgData = &site.Categories[i].Packages[j]
+						for _, c := range site.Categories {
+							if c.Name == catName {
+								for _, p := range c.Packages {
+									if p.Name == pkgName {
+										pkgData = &p
 										break
 									}
 								}
@@ -865,6 +880,11 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 							http.NotFound(w, r)
 							return
 						}
+
+            validLicenses := make(map[string]bool)
+            for _, lic := range s.AggLicenses {
+              validLicenses[lic.Name] = true
+							}
 
 						if len(parts) == 6 {
 							s.renderPageHTTP(w, "repo_package.html", map[string]interface{}{
@@ -880,7 +900,7 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 								"Repo":    site,
 								"Package": *pkgData,
 								"Version": version,
-								"ValidLicenses": map[string]bool{},
+									"ValidLicenses": validLicenses,
 							})
 							return
 						} else if len(parts) == 8 && parts[6] == "ebuild" {
@@ -926,6 +946,7 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 								"VersionData":      *versionData,
 								"FilteredManifest": filteredManifest,
 								"Version":          version,
+									"ValidLicenses":    validLicenses,
 							})
 							return
 						} else if len(parts) == 8 && parts[6] == "manifest" {
