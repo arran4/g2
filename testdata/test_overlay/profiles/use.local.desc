@@ -1,0 +1,4 @@
+app-misc/foo test-flag bar
+app-misc/foo test-flag bar2
+app-misc/foo baz bazdesc
+app-misc/foo1 baz bazdesc

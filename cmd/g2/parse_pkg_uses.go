@@ -307,6 +307,70 @@ func populatePkgUseFlags(site *SiteData) {
 		localDescs = site.UseLocalDesc.Flags
 	}
 
+	// Pre-compute the most common local and metadata descriptions globally per flag.
+	mostCommonLocal := make(map[string]string)
+	mostCommonMetadata := make(map[string]string)
+
+	localCounts := make(map[string]map[string]int)
+	metadataCounts := make(map[string]map[string]int)
+
+	if site.UseLocalDesc != nil {
+		for _, flags := range site.UseLocalDesc.Flags {
+			for flag, desc := range flags {
+				if localCounts[flag] == nil {
+					localCounts[flag] = make(map[string]int)
+				}
+				localCounts[flag][desc]++
+			}
+		}
+	}
+
+	for i := range site.Categories {
+		for j := range site.Categories[i].Packages {
+			pkg := &site.Categories[i].Packages[j]
+			if pkg.Metadata != nil {
+				for _, block := range pkg.Metadata.Use {
+					for _, f := range block.Flags {
+						if f.Text != "" {
+							if metadataCounts[f.Name] == nil {
+								metadataCounts[f.Name] = make(map[string]int)
+							}
+							metadataCounts[f.Name][f.Text]++
+						}
+					}
+				}
+			}
+		}
+	}
+
+	for flag, descCounts := range localCounts {
+		maxCount := 0
+		maxDesc := ""
+		for desc, count := range descCounts {
+			if count > maxCount {
+				maxCount = count
+				maxDesc = desc
+			} else if count == maxCount && desc < maxDesc { // break ties
+				maxDesc = desc
+			}
+		}
+		mostCommonLocal[flag] = maxDesc
+	}
+
+	for flag, descCounts := range metadataCounts {
+		maxCount := 0
+		maxDesc := ""
+		for desc, count := range descCounts {
+			if count > maxCount {
+				maxCount = count
+				maxDesc = desc
+			} else if count == maxCount && desc < maxDesc { // break ties
+				maxDesc = desc
+			}
+		}
+		mostCommonMetadata[flag] = maxDesc
+	}
+
 	for i := range site.Categories {
 		for j := range site.Categories[i].Packages {
 			pkg := &site.Categories[i].Packages[j]
@@ -349,11 +413,14 @@ func populatePkgUseFlags(site *SiteData) {
 			var pkgFlags []PkgUseFlag
 			for name, flag := range flagsMap {
 				desc := ""
+				source := ""
+
 				if pkg.Metadata != nil {
 					for _, block := range pkg.Metadata.Use {
 						for _, f := range block.Flags {
 							if f.Name == name {
 								desc = f.Text
+								source = "metadata.xml"
 								break
 							}
 						}
@@ -364,6 +431,7 @@ func populatePkgUseFlags(site *SiteData) {
 					if localFlags, ok := localDescs[pkgKey]; ok {
 						if ld, ok := localFlags[name]; ok {
 							desc = ld
+							source = "use.local.desc"
 						}
 					}
 				}
@@ -371,10 +439,26 @@ func populatePkgUseFlags(site *SiteData) {
 				if desc == "" {
 					if gd, ok := globalDescs[name]; ok {
 						desc = gd
+						source = "use.desc"
+					}
+				}
+
+				if desc == "" {
+					if mcl, ok := mostCommonLocal[name]; ok && mcl != "" {
+						desc = mcl
+						source = "most common use.local.desc"
+					}
+				}
+
+				if desc == "" {
+					if mcm, ok := mostCommonMetadata[name]; ok && mcm != "" {
+						desc = mcm
+						source = "most common metadata.xml"
 					}
 				}
 
 				flag.Desc = desc
+				flag.Source = source
 
 				for _, ver := range pkg.Versions {
 					vName := ver.Version

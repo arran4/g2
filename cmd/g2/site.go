@@ -177,8 +177,9 @@ type PackageData struct {
 }
 
 type PkgUseFlag struct {
-	Name string
-	Desc string
+	Name     string
+	Desc     string
+	Source   string
 	Versions map[string]string // Version -> Unicode symbol representing state
 }
 

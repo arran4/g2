@@ -140,7 +140,12 @@
         {{range $flag := .Package.PkgUseFlags}}
         <tr>
             <td><a href="../../../../uses/{{$flag.Name}}/">{{$flag.Name}}</a></td>
-            <td>{{$flag.Desc}}</td>
+            <td>
+                {{$flag.Desc}}
+                {{if or (eq $flag.Source "most common use.local.desc") (eq $flag.Source "most common metadata.xml") (eq $flag.Source "")}}
+                <span title="Description not explicitly defined in this package's metadata.xml, use.local.desc, or global use.desc. Source: {{if $flag.Source}}{{$flag.Source}}{{else}}Unknown{{end}}" style="cursor: help;">⚠️</span>
+                {{end}}
+            </td>
             {{range $.Package.Versions}}
             {{$verName := .Version}}{{if .Ebuild.Vars.PV}}{{$verName = .Ebuild.Vars.PV}}{{end}}
             <td style="text-align: center;" title="Status of USE flag '{{$flag.Name}}' for version {{$verName}}">{{index $flag.Versions $verName}}</td>
