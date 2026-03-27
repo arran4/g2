@@ -118,17 +118,17 @@
     </table>
 </div>
 {{end}}
-<script src="../../../../../../search.js"></script>
+<script src="{{$.BaseURL}}search.js"></script>
 <script>
     document.addEventListener("DOMContentLoaded", async function() {
         const searchEngine = new SearchEngine();
         searchEngine.loaded = true; // prevent loading manifest
 
         try {
-            const res = await fetch('../../../../../../search/data/manifest.json');
+            const res = await fetch('{{$.BaseURL}}search/data/manifest.json');
             const manifest = await res.json();
             for (const file of manifest.data_files) {
-                const dataRes = await fetch('../../../../../../search/data/' + file);
+                const dataRes = await fetch('{{$.BaseURL}}search/data/' + file);
                 const data = await dataRes.json();
                 searchEngine.documents = searchEngine.documents.concat(data);
             }
