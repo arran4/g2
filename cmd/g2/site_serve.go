@@ -156,10 +156,7 @@ func newSiteServer(sites []*SiteData) (*SiteServer, error) {
 		populatePkgUseFlags(site)
 	}
 
-	tmpl, err := template.New("").Funcs(template.FuncMap{
-		"join": strings.Join,
-		"parseIUSEFlags": parseIUSEFlagsFunc,
-	}).ParseFS(siteTemplates, "sitegen_templates/*.html")
+	tmpl, err := template.New("").Funcs(getTemplateFuncMap()).ParseFS(siteTemplates, "sitegen_templates/*.html")
 	if err != nil {
 		return nil, fmt.Errorf("parsing templates: %w", err)
 	}

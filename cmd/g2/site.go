@@ -1169,10 +1169,7 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 		populatePkgUseFlags(site)
 	}
 
-	tmpl, err := template.New("").Funcs(template.FuncMap{
-		"join": strings.Join,
-		"parseIUSEFlags": parseIUSEFlagsFunc,
-	}).ParseFS(siteTemplates, "sitegen_templates/*.html")
+	tmpl, err := template.New("").Funcs(getTemplateFuncMap()).ParseFS(siteTemplates, "sitegen_templates/*.html")
 	if err != nil {
 		return fmt.Errorf("parsing templates: %w", err)
 	}
@@ -2409,6 +2406,11 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, 
 			return fmt.Errorf("reading repositories.xml from stdin: %w", err)
 		}
 	} else if strings.HasPrefix(repositoriesFile, "http://") || strings.HasPrefix(repositoriesFile, "https://") {
+		// Convert github blob URL to raw URL to download the actual XML content, not the HTML page.
+		if strings.HasPrefix(repositoriesFile, "https://github.com/") && strings.Contains(repositoriesFile, "/blob/") {
+			repositoriesFile = strings.Replace(repositoriesFile, "https://github.com/", "https://raw.githubusercontent.com/", 1)
+			repositoriesFile = strings.Replace(repositoriesFile, "/blob/", "/", 1)
+		}
 		resp, err := http.Get(repositoriesFile)
 		if err != nil {
 			return fmt.Errorf("fetching repositories.xml: %w", err)
@@ -2425,7 +2427,7 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, 
 		}
 	}
 
-	var repos g2.RemoteRepositories
+	var repos g2.Repositories
 	if err := xml.Unmarshal(data, &repos); err != nil {
 		return fmt.Errorf("parsing repositories.xml: %w", err)
 	}
@@ -2440,15 +2442,15 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, 
 	overallSiteData := &g2.SiteData{
 		Title: "Remote Gentoo Repositories",
 	}
-	for _, repo := range repos.Repos {
+	for _, repo := range repos.Repositories {
 		if len(repo.Sources) == 0 {
 			continue
 		}
 
 		var gitUrl string
 		for _, src := range repo.Sources {
-			if src.Type == "git" && strings.HasPrefix(src.URL, "http") {
-				gitUrl = src.URL
+			if src.Type == "git" && strings.HasPrefix(src.Text, "http") {
+				gitUrl = src.Text
 				break
 			}
 		}
@@ -2499,9 +2501,7 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, 
 		return err
 	}
 
-	tmpl, err := template.New("").Funcs(template.FuncMap{
-		"join": strings.Join,
-	}).ParseFS(siteTemplates, "sitegen_templates/*.html")
+	tmpl, err := template.New("").Funcs(getTemplateFuncMap()).ParseFS(siteTemplates, "sitegen_templates/*.html")
 	if err != nil {
 		return fmt.Errorf("parsing templates: %w", err)
 	}
