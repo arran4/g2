@@ -99,6 +99,7 @@ type SiteData struct {
 	Title          string
 	RepoName       string
 	RemoteURL      string
+	Repository     *g2.Repository
 	EAPI           string
 	Projects       *g2.Projects
 	Categories     []CategoryData
@@ -113,7 +114,9 @@ type SiteData struct {
 	QAPolicy       *g2.QAPolicy
 	UseDesc        *g2.UseDesc
 	UseLocalDesc   *g2.UseLocalDesc
+	InfoPkgs       []g2.InfoPkg
 	Deprecated     []g2.PackageDeprecated
+	InfoVars       []string
 	PackageCount   int
 	AggUseFlags    []*AggUseFlag
 }
@@ -174,6 +177,9 @@ type PackageData struct {
 
 	// Deprecation
 	Deprecated *g2.PackageDeprecated
+
+	// InfoPkg matching
+	IsInfoPkg bool
 }
 
 type PkgUseFlag struct {
@@ -209,6 +215,12 @@ func (cfg *MainArgConfig) cmdOverlay(args []string) error {
 	}
 	if subcmd == "license" {
 		return cfg.cmdOverlayLicense(args[1:])
+  }
+	if subcmd == "info-vars" {
+		return cfg.cmdOverlayInfoVars(args[1:])
+  }
+	if subcmd == "info-pkgs" {
+		return cfg.cmdOverlayInfoPkgs(args[1:])
 	}
 	if subcmd != "site" {
 		return fmt.Errorf("unknown overlay subcommand: %s", subcmd)
@@ -276,7 +288,7 @@ func (cfg *MainArgConfig) cmdOverlay(args []string) error {
 	}
 	defer cleanup()
 
-	siteData, err := parseRepo(os.DirFS(parseLocation), ".", "Gentoo Packages", *fastGit)
+	siteData, err := parseRepo(os.DirFS(parseLocation), ".", "Gentoo Packages", *fastGit, nil)
 	if err != nil {
 		return fmt.Errorf("parsing repo: %w", err)
 	}
@@ -447,7 +459,7 @@ func getHighestVersionsAndCount(versions []VersionData) (template.HTML, template
 	return template.HTML(formatGroups(stableGroup)), template.HTML(formatGroups(testingGroup)), len(versions)
 }
 
-func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool) (*SiteData, error) {
+func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool, repoInfo *g2.Repository) (*SiteData, error) {
 	title := defaultTitle
 	var repoName string
 
@@ -534,10 +546,26 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool) (
 		log.Printf("Warning: failed to parse package.deprecated: %v", err)
 	}
 
+	infoVarsPath := filepath.Join(repoDir, "profiles", "info_vars")
+	var infoVars []string
+	if parsedInfoVars, err := g2.ParseInfoVarsFS(sysFS, filepath.ToSlash(infoVarsPath)); err == nil {
+		infoVars = parsedInfoVars
+	} else if !os.IsNotExist(err) {
+		log.Printf("Warning: failed to parse info_vars: %v", err)
+  }
+	infoPkgsPath := filepath.Join(repoDir, "profiles", "info_pkgs")
+	var infoPkgs []g2.InfoPkg
+	if parsedInfoPkgs, err := g2.ParseInfoPkgsFS(sysFS, filepath.ToSlash(infoPkgsPath)); err == nil {
+		infoPkgs = parsedInfoPkgs
+	} else if !os.IsNotExist(err) {
+		log.Printf("Warning: failed to parse info_pkgs: %v", err)
+	}
+
 	site := &SiteData{
 		Title:          title,
 		RepoName:       repoName,
 		RemoteURL:      remoteURL,
+		Repository:     repoInfo,
 		EAPI:           eapi,
 		LayoutConf:     lc,
 		LicenseMapping: licenseGroups,
@@ -545,6 +573,8 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool) (
 		UseDesc:        useDesc,
 		UseLocalDesc:   useLocalDesc,
 		Deprecated:     deprecated,
+		InfoVars:       infoVars,
+		InfoPkgs:       infoPkgs,
 		PackageCount:   0,
 	}
 
@@ -956,6 +986,22 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool) (
 					Deprecated:   pkgData.Versions[i].Deprecated,
 				})
 			}
+
+			// Add InfoPkg status at the package level
+			for j := range site.InfoPkgs {
+				// We want to exact match the package string (e.g. "app-shells/bash")
+				// with either the full atom or the atom without its slot part (":0").
+				atom := site.InfoPkgs[j].PackageAtom
+				baseAtom := atom
+				if idx := strings.Index(atom, ":"); idx != -1 {
+					baseAtom = atom[:idx]
+				}
+				if baseAtom == pkgStr {
+					pkgData.IsInfoPkg = true
+					break
+				}
+			}
+
 			pkgData.LintWarnings = lints.PerformLinting(repoDir, &g2PkgData)
 
 			catData.Packages = append(catData.Packages, pkgData)
@@ -1573,23 +1619,6 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 		return globalNews[i].Posted.After(globalNews[j].Posted)
 	})
 
-	// Generate Feeds for Repo
-	var repoFeedItems []g2.FeedItem
-	for _, pkg := range allPackages {
-		for _, ver := range pkg.Versions {
-			desc := ""
-			if ver.Ebuild != nil && ver.Ebuild.Vars != nil {
-				desc = ver.Ebuild.Vars["DESCRIPTION"]
-			}
-			_ = append(repoFeedItems, g2.FeedItem{
-				Title:       fmt.Sprintf("%s/%s-%s", pkg.Category, pkg.Name, ver.Version),
-				Link:        fmt.Sprintf("packages/%s/", pkg.Name),
-				Description: desc,
-				PubDate:     time.Now().Format(time.RFC1123Z),
-				Updated:     time.Now().Format(time.RFC3339),
-			})
-		}
-	}
 	var recentNews []AggNewsItem
 	cutoffDate := time.Now().AddDate(0, -3, 0)
 	for _, n := range globalNews {
@@ -1670,98 +1699,6 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 		return fmt.Errorf("rendering page: %w", err)
 	}
 
-	// Generate Global Feeds
-	var globalFeedItems []FeedItem
-	for _, pkg := range sortedPackages {
-		for _, site := range pkg.Repos {
-			var sPkg *PackageData
-			for _, cat := range site.Categories {
-				if cat.Name == pkg.Category {
-					for _, p := range cat.Packages {
-						if p.Name == pkg.Name {
-							sPkg = &p
-							break
-						}
-					}
-				}
-			}
-			if sPkg != nil {
-				for _, ver := range sPkg.Versions {
-					desc := ""
-					if ver.Ebuild != nil && ver.Ebuild.Vars != nil {
-						desc = ver.Ebuild.Vars["DESCRIPTION"]
-					}
-					t := ver.ModTime
-					if t.IsZero() {
-						t = time.Now()
-					}
-					globalFeedItems = append(globalFeedItems, FeedItem{
-						Title:       fmt.Sprintf("%s/%s-%s (%s)", sPkg.Category, sPkg.Name, ver.Version, site.RepoName),
-						Link:        fmt.Sprintf("repos/%s/categories/%s/packages/%s/", site.RepoName, sPkg.Category, sPkg.Name),
-						Description: desc,
-						PubDate:     t.Format(time.RFC1123Z),
-						Updated:     t.Format(time.RFC3339),
-						Time:        t,
-					})
-				}
-			}
-		}
-	}
-	sort.Slice(globalFeedItems, func(i, j int) bool {
-		return globalFeedItems[i].Time.After(globalFeedItems[j].Time)
-	})
-	var recentGlobalUpdates []FeedItem
-	recentLimit := time.Now().Add(-recentDuration)
-	for _, item := range globalFeedItems {
-		if item.Time.After(recentLimit) {
-			recentGlobalUpdates = append(recentGlobalUpdates, item)
-			if len(recentGlobalUpdates) >= 10 {
-				break
-			}
-		}
-	}
-
-	if err := os.MkdirAll(filepath.Join(outDir, "recent"), 0755); err != nil {
-		return err
-	}
-	var allRecentGlobal []FeedItem
-	if len(globalFeedItems) > 500 {
-		allRecentGlobal = append([]FeedItem(nil), globalFeedItems[:500]...)
-	} else {
-		allRecentGlobal = append([]FeedItem(nil), globalFeedItems...)
-	}
-	for i := range allRecentGlobal {
-		if allRecentGlobal[i].Link != "" && !strings.HasPrefix(allRecentGlobal[i].Link, "http") {
-			allRecentGlobal[i].Link = "../" + allRecentGlobal[i].Link
-		}
-	}
-	if err := renderPage(filepath.Join(outDir, "recent", "index.html"), tmpl, "recent.html", map[string]interface{}{
-		"Title":       "Recent Updates",
-		"BaseURL":     "../",
-		"Breadcrumbs": []Breadcrumb{{Name: title, URL: "../"}, {Name: "Recent Updates"}},
-		"Updates":     allRecentGlobal,
-		"Version":     version,
-	}); err != nil {
-		return err
-	}
-
-	if len(globalFeedItems) > 50 {
-		globalFeedItems = globalFeedItems[:50]
-	}
-	var globalG2FeedItems []g2.FeedItem
-	for _, fi := range globalFeedItems {
-		globalG2FeedItems = append(globalG2FeedItems, g2.FeedItem{
-			Title:       fi.Title,
-			Link:        fi.Link,
-			Description: fi.Description,
-			PubDate:     fi.PubDate,
-			Updated:     fi.Updated,
-		})
-	}
-	if err := generateFeeds(filepath.Join(outDir, "index"), title, "Latest updates to global repository", "", globalG2FeedItems); err != nil {
-		log.Printf("Warning: failed to generate global feed: %v", err)
-	}
-
 	// 1. Root Dashboard
 	if err := renderPage(filepath.Join(outDir, "index.html"), tmpl, "dashboard.html", map[string]interface{}{
 		"Title":                title,
@@ -1772,7 +1709,6 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 		"Licenses":             sortedLicenses,
 		"Projects":             sortedProjects,
 		"Profiles":             sortedProfiles,
-		"Updates":              recentGlobalUpdates,
 		"Version":              version,
 		"RecentDurationString": recentDurationStr,
 		"RecentNews":           recentNews,
@@ -1872,6 +1808,33 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 				"Title":       site.RepoName + " - Deprecated",
 				"BaseURL":     "../../../",
 				"Breadcrumbs": []Breadcrumb{{Name: title, URL: "../../../"}, {Name: site.RepoName, URL: "../"}, {Name: "Deprecated Packages"}},
+				"Repo":        site,
+			}); err != nil {
+				return fmt.Errorf("rendering page: %w", err)
+			}
+		}
+
+		if len(site.InfoVars) > 0 {
+			if err := os.MkdirAll(filepath.Join(repoDir, "info_vars"), 0755); err != nil {
+				return fmt.Errorf("creating directory: %w", err)
+			}
+			if err := renderPage(filepath.Join(repoDir, "info_vars", "index.html"), tmpl, "repo_info_vars.html", map[string]interface{}{
+				"Title":       site.RepoName + " - Info Vars",
+				"BaseURL":     "../../../",
+				"Breadcrumbs": []Breadcrumb{{Name: title, URL: "../../../"}, {Name: site.RepoName, URL: "../"}, {Name: "Info Vars"}},
+				"Repo":        site,
+			}); err != nil {
+				return fmt.Errorf("rendering page: %w", err)
+			}
+    }
+		if len(site.InfoPkgs) > 0 {
+			if err := os.MkdirAll(filepath.Join(repoDir, "info_pkgs"), 0755); err != nil {
+				return fmt.Errorf("creating directory: %w", err)
+			}
+			if err := renderPage(filepath.Join(repoDir, "info_pkgs", "index.html"), tmpl, "repo_info_pkgs.html", map[string]interface{}{
+				"Title":       site.RepoName + " - Info Packages",
+				"BaseURL":     "../../../",
+				"Breadcrumbs": []Breadcrumb{{Name: title, URL: "../../../"}, {Name: site.RepoName, URL: "../"}, {Name: "Info Packages"}},
 				"Repo":        site,
 			}); err != nil {
 				return fmt.Errorf("rendering page: %w", err)
@@ -2223,82 +2186,6 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 				return fmt.Errorf("rendering page: %w", err)
 			}
 		}
-		var repoFeedItems []FeedItem
-		for _, cat := range site.Categories {
-			for _, pkg := range cat.Packages {
-				for _, ver := range pkg.Versions {
-					desc := ""
-					if ver.Ebuild != nil && ver.Ebuild.Vars != nil {
-						desc = ver.Ebuild.Vars["DESCRIPTION"]
-					}
-					t := ver.ModTime
-					if t.IsZero() {
-						t = time.Now()
-					}
-					repoFeedItems = append(repoFeedItems, FeedItem{
-						Title:       fmt.Sprintf("%s/%s-%s", pkg.Category, pkg.Name, ver.Version),
-						Link:        fmt.Sprintf("categories/%s/packages/%s/", pkg.Category, pkg.Name),
-						Description: desc,
-						PubDate:     t.Format(time.RFC1123Z),
-						Updated:     t.Format(time.RFC3339),
-						Time:        t,
-					})
-				}
-			}
-		}
-		sort.Slice(repoFeedItems, func(i, j int) bool {
-			return repoFeedItems[i].Time.After(repoFeedItems[j].Time)
-		})
-		var recentRepoUpdates []FeedItem
-		for _, item := range repoFeedItems {
-			if item.Time.After(recentLimit) {
-				recentRepoUpdates = append(recentRepoUpdates, item)
-				if len(recentRepoUpdates) >= 10 {
-					break
-				}
-			}
-		}
-
-		if err := os.MkdirAll(filepath.Join(repoDir, "recent"), 0755); err != nil {
-			return err
-		}
-		var allRecentRepo []FeedItem
-		if len(repoFeedItems) > 500 {
-			allRecentRepo = append([]FeedItem(nil), repoFeedItems[:500]...)
-		} else {
-			allRecentRepo = append([]FeedItem(nil), repoFeedItems...)
-		}
-		for i := range allRecentRepo {
-			if allRecentRepo[i].Link != "" && !strings.HasPrefix(allRecentRepo[i].Link, "http") {
-				allRecentRepo[i].Link = "../" + allRecentRepo[i].Link
-			}
-		}
-		if err := renderPage(filepath.Join(repoDir, "recent", "index.html"), tmpl, "recent.html", map[string]interface{}{
-			"Title":       site.RepoName + " - Recent Updates",
-			"BaseURL":     "../../../",
-			"Breadcrumbs": []Breadcrumb{{Name: title, URL: "../../../"}, {Name: site.RepoName, URL: "../"}, {Name: "Recent Updates"}},
-			"Updates":     allRecentRepo,
-			"Version":     version,
-		}); err != nil {
-			return err
-		}
-
-		if len(repoFeedItems) > 50 {
-			repoFeedItems = repoFeedItems[:50]
-		}
-		var repoG2FeedItems []g2.FeedItem
-		for _, fi := range repoFeedItems {
-			repoG2FeedItems = append(repoG2FeedItems, g2.FeedItem{
-				Title:       fi.Title,
-				Link:        fi.Link,
-				Description: fi.Description,
-				PubDate:     fi.PubDate,
-				Updated:     fi.Updated,
-			})
-		}
-		if err := generateFeeds(filepath.Join(repoDir, "index"), site.RepoName, "Latest updates to repository", "", repoG2FeedItems); err != nil {
-			log.Printf("Warning: failed to generate repo feed: %v", err)
-		}
 
 		pkgCount := 0
 		for _, c := range site.Categories {
@@ -2325,7 +2212,6 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 			"Breadcrumbs":           []Breadcrumb{{Name: title, URL: "../../"}, {Name: "Overlays", URL: "../../overlays/"}, {Name: site.RepoName}},
 			"Repo":                  site,
 			"PackageCount":          site.PackageCount,
-			"Updates":               recentRepoUpdates,
 			"Version":               version,
 			"RecentDurationString":  recentDurationStr,
 			"RecentNews":            repoRecentNews,
@@ -2549,42 +2435,6 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 				return fmt.Errorf("creating directory %s: %w", pkgDir, err)
 			}
 
-			var pkgFeedItems []FeedItem
-			for _, ver := range pkg.Versions {
-				desc := ""
-				if ver.Ebuild != nil && ver.Ebuild.Vars != nil {
-					desc = ver.Ebuild.Vars["DESCRIPTION"]
-				}
-				t := ver.ModTime
-				if t.IsZero() {
-					t = time.Now()
-				}
-				pkgFeedItems = append(pkgFeedItems, FeedItem{
-					Title:       fmt.Sprintf("%s/%s-%s", pkg.Category, pkg.Name, ver.Version),
-					Link:        "",
-					Description: desc,
-					PubDate:     t.Format(time.RFC1123Z),
-					Updated:     t.Format(time.RFC3339),
-					Time:        t,
-				})
-			}
-			sort.Slice(pkgFeedItems, func(i, j int) bool {
-				return pkgFeedItems[i].Time.After(pkgFeedItems[j].Time)
-			})
-			var pkgG2FeedItems []g2.FeedItem
-			for _, fi := range pkgFeedItems {
-				pkgG2FeedItems = append(pkgG2FeedItems, g2.FeedItem{
-					Title:       fi.Title,
-					Link:        fi.Link,
-					Description: fi.Description,
-					PubDate:     fi.PubDate,
-					Updated:     fi.Updated,
-				})
-			}
-			if err := generateFeeds(filepath.Join(pkgDir, "index"), pkg.Category+"/"+pkg.Name, "Latest updates to package", "", pkgG2FeedItems); err != nil {
-				log.Printf("Warning: failed to generate package feed: %v", err)
-			}
-
 			var movedToName, movedToURL string
 			for _, move := range site.Moves {
 				if move.Old == pkg.Category+"/"+pkg.Name {
@@ -2760,7 +2610,7 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, 
 
 		repoPath := filepath.Join(tmpDir, repo.Name)
 		// Try to shallow clone
-		cmd := exec.Command("git", "clone", "--depth", "1", gitUrl, repoPath)
+		cmd := exec.Command("git", "clone", gitUrl, repoPath)
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 		if err := cmd.Run(); err != nil {
@@ -2769,7 +2619,8 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, 
 		}
 
 		log.Printf("Parsing repository: %s", repo.Name)
-		siteData, err := parseRepo(os.DirFS(repoPath), ".", repo.Name, fastGit)
+		repoCopy := repo
+		siteData, err := parseRepo(os.DirFS(repoPath), ".", repo.Name, fastGit, &repoCopy)
 		if err != nil {
 			log.Printf("Failed to parse repo %s: %v", repo.Name, err)
 			continue
