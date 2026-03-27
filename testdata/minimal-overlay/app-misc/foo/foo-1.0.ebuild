@@ -1,3 +1,0 @@
-EAPI=8
-DESCRIPTION="Minimal foo"
-SLOT="0"
