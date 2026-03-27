@@ -790,6 +790,10 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool, r
 		catData := CategoryData{Name: name}
 		catPath := filepath.Join(repoDir, name)
 
+		inRepo := len(supportedCategories) == 0 || supportedCategories[name]
+		mainCats := fetchMainGentooCategories()
+		inMain := len(mainCats) == 0 || mainCats[name]
+
 		pkgEntries, err := fs.ReadDir(sysFS, filepath.ToSlash(catPath))
 		if err != nil {
 			log.Printf("Warning: reading category dir %s: %v", catPath, err)
@@ -1075,17 +1079,30 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool, r
 
 			pkgData.LintWarnings = lints.PerformLinting(repoDir, &g2PkgData)
 
+			if len(mainCats) > 0 && !inMain {
+				pkgData.LintWarnings = append(pkgData.LintWarnings, fmt.Sprintf("Note: category '%s' is not in the main gentoo categories list", name))
+			}
+			if len(supportedCategories) > 0 && !inRepo {
+				if inMain {
+					pkgData.LintWarnings = append(pkgData.LintWarnings, fmt.Sprintf("Warning: category '%s' is not listed in repo's profiles/categories", name))
+				} else {
+					pkgData.LintWarnings = append(pkgData.LintWarnings, fmt.Sprintf("Error: category '%s' is not listed in repo's profiles/categories or the main gentoo categories list", name))
+				}
+			}
+
 			catData.Packages = append(catData.Packages, pkgData)
 		}
 
 		if len(catData.Packages) > 0 {
-			// TODO: Make a lint rule
-			if len(supportedCategories) > 0 && !supportedCategories[name] {
-				log.Printf("Warning: category '%s' is not listed in repo's profiles/categories", name)
+			if len(mainCats) > 0 && !inMain {
+				log.Printf("Note: category '%s' is not in the main gentoo categories list", name)
 			}
-			mainCats := fetchMainGentooCategories()
-			if len(mainCats) > 0 && !mainCats[name] {
-				log.Printf("Warning: category '%s' is not in the main gentoo categories list", name)
+			if len(supportedCategories) > 0 && !inRepo {
+				if inMain {
+					log.Printf("Warning: category '%s' is not listed in repo's profiles/categories", name)
+				} else {
+					log.Printf("Error: category '%s' is not listed in repo's profiles/categories or the main gentoo categories list", name)
+				}
 			}
 
 			// Sort packages by name
