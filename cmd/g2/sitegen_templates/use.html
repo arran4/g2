@@ -7,6 +7,29 @@
 </div>
 {{end}}
 
+{{if or .UseFlag.LocalDescs .UseFlag.MetadataDescs}}
+<div class="metadata-section">
+    <h3>Local and Metadata Descriptions</h3>
+    {{if .UseFlag.MetadataDescs}}
+    <h4>Metadata Descriptions (metadata.xml)</h4>
+    <ul>
+        {{range $pkgKey, $desc := .UseFlag.MetadataDescs}}
+        <li><strong>{{$pkgKey}}:</strong> {{$desc}}</li>
+        {{end}}
+    </ul>
+    {{end}}
+
+    {{if .UseFlag.LocalDescs}}
+    <h4>Local Descriptions (use.local.desc)</h4>
+    <ul>
+        {{range $pkgKey, $desc := .UseFlag.LocalDescs}}
+        <li><strong>{{$pkgKey}}:</strong> {{$desc}}</li>
+        {{end}}
+    </ul>
+    {{end}}
+</div>
+{{end}}
+
 {{if .UseFlag.Warnings}}
 <div class="metadata-section" style="border: 1px solid #cc0000; padding: 10px; margin-bottom: 20px;">
     <h3 style="color: #cc0000;">Warnings</h3>
