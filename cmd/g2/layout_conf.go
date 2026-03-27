@@ -35,24 +35,37 @@ func (cfg *MainArgConfig) cmdLayoutConf(args []string) error {
 		}
 	}
 
-	subcmd := remainingArgs[0]
+	element := remainingArgs[0]
+
+	if element == "list" {
+		for _, entry := range lc.Entries {
+			for _, comment := range entry.Comments {
+				if comment != "" {
+					fmt.Println(comment)
+				}
+			}
+			fmt.Printf("%s = %s\n", entry.Key, entry.Value)
+		}
+		return nil
+	}
+
+	if len(remainingArgs) < 2 {
+		return fmt.Errorf("missing subcommand for element %s (e.g., get, set, unset)", element)
+	}
+
+	subcmd := remainingArgs[1]
 	switch subcmd {
 	case "get":
-		if len(remainingArgs) < 2 {
-			return fmt.Errorf("missing key to get")
-		}
-		key := remainingArgs[1]
-		val := lc.GetValue(key)
+		val := lc.GetValue(element)
 		if val != "" {
 			fmt.Println(val)
 		}
 	case "set":
 		if len(remainingArgs) < 3 {
-			return fmt.Errorf("missing key or value to set")
+			return fmt.Errorf("missing value to set for %s", element)
 		}
-		key := remainingArgs[1]
 		value := strings.Join(remainingArgs[2:], " ")
-		lc.SetValue(key, value)
+		lc.SetValue(element, value)
 		if err := os.MkdirAll(filepath.Dir(layoutConfPath), 0755); err != nil {
 			return fmt.Errorf("creating metadata dir: %w", err)
 		}
@@ -60,16 +73,12 @@ func (cfg *MainArgConfig) cmdLayoutConf(args []string) error {
 			return fmt.Errorf("writing layout.conf: %w", err)
 		}
 	case "unset":
-		if len(remainingArgs) < 2 {
-			return fmt.Errorf("missing key to unset")
-		}
-		key := remainingArgs[1]
-		lc.UnsetValue(key)
+		lc.UnsetValue(element)
 		if err := g2.WriteLayoutConf(lc, layoutConfPath); err != nil {
 			return fmt.Errorf("writing layout.conf: %w", err)
 		}
 	default:
-		return fmt.Errorf("unknown layout-conf subcommand: %s", subcmd)
+		return fmt.Errorf("unknown action for %s: %s", element, subcmd)
 	}
 
 	return nil
