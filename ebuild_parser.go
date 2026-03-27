@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"strings"
 	"unicode"
 )
@@ -357,6 +358,30 @@ func (p *EbuildParser) consumeArray() (string, error) {
 				break
 			}
 		}
+		if r == '"' || r == '\'' {
+			quote := r
+			escape := false
+			sb.WriteRune(r)
+			for {
+				nr, err := p.nextRune()
+				if err != nil {
+					break
+				}
+				sb.WriteRune(nr)
+				if escape {
+					escape = false
+					continue
+				}
+				if nr == '\\' {
+					escape = true
+					continue
+				}
+				if nr == quote {
+					break
+				}
+			}
+			continue
+		}
 		if r == '#' {
 			// Comment inside array! Common ebuild issue.
 			for {
@@ -381,8 +406,17 @@ func (p *EbuildParser) skipFunctionBody() error {
 	if err != nil {
 		return err
 	}
+
+	opener := '{'
+	closer := '}'
 	if r != '{' {
-		return fmt.Errorf("%w: expected '{' for function body", ErrSyntaxError)
+		if r == '(' {
+			log.Printf("Warning: parsing ebuild variables: expected '{' for function body but found '(', treating as subshell body")
+			opener = '('
+			closer = ')'
+		} else {
+			return fmt.Errorf("%w: expected '{' for function body", ErrSyntaxError)
+		}
 	}
 
 	braces := 1
@@ -395,9 +429,9 @@ func (p *EbuildParser) skipFunctionBody() error {
 			}
 			return fmt.Errorf("%w: unterminated function %v", ErrSyntaxError, err)
 		}
-		if r == '{' {
+		if r == opener {
 			braces++
-		} else if r == '}' {
+		} else if r == closer {
 			braces--
 			if braces == 0 {
 				break
