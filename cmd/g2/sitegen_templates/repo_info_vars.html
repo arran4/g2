@@ -1,0 +1,15 @@
+{{template "layout.html" .}}
+
+{{define "content"}}
+<h2>Info Variables</h2>
+
+<div class="metadata-section">
+    <p>The following variables are printed with a standard 'emerge info'.</p>
+    <ul>
+        {{range .Repo.InfoVars}}
+        <li><code>{{.}}</code></li>
+        {{end}}
+    </ul>
+</div>
+
+{{end}}

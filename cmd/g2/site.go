@@ -116,6 +116,7 @@ type SiteData struct {
 	UseLocalDesc   *g2.UseLocalDesc
 	InfoPkgs       []g2.InfoPkg
 	Deprecated     []g2.PackageDeprecated
+	InfoVars       []string
 	PackageCount   int
 	AggUseFlags    []*AggUseFlag
 }
@@ -212,6 +213,9 @@ func (cfg *MainArgConfig) cmdOverlay(args []string) error {
 	if subcmd == "ebuild" {
 		return cfg.cmdOverlayEbuild(args[1:])
 	}
+	if subcmd == "info-vars" {
+		return cfg.cmdOverlayInfoVars(args[1:])
+  }
 	if subcmd == "info-pkgs" {
 		return cfg.cmdOverlayInfoPkgs(args[1:])
 	}
@@ -532,6 +536,13 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool, r
 		log.Printf("Warning: failed to parse package.deprecated: %v", err)
 	}
 
+	infoVarsPath := filepath.Join(repoDir, "profiles", "info_vars")
+	var infoVars []string
+	if parsedInfoVars, err := g2.ParseInfoVarsFS(sysFS, filepath.ToSlash(infoVarsPath)); err == nil {
+		infoVars = parsedInfoVars
+	} else if !os.IsNotExist(err) {
+		log.Printf("Warning: failed to parse info_vars: %v", err)
+  }
 	infoPkgsPath := filepath.Join(repoDir, "profiles", "info_pkgs")
 	var infoPkgs []g2.InfoPkg
 	if parsedInfoPkgs, err := g2.ParseInfoPkgsFS(sysFS, filepath.ToSlash(infoPkgsPath)); err == nil {
@@ -552,6 +563,7 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool, r
 		UseDesc:        useDesc,
 		UseLocalDesc:   useLocalDesc,
 		Deprecated:     deprecated,
+		InfoVars:       infoVars,
 		InfoPkgs:       infoPkgs,
 		PackageCount:   0,
 	}
@@ -1792,6 +1804,19 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 			}
 		}
 
+		if len(site.InfoVars) > 0 {
+			if err := os.MkdirAll(filepath.Join(repoDir, "info_vars"), 0755); err != nil {
+				return fmt.Errorf("creating directory: %w", err)
+			}
+			if err := renderPage(filepath.Join(repoDir, "info_vars", "index.html"), tmpl, "repo_info_vars.html", map[string]interface{}{
+				"Title":       site.RepoName + " - Info Vars",
+				"BaseURL":     "../../../",
+				"Breadcrumbs": []Breadcrumb{{Name: title, URL: "../../../"}, {Name: site.RepoName, URL: "../"}, {Name: "Info Vars"}},
+				"Repo":        site,
+			}); err != nil {
+				return fmt.Errorf("rendering page: %w", err)
+			}
+    }
 		if len(site.InfoPkgs) > 0 {
 			if err := os.MkdirAll(filepath.Join(repoDir, "info_pkgs"), 0755); err != nil {
 				return fmt.Errorf("creating directory: %w", err)
