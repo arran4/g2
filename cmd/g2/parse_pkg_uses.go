@@ -31,9 +31,25 @@ func AggregateUseFlags(sites []*SiteData, aggPackages map[string]*AggPackage) ([
 										MetadataDescs: make(map[string]string),
 									}
 								}
+								// Global logic
+								foundPkgGlobal := false
+								for _, pkgObj := range globalAggUseFlags[flag.Name].Packages {
+									if pkgObj.Name == p.Name && pkgObj.Category == p.Category {
+										foundPkgGlobal = true
+										break
+									}
+								}
+								if !foundPkgGlobal && aggPackages != nil {
+									if ap, ok := aggPackages[pkgKey]; ok {
+										globalAggUseFlags[flag.Name].Packages = append(globalAggUseFlags[flag.Name].Packages, ap)
+										globalAggUseFlags[flag.Name].Count++
+									}
+								}
+
 								if flag.Text != "" {
 									globalAggUseFlags[flag.Name].MetadataDescs[pkgKey] = flag.Text
 								}
+
 								// Repo
 								if _, ok := repoAggUseFlags[flag.Name]; !ok {
 									repoAggUseFlags[flag.Name] = &AggUseFlag{
@@ -42,6 +58,22 @@ func AggregateUseFlags(sites []*SiteData, aggPackages map[string]*AggPackage) ([
 										MetadataDescs: make(map[string]string),
 									}
 								}
+
+								// Repo logic
+								foundPkgRepo := false
+								for _, pkgObj := range repoAggUseFlags[flag.Name].Packages {
+									if pkgObj.Name == p.Name && pkgObj.Category == p.Category {
+										foundPkgRepo = true
+										break
+									}
+								}
+								if !foundPkgRepo && aggPackages != nil {
+									if ap, ok := aggPackages[pkgKey]; ok {
+										repoAggUseFlags[flag.Name].Packages = append(repoAggUseFlags[flag.Name].Packages, ap)
+										repoAggUseFlags[flag.Name].Count++
+									}
+								}
+
 								if flag.Text != "" {
 									repoAggUseFlags[flag.Name].MetadataDescs[pkgKey] = flag.Text
 								}

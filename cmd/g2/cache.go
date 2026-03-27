@@ -135,7 +135,7 @@ func doCacheVerify(cfs CacheFS, repoDir string) error {
 		}
 	}
 
-	siteData, err := parseRepo(cfs, repoDir, "Cache Verification", false)
+	siteData, err := parseRepo(cfs, repoDir, "Cache Verification", false, nil)
 	if err != nil {
 		return fmt.Errorf("parsing repo: %w", err)
 	}
@@ -143,6 +143,11 @@ func doCacheVerify(cfs CacheFS, repoDir string) error {
 	hasErrors := false
 
 	for _, format := range cacheFormats {
+		if format != "md5-dict" {
+			log.Printf("Warning: Cache format '%s' is not supported. Only md5-dict is supported.", format)
+			hasErrors = true
+			continue
+		}
 		log.Printf("Verifying cache for format: %s", format)
 
 		for _, cat := range siteData.Categories {
@@ -198,18 +203,18 @@ func doCacheGenerate(cfs CacheFS, repoDir string) error {
 		}
 	}
 
-	siteData, err := parseRepo(cfs, repoDir, "Cache Generation", false)
+	siteData, err := parseRepo(cfs, repoDir, "Cache Generation", false, nil)
 	if err != nil {
 		return fmt.Errorf("parsing repo: %w", err)
 	}
 
 	for _, format := range cacheFormats {
-		log.Printf("Generating cache for format: %s", format)
-
-		// For now, we only fully support md5-dict as a known format for generation.
 		if format != "md5-dict" {
-			log.Printf("Warning: Generation for cache format '%s' might not be fully supported, but we'll generate basic variables.", format)
+			log.Printf("Warning: Cache format '%s' is not supported. Skipping. Only md5-dict is supported.", format)
+			continue
 		}
+
+		log.Printf("Generating cache for format: %s", format)
 
 		for _, cat := range siteData.Categories {
 			for _, pkg := range cat.Packages {
@@ -345,7 +350,7 @@ func doCacheClean(cfs CacheFS, repoDir string) error {
 		}
 	}
 
-	siteData, err := parseRepo(cfs, repoDir, "Cache Cleaning", false)
+	siteData, err := parseRepo(cfs, repoDir, "Cache Cleaning", false, nil)
 	if err != nil {
 		return fmt.Errorf("parsing repo: %w", err)
 	}

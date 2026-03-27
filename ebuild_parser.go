@@ -55,6 +55,15 @@ func (r *Reader) ReadRune() (rune, int, error) {
 	if err != nil {
 		return ch, size, err
 	}
+
+	// Sanity Check: Gentoo ebuild files are text files.
+	// If we encounter a null byte, it indicates a corrupted file,
+	// a binary file, or a padding issue. We should fail parsing immediately
+	// to prevent propagating garbage data.
+	if ch == '\x00' {
+		return 0, 0, fmt.Errorf("corrupted file: null byte encountered at %v", r.Pos)
+	}
+
 	if ch == '\n' {
 		r.Pos.Line++
 		r.Pos.Column = 1

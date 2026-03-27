@@ -78,6 +78,30 @@
 {{end}}
 
 {{if or .VersionData.Ebuild.Vars.DEPEND .VersionData.Ebuild.Vars.RDEPEND .VersionData.Ebuild.Vars.BDEPEND}}
+{{if .VersionData.ApplicableMirrors}}
+<div class="metadata-section">
+    <h3>Applicable Mirrors</h3>
+    <table>
+        <tr>
+            <th>Mirror Name</th>
+            <th>URLs</th>
+        </tr>
+        {{range $mirrorName, $urls := .VersionData.ApplicableMirrors}}
+        <tr>
+            <td>{{$mirrorName}}</td>
+            <td>
+                <ul>
+                {{range $urls}}
+                    <li><a href="{{.}}">{{.}}</a></li>
+                {{end}}
+                </ul>
+            </td>
+        </tr>
+        {{end}}
+    </table>
+</div>
+{{end}}
+
 <div class="metadata-section">
     <h3>Dependencies</h3>
     {{if .VersionData.Ebuild.Vars.DEPEND}}
