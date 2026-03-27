@@ -339,20 +339,60 @@ func ExtractURIs(content string, variables map[string]string) ([]URIEntry, error
 
 var versionRegex = regexp.MustCompile(`^(\d+(?:\.\d+)*)(?:([a-z]))?(?:_(alpha|beta|pre|rc|p)(\d*))?(?:-r(\d+))?$`)
 
-type gentooVersion struct {
-	Nums     []int
-	NumStrs  []string
-	Letter   string
-	Suffix   string
-	SuffixNo int
-	Revision int
-	IsValid  bool
+// GentooVersion represents a parsed Gentoo package version strictly adhering to PMS rules.
+type GentooVersion struct {
+	Nums        []int
+	NumStrs     []string
+	Letter      string
+	Suffix      string
+	SuffixNoStr string
+	SuffixNo    int
+	Revision    int
+	IsValid     bool
 }
 
-func parseVersion(v string) gentooVersion {
+// String reassembles and serializes the parsed GentooVersion back into a string.
+func (gv *GentooVersion) String() string {
+	if !gv.IsValid {
+		return ""
+	}
+
+	var sb strings.Builder
+
+	sb.WriteString(strings.Join(gv.NumStrs, "."))
+
+	if gv.Letter != "" {
+		sb.WriteString(gv.Letter)
+	}
+
+	if gv.Suffix != "" {
+		sb.WriteString("_")
+		sb.WriteString(gv.Suffix)
+		if gv.SuffixNoStr != "" {
+			sb.WriteString(gv.SuffixNoStr)
+		}
+	}
+
+	if gv.Revision > 0 {
+		sb.WriteString("-r")
+		sb.WriteString(strconv.Itoa(gv.Revision))
+	}
+
+	return sb.String()
+}
+
+// IncrementRevision increments the Gentoo version revision number (e.g., -r1 -> -r2).
+func (gv *GentooVersion) IncrementRevision() {
+	if gv.IsValid {
+		gv.Revision++
+	}
+}
+
+// ParseGentooVersion parses a gentoo version into parts
+func ParseGentooVersion(v string) GentooVersion {
 	m := versionRegex.FindStringSubmatch(v)
 	if m == nil {
-		return gentooVersion{IsValid: false}
+		return GentooVersion{IsValid: false}
 	}
 
 	toInt := func(s string) int {
@@ -369,14 +409,15 @@ func parseVersion(v string) gentooVersion {
 		nums = append(nums, toInt(n))
 	}
 
-	return gentooVersion{
-		Nums:     nums,
-		NumStrs:  numStrs,
-		Letter:   m[2],
-		Suffix:   m[3],
-		SuffixNo: toInt(m[4]),
-		Revision: toInt(m[5]),
-		IsValid:  true,
+	return GentooVersion{
+		Nums:        nums,
+		NumStrs:     numStrs,
+		Letter:      m[2],
+		Suffix:      m[3],
+		SuffixNoStr: m[4],
+		SuffixNo:    toInt(m[4]),
+		Revision:    toInt(m[5]),
+		IsValid:     true,
 	}
 }
 
@@ -400,7 +441,7 @@ func cmpInt(a, b int) int {
 	return 0
 }
 
-func compareGentooVersionParts(v1, v2 gentooVersion) int {
+func compareGentooVersionParts(v1, v2 GentooVersion) int {
 	maxLen := len(v1.Nums)
 	if len(v2.Nums) > maxLen {
 		maxLen = len(v2.Nums)
@@ -492,8 +533,8 @@ func compareGentooVersionParts(v1, v2 gentooVersion) int {
 // CompareVersions compares two gentoo versions strictly adhering to PMS.
 // Returns > 0 if v1 > v2, < 0 if v1 < v2, and 0 if equal.
 func CompareVersions(v1, v2 string) int {
-	gv1 := parseVersion(v1)
-	gv2 := parseVersion(v2)
+	gv1 := ParseGentooVersion(v1)
+	gv2 := ParseGentooVersion(v2)
 
 	if gv1.IsValid && gv2.IsValid {
 		return compareGentooVersionParts(gv1, gv2)

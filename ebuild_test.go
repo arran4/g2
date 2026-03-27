@@ -348,3 +348,60 @@ func TestCompareVersions(t *testing.T) {
 		})
 	}
 }
+
+
+func TestGentooVersion_String(t *testing.T) {
+	tests := []string{
+		"1.0",
+		"1.0.0",
+		"1.0-r1",
+		"1.0_alpha",
+		"1.0_alpha1",
+		"1.0_alpha1-r1",
+		"1.0a",
+		"1.0a-r1",
+		"1.0_p1",
+		"1.0_p1-r1",
+		"0.0.1",
+		"0.1.0",
+	}
+
+	for _, tt := range tests {
+		t.Run(tt, func(t *testing.T) {
+			gv := ParseGentooVersion(tt)
+			if !gv.IsValid {
+				t.Fatalf("Failed to parse %s", tt)
+			}
+			got := gv.String()
+			if got != tt {
+				t.Errorf("GentooVersion.String() = %q, want %q", got, tt)
+			}
+		})
+	}
+}
+
+func TestGentooVersion_IncrementRevision(t *testing.T) {
+	tests := []struct {
+		input string
+		want  string
+	}{
+		{"1.0", "1.0-r1"},
+		{"1.0-r1", "1.0-r2"},
+		{"1.0_alpha1", "1.0_alpha1-r1"},
+		{"1.0_alpha1-r1", "1.0_alpha1-r2"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			gv := ParseGentooVersion(tt.input)
+			if !gv.IsValid {
+				t.Fatalf("Failed to parse %s", tt.input)
+			}
+			gv.IncrementRevision()
+			got := gv.String()
+			if got != tt.want {
+				t.Errorf("IncrementRevision() resulted in %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
