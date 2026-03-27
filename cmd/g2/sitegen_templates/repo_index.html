@@ -53,6 +53,13 @@
     {{end}}
 </ul>
 
+{{if gt (len .Repo.InfoVars) 0}}
+<h2>Extra</h2>
+<ul>
+    <li><a href="info_vars/">Info Vars ({{len .Repo.InfoVars}})</a></li>
+</ul>
+{{end}}
+
 {{if .RecentNews}}
 <h2>Recent News</h2>
 <ul>

@@ -114,6 +114,7 @@ type SiteData struct {
 	UseDesc        *g2.UseDesc
 	UseLocalDesc   *g2.UseLocalDesc
 	Deprecated     []g2.PackageDeprecated
+	InfoVars       []string
 	PackageCount   int
 	AggUseFlags    []*AggUseFlag
 }
@@ -206,6 +207,9 @@ func (cfg *MainArgConfig) cmdOverlay(args []string) error {
 	subcmd := args[0]
 	if subcmd == "ebuild" {
 		return cfg.cmdOverlayEbuild(args[1:])
+	}
+	if subcmd == "info-vars" {
+		return cfg.cmdOverlayInfoVars(args[1:])
 	}
 	if subcmd != "site" {
 		return fmt.Errorf("unknown overlay subcommand: %s", subcmd)
@@ -524,6 +528,14 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool) (
 		log.Printf("Warning: failed to parse package.deprecated: %v", err)
 	}
 
+	infoVarsPath := filepath.Join(repoDir, "profiles", "info_vars")
+	var infoVars []string
+	if parsedInfoVars, err := g2.ParseInfoVarsFS(sysFS, filepath.ToSlash(infoVarsPath)); err == nil {
+		infoVars = parsedInfoVars
+	} else if !os.IsNotExist(err) {
+		log.Printf("Warning: failed to parse info_vars: %v", err)
+	}
+
 	site := &SiteData{
 		Title:          title,
 		RepoName:       repoName,
@@ -535,6 +547,7 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool) (
 		UseDesc:        useDesc,
 		UseLocalDesc:   useLocalDesc,
 		Deprecated:     deprecated,
+		InfoVars:       infoVars,
 		PackageCount:   0,
 	}
 
@@ -1862,6 +1875,20 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 				"Title":       site.RepoName + " - Deprecated",
 				"BaseURL":     "../../../",
 				"Breadcrumbs": []Breadcrumb{{Name: title, URL: "../../../"}, {Name: site.RepoName, URL: "../"}, {Name: "Deprecated Packages"}},
+				"Repo":        site,
+			}); err != nil {
+				return fmt.Errorf("rendering page: %w", err)
+			}
+		}
+
+		if len(site.InfoVars) > 0 {
+			if err := os.MkdirAll(filepath.Join(repoDir, "info_vars"), 0755); err != nil {
+				return fmt.Errorf("creating directory: %w", err)
+			}
+			if err := renderPage(filepath.Join(repoDir, "info_vars", "index.html"), tmpl, "repo_info_vars.html", map[string]interface{}{
+				"Title":       site.RepoName + " - Info Vars",
+				"BaseURL":     "../../../",
+				"Breadcrumbs": []Breadcrumb{{Name: title, URL: "../../../"}, {Name: site.RepoName, URL: "../"}, {Name: "Info Vars"}},
 				"Repo":        site,
 			}); err != nil {
 				return fmt.Errorf("rendering page: %w", err)
