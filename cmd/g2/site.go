@@ -444,6 +444,28 @@ func getHighestVersionsAndCount(versions []VersionData) (template.HTML, template
 	return template.HTML(formatGroups(stableGroup)), template.HTML(formatGroups(testingGroup)), len(versions)
 }
 
+// sanitizeFilename restricts a string to characters safe for file and directory names
+// and limits its length to prevent "file name too long" errors.
+func sanitizeFilename(s string) string {
+	if len(s) > 250 {
+		log.Printf("Warning: name %q is too long, truncating to 250 characters", s)
+		s = s[:250]
+	}
+	var sb strings.Builder
+	for _, r := range s {
+		if r == '\x00' {
+			log.Printf("Warning: name %q contains null bytes, stripping them", s)
+			continue
+		}
+		sb.WriteRune(r)
+	}
+	res := sb.String()
+	if res != s {
+		log.Printf("Warning: name %q was sanitized to %q", s, res)
+	}
+	return res
+}
+
 func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool) (*SiteData, error) {
 	title := defaultTitle
 	var repoName string
@@ -1401,6 +1423,7 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 			allPackages = append(allPackages, cat.Packages...)
 		}
 	}
+	_ = allPackages
 	totalPackages := 0
 
 	for _, site := range sites {
@@ -1898,7 +1921,13 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 	}
 
 	for _, cat := range sortedCategories {
-		catDir := filepath.Join(outDir, "categories", cat.Name)
+		catDirName := sanitizeFilename(cat.Name)
+		if catDirName == "" {
+			continue
+		}
+		// NOTE: Sanitize modifies directory generation, but not template linkages,
+		// but since null-bytes shouldn't be in valid names anyway, this prevents the filesystem crash.
+		catDir := filepath.Join(outDir, "categories", catDirName)
 		if err := os.MkdirAll(catDir, 0755); err != nil {
 			return fmt.Errorf("creating directory %s: %w", catDir, err)
 		}
@@ -2086,7 +2115,11 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 	}
 
 	for _, lic := range sortedLicenses {
-		licDir := filepath.Join(outDir, "licenses", lic.Name)
+		licDirName := sanitizeFilename(lic.Name)
+		if licDirName == "" {
+			continue // Skip licenses that sanitize down to nothing
+		}
+		licDir := filepath.Join(outDir, "licenses", licDirName)
 		if err := os.MkdirAll(licDir, 0755); err != nil {
 			return fmt.Errorf("creating directory %s: %w", licDir, err)
 		}
@@ -2128,7 +2161,11 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 		}
 
 		for _, proj := range sortedProjects {
-			projDir := filepath.Join(outDir, "projects", proj.Project.Email)
+			projDirName := sanitizeFilename(proj.Project.Email)
+			if projDirName == "" {
+				continue
+			}
+			projDir := filepath.Join(outDir, "projects", projDirName)
 			if err := os.MkdirAll(projDir, 0755); err != nil {
 				return fmt.Errorf("creating directory %s: %w", projDir, err)
 			}
@@ -2442,7 +2479,11 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 			}
 		}
 		for _, cat := range site.Categories {
-			catDir := filepath.Join(repoDir, "categories", cat.Name)
+			catDirName := sanitizeFilename(cat.Name)
+			if catDirName == "" {
+				continue
+			}
+			catDir := filepath.Join(repoDir, "categories", catDirName)
 			if err := os.MkdirAll(catDir, 0755); err != nil {
 				return fmt.Errorf("creating directory %s: %w", catDir, err)
 			}

@@ -83,3 +83,16 @@ func TestParserTxtar(t *testing.T) {
 		})
 	}
 }
+
+func TestParserCatchesNullBytes(t *testing.T) {
+	ebuildData := "LICENSE=\"GPL-2\x00\"\n"
+	parser := NewEbuildParser(context.Background(), strings.NewReader(ebuildData))
+	_, err := parser.Parse()
+	if err == nil {
+		t.Fatal("Expected parse to fail on null bytes, but it succeeded")
+	}
+
+	if !strings.Contains(err.Error(), "corrupted file: null byte encountered") {
+		t.Errorf("Expected null byte error, got: %v", err)
+	}
+}
