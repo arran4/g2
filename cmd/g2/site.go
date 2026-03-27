@@ -1551,7 +1551,6 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 			}
 		}
 	}
-	_ = allPackages
 	totalPackages := 0
 
 	for _, site := range sites {
