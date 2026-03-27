@@ -176,7 +176,6 @@ func newSiteServer(sites []*SiteData) (*SiteServer, error) {
 	aggPackages := make(map[string]*AggPackage)
 	aggLicenses := make(map[string]*AggLicense)
 	aggProjects := make(map[string]*AggProject)
-	aggUseFlags := make(map[string]*AggUseFlag)
 
 	for _, site := range sites {
 		if site.Projects != nil {
