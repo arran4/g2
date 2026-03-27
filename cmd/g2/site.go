@@ -161,11 +161,20 @@ type PackageData struct {
 	MetadataRawURL string
 	ModTime        time.Time
 
+	// Processed Uses (per package)
+	PkgUseFlags []PkgUseFlag
+
 	// Lint Info
 	LintWarnings []string
 
 	// Deprecation
 	Deprecated *g2.PackageDeprecated
+}
+
+type PkgUseFlag struct {
+	Name string
+	Desc string
+	Versions map[string]string // Version -> Unicode symbol representing state
 }
 
 type VersionData struct {
@@ -1156,6 +1165,10 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 		return err
 	}
 
+	for _, site := range sites {
+		populatePkgUseFlags(site)
+	}
+
 	tmpl, err := template.New("").Funcs(template.FuncMap{
 		"join": strings.Join,
 		"parseIUSEFlags": parseIUSEFlagsFunc,
@@ -1422,6 +1435,19 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 		}); err != nil {
 			return fmt.Errorf("rendering page: %w", err)
 		}
+	}
+
+	// Generate Help Page
+	if err := os.MkdirAll(filepath.Join(outDir, "help"), 0755); err != nil {
+		return err
+	}
+	if err := renderPage(filepath.Join(outDir, "help", "index.html"), tmpl, "help.html", map[string]interface{}{
+		"Title":       "Help & Legend",
+		"BaseURL":     "../",
+		"Breadcrumbs": []Breadcrumb{{Name: title, URL: "../"}, {Name: "Help"}},
+		"Version":     version,
+	}); err != nil {
+		return fmt.Errorf("rendering page: %w", err)
 	}
 
 	// Generate Global Feeds
