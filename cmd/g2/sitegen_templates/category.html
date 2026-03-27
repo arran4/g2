@@ -1,6 +1,8 @@
 
-<h2>Category: {{.Category.Name}}</h2>
-<ul>
+<h2>Category: {{.Category.Name}}
+    <button id="toggle-view-mode" style="float: right; font-size: 0.6em; margin-top: 0.5em; cursor: pointer;">Show Short Mode</button>
+</h2>
+<ul id="package-list">
     {{range .Category.Packages}}
         <li>
             {{if eq (len .ReposList) 1}}
@@ -10,9 +12,32 @@
                 <a href="{{$.BaseURL}}packages/{{$.Category.Name}}/{{.Name}}/">{{.Name}}</a> (ambiguous, available in {{len .ReposList}} overlays)
             {{end}}
             - Ebuilds: {{.EbuildCount}}, Stable: {{.HighestStableVersion}}, Testing: {{.HighestTestingVersion}}
-            {{if .DominantDescription}}<br/><small><b>Description:</b> {{.DominantDescription}}</small>{{end}}
-            {{if .DominantHomepage}}<br/><small><b>Homepage:</b> <a href="{{.DominantHomepage}}">{{.DominantHomepage}}</a></small>{{end}}
-            {{if .DominantLicense}}<br/><small><b>License:</b> {{.DominantLicense}}</small>{{end}}
+            <span class="package-details">
+                {{if .DominantDescription}}<br/><small><b>Description:</b> {{.DominantDescription}}</small>{{end}}
+                {{if .DominantHomepage}}<br/><small><b>Homepage:</b> <a href="{{.DominantHomepage}}">{{.DominantHomepage}}</a></small>{{end}}
+                {{if .DominantLicense}}<br/><small><b>License:</b> {{.DominantLicense}}</small>{{end}}
+            </span>
         </li>
     {{end}}
 </ul>
+
+<style>
+    ul.short-mode .package-details {
+        display: none;
+    }
+</style>
+
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        var btn = document.getElementById("toggle-view-mode");
+        var list = document.getElementById("package-list");
+        btn.addEventListener("click", function() {
+            list.classList.toggle("short-mode");
+            if (list.classList.contains("short-mode")) {
+                btn.textContent = "Show Long Mode";
+            } else {
+                btn.textContent = "Show Short Mode";
+            }
+        });
+    });
+</script>
