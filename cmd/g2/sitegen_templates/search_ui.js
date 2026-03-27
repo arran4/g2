@@ -56,10 +56,26 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             const title = document.createElement('h3');
             title.style.marginTop = '0';
-            const link = document.createElement('a');
-            link.href = doc.page_url;
-            link.textContent = `${doc.full_name}-${doc.version}`;
-            title.appendChild(link);
+
+            const catLink = document.createElement('a');
+            catLink.href = `../repos/${doc.overlay}/categories/${doc.category}/`;
+            catLink.textContent = doc.category;
+            title.appendChild(catLink);
+
+            title.appendChild(document.createTextNode('/'));
+
+            const pkgLink = document.createElement('a');
+            pkgLink.href = `../repos/${doc.overlay}/categories/${doc.category}/packages/${doc.package}/`;
+            pkgLink.textContent = doc.package;
+            title.appendChild(pkgLink);
+
+            title.appendChild(document.createTextNode('-'));
+
+            const verLink = document.createElement('a');
+            verLink.href = doc.page_url;
+            verLink.textContent = doc.version;
+            title.appendChild(verLink);
+
             resultDiv.appendChild(title);
 
             const meta = document.createElement('p');
@@ -93,7 +109,22 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const uses = document.createElement('p');
                 uses.style.fontSize = '0.8em';
                 uses.style.color = '#888';
-                uses.innerHTML = `<strong>USE:</strong> ${doc.uses.join(' ')}`;
+
+                const usesLabel = document.createElement('strong');
+                usesLabel.textContent = 'USE: ';
+                uses.appendChild(usesLabel);
+
+                doc.uses.forEach((use, index) => {
+                    const useLink = document.createElement('a');
+                    useLink.href = `../uses/${use}/`;
+                    useLink.textContent = use;
+                    uses.appendChild(useLink);
+
+                    if (index < doc.uses.length - 1) {
+                        uses.appendChild(document.createTextNode(' '));
+                    }
+                });
+
                 resultDiv.appendChild(uses);
             }
 
