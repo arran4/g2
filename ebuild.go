@@ -222,6 +222,32 @@ func ParseEbuild(fsys fs.FS, path string, mode ParsingMode) (*Ebuild, error) {
 	return e, nil
 }
 
+// ParseLicense extracts individual license names from a LICENSE string,
+// stripping USE-conditional flags, || operators, and parenthesis.
+func ParseLicense(licenseStr string) []string {
+	flags := strings.Fields(licenseStr)
+	var parsed []string
+	for _, flagName := range flags {
+		if flagName == "||" || flagName == "(" || flagName == ")" {
+			continue
+		}
+		if strings.HasSuffix(flagName, "?") {
+			continue
+		}
+		parsed = append(parsed, flagName)
+	}
+
+	unique := make(map[string]bool)
+	var result []string
+	for _, p := range parsed {
+		if !unique[p] {
+			unique[p] = true
+			result = append(result, p)
+		}
+	}
+	return result
+}
+
 // ParseIUSE extracts the actual USE flag names from an IUSE string,
 // stripping prefixes like + and -.
 func ParseIUSE(iuseStr string) []string {
