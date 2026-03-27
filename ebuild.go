@@ -240,22 +240,31 @@ func ParseIUSE(iuseStr string) []string {
 // ParseEbuildVariables extracts PN, PV, P from the ebuild filename.
 func ParseEbuildVariables(filename string) map[string]string {
 	basename := filepath.Base(filename)
-	re := regexp.MustCompile(`^(.+)-(\d+(\.\d+)*([a-z]|_p\d+|_rc\d+|_beta\d+|_alpha\d+)?(-r\d+)?)\.ebuild$`)
-	matches := re.FindStringSubmatch(basename)
+	if !strings.HasSuffix(basename, ".ebuild") {
+		return nil
+	}
+	basename = strings.TrimSuffix(basename, ".ebuild")
 
-	if matches == nil {
+	parts := strings.Split(basename, "-")
+	if len(parts) < 2 {
 		return nil
 	}
 
-	pn := matches[1]
-	pv := matches[2]
-	p := fmt.Sprintf("%s-%s", pn, pv)
-
-	return map[string]string{
-		"P":  p,
-		"PN": pn,
-		"PV": pv,
+	// Iterate to find the first valid version suffix from the left
+	for i := 1; i < len(parts); i++ {
+		pvCandidate := strings.Join(parts[i:], "-")
+		gv := ParseGentooVersion(pvCandidate)
+		if gv.IsValid {
+			pn := strings.Join(parts[:i], "-")
+			return map[string]string{
+				"P":  pn + "-" + pvCandidate,
+				"PN": pn,
+				"PV": pvCandidate,
+			}
+		}
 	}
+
+	return nil
 }
 
 // ResolveVariables replaces ${VAR} and $VAR in the text with values from variables map.
