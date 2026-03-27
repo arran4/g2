@@ -80,17 +80,3 @@ func ParseRepositoriesFromReader(r io.Reader) (*Repositories, error) {
 }
 
 // RemoteRepositories models a list of overlay repositories.
-type RemoteRepositories struct {
-	XMLName xml.Name     `xml:"repositories"`
-	Repos   []RemoteRepo `xml:"repo"`
-}
-
-type RemoteRepo struct {
-	Name    string       `xml:"name"`
-	Sources []RepoSource `xml:"source"`
-}
-
-type RepoSource struct {
-	Type string `xml:"type,attr"`
-	URL  string `xml:",chardata"`
-}

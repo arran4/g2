@@ -261,11 +261,23 @@ func ParseEbuildVariables(filename string) map[string]string {
 // ResolveVariables replaces ${VAR} and $VAR in the text with values from variables map.
 func ResolveVariables(text string, variables map[string]string) string {
 	// Simple resolution: multiple passes until no change or limit reached
+	// To prevent memory exhaustion from self-referential or heavily nested variables,
+	// cap the maximum expanded length.
+	maxLen := 1024 * 1024 // 1MB limit for expanded strings
 	for i := 0; i < 5; i++ { // Limit recursion depth
 		original := text
 		for key, value := range variables {
-			text = strings.ReplaceAll(text, fmt.Sprintf("${%s}", key), value)
-			text = strings.ReplaceAll(text, fmt.Sprintf("$%s", key), value)
+			if strings.Contains(text, fmt.Sprintf("${%s}", key)) || strings.Contains(text, fmt.Sprintf("$%s", key)) {
+				// Prevent replacing if the value itself contains the key, preventing infinite growth in edge cases
+				if strings.Contains(value, fmt.Sprintf("${%s}", key)) || strings.Contains(value, fmt.Sprintf("$%s", key)) {
+					continue
+				}
+				text = strings.ReplaceAll(text, fmt.Sprintf("${%s}", key), value)
+				text = strings.ReplaceAll(text, fmt.Sprintf("$%s", key), value)
+				if len(text) > maxLen {
+					return text[:maxLen]
+				}
+			}
 		}
 		if text == original {
 			break

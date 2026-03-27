@@ -119,6 +119,31 @@
 </div>
 {{end}}
 
+{{if .Package.PkgUseFlags}}
+<div class="metadata-section">
+    <h3>USE Flags</h3>
+    <table>
+        <tr>
+            <th>Flag</th>
+            <th>Description</th>
+            {{range .Package.Versions}}
+            <th>{{if .Ebuild.Vars.PV}}{{.Ebuild.Vars.PV}}{{else}}{{.Version}}{{end}}</th>
+            {{end}}
+        </tr>
+        {{range $flag := .Package.PkgUseFlags}}
+        <tr>
+            <td><a href="../../../../uses/{{$flag.Name}}/">{{$flag.Name}}</a></td>
+            <td>{{$flag.Desc}}</td>
+            {{range $.Package.Versions}}
+            {{$verName := .Version}}{{if .Ebuild.Vars.PV}}{{$verName = .Ebuild.Vars.PV}}{{end}}
+            <td style="text-align: center;" title="Status of USE flag '{{$flag.Name}}' for version {{$verName}}">{{index $flag.Versions $verName}}</td>
+            {{end}}
+        </tr>
+        {{end}}
+    </table>
+</div>
+{{end}}
+
 {{if .Package.Files}}
 <div class="metadata-section">
     <h3>Files</h3>
