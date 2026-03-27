@@ -100,6 +100,11 @@ func generateSearchIndex(outDir string, sites []*SiteData) error {
 						for _, l := range strings.Fields(licenseStr) {
 							if l != "||" && l != "(" && l != ")" && !strings.HasPrefix(l, "?") {
 								licenses = append(licenses, l)
+								if site.LicenseMapping != nil {
+									if aliases, ok := site.LicenseMapping[l]; ok {
+										licenses = append(licenses, aliases...)
+									}
+								}
 							}
 						}
 

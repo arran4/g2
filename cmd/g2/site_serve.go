@@ -11,7 +11,6 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
-	"time"
 )
 
 func (cfg *MainArgConfig) cmdSite(args []string) error {
@@ -46,7 +45,7 @@ func (cfg *MainArgConfig) cmdSiteServe(args []string) error {
 
 	if isOverlayDir(location) {
 		log.Printf("Parsing local overlay at %s", location)
-		siteData, err := parseRepo(os.DirFS(location), ".", "Gentoo Packages", false)
+		siteData, err := parseRepo(os.DirFS(location), ".", "Gentoo Packages", false, nil)
 		if err != nil {
 			return fmt.Errorf("parsing repo %s: %w", location, err)
 		}
@@ -67,7 +66,7 @@ func (cfg *MainArgConfig) cmdSiteServe(args []string) error {
 			repoPath := filepath.Join(dbReposPath, entry.Name())
 			if isOverlayDir(repoPath) {
 				log.Printf("Parsing repository %s", entry.Name())
-				siteData, err := parseRepo(os.DirFS(repoPath), ".", entry.Name(), false)
+				siteData, err := parseRepo(os.DirFS(repoPath), ".", entry.Name(), false, nil)
 				if err != nil {
 					log.Printf("Warning: failed to parse repo %s: %v", entry.Name(), err)
 					continue
@@ -109,7 +108,6 @@ type SiteServer struct {
 	AggPackages   []*AggPackage
 	AggLicenses   []*AggLicense
 	AggProjects   []*AggProject
-	GlobalUpdates []FeedItem
 
 	// Mappings for faster lookup
 	CatMap  map[string]*AggCategory
@@ -309,42 +307,6 @@ func newSiteServer(sites []*SiteData) (*SiteServer, error) {
 		server.Title = sites[0].Title
 	}
 
-	var globalFeedItems []FeedItem
-	for _, pkg := range server.AggPackages {
-		for _, site := range pkg.Repos {
-			var sPkg *PackageData
-			for _, cat := range site.Categories {
-				if cat.Name == pkg.Category {
-					for _, p := range cat.Packages {
-						if p.Name == pkg.Name {
-							sPkg = &p
-							break
-						}
-					}
-				}
-			}
-			if sPkg != nil {
-				for _, ver := range sPkg.Versions {
-					desc := ""
-					if ver.Ebuild != nil && ver.Ebuild.Vars != nil {
-						desc = ver.Ebuild.Vars["DESCRIPTION"]
-					}
-					globalFeedItems = append(globalFeedItems, FeedItem{
-						Title:       fmt.Sprintf("%s/%s-%s (%s)", sPkg.Category, sPkg.Name, ver.Version, site.RepoName),
-						Link:        fmt.Sprintf("repos/%s/categories/%s/packages/%s/", site.RepoName, sPkg.Category, sPkg.Name),
-						Description: desc,
-						PubDate:     time.Now().Format(time.RFC1123Z),
-						Updated:     time.Now().Format(time.RFC3339),
-					})
-				}
-			}
-		}
-	}
-	if len(globalFeedItems) > 50 {
-		globalFeedItems = globalFeedItems[:50]
-	}
-	server.GlobalUpdates = globalFeedItems
-
 	return server, nil
 }
 
@@ -394,7 +356,6 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			"UseFlags":   s.AggUseFlags,
 			"Projects":   s.AggProjects,
 			"Profiles":   []interface{}{},
-			"Updates":    s.GlobalUpdates,
 			"Version":    version,
 		})
 		return
@@ -646,28 +607,9 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			}
 
 			if len(parts) == 2 {
-				var repoFeedItems []FeedItem
 				pkgCount := 0
 				for _, cat := range site.Categories {
 					pkgCount += len(cat.Packages)
-					for _, pkg := range cat.Packages {
-						for _, ver := range pkg.Versions {
-							desc := ""
-							if ver.Ebuild != nil && ver.Ebuild.Vars != nil {
-								desc = ver.Ebuild.Vars["DESCRIPTION"]
-							}
-							repoFeedItems = append(repoFeedItems, FeedItem{
-								Title:       fmt.Sprintf("%s/%s-%s", pkg.Category, pkg.Name, ver.Version),
-								Link:        fmt.Sprintf("categories/%s/packages/%s/", pkg.Category, pkg.Name),
-								Description: desc,
-								PubDate:     time.Now().Format(time.RFC1123Z),
-								Updated:     time.Now().Format(time.RFC3339),
-							})
-						}
-					}
-				}
-				if len(repoFeedItems) > 50 {
-					repoFeedItems = repoFeedItems[:50]
 				}
 
 				s.renderPageHTTP(w, "repo_index.html", map[string]interface{}{
@@ -676,7 +618,6 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					"Breadcrumbs":  []Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: "Overlays", URL: baseURL + "overlays/"}, {Name: site.RepoName}},
 					"Repo":         site,
 					"PackageCount": site.PackageCount,
-					"Updates":      repoFeedItems,
 					"Version":      version,
 					"GlobalCategoriesCount": len(s.AggCategories),
 					"GlobalPackagesCount":   len(s.AggPackages),
@@ -688,6 +629,28 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 			if len(parts) >= 3 {
 				switch parts[2] {
+				case "deprecated":
+					if len(parts) == 3 {
+						s.renderPageHTTP(w, "repo_deprecated.html", map[string]interface{}{
+							"Title":       site.RepoName + " - Deprecated",
+							"BaseURL":     baseURL,
+							"Breadcrumbs": []Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: site.RepoName, URL: "../"}, {Name: "Deprecated Packages"}},
+							"Repo":        site,
+							"Version":     version,
+						})
+						return
+					}
+				case "info_pkgs":
+					if len(parts) == 3 {
+						s.renderPageHTTP(w, "repo_info_pkgs.html", map[string]interface{}{
+							"Title":       site.RepoName + " - Info Packages",
+							"BaseURL":     baseURL,
+							"Breadcrumbs": []Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: site.RepoName, URL: "../"}, {Name: "Info Packages"}},
+							"Repo":        site,
+							"Version":     version,
+						})
+						return
+					}
 				case "categories":
 					if len(parts) == 3 {
 						s.renderPageHTTP(w, "categories.html", map[string]interface{}{
