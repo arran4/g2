@@ -28,8 +28,10 @@
         </tr>
         {{range .UseFlag.Packages}}
         {{$pkgKey := printf "%s/%s" .Category .Name}}
+        {{$firstRepo := ""}}
+        {{range $r, $d := .Repos}}{{$firstRepo = $r}}{{end}}
         <tr>
-            <td><a href="../../repos/{{(index .Repos 0).RepoName}}/categories/{{.Category}}/packages/{{.Name}}/">{{$pkgKey}}</a></td>
+            <td><a href="{{$.BaseURL}}repos/{{$firstRepo}}/categories/{{.Category}}/packages/{{.Name}}/">{{$pkgKey}}</a></td>
             <td>
                 {{$localDesc := index $.UseFlag.LocalDescs $pkgKey}}
                 {{if $localDesc}}{{$localDesc}}{{else}}<em>-</em>{{end}}

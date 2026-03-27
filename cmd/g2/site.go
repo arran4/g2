@@ -115,6 +115,7 @@ type SiteData struct {
 	UseLocalDesc   *g2.UseLocalDesc
 	Deprecated     []g2.PackageDeprecated
 	PackageCount   int
+	AggUseFlags    []*AggUseFlag
 }
 
 type LicenseData struct {
@@ -1253,7 +1254,6 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 	aggLicenses := make(map[string]*AggLicense)
 	aggProjects := make(map[string]*AggProject)
 	aggProfiles := make(map[string]*AggProfile)
-	aggUseFlags := make(map[string]*AggUseFlag)
 	aggMoves := make(map[string]*AggPackageMove)
 	var globalNews []AggNewsItem
 
@@ -1403,11 +1403,7 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 		return sortedPackages[i].Category < sortedPackages[j].Category
 	})
 
-	var sortedUseFlags []*AggUseFlag
-	for _, flag := range aggUseFlags {
-		sortedUseFlags = append(sortedUseFlags, flag)
-	}
-	sort.Slice(sortedUseFlags, func(i, j int) bool { return sortedUseFlags[i].Name < sortedUseFlags[j].Name })
+	sortedUseFlags, _ := AggregateUseFlags(sites, aggPackages)
 
 	validLicenses := make(map[string]bool)
 	var sortedLicenses []*AggLicense
@@ -1690,6 +1686,39 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 
 	for _, site := range sites {
 		repoDir := filepath.Join(outDir, "repos", site.RepoName)
+
+		if len(site.AggUseFlags) > 0 {
+			if err := os.MkdirAll(filepath.Join(repoDir, "uses"), 0755); err != nil {
+				return fmt.Errorf("creating directory: %w", err)
+			}
+			if err := renderPage(filepath.Join(repoDir, "uses", "index.html"), tmpl, "uses.html", map[string]interface{}{
+				"Title":       site.RepoName + " - USE Flags",
+				"BaseURL":     "../../../",
+				"Breadcrumbs": []Breadcrumb{{Name: title, URL: "../../../"}, {Name: site.RepoName, URL: "../"}, {Name: "USE Flags"}},
+				"UseFlags":    site.AggUseFlags,
+				"Version":     version,
+			}); err != nil {
+				return fmt.Errorf("rendering page: %w", err)
+			}
+
+			for _, f := range site.AggUseFlags {
+				safeName := strings.ReplaceAll(f.Name, "/", "_")
+				useDir := filepath.Join(repoDir, "uses", safeName)
+				if err := os.MkdirAll(useDir, 0755); err != nil {
+					return fmt.Errorf("creating directory %s: %w", useDir, err)
+				}
+
+				if err := renderPage(filepath.Join(useDir, "index.html"), tmpl, "use.html", map[string]interface{}{
+					"Title":       "USE Flag: " + f.Name,
+					"BaseURL":     "../../../../",
+					"Breadcrumbs": []Breadcrumb{{Name: title, URL: "../../../../"}, {Name: site.RepoName, URL: "../../"}, {Name: "USE Flags", URL: "../"}, {Name: f.Name}},
+					"UseFlag":     f,
+					"Version":     version,
+				}); err != nil {
+					return err
+				}
+			}
+		}
 
 		if len(site.Deprecated) > 0 {
 			if err := os.MkdirAll(filepath.Join(repoDir, "deprecated"), 0755); err != nil {

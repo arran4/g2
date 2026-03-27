@@ -1,8 +1,268 @@
 package main
 
 import (
+	"fmt"
 	"sort"
+	"strings"
 )
+
+// AggregateUseFlags processes a list of SiteData and updates an aggregate map of UseFlags,
+// and returns the sorted global UseFlags list. It also aggregates per-repo USE flags inside SiteData.
+func AggregateUseFlags(sites []*SiteData, aggPackages map[string]*AggPackage) ([]*AggUseFlag, map[string]*AggUseFlag) {
+	globalAggUseFlags := make(map[string]*AggUseFlag)
+
+	for _, site := range sites {
+		repoAggUseFlags := make(map[string]*AggUseFlag)
+
+		for _, pkg := range site.Categories {
+			for _, p := range pkg.Packages {
+				pkgKey := p.Category + "/" + p.Name
+
+				if p.Metadata != nil {
+					pkgMd := p.Metadata
+					if pkgMd != nil {
+						for _, useBlock := range pkgMd.Use {
+							for _, flag := range useBlock.Flags {
+								// Global
+								if _, ok := globalAggUseFlags[flag.Name]; !ok {
+									globalAggUseFlags[flag.Name] = &AggUseFlag{
+										Name:          flag.Name,
+										LocalDescs:    make(map[string]string),
+										MetadataDescs: make(map[string]string),
+									}
+								}
+								if flag.Text != "" {
+									globalAggUseFlags[flag.Name].MetadataDescs[pkgKey] = flag.Text
+								}
+								// Repo
+								if _, ok := repoAggUseFlags[flag.Name]; !ok {
+									repoAggUseFlags[flag.Name] = &AggUseFlag{
+										Name:          flag.Name,
+										LocalDescs:    make(map[string]string),
+										MetadataDescs: make(map[string]string),
+									}
+								}
+								if flag.Text != "" {
+									repoAggUseFlags[flag.Name].MetadataDescs[pkgKey] = flag.Text
+								}
+							}
+						}
+					}
+				}
+
+				for _, ver := range p.Versions {
+					if ver.Ebuild != nil && ver.Ebuild.Vars != nil {
+						// Extract IUSE flags
+						iuse := ver.Ebuild.Vars["IUSE"]
+						if iuse != "" {
+							parsedFlags := parseIUSEFlagsFunc(iuse)
+							for _, flagObj := range parsedFlags {
+								flag := flagObj.Name
+								// Global
+								if _, ok := globalAggUseFlags[flag]; !ok {
+									globalAggUseFlags[flag] = &AggUseFlag{
+										Name:          flag,
+										LocalDescs:    make(map[string]string),
+										MetadataDescs: make(map[string]string),
+									}
+								}
+								// Repo
+								if _, ok := repoAggUseFlags[flag]; !ok {
+									repoAggUseFlags[flag] = &AggUseFlag{
+										Name:          flag,
+										LocalDescs:    make(map[string]string),
+										MetadataDescs: make(map[string]string),
+									}
+								}
+
+								// Global logic
+								foundPkgGlobal := false
+								for _, pkgObj := range globalAggUseFlags[flag].Packages {
+									if pkgObj.Name == p.Name && pkgObj.Category == p.Category {
+										foundPkgGlobal = true
+										break
+									}
+								}
+								if !foundPkgGlobal && aggPackages != nil {
+									if ap, ok := aggPackages[pkgKey]; ok {
+										globalAggUseFlags[flag].Packages = append(globalAggUseFlags[flag].Packages, ap)
+										globalAggUseFlags[flag].Count++
+									}
+								}
+
+								// Repo logic
+								foundPkgRepo := false
+								for _, pkgObj := range repoAggUseFlags[flag].Packages {
+									if pkgObj.Name == p.Name && pkgObj.Category == p.Category {
+										foundPkgRepo = true
+										break
+									}
+								}
+								if !foundPkgRepo && aggPackages != nil {
+									if ap, ok := aggPackages[pkgKey]; ok {
+										repoAggUseFlags[flag].Packages = append(repoAggUseFlags[flag].Packages, ap)
+										repoAggUseFlags[flag].Count++
+									}
+								}
+							}
+						}
+
+						// Extract REQUIRED_USE flags
+						requiredUse := ver.Ebuild.Vars["REQUIRED_USE"]
+						if requiredUse != "" {
+							parsedFlags := parseIUSEFlagsFunc(requiredUse)
+							for _, flagObj := range parsedFlags {
+								flag := flagObj.Name
+								if flag == "(" || flag == ")" || flag == "||" || flag == "^^" || flag == "??" || strings.HasSuffix(flag, "?") {
+									continue
+								}
+								flag = strings.TrimPrefix(flag, "!") // remove negations
+
+								// Global
+								if _, ok := globalAggUseFlags[flag]; !ok {
+									globalAggUseFlags[flag] = &AggUseFlag{
+										Name:          flag,
+										LocalDescs:    make(map[string]string),
+										MetadataDescs: make(map[string]string),
+									}
+								}
+								// Repo
+								if _, ok := repoAggUseFlags[flag]; !ok {
+									repoAggUseFlags[flag] = &AggUseFlag{
+										Name:          flag,
+										LocalDescs:    make(map[string]string),
+										MetadataDescs: make(map[string]string),
+									}
+								}
+
+								// Global
+								foundPkgGlobal := false
+								for _, pkgObj := range globalAggUseFlags[flag].Packages {
+									if pkgObj.Name == p.Name && pkgObj.Category == p.Category {
+										foundPkgGlobal = true
+										break
+									}
+								}
+								if !foundPkgGlobal && aggPackages != nil {
+									if ap, ok := aggPackages[pkgKey]; ok {
+										globalAggUseFlags[flag].Packages = append(globalAggUseFlags[flag].Packages, ap)
+										globalAggUseFlags[flag].Count++
+									}
+								}
+
+								// Repo
+								foundPkgRepo := false
+								for _, pkgObj := range repoAggUseFlags[flag].Packages {
+									if pkgObj.Name == p.Name && pkgObj.Category == p.Category {
+										foundPkgRepo = true
+										break
+									}
+								}
+								if !foundPkgRepo && aggPackages != nil {
+									if ap, ok := aggPackages[pkgKey]; ok {
+										repoAggUseFlags[flag].Packages = append(repoAggUseFlags[flag].Packages, ap)
+										repoAggUseFlags[flag].Count++
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+
+		if site.UseDesc != nil {
+			for flag, desc := range site.UseDesc.Flags {
+				// Global
+				if _, ok := globalAggUseFlags[flag]; !ok {
+					globalAggUseFlags[flag] = &AggUseFlag{
+						Name:          flag,
+						LocalDescs:    make(map[string]string),
+						MetadataDescs: make(map[string]string),
+					}
+				}
+				globalAggUseFlags[flag].GlobalDesc = desc
+
+				// Repo
+				if _, ok := repoAggUseFlags[flag]; !ok {
+					repoAggUseFlags[flag] = &AggUseFlag{
+						Name:          flag,
+						LocalDescs:    make(map[string]string),
+						MetadataDescs: make(map[string]string),
+					}
+				}
+				repoAggUseFlags[flag].GlobalDesc = desc
+			}
+		}
+
+		if site.UseLocalDesc != nil {
+			for pkg, flags := range site.UseLocalDesc.Flags {
+				for flag, desc := range flags {
+					// Global
+					if aggFlag, ok := globalAggUseFlags[flag]; ok {
+						aggFlag.LocalDescs[pkg] = desc
+					}
+					// Repo
+					if aggFlag, ok := repoAggUseFlags[flag]; ok {
+						aggFlag.LocalDescs[pkg] = desc
+					}
+				}
+			}
+		}
+
+		var sortedRepoUseFlags []*AggUseFlag
+		for _, flag := range repoAggUseFlags {
+			if flag.GlobalDesc == "" && len(flag.Packages) > 0 {
+				flag.Warnings = append(flag.Warnings, fmt.Sprintf("Warning: USE flag '%s' is used in ebuilds/metadata but is not defined in profiles/use.desc", flag.Name))
+			}
+			if flag.GlobalDesc != "" && len(flag.Packages) == 0 {
+				flag.Warnings = append(flag.Warnings, fmt.Sprintf("Warning: USE flag '%s' is defined in use.desc but is never used by any package", flag.Name))
+			}
+
+			for _, pkg := range flag.Packages {
+				pkgKey := pkg.Category + "/" + pkg.Name
+				hasLocal := flag.LocalDescs[pkgKey] != ""
+				hasMetadata := flag.MetadataDescs[pkgKey] != ""
+
+				if !hasMetadata && !hasLocal && flag.GlobalDesc == "" {
+					flag.Warnings = append(flag.Warnings, fmt.Sprintf("Warning: USE flag '%s' used by %s but has no description in metadata.xml, use.local.desc or use.desc", flag.Name, pkgKey))
+				} else if !hasMetadata && flag.GlobalDesc == "" {
+					flag.Warnings = append(flag.Warnings, fmt.Sprintf("Warning: USE flag '%s' used by %s but not documented in its metadata.xml", flag.Name, pkgKey))
+				}
+			}
+			sortedRepoUseFlags = append(sortedRepoUseFlags, flag)
+		}
+		sort.Slice(sortedRepoUseFlags, func(i, j int) bool { return sortedRepoUseFlags[i].Name < sortedRepoUseFlags[j].Name })
+		site.AggUseFlags = sortedRepoUseFlags
+	}
+
+	var sortedUseFlags []*AggUseFlag
+	for _, flag := range globalAggUseFlags {
+		if flag.GlobalDesc == "" && len(flag.Packages) > 0 {
+			flag.Warnings = append(flag.Warnings, fmt.Sprintf("Warning: USE flag '%s' is used in ebuilds/metadata but is not defined in profiles/use.desc", flag.Name))
+		}
+		if flag.GlobalDesc != "" && len(flag.Packages) == 0 {
+			flag.Warnings = append(flag.Warnings, fmt.Sprintf("Warning: USE flag '%s' is defined in use.desc but is never used by any package", flag.Name))
+		}
+
+		for _, pkg := range flag.Packages {
+			pkgKey := pkg.Category + "/" + pkg.Name
+			hasLocal := flag.LocalDescs[pkgKey] != ""
+			hasMetadata := flag.MetadataDescs[pkgKey] != ""
+
+			if !hasMetadata && !hasLocal && flag.GlobalDesc == "" {
+				flag.Warnings = append(flag.Warnings, fmt.Sprintf("Warning: USE flag '%s' used by %s but has no description in metadata.xml, use.local.desc or use.desc", flag.Name, pkgKey))
+			} else if !hasMetadata && flag.GlobalDesc == "" {
+				flag.Warnings = append(flag.Warnings, fmt.Sprintf("Warning: USE flag '%s' used by %s but not documented in its metadata.xml", flag.Name, pkgKey))
+			}
+		}
+
+		sortedUseFlags = append(sortedUseFlags, flag)
+	}
+	sort.Slice(sortedUseFlags, func(i, j int) bool { return sortedUseFlags[i].Name < sortedUseFlags[j].Name })
+
+	return sortedUseFlags, globalAggUseFlags
+}
 
 func populatePkgUseFlags(site *SiteData) {
 	globalDescs := make(map[string]string)
