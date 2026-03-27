@@ -1,5 +1,0 @@
-DESCRIPTION="A test package"
-HOMEPAGE="https://example.com"
-LICENSE="MIT"
-SLOT="0"
-KEYWORDS="amd64"
