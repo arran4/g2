@@ -851,25 +851,11 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 							http.NotFound(w, r)
 							return
 						}
-					} else if len(parts) >= 6 && parts[4] == "packages" {
-						catName := parts[3]
-						pkgName := parts[5]
 
-						var pkgData *PackageData
-						for _, c := range site.Categories {
-							if c.Name == catName {
-								for _, p := range c.Packages {
-									if p.Name == pkgName {
-										pkgData = &p
-										break
-									}
-								}
+							validLicenses := make(map[string]bool)
+							for _, lic := range s.AggLicenses {
+								validLicenses[lic.Name] = true
 							}
-						}
-						if pkgData == nil {
-							http.NotFound(w, r)
-							return
-						}
 
 						if len(parts) == 6 {
 							s.renderPageHTTP(w, "repo_package.html", map[string]interface{}{
@@ -885,6 +871,7 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 								"Repo":    site,
 								"Package": *pkgData,
 								"Version": version,
+									"ValidLicenses": validLicenses,
 							})
 							return
 						} else if len(parts) == 8 && parts[6] == "ebuild" {
@@ -930,6 +917,7 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 								"VersionData":      *versionData,
 								"FilteredManifest": filteredManifest,
 								"Version":          version,
+									"ValidLicenses":    validLicenses,
 							})
 							return
 						}
