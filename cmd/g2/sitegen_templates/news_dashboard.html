@@ -8,7 +8,7 @@
             {{if .Author}}<span class="news-author"> by {{.Author}}</span>{{end}}
             {{/* .RepoName is only available for AggNewsItem (global), but templates might be shared with local NewsItem */}}
         </div>
-        <div class="news-body" style="white-space: pre-wrap;">{{.Body}}</div>
+        <div class="news-body">{{.ToHTMLTemplate}}</div>
     </article>
     <hr/>
     {{end}}

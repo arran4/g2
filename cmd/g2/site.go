@@ -86,16 +86,6 @@ type ProfileData struct {
 	Children []string
 }
 
-type NewsItem struct {
-	Title    string
-	Author   string
-	Posted   time.Time
-	Revision string
-	Body     string
-	DirName  string
-	FileName string
-}
-
 type SiteData struct {
 	Title          string
 	RepoName       string
@@ -109,7 +99,7 @@ type SiteData struct {
 	AuthorsURL     string
 	Moves          []g2.PackageMove
 	SlotMoves      []g2.PackageSlotMove
-	News           []NewsItem
+	News           []g2.NewsItem
 	LayoutConf     *g2.LayoutConf
 	LicenseMapping map[string][]string
 	QAPolicy       *g2.QAPolicy
@@ -698,49 +688,10 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool, r
 				continue
 			}
 
-			lines := strings.Split(string(content), "\n")
-			var item NewsItem
+			item := g2.ParseNewsItem(string(content))
 			item.DirName = dirName
 			item.FileName = dirName + ".en.txt"
 
-			inBody := false
-			var bodyLines []string
-
-			for _, line := range lines {
-				if inBody {
-					bodyLines = append(bodyLines, line)
-					continue
-				}
-
-				if strings.TrimSpace(line) == "" {
-					inBody = true
-					continue
-				}
-
-				parts := strings.SplitN(line, ":", 2)
-				if len(parts) != 2 {
-					continue
-				}
-
-				key := strings.TrimSpace(parts[0])
-				val := strings.TrimSpace(parts[1])
-
-				switch key {
-				case "Title":
-					item.Title = val
-				case "Author":
-					item.Author = val
-				case "Posted":
-					t, err := time.Parse("2006-01-02", val)
-					if err == nil {
-						item.Posted = t
-					}
-				case "Revision":
-					item.Revision = val
-				}
-			}
-
-			item.Body = strings.TrimSpace(strings.Join(bodyLines, "\n"))
 			site.News = append(site.News, item)
 		}
 
@@ -1600,7 +1551,7 @@ type AggPackageMove struct {
 }
 
 type AggNewsItem struct {
-	NewsItem
+	g2.NewsItem
 	RepoName string
 }
 
@@ -2391,7 +2342,7 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 			pkgCount += len(c.Packages)
 		}
 
-		var repoRecentNews []NewsItem
+		var repoRecentNews []g2.NewsItem
 		for _, n := range site.News {
 			if n.Posted.After(cutoffDate) {
 				repoRecentNews = append(repoRecentNews, n)
