@@ -1142,9 +1142,12 @@ type AggCategory struct {
 	Packages map[string]*AggPackage
 }
 type AggPackage struct {
-	Name     string
-	Category string
-	Repos    map[string]*SiteData
+	Name                string
+	Category            string
+	Repos               map[string]*SiteData
+	DominantDescription string
+	DominantHomepage    string
+	DominantLicense     string
 }
 type AggProject struct {
 	Project  *g2.Project
@@ -1305,6 +1308,15 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 					totalPackages++
 				}
 				aggPackages[pkgKey].Repos[site.RepoName] = site
+				if aggPackages[pkgKey].DominantDescription == "" {
+					aggPackages[pkgKey].DominantDescription = pkg.DominantDescription
+				}
+				if aggPackages[pkgKey].DominantHomepage == "" {
+					aggPackages[pkgKey].DominantHomepage = pkg.DominantHomepage
+				}
+				if aggPackages[pkgKey].DominantLicense == "" {
+					aggPackages[pkgKey].DominantLicense = pkg.DominantLicense
+				}
 				aggCategories[cat.Name].Packages[pkg.Name] = aggPackages[pkgKey]
 
 				if pkg.Metadata != nil {
@@ -1735,11 +1747,14 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 		sort.Slice(catPkgs, func(i, j int) bool { return catPkgs[i].Name < catPkgs[j].Name })
 
 		type TmplPkg struct {
-			Name      string
-			ReposList []*SiteData
-			EbuildCount int
-			HighestStableVersion template.HTML
+			Name                  string
+			ReposList             []*SiteData
+			EbuildCount           int
+			HighestStableVersion  template.HTML
 			HighestTestingVersion template.HTML
+			DominantDescription   string
+			DominantHomepage      string
+			DominantLicense       string
 		}
 		var tmplPkgs []TmplPkg
 		for _, p := range catPkgs {
@@ -1756,7 +1771,7 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 			    }
 			}
 			hs, ht, count := getHighestVersionsAndCount(allVersions)
-			tmplPkgs = append(tmplPkgs, TmplPkg{Name: p.Name, ReposList: mapToList(p.Repos), EbuildCount: count, HighestStableVersion: hs, HighestTestingVersion: ht})
+			tmplPkgs = append(tmplPkgs, TmplPkg{Name: p.Name, ReposList: mapToList(p.Repos), EbuildCount: count, HighestStableVersion: hs, HighestTestingVersion: ht, DominantDescription: p.DominantDescription, DominantHomepage: p.DominantHomepage, DominantLicense: p.DominantLicense})
 		}
 
 		if err := renderPage(filepath.Join(catDir, "index.html"), tmpl, "category.html", map[string]interface{}{
@@ -2270,15 +2285,18 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 			}
 
 			type TmplPkg struct {
-				Name      string
-				ReposList []*SiteData
-				EbuildCount int
-				HighestStableVersion template.HTML
+				Name                  string
+				ReposList             []*SiteData
+				EbuildCount           int
+				HighestStableVersion  template.HTML
 				HighestTestingVersion template.HTML
+				DominantDescription   string
+				DominantHomepage      string
+				DominantLicense       string
 			}
 			var tmplPkgs []TmplPkg
 			for _, p := range cat.Packages {
-				tmplPkgs = append(tmplPkgs, TmplPkg{Name: p.Name, ReposList: []*SiteData{site}, EbuildCount: p.EbuildCount, HighestStableVersion: p.HighestStableVersion, HighestTestingVersion: p.HighestTestingVersion})
+				tmplPkgs = append(tmplPkgs, TmplPkg{Name: p.Name, ReposList: []*SiteData{site}, EbuildCount: p.EbuildCount, HighestStableVersion: p.HighestStableVersion, HighestTestingVersion: p.HighestTestingVersion, DominantDescription: p.DominantDescription, DominantHomepage: p.DominantHomepage, DominantLicense: p.DominantLicense})
 			}
 
 			if err := renderPage(filepath.Join(catDir, "index.html"), tmpl, "category.html", map[string]interface{}{
