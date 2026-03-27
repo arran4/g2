@@ -213,6 +213,9 @@ func (cfg *MainArgConfig) cmdOverlay(args []string) error {
 	if subcmd == "ebuild" {
 		return cfg.cmdOverlayEbuild(args[1:])
 	}
+	if subcmd == "license" {
+		return cfg.cmdOverlayLicense(args[1:])
+  }
 	if subcmd == "info-vars" {
 		return cfg.cmdOverlayInfoVars(args[1:])
   }
@@ -491,15 +494,22 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool, r
 		}
 	}
 
-	var licenseMapping map[string][]string
-	licenseMappingPath := filepath.Join(repoDir, "metadata", "license-mapping.conf")
-	if f, err := sysFS.Open(filepath.ToSlash(licenseMappingPath)); err == nil {
-		mapping, err := g2.ParseLicenseMapping(f)
+	var licenseGroups map[string][]string
+	licenseGroupsPath := filepath.Join(repoDir, "profiles", "license_groups")
+	if f, err := sysFS.Open(filepath.ToSlash(licenseGroupsPath)); err == nil {
+		groups, err := g2.ParseLicenseGroups(f)
 		_ = f.Close()
 		if err != nil {
-			log.Printf("Warning: failed to parse license-mapping.conf: %v", err)
+			log.Printf("Warning: failed to parse license_groups: %v", err)
 		} else {
-			licenseMapping = mapping
+			// ParseLicenseGroups returns group -> licenses, we need license -> groups mapping
+			licenseMapping := make(map[string][]string)
+			for group, licenses := range groups {
+				for _, lic := range licenses {
+					licenseMapping[lic] = append(licenseMapping[lic], group)
+				}
+			}
+			licenseGroups = licenseMapping
 		}
 	}
 	qaPolicyPath := filepath.Join(repoDir, "metadata", "qa-policy.conf")
@@ -558,7 +568,7 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool, r
 		Repository:     repoInfo,
 		EAPI:           eapi,
 		LayoutConf:     lc,
-		LicenseMapping: licenseMapping,
+		LicenseMapping: licenseGroups,
 		QAPolicy:       qa,
 		UseDesc:        useDesc,
 		UseLocalDesc:   useLocalDesc,
