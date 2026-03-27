@@ -20,6 +20,24 @@
         {{if .Repo.LayoutConf.GetValue "eapis-deprecated"}}
             <li>EAPIs Deprecated: {{.Repo.LayoutConf.GetValue "eapis-deprecated"}}</li>
         {{end}}
+        {{if .Repo.LayoutConf.GetValue "profile-eapis-banned"}}
+            <li>Profile EAPIs Banned: {{.Repo.LayoutConf.GetValue "profile-eapis-banned"}}</li>
+        {{end}}
+        {{if .Repo.LayoutConf.GetValue "profile-eapis-deprecated"}}
+            <li>Profile EAPIs Deprecated: {{.Repo.LayoutConf.GetValue "profile-eapis-deprecated"}}</li>
+        {{end}}
+        {{if .Repo.LayoutConf.GetValue "restrict-allowed"}}
+            <li>Restrict Allowed: {{.Repo.LayoutConf.GetValue "restrict-allowed"}}</li>
+        {{end}}
+        {{if .Repo.LayoutConf.GetValue "properties-allowed"}}
+            <li>Properties Allowed: {{.Repo.LayoutConf.GetValue "properties-allowed"}}</li>
+        {{end}}
+        {{if .Repo.LayoutConf.GetValue "manifest-hashes"}}
+            <li>Manifest Hashes: {{.Repo.LayoutConf.GetValue "manifest-hashes"}}</li>
+        {{end}}
+        {{if .Repo.LayoutConf.GetValue "manifest-required-hashes"}}
+            <li>Manifest Required Hashes: {{.Repo.LayoutConf.GetValue "manifest-required-hashes"}}</li>
+        {{end}}
     {{end}}
     {{if gt (len .Repo.Categories) 0}}
     <li><a href="categories/">Categories ({{len .Repo.Categories}})</a></li>
