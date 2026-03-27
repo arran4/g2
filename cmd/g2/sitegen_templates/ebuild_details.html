@@ -385,60 +385,92 @@
             }
         }
 
+        // Helper to check if a target package is present in a parsed dependency tree under currently active USE flags
+        function isTargetInTree(node, targetPkg) {
+            if(node.type === "use_conditional") {
+                if(!isNodeVisible(node)) return false;
+                for(const child of (node.children || [])) {
+                    if(isTargetInTree(child, targetPkg)) return true;
+                }
+                return false;
+            }
+            if(node.type === "any_of" || node.type === "all_of") {
+                for(const child of (node.children || [])) {
+                    if(isTargetInTree(child, targetPkg)) return true;
+                }
+                return false;
+            }
+            if(node.type === "string") {
+                return extractPackageName(node.name) === targetPkg;
+            }
+            return false;
+        }
+
         function renderRevDeps() {
             const container = document.getElementById("reverse-dependencies-container");
             if(!container) return;
             container.innerHTML = "";
 
-            // Use search engine to find reverse dependencies
-            let matchedDocs = searchEngine.documents.filter(d =>
-                (d.raw_depends && d.raw_depends.includes(currentPkgName)) ||
-                (d.raw_rdepends && d.raw_rdepends.includes(currentPkgName)) ||
-                (d.raw_bdepends && d.raw_bdepends.includes(currentPkgName)) ||
-                (d.raw_pdepends && d.raw_pdepends.includes(currentPkgName))
-            );
-
-            if(matchedDocs.length === 0) {
-                container.textContent = "No reverse dependencies found.";
-                return;
-            }
-
+            let foundAny = false;
             const ul = document.createElement("ul");
-            for(const doc of matchedDocs) {
-                const li = document.createElement("li");
 
-                let types = [];
-                if(doc.raw_depends && doc.raw_depends.includes(currentPkgName)) types.push("DEPEND");
-                if(doc.raw_rdepends && doc.raw_rdepends.includes(currentPkgName)) types.push("RDEPEND");
-                if(doc.raw_bdepends && doc.raw_bdepends.includes(currentPkgName)) types.push("BDEPEND");
-                if(doc.raw_pdepends && doc.raw_pdepends.includes(currentPkgName)) types.push("PDEPEND");
+            for(const doc of searchEngine.documents) {
+                let matchedTypes = [];
+                let condStrs = []; // Display which USE flags conditionalized this dep (optional context)
 
-                const a = document.createElement("a");
-                a.href = doc.page_url; // Wait, page_url might be relative to search root. We need to adapt it.
-                // Assuming we are in /repos/repo/categories/cat/packages/pkg/ebuild/ver/
-                const name = doc.category + "/" + doc.package + " (" + doc.version + ")";
-                a.textContent = name;
-                a.href = "../../../../../../categories/" + doc.category + "/packages/" + doc.package + "/ebuild/" + doc.version + "/";
+                const checkDep = (rawStr, typeName) => {
+                    if(!rawStr || !rawStr.includes(currentPkgName)) return;
+                    let nodes = parseDepString(rawStr);
+                    let matchesTarget = false;
+                    for(const n of nodes) {
+                        if(isTargetInTree(n, currentPkgName)) {
+                            matchesTarget = true;
+                            break;
+                        }
+                    }
+                    if(matchesTarget) {
+                        matchedTypes.push(typeName);
+                    }
+                };
 
-                li.appendChild(a);
+                checkDep(doc.raw_depends, "DEPEND");
+                checkDep(doc.raw_rdepends, "RDEPEND");
+                checkDep(doc.raw_bdepends, "BDEPEND");
+                checkDep(doc.raw_pdepends, "PDEPEND");
 
-                const span = document.createElement("span");
-                span.style.color = "#666";
-                span.style.marginLeft = "10px";
-                span.textContent = "- " + types.join(", ");
-                li.appendChild(span);
+                if(matchedTypes.length > 0) {
+                    foundAny = true;
+                    const li = document.createElement("li");
 
-                ul.appendChild(li);
+                    const a = document.createElement("a");
+                    const name = doc.category + "/" + doc.package + " (" + doc.version + ")";
+                    a.textContent = name;
+                    a.href = "../../../../../../categories/" + doc.category + "/packages/" + doc.package + "/ebuild/" + doc.version + "/";
+
+                    li.appendChild(a);
+
+                    const span = document.createElement("span");
+                    span.style.color = "#666";
+                    span.style.marginLeft = "10px";
+                    span.textContent = "- " + matchedTypes.join(", ");
+                    li.appendChild(span);
+
+                    ul.appendChild(li);
+                }
             }
-            container.appendChild(ul);
+
+            if(!foundAny) {
+                container.textContent = "No reverse dependencies found (or all filtered out by USE flags).";
+            } else {
+                container.appendChild(ul);
+            }
         }
 
         if(useInput) {
             useInput.addEventListener("input", () => {
                 parseUses();
                 renderAllDeps();
-                // Render revdeps filtering could be done if we parsed their raw strings.
-                // Since revdeps are just strings in searchIndex, we'll leave them static for now.
+                renderRevDeps();
             });
         }
 

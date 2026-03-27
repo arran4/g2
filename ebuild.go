@@ -863,28 +863,76 @@ func PadVersionTokens(v string) string {
 	})
 }
 
-// ExtractPackageNameFromDep strips version, slot, and USE flags from a package string
-func ExtractPackageNameFromDep(dep string) string {
-	if idx := strings.Index(dep, "["); idx != -1 {
-		dep = dep[:idx]
-	}
-	if idx := strings.Index(dep, ":"); idx != -1 {
-		dep = dep[:idx]
-	}
+// PackageAtom represents a parsed Gentoo package dependency specification.
+type PackageAtom struct {
+	Operator string // e.g. ">=", "~", "!", "!!", ""
+	Category string // e.g. "dev-lang"
+	Name     string // e.g. "python"
+	Version  string // e.g. "3.10.4-r1"
+	Slot     string // e.g. "0/3.10"
+	UseFlags string // e.g. "sqlite,xml"
+}
+
+// ParsePackageAtom parses a raw dependency string into its constituent parts.
+func ParsePackageAtom(dep string) PackageAtom {
+	var atom PackageAtom
+
+	// 1. Extract Operator
 	for len(dep) > 0 && (dep[0] == '>' || dep[0] == '<' || dep[0] == '=' || dep[0] == '~' || dep[0] == '!') {
+		atom.Operator += string(dep[0])
 		dep = dep[1:]
 	}
-	// Also strip any remaining version parts from the end
-	// E.g., dev-lang/python-3.10.0-r1 -> dev-lang/python
-	parts := strings.Split(dep, "/")
-	if len(parts) == 2 {
-		name := parts[1]
-		// Find first hyphen followed by digit
-		for i := 0; i < len(name)-1; i++ {
-			if name[i] == '-' && name[i+1] >= '0' && name[i+1] <= '9' {
-				return parts[0] + "/" + name[:i]
-			}
+
+	// 2. Extract USE Flags
+	if idx := strings.Index(dep, "["); idx != -1 {
+		if endIdx := strings.LastIndex(dep, "]"); endIdx > idx {
+			atom.UseFlags = dep[idx+1 : endIdx]
+			dep = dep[:idx] // strip USE flags
 		}
 	}
-	return dep
+
+	// 3. Extract Slot
+	if idx := strings.Index(dep, ":"); idx != -1 {
+		atom.Slot = dep[idx+1:]
+		dep = dep[:idx] // strip slot
+	}
+
+	// 4. Extract Category, Name, and Version
+	// dep is now something like "dev-lang/python-3.10.0-r1" or "virtual/pkgconfig"
+	parts := strings.Split(dep, "/")
+	if len(parts) == 2 {
+		atom.Category = parts[0]
+		nameAndVer := parts[1]
+
+		// Find where the version starts. A version usually starts after a hyphen followed by a digit.
+		verStartIdx := -1
+		for i := 0; i < len(nameAndVer)-1; i++ {
+			if nameAndVer[i] == '-' && nameAndVer[i+1] >= '0' && nameAndVer[i+1] <= '9' {
+				verStartIdx = i
+				break
+			}
+		}
+
+		if verStartIdx != -1 {
+			atom.Name = nameAndVer[:verStartIdx]
+			atom.Version = nameAndVer[verStartIdx+1:]
+		} else {
+			atom.Name = nameAndVer
+		}
+	} else {
+		// Fallback for malformed strings missing category
+		atom.Name = dep
+	}
+
+	return atom
+}
+
+// ExtractPackageNameFromDep strips version, slot, and USE flags from a package string
+// using the AST parser PackageAtom to satisfy architectural requirements.
+func ExtractPackageNameFromDep(dep string) string {
+	atom := ParsePackageAtom(dep)
+	if atom.Category != "" {
+		return atom.Category + "/" + atom.Name
+	}
+	return atom.Name
 }

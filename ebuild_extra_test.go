@@ -27,3 +27,44 @@ func TestExtractPackageNameFromDep(t *testing.T) {
 		}
 	}
 }
+
+func TestParsePackageAtom(t *testing.T) {
+	tests := []struct {
+		input string
+		op    string
+		cat   string
+		name  string
+		ver   string
+		slot  string
+		use   string
+	}{
+		{">=dev-lang/python-3.10.4:0/3.10[sqlite,xml]", ">=", "dev-lang", "python", "3.10.4", "0/3.10", "sqlite,xml"},
+		{"~dev-libs/libxml2-2.9.12-r5", "~", "dev-libs", "libxml2", "2.9.12-r5", "", ""},
+		{"dev-lang/python", "", "dev-lang", "python", "", "", ""},
+		{"!!sys-fs/udev", "!!", "sys-fs", "udev", "", "", ""},
+		{"!<sys-apps/systemd-216", "!<", "sys-apps", "systemd", "216", "", ""},
+		{"=media-libs/libpng-1.6.39-r1", "=", "media-libs", "libpng", "1.6.39-r1", "", ""},
+	}
+
+	for _, tc := range tests {
+		atom := ParsePackageAtom(tc.input)
+		if atom.Operator != tc.op {
+			t.Errorf("input %q: expected op %q, got %q", tc.input, tc.op, atom.Operator)
+		}
+		if atom.Category != tc.cat {
+			t.Errorf("input %q: expected cat %q, got %q", tc.input, tc.cat, atom.Category)
+		}
+		if atom.Name != tc.name {
+			t.Errorf("input %q: expected name %q, got %q", tc.input, tc.name, atom.Name)
+		}
+		if atom.Version != tc.ver {
+			t.Errorf("input %q: expected ver %q, got %q", tc.input, tc.ver, atom.Version)
+		}
+		if atom.Slot != tc.slot {
+			t.Errorf("input %q: expected slot %q, got %q", tc.input, tc.slot, atom.Slot)
+		}
+		if atom.UseFlags != tc.use {
+			t.Errorf("input %q: expected use %q, got %q", tc.input, tc.use, atom.UseFlags)
+		}
+	}
+}

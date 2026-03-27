@@ -157,17 +157,13 @@ func generateSearchIndex(outDir string, sites []*SiteData) error {
 							if d := ver.Ebuild.Vars["BDEPEND"]; d != "" {
 								rawBdepends = d
 								matches := pkgRegex.FindAllString(d, -1)
-								for _, m := range matches {
-									bdepends = append(bdepends, m)
-								}
+								bdepends = append(bdepends, matches...)
 							}
 
 							if d := ver.Ebuild.Vars["PDEPEND"]; d != "" {
 								rawPdepends = d
 								matches := pkgRegex.FindAllString(d, -1)
-								for _, m := range matches {
-									pdepends = append(pdepends, m)
-								}
+								pdepends = append(pdepends, matches...)
 							}
 
 							if d := ver.Ebuild.Vars["REQUIRED_USE"]; d != "" {
