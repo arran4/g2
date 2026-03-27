@@ -119,9 +119,7 @@ type SiteData struct {
 	PackageCount      int
 	AggUseFlags       []*AggUseFlag
 	ThirdPartyMirrors map[string][]string
-	InfoVars       []string
-	PackageCount   int
-	AggUseFlags    []*AggUseFlag
+	InfoVars          []string
 }
 
 type LicenseData struct {
