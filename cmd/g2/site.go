@@ -1360,10 +1360,28 @@ func getRepoUseFlags(site *SiteData, aggPackages map[string]*AggPackage) []*AggU
 			if pkg.Metadata != nil {
 				for _, useBlock := range pkg.Metadata.Use {
 					for _, flag := range useBlock.Flags {
-						if aggFlag, ok := aggUseFlags[flag.Name]; ok {
-							if flag.Text != "" {
-								aggFlag.MetadataDescs[pkgKey] = flag.Text
+						if _, ok := aggUseFlags[flag.Name]; !ok {
+							aggUseFlags[flag.Name] = &AggUseFlag{
+								Name:          flag.Name,
+								LocalDescs:    make(map[string]string),
+								MetadataDescs: make(map[string]string),
 							}
+						}
+
+						foundPkg := false
+						for _, p := range aggUseFlags[flag.Name].Packages {
+							if p.Name == pkg.Name && p.Category == pkg.Category {
+								foundPkg = true
+								break
+							}
+						}
+						if !foundPkg {
+							aggUseFlags[flag.Name].Packages = append(aggUseFlags[flag.Name].Packages, aggPackages[pkgKey])
+							aggUseFlags[flag.Name].Count++
+						}
+
+						if flag.Text != "" {
+							aggUseFlags[flag.Name].MetadataDescs[pkgKey] = flag.Text
 						}
 					}
 				}
