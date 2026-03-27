@@ -94,21 +94,21 @@ func (cfg *MainArgConfig) cmdOverlayInfoPkgsAdd(args []string) error {
 	if err != nil {
 		return fmt.Errorf("opening info_pkgs file: %w", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	// Write standard header if it's new/empty
 	if len(content) == 0 {
-		f.WriteString("# Copyright 2004-2025 Gentoo Authors\n")
-		f.WriteString("# Distributed under the terms of the GNU General Public License v2\n")
-		f.WriteString("##\n")
-		f.WriteString("## These ATOMS are printed with a standard 'emerge info' in\n")
-		f.WriteString("## portage as of 2.0.51-r5. Do not overcrowd the output please.\n")
-		f.WriteString("##\n")
+		_, _ = f.WriteString("# Copyright 2004-2025 Gentoo Authors\n")
+		_, _ = f.WriteString("# Distributed under the terms of the GNU General Public License v2\n")
+		_, _ = f.WriteString("##\n")
+		_, _ = f.WriteString("## These ATOMS are printed with a standard 'emerge info' in\n")
+		_, _ = f.WriteString("## portage as of 2.0.51-r5. Do not overcrowd the output please.\n")
+		_, _ = f.WriteString("##\n")
 	} else if len(content) > 0 && content[len(content)-1] != '\n' {
-		f.WriteString("\n")
+		_, _ = f.WriteString("\n")
 	}
 
-	f.WriteString(atom + "\n")
+	_, _ = f.WriteString(atom + "\n")
 	fmt.Printf("Added %s to info_pkgs.\n", atom)
 	return nil
 }
