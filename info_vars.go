@@ -39,7 +39,7 @@ func ParseInfoVarsFS(sysFS fs.FS, path string) ([]string, error) {
 		}
 		return nil, err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	return parseInfoVarsReader(f)
 }
 
@@ -52,7 +52,7 @@ func ParseInfoVars(path string) ([]string, error) {
 		}
 		return nil, err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	return parseInfoVarsReader(f)
 }
 
@@ -72,6 +72,6 @@ func WriteInfoVarsFile(path string, vars []string) error {
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	return SerializeInfoVars(f, vars)
 }
