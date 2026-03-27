@@ -152,6 +152,10 @@ func parseIUSEFlagsFunc(iuse string) []ParsedIUSEFlag {
 }
 
 func newSiteServer(sites []*SiteData) (*SiteServer, error) {
+	for _, site := range sites {
+		populatePkgUseFlags(site)
+	}
+
 	tmpl, err := template.New("").Funcs(getTemplateFuncMap()).ParseFS(siteTemplates, "sitegen_templates/*.html")
 	if err != nil {
 		return nil, fmt.Errorf("parsing templates: %w", err)
@@ -508,7 +512,9 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			"Categories": s.AggCategories,
 			"Packages":   s.AggPackages,
 			"Licenses":   s.AggLicenses,
+			"UseFlags":   s.AggUseFlags,
 			"Projects":   s.AggProjects,
+			"Profiles":   []interface{}{},
 			"Updates":    s.GlobalUpdates,
 			"Version":    version,
 		})
@@ -737,6 +743,17 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+	case "help":
+		if len(parts) == 1 {
+			s.renderPageHTTP(w, "help.html", map[string]interface{}{
+				"Title":       "Help & Legend",
+				"BaseURL":     baseURL,
+				"Breadcrumbs": []Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: "Help"}},
+				"Version":     version,
+			})
+			return
+		}
+
 	case "repos":
 		if len(parts) >= 2 {
 			repoName := parts[1]
@@ -834,30 +851,11 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 						pkgName := parts[5]
 
 						var pkgData *PackageData
-						for _, c := range site.Categories {
-							if c.Name == catName {
-								for _, p := range c.Packages {
-									if p.Name == pkgName {
-										pkgData = &p
-										break
-									}
-								}
-							}
-						}
-						if pkgData == nil {
-							http.NotFound(w, r)
-							return
-						}
-					} else if len(parts) >= 6 && parts[4] == "packages" {
-						catName := parts[3]
-						pkgName := parts[5]
-
-						var pkgData *PackageData
-						for _, c := range site.Categories {
-							if c.Name == catName {
-								for _, p := range c.Packages {
-									if p.Name == pkgName {
-										pkgData = &p
+						for i := range site.Categories {
+							if site.Categories[i].Name == catName {
+								for j := range site.Categories[i].Packages {
+									if site.Categories[i].Packages[j].Name == pkgName {
+										pkgData = &site.Categories[i].Packages[j]
 										break
 									}
 								}
@@ -882,6 +880,7 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 								"Repo":    site,
 								"Package": *pkgData,
 								"Version": version,
+								"ValidLicenses": map[string]bool{},
 							})
 							return
 						} else if len(parts) == 8 && parts[6] == "ebuild" {
@@ -927,6 +926,40 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 								"VersionData":      *versionData,
 								"FilteredManifest": filteredManifest,
 								"Version":          version,
+							})
+							return
+						} else if len(parts) == 8 && parts[6] == "manifest" {
+							manifestName := strings.TrimSuffix(parts[7], ".html")
+
+							var targetMD *ManifestEntryData
+							for _, md := range pkgData.ManifestData {
+								if md.Entry.Filename == manifestName {
+									targetMD = &md
+									break
+								}
+							}
+							if targetMD == nil {
+								http.NotFound(w, r)
+								return
+							}
+
+							s.renderPageHTTP(w, "repo_package_manifest.html", map[string]interface{}{
+								"Title":       fmt.Sprintf("%s - %s/%s-Manifest-%s", site.RepoName, pkgData.Category, pkgData.Name, manifestName),
+								"BaseURL":     baseURL,
+								"Breadcrumbs": []Breadcrumb{
+									{Name: s.Title, URL: baseURL},
+									{Name: site.RepoName, URL: "../../../../../../"},
+									{Name: "Categories", URL: "../../../../../"},
+									{Name: pkgData.Category, URL: "../../../../"},
+									{Name: "Packages", URL: "../../../"},
+									{Name: pkgData.Name, URL: "../../"},
+									{Name: "Manifest"},
+									{Name: manifestName},
+								},
+								"Repo":        site,
+								"Package":     *pkgData,
+								"Manifest":    *targetMD,
+								"Version":     version,
 							})
 							return
 						}

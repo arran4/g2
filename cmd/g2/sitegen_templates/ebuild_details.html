@@ -50,7 +50,7 @@
     <div>
         {{range parseIUSEFlags .VersionData.Ebuild.Vars.IUSE}}
         <div class="iuse-flag">
-            <a href="../../../../uses/{{.Name}}/">{{.Name}}</a>
+            <a href="{{$.BaseURL}}uses/{{.Name}}/">{{.Name}}</a>
             {{if .Conditional}}
             <div class="iuse-tooltip" title="{{.ConditionStr}}">
                 &#10067;
@@ -94,7 +94,7 @@
         {{range .FilteredManifest}}
         <tr>
             <td>{{.Entry.Type}}</td>
-            <td>{{.Entry.Filename}}</td>
+            <td><a href="../../manifest/{{.Entry.Filename}}/">{{.Entry.Filename}}</a></td>
             <td>{{.Entry.Size}} bytes</td>
             <td>
                 {{range $i, $u := .URLs}}{{if $i}}<br>{{end}}<a href="{{$u}}">{{$u}}</a>{{end}}

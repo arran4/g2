@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-//go:embed sitegen_templates/*.html sitegen_templates/*.xml
+//go:embed sitegen_templates/*.html sitegen_templates/*.xml sitegen_templates/*.js
 var siteTemplates embed.FS
 
 func getTemplateFuncMap() template.FuncMap {
