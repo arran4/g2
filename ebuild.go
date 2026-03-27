@@ -240,7 +240,7 @@ func ParseIUSE(iuseStr string) []string {
 // ParseEbuildVariables extracts PN, PV, P from the ebuild filename.
 func ParseEbuildVariables(filename string) map[string]string {
 	basename := filepath.Base(filename)
-	re := regexp.MustCompile(`^(.+)-(\d+(\.\d+)*([a-z]|_p\d+|_rc\d+|_beta\d+|_alpha\d+)?(-r\d+)?)\.ebuild$`)
+	re := regexp.MustCompile(`^(.+)-(\d+(\.\d+)*([a-z]|_p\d*|_pre\d*|_rc\d*|_beta\d*|_alpha\d*)?(-r\d+)?)\.ebuild$`)
 	matches := re.FindStringSubmatch(basename)
 
 	if matches == nil {
