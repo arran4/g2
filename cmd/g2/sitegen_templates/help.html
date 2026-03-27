@@ -8,3 +8,50 @@
         <li><strong>✗</strong> : The USE flag is absent in the ebuild version.</li>
     </ul>
 </div>
+
+<div class="metadata-section">
+    <h2>Search Documentation</h2>
+    <p>Use the search box in the navigation to find packages. You can use plain text to search across names, descriptions, and use flags, or use specific field filters.</p>
+
+    <h3>Syntax</h3>
+    <ul>
+        <li><b>Plain text</b>: <code>ollama</code> - matches anywhere in the package name, description, etc.</li>
+        <li><b>Field filters</b>: <code>category:app-admin</code>, <code>license:MIT</code>, <code>arch:amd64</code>, <code>keyword:~amd64</code></li>
+        <li><b>Boolean Logic</b>:
+            <ul>
+                <li>Implicit AND: <code>app-admin ollama</code></li>
+                <li>Explicit OR: <code>license:MIT OR license:BSD</code></li>
+                <li>Negation: <code>-mask:hard</code> or <code>NOT mask:hard</code> or <code>!mask:hard</code></li>
+            </ul>
+        </li>
+        <li><b>Grouping</b>: <code>(license:MIT OR license:BSD) AND arch:amd64</code></li>
+        <li><b>Sequences</b>: <code>'system user</code> - searches for an ordered sequence of words.</li>
+    </ul>
+
+    <h3>Supported Fields</h3>
+    <ul>
+        <li><code>overlay</code>: Repository name</li>
+        <li><code>category</code>: Package category</li>
+        <li><code>url</code>: Package URL</li>
+        <li><code>arch</code>: Architecture (e.g., amd64)</li>
+        <li><code>keyword</code>: Raw keyword (e.g., ~amd64)</li>
+        <li><code>mask</code>: Mask status (none, soft, hard)</li>
+        <li><code>version</code>: Version comparison (e.g., v3.4.5, >v3.4.5, &lt;v3.4.5)</li>
+        <li><code>license</code>: License name</li>
+        <li><code>depends</code>, <code>rdepends</code>: Packages it depends on</li>
+        <li><code>depended</code>, <code>rdepended</code>: Packages that depend on it</li>
+        <li><code>manifestfile</code>: Files in the manifest</li>
+        <li><code>EAPI</code>, <code>slot</code>, <code>inherit</code>, <code>use</code></li>
+    </ul>
+
+    <h3>Examples</h3>
+    <ul>
+        <li><a href="{{.BaseURL}}search/?q=ollama">ollama</a></li>
+        <li><a href="{{.BaseURL}}search/?q=license:MIT AND arch:amd64">license:MIT AND arch:amd64</a></li>
+        <li><a href="{{.BaseURL}}search/?q=depends:dev-lang/go">depends:dev-lang/go</a></li>
+        <li><a href="{{.BaseURL}}search/?q=rdepended:sys-libs/zlib">rdepended:sys-libs/zlib</a></li>
+        <li><a href="{{.BaseURL}}search/?q=mask:none use:xorg">mask:none use:xorg</a></li>
+        <li><a href="{{.BaseURL}}search/?q=version:>v3.4.5">version:>v3.4.5</a></li>
+        <li><a href="{{.BaseURL}}search/?q='system user">'system user</a></li>
+    </ul>
+</div>
