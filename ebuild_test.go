@@ -296,3 +296,55 @@ func TestParseIUSE(t *testing.T) {
 		})
 	}
 }
+
+func TestCompareVersions(t *testing.T) {
+	tests := []struct {
+		v1   string
+		v2   string
+		want int
+	}{
+		{"1.0", "1.0", 0},
+		{"1.0.0", "1.0", 0},
+		{"1.0", "1.0.0", 0},
+		{"1.0", "1.1", -1},
+		{"1.1", "1.0", 1},
+		{"1.0-r1", "1.0", 1},
+		{"1.0", "1.0-r1", -1},
+		{"1.0-r1", "1.0-r2", -1},
+		{"1.0-r2", "1.0-r1", 1},
+		{"1.0_alpha", "1.0", -1},
+		{"1.0_beta", "1.0_alpha", 1},
+		{"1.0_pre", "1.0_beta", 1},
+		{"1.0_rc", "1.0_pre", 1},
+		{"1.0", "1.0_rc", 1},
+		{"1.0_p", "1.0", 1},
+		{"1.0_alpha1", "1.0_alpha2", -1},
+		{"1.0_alpha2", "1.0_alpha1", 1},
+		{"1.0_p1", "1.0_p2", -1},
+		{"1.0_p2", "1.0_p1", 1},
+		{"1.0a", "1.0", 1},
+		{"1.0", "1.0a", -1},
+		{"1.0a", "1.0b", -1},
+		{"1.0b", "1.0a", 1},
+		{"1.0.1", "1.0", 1},
+		{"1.0", "1.0.1", -1},
+		{"1.001", "1.01", -1},
+		{"1.01", "1.001", 1},
+		{"1.01", "1.1", -1},
+		{"1.1", "1.01", 1},
+		{"1.0_alpha1-r1", "1.0_alpha1-r2", -1},
+		{"1.0_alpha1-r2", "1.0_alpha1-r1", 1},
+		// Unparseable versions fallback to string compare
+		{"invalid1", "invalid2", -1},
+		{"invalid2", "invalid1", 1},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.v1+"_vs_"+tt.v2, func(t *testing.T) {
+			got := CompareVersions(tt.v1, tt.v2)
+			if got != tt.want {
+				t.Errorf("CompareVersions(%q, %q) = %d, want %d", tt.v1, tt.v2, got, tt.want)
+			}
+		})
+	}
+}

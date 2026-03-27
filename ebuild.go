@@ -408,9 +408,31 @@ func compareGentooVersionParts(v1, v2 gentooVersion) int {
 
 	for i := 0; i < maxLen; i++ {
 		if i >= len(v1.Nums) {
+			// v1 is shorter. If remaining v2 parts are all 0, they are equal in this part
+			allZero := true
+			for j := i; j < len(v2.Nums); j++ {
+				if v2.Nums[j] != 0 {
+					allZero = false
+					break
+				}
+			}
+			if allZero {
+				continue
+			}
 			return -1
 		}
 		if i >= len(v2.Nums) {
+			// v2 is shorter. If remaining v1 parts are all 0, they are equal in this part
+			allZero := true
+			for j := i; j < len(v1.Nums); j++ {
+				if v1.Nums[j] != 0 {
+					allZero = false
+					break
+				}
+			}
+			if allZero {
+				continue
+			}
 			return 1
 		}
 
