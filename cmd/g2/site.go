@@ -114,8 +114,9 @@ type SiteData struct {
 	UseDesc        *g2.UseDesc
 	UseLocalDesc   *g2.UseLocalDesc
 	Deprecated     []g2.PackageDeprecated
-	PackageCount   int
-	AggUseFlags    []*AggUseFlag
+	PackageCount      int
+	AggUseFlags       []*AggUseFlag
+	ThirdPartyMirrors map[string][]string
 }
 
 type LicenseData struct {
@@ -141,9 +142,10 @@ type FileData struct {
 }
 
 type ManifestEntryData struct {
-	Entry    *g2.ManifestEntry
-	Versions []string
-	URLs     []string
+	Entry        *g2.ManifestEntry
+	Versions     []string
+	URLs         []string
+	ResolvedURLs []string
 }
 
 type PackageData struct {
@@ -195,6 +197,9 @@ type VersionData struct {
 
 	// Moves
 	MovedToSlot string
+
+	// Mirrors
+	ApplicableMirrors map[string][]string
 }
 
 // End model TODO check
@@ -524,6 +529,13 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool) (
 		log.Printf("Warning: failed to parse package.deprecated: %v", err)
 	}
 
+	var thirdPartyMirrors map[string][]string
+	if tm, err := g2.ParseThirdPartyMirrorsFS(sysFS, filepath.ToSlash(filepath.Join(repoDir, "profiles", "thirdpartymirrors"))); err == nil {
+		thirdPartyMirrors = tm
+	} else if !os.IsNotExist(err) {
+		log.Printf("Warning: failed to parse thirdpartymirrors: %v", err)
+	}
+
 	site := &SiteData{
 		Title:          title,
 		RepoName:       repoName,
@@ -534,8 +546,9 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool) (
 		QAPolicy:       qa,
 		UseDesc:        useDesc,
 		UseLocalDesc:   useLocalDesc,
-		Deprecated:     deprecated,
-		PackageCount:   0,
+		Deprecated:        deprecated,
+		PackageCount:      0,
+		ThirdPartyMirrors: thirdPartyMirrors,
 	}
 
 	// Calculate PackageCount correctly after parsing all categories
@@ -877,12 +890,33 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool) (
 				}
 			}
 
+			// Set ApplicableMirrors for each version
+			for i, v := range pkgData.Versions {
+				if v.Ebuild != nil {
+					applicableMirrors := make(map[string][]string)
+					for _, uri := range v.Ebuild.SrcUri {
+						if strings.HasPrefix(uri.URL, "mirror://") {
+							parts := strings.SplitN(uri.URL[len("mirror://"):], "/", 2)
+							if len(parts) > 0 {
+								mirrorName := parts[0]
+								if mirrors, ok := site.ThirdPartyMirrors[mirrorName]; ok {
+									applicableMirrors[mirrorName] = mirrors
+								}
+							}
+						}
+					}
+					if len(applicableMirrors) > 0 {
+						pkgData.Versions[i].ApplicableMirrors = applicableMirrors
+					}
+				}
+			}
+
 			// Read Manifest
 			manifestPath := filepath.Join(pkgPath, "Manifest")
 			manifest, err := parseManifestFromFS(sysFS, filepath.ToSlash(manifestPath))
 			if err == nil {
 				pkgData.Manifest = manifest
-				pkgData.ManifestData = buildManifestData(manifest, pkgData.Versions)
+				pkgData.ManifestData = buildManifestData(manifest, pkgData.Versions, site.ThirdPartyMirrors)
 			}
 
 			// Read files/ directory
@@ -977,7 +1011,7 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool) (
 	return site, nil
 }
 
-func buildManifestData(manifest *g2.Manifest, versions []VersionData) []ManifestEntryData {
+func buildManifestData(manifest *g2.Manifest, versions []VersionData, thirdPartyMirrors map[string][]string) []ManifestEntryData {
 	var manifestData []ManifestEntryData
 	for _, entry := range manifest.Entries {
 		md := ManifestEntryData{
@@ -1008,6 +1042,30 @@ func buildManifestData(manifest *g2.Manifest, versions []VersionData) []Manifest
 					if !urlMap[uri.URL] {
 						md.URLs = append(md.URLs, uri.URL)
 						urlMap[uri.URL] = true
+
+						if strings.HasPrefix(uri.URL, "mirror://") {
+							parts := strings.SplitN(uri.URL[len("mirror://"):], "/", 2)
+							if len(parts) == 2 {
+								mirrorName := parts[0]
+								filePath := parts[1]
+								if mirrors, ok := thirdPartyMirrors[mirrorName]; ok {
+									for _, mirrorURL := range mirrors {
+										resolvedURL := mirrorURL
+										if !strings.HasSuffix(resolvedURL, "/") {
+											resolvedURL += "/"
+										}
+										resolvedURL += filePath
+										md.ResolvedURLs = append(md.ResolvedURLs, resolvedURL)
+									}
+								} else {
+									md.ResolvedURLs = append(md.ResolvedURLs, uri.URL)
+								}
+							} else {
+								md.ResolvedURLs = append(md.ResolvedURLs, uri.URL)
+							}
+						} else {
+							md.ResolvedURLs = append(md.ResolvedURLs, uri.URL)
+						}
 					}
 				}
 			}
@@ -1017,6 +1075,7 @@ func buildManifestData(manifest *g2.Manifest, versions []VersionData) []Manifest
 			return md.Versions[i] > md.Versions[j]
 		})
 		sort.Strings(md.URLs)
+		sort.Strings(md.ResolvedURLs)
 
 		manifestData = append(manifestData, md)
 	}

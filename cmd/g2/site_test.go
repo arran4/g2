@@ -55,7 +55,7 @@ func TestBuildManifestData(t *testing.T) {
 		},
 	}
 
-	got := buildManifestData(manifest, versions)
+	got := buildManifestData(manifest, versions, nil)
 
 	expected := []ManifestEntryData{
 		{

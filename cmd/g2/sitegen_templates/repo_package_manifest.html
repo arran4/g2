@@ -31,8 +31,14 @@
 <div class="metadata-section">
     <h3>Source URLs</h3>
     <ul>
+        {{if .Manifest.ResolvedURLs}}
+        {{range .Manifest.ResolvedURLs}}
+        <li><a href="{{.}}">{{.}}</a></li>
+        {{end}}
+        {{else}}
         {{range .Manifest.URLs}}
         <li><a href="{{.}}">{{.}}</a></li>
+        {{end}}
         {{end}}
     </ul>
 </div>
