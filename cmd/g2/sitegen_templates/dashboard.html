@@ -1,7 +1,16 @@
 <div class="metadata-section">
+    <h3>Search</h3>
+    <form action="search/" method="get">
+        <input type="text" name="q" placeholder="Search packages, descriptions, use flags..." style="width: 80%; padding: 0.5rem;" />
+        <button type="submit" style="padding: 0.5rem;">Search</button>
+    </form>
+</div>
+
+<div class="metadata-section">
     <h3>Dashboard</h3>
     <p>Welcome to {{.Title}}.</p>
     <ul>
+        <li><a href="search/">Search</a></li>
         {{if gt (len .Repos) 0}}
         <li><a href="overlays/">Overlays ({{len .Repos}})</a></li>
         {{end}}

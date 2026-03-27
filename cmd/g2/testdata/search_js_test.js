@@ -106,3 +106,15 @@ assert.strictEqual(res.length, 1);
 assert.strictEqual(res[0].id, 1);
 
 console.log("All JS tests passed!");
+
+// Additional syntax tests
+res = engine.search("!mask:hard");
+assert.strictEqual(res.length, 2);
+
+res = engine.search("-mask:hard");
+assert.strictEqual(res.length, 2);
+
+res = engine.search("'system manager'");
+assert.strictEqual(res.length, 1);
+assert.strictEqual(res[0].id, 3);
+console.log("SUCCESS");
