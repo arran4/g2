@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/arran4/g2/templates"
 	"bytes"
 	"encoding/xml"
 	"flag"
@@ -1618,7 +1619,7 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 		log.Printf("Warning: failed to generate search index: %v", err)
 	}
 
-	tmpl, err := template.New("").Funcs(getTemplateFuncMap()).ParseFS(siteTemplates, "sitegen_templates/*.html")
+	tmpl, err := template.New("").Funcs(getTemplateFuncMap()).ParseFS(templates.SiteFiles, "site/*.html")
 	if err != nil {
 		return fmt.Errorf("parsing templates: %w", err)
 	}

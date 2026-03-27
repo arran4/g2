@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"github.com/arran4/g2/templates"
 	"flag"
 	"fmt"
 	"html/template"
@@ -154,7 +155,7 @@ func newSiteServer(sites []*SiteData) (*SiteServer, error) {
 		populatePkgUseFlags(site)
 	}
 
-	tmpl, err := template.New("").Funcs(getTemplateFuncMap()).ParseFS(siteTemplates, "sitegen_templates/*.html")
+	tmpl, err := template.New("").Funcs(getTemplateFuncMap()).ParseFS(templates.SiteFiles, "site/*.html")
 	if err != nil {
 		return nil, fmt.Errorf("parsing templates: %w", err)
 	}

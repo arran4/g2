@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/arran4/g2/templates"
 	"encoding/json"
 	"fmt"
 	"html/template"
@@ -320,7 +321,7 @@ func generateSearchIndex(outDir string, sites []*SiteData) error {
 
 	jsFiles := []string{"search_parser.js", "search.js", "search_ui.js"}
 	for _, jsFile := range jsFiles {
-		content, err := siteTemplates.ReadFile("sitegen_templates/" + jsFile)
+		content, err := templates.SiteFiles.ReadFile("site/" + jsFile)
 		if err != nil {
 			return fmt.Errorf("reading template js %s: %w", jsFile, err)
 		}
@@ -333,7 +334,7 @@ func generateSearchIndex(outDir string, sites []*SiteData) error {
 	tmpl, err := template.New("").Funcs(template.FuncMap{
 		"join": strings.Join,
 		"parseIUSEFlags": parseIUSEFlagsFunc,
-	}).ParseFS(siteTemplates, "sitegen_templates/*.html")
+	}).ParseFS(templates.SiteFiles, "site/*.html")
 	if err != nil {
 		return fmt.Errorf("parsing search templates: %w", err)
 	}
