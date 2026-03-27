@@ -147,20 +147,25 @@ type ManifestEntryData struct {
 }
 
 type PackageData struct {
-	Name          string
-	Category      string
-	Versions      []VersionData
-	Metadata      *g2.PkgMetadata
-	MetadataError error
-	Manifest      *g2.Manifest
-	ManifestData  []ManifestEntryData
-	Files         []FileData
+	Name                  string
+	Category              string
+	Versions              []VersionData
+	Metadata              *g2.PkgMetadata
+	MetadataError         error
+	Manifest              *g2.Manifest
+	ManifestData          []ManifestEntryData
+	Files                 []FileData
 	HighestStableVersion  template.HTML
 	HighestTestingVersion template.HTML
 	EbuildCount           int
 	DominantDescription   string
 	DominantHomepage      string
 	DominantLicense       string
+	DominantDepends       []string
+	DominantRDepends      []string
+	DominantBDepends      []string
+	DominantPDepends      []string
+	DominantRequiredUse   []string
 
 	// Git info
 	MetadataRawURL string
@@ -177,8 +182,8 @@ type PackageData struct {
 }
 
 type PkgUseFlag struct {
-	Name string
-	Desc string
+	Name     string
+	Desc     string
 	Versions map[string]string // Version -> Unicode symbol representing state
 }
 
@@ -195,6 +200,13 @@ type VersionData struct {
 
 	// Moves
 	MovedToSlot string
+
+	// Dependencies
+	Depends     []string
+	RDepends    []string
+	BDepends    []string
+	PDepends    []string
+	RequiredUse []string
 }
 
 // End model TODO check
@@ -359,8 +371,6 @@ func parseManifestFromFS(sysFS fs.FS, path string) (*g2.Manifest, error) {
 	return g2.ParseManifestFromReader(file)
 }
 
-
-
 func getHighestVersionsAndCount(versions []VersionData) (template.HTML, template.HTML, int) {
 	// Parse KEYWORDS and group versions
 
@@ -416,11 +426,11 @@ func getHighestVersionsAndCount(versions []VersionData) (template.HTML, template
 
 		// Sort descending
 		for i := 0; i < len(sortedVersions); i++ {
-		    for j := i+1; j < len(sortedVersions); j++ {
-		        if g2.CompareVersions(sortedVersions[i], sortedVersions[j]) < 0 {
-		            sortedVersions[i], sortedVersions[j] = sortedVersions[j], sortedVersions[i]
-		        }
-		    }
+			for j := i + 1; j < len(sortedVersions); j++ {
+				if g2.CompareVersions(sortedVersions[i], sortedVersions[j]) < 0 {
+					sortedVersions[i], sortedVersions[j] = sortedVersions[j], sortedVersions[i]
+				}
+			}
 		}
 
 		var parts []string
@@ -429,13 +439,13 @@ func getHighestVersionsAndCount(versions []VersionData) (template.HTML, template
 
 			// sort archs
 			for i := 0; i < len(archs); i++ {
-			    for j := i+1; j < len(archs); j++ {
-			        if archs[i] > archs[j] {
-			            archs[i], archs[j] = archs[j], archs[i]
-			        }
-			    }
+				for j := i + 1; j < len(archs); j++ {
+					if archs[i] > archs[j] {
+						archs[i], archs[j] = archs[j], archs[i]
+					}
+				}
 			}
-			parts = append(parts, "<span title=\"" + strings.Join(archs, " ") + "\">" + ver + "</span>")
+			parts = append(parts, "<span title=\""+strings.Join(archs, " ")+"\">"+ver+"</span>")
 		}
 
 		return strings.Join(parts, ", ")
@@ -515,7 +525,7 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool) (
 		if uld, err := g2.ParseUseLocalDesc(f); err == nil {
 			useLocalDesc = uld
 		}
-  }
+	}
 	packageDeprecatedPath := filepath.Join(repoDir, "profiles", "package.deprecated")
 	var deprecated []g2.PackageDeprecated
 	if parsedDeprecated, err := g2.ParsePackageDeprecatedFS(sysFS, filepath.ToSlash(packageDeprecatedPath)); err == nil {
@@ -771,11 +781,42 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool) (
 					pkgData.ModTime = modTime
 				}
 
+				// Dependencies
+				var depends, rdepends, bdepends, pdepends, requiredUse []string
+				if ebuild != nil && ebuild.Vars != nil {
+						vars := g2.Variables(ebuild.Vars)
+					if depStr := ebuild.Vars["DEPEND"]; depStr != "" {
+						tree := g2.ParseDepTree(depStr)
+						depends, _ = tree.Evaluate(g2.IgnoreUseFlags(true), vars)
+					}
+					if depStr := ebuild.Vars["RDEPEND"]; depStr != "" {
+						tree := g2.ParseDepTree(depStr)
+						rdepends, _ = tree.Evaluate(g2.IgnoreUseFlags(true), vars)
+					}
+					if depStr := ebuild.Vars["BDEPEND"]; depStr != "" {
+						tree := g2.ParseDepTree(depStr)
+						bdepends, _ = tree.Evaluate(g2.IgnoreUseFlags(true), vars)
+					}
+					if depStr := ebuild.Vars["PDEPEND"]; depStr != "" {
+						tree := g2.ParseDepTree(depStr)
+						pdepends, _ = tree.Evaluate(g2.IgnoreUseFlags(true), vars)
+					}
+					if depStr := ebuild.Vars["REQUIRED_USE"]; depStr != "" {
+						tree := g2.ParseDepTree(depStr)
+						requiredUse, _ = tree.Evaluate(g2.IgnoreUseFlags(true), vars)
+					}
+				}
+
 				vd := VersionData{
 					Version:      version,
 					Ebuild:       ebuild,
 					EbuildRawURL: ebuildRawURL,
 					ModTime:      modTime,
+					Depends:      depends,
+					RDepends:     rdepends,
+					BDepends:     bdepends,
+					PDepends:     pdepends,
+					RequiredUse:  requiredUse,
 				}
 
 				if site.SlotMoves != nil {
@@ -846,12 +887,12 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool) (
 				targetEbuild = highestMasked
 			}
 			if targetEbuild == nil && len(pkgData.Versions) > 0 {
-			    for _, v := range pkgData.Versions {
-			        if v.Ebuild != nil && v.Ebuild.Vars != nil {
-			            targetEbuild = v.Ebuild
-			            break
-			        }
-			    }
+				for _, v := range pkgData.Versions {
+					if v.Ebuild != nil && v.Ebuild.Vars != nil {
+						targetEbuild = v.Ebuild
+						break
+					}
+				}
 			}
 
 			if pkgData.Metadata != nil && len(pkgData.Metadata.LongDescription) > 0 {
@@ -863,6 +904,28 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool) (
 			if targetEbuild != nil {
 				pkgData.DominantHomepage = targetEbuild.Vars["HOMEPAGE"]
 				pkgData.DominantLicense = targetEbuild.Vars["LICENSE"]
+
+				vars := g2.Variables(targetEbuild.Vars)
+				if depStr := targetEbuild.Vars["DEPEND"]; depStr != "" {
+					tree := g2.ParseDepTree(depStr)
+					pkgData.DominantDepends, _ = tree.Evaluate(g2.IgnoreUseFlags(true), vars)
+				}
+				if depStr := targetEbuild.Vars["RDEPEND"]; depStr != "" {
+					tree := g2.ParseDepTree(depStr)
+					pkgData.DominantRDepends, _ = tree.Evaluate(g2.IgnoreUseFlags(true), vars)
+				}
+				if depStr := targetEbuild.Vars["BDEPEND"]; depStr != "" {
+					tree := g2.ParseDepTree(depStr)
+					pkgData.DominantBDepends, _ = tree.Evaluate(g2.IgnoreUseFlags(true), vars)
+				}
+				if depStr := targetEbuild.Vars["PDEPEND"]; depStr != "" {
+					tree := g2.ParseDepTree(depStr)
+					pkgData.DominantPDepends, _ = tree.Evaluate(g2.IgnoreUseFlags(true), vars)
+				}
+				if depStr := targetEbuild.Vars["REQUIRED_USE"]; depStr != "" {
+					tree := g2.ParseDepTree(depStr)
+					pkgData.DominantRequiredUse, _ = tree.Evaluate(g2.IgnoreUseFlags(true), vars)
+				}
 			}
 
 			sort.Slice(pkgData.Versions, func(i, j int) bool {
@@ -1164,13 +1227,13 @@ type AggLicense struct {
 }
 
 type AggUseFlag struct {
-	Name             string
-	Count            int
-	GlobalDesc       string
-	LocalDescs       map[string]string
-	MetadataDescs    map[string]string
-	Packages         []*AggPackage
-	Warnings         []string
+	Name          string
+	Count         int
+	GlobalDesc    string
+	LocalDescs    map[string]string
+	MetadataDescs map[string]string
+	Packages      []*AggPackage
+	Warnings      []string
 }
 
 func getRepoUseFlags(site *SiteData, aggPackages map[string]*AggPackage) []*AggUseFlag {
@@ -1283,9 +1346,9 @@ func getRepoUseFlags(site *SiteData, aggPackages map[string]*AggPackage) []*AggU
 	var sortedUseFlags []*AggUseFlag
 	for _, flag := range aggUseFlags {
 		for _, pkg := range flag.Packages {
-		    if pkg == nil {
-		        continue
-		    }
+			if pkg == nil {
+				continue
+			}
 			pkgKey := pkg.Category + "/" + pkg.Name
 			hasLocal := flag.LocalDescs[pkgKey] != ""
 			hasMetadata := flag.MetadataDescs[pkgKey] != ""
@@ -1468,37 +1531,41 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 
 				for _, ver := range pkg.Versions {
 					if ver.Ebuild != nil && ver.Ebuild.Vars != nil {
-						lic := ver.Ebuild.Vars["LICENSE"]
-						if lic != "" {
-							if _, ok := aggLicenses[lic]; !ok {
-								aggLicenses[lic] = &AggLicense{Name: lic}
-							}
+						licenseStr := ver.Ebuild.Vars["LICENSE"]
+						licenses := g2.ParseLicense(licenseStr)
 
-							found := false
-							for _, p := range aggLicenses[lic].Packages {
-								if p.Name == pkg.Name && p.Category == pkg.Category {
-									found = true
-									break
+						for _, lic := range licenses {
+							if lic != "" {
+								if _, ok := aggLicenses[lic]; !ok {
+									aggLicenses[lic] = &AggLicense{Name: lic}
 								}
-							}
-							if !found {
-								aggLicenses[lic].Packages = append(aggLicenses[lic].Packages, aggPackages[pkgKey])
-								aggLicenses[lic].Count++
-							}
 
-							// Add aliases from this site's license mapping
-							if site.LicenseMapping != nil {
-								if aliases, ok := site.LicenseMapping[lic]; ok {
-									for _, alias := range aliases {
-										hasAlias := false
-										for _, existing := range aggLicenses[lic].Aliases {
-											if existing == alias {
-												hasAlias = true
-												break
+								found := false
+								for _, p := range aggLicenses[lic].Packages {
+									if p.Name == pkg.Name && p.Category == pkg.Category {
+										found = true
+										break
+									}
+								}
+								if !found {
+									aggLicenses[lic].Packages = append(aggLicenses[lic].Packages, aggPackages[pkgKey])
+									aggLicenses[lic].Count++
+								}
+
+								// Add aliases from this site's license mapping
+								if site.LicenseMapping != nil {
+									if aliases, ok := site.LicenseMapping[lic]; ok {
+										for _, alias := range aliases {
+											hasAlias := false
+											for _, existing := range aggLicenses[lic].Aliases {
+												if existing == alias {
+													hasAlias = true
+													break
+												}
 											}
-										}
-										if !hasAlias {
-											aggLicenses[lic].Aliases = append(aggLicenses[lic].Aliases, alias)
+											if !hasAlias {
+												aggLicenses[lic].Aliases = append(aggLicenses[lic].Aliases, alias)
+											}
 										}
 									}
 								}
@@ -1919,15 +1986,15 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 		for _, p := range catPkgs {
 			var allVersions []VersionData
 			for _, r := range p.Repos {
-			    for _, c := range r.Categories {
-			        if c.Name == cat.Name {
-			            for _, pkgData := range c.Packages {
-			                if pkgData.Name == p.Name {
-                                allVersions = append(allVersions, pkgData.Versions...)
-			                }
-			            }
-			        }
-			    }
+				for _, c := range r.Categories {
+					if c.Name == cat.Name {
+						for _, pkgData := range c.Packages {
+							if pkgData.Name == p.Name {
+								allVersions = append(allVersions, pkgData.Versions...)
+							}
+						}
+					}
+				}
 			}
 			hs, ht, count := getHighestVersionsAndCount(allVersions)
 			tmplPkgs = append(tmplPkgs, TmplPkg{Name: p.Name, ReposList: mapToList(p.Repos), EbuildCount: count, HighestStableVersion: hs, HighestTestingVersion: ht, DominantDescription: p.DominantDescription, DominantHomepage: p.DominantHomepage, DominantLicense: p.DominantLicense})
@@ -2616,7 +2683,7 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 						return fmt.Errorf("rendering page: %w", err)
 					}
 				}
-      }
+			}
 			for _, v := range pkg.Versions {
 				versionStr := v.Version
 				if v.Ebuild != nil && v.Ebuild.Vars != nil && v.Ebuild.Vars["PV"] != "" {

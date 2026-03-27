@@ -32,6 +32,32 @@
     </dl>
 </div>
 
+{{if or .Package.DominantDepends .Package.DominantRDepends .Package.DominantBDepends .Package.DominantPDepends .Package.DominantRequiredUse}}
+<div class="metadata-section">
+    <h3>Dependencies & Requirements (Highest Version)</h3>
+    {{if .Package.DominantDepends}}
+    <h4>DEPEND</h4>
+    <p>{{.Package.DominantDepends | parseDependsLink}}</p>
+    {{end}}
+    {{if .Package.DominantRDepends}}
+    <h4>RDEPEND</h4>
+    <p>{{.Package.DominantRDepends | parseDependsLink}}</p>
+    {{end}}
+    {{if .Package.DominantBDepends}}
+    <h4>BDEPEND</h4>
+    <p>{{.Package.DominantBDepends | parseDependsLink}}</p>
+    {{end}}
+    {{if .Package.DominantPDepends}}
+    <h4>PDEPEND</h4>
+    <p>{{.Package.DominantPDepends | parseDependsLink}}</p>
+    {{end}}
+    {{if .Package.DominantRequiredUse}}
+    <h4>REQUIRED_USE</h4>
+    <p>{{.Package.DominantRequiredUse | parseDependsLink}}</p>
+    {{end}}
+</div>
+{{end}}
+
 <div class="metadata-section">
     <h3>Versions</h3>
     <table>

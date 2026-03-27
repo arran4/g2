@@ -77,20 +77,28 @@
 </div>
 {{end}}
 
-{{if or .VersionData.Ebuild.Vars.DEPEND .VersionData.Ebuild.Vars.RDEPEND .VersionData.Ebuild.Vars.BDEPEND}}
+{{if or .VersionData.Depends .VersionData.RDepends .VersionData.BDepends .VersionData.PDepends .VersionData.RequiredUse}}
 <div class="metadata-section">
-    <h3>Dependencies</h3>
-    {{if .VersionData.Ebuild.Vars.DEPEND}}
+    <h3>Dependencies & Requirements</h3>
+    {{if .VersionData.Depends}}
     <h4>DEPEND</h4>
-    <pre>{{.VersionData.Ebuild.Vars.DEPEND}}</pre>
+    <p>{{.VersionData.Depends | parseDependsLink}}</p>
     {{end}}
-    {{if .VersionData.Ebuild.Vars.RDEPEND}}
+    {{if .VersionData.RDepends}}
     <h4>RDEPEND</h4>
-    <pre>{{.VersionData.Ebuild.Vars.RDEPEND}}</pre>
+    <p>{{.VersionData.RDepends | parseDependsLink}}</p>
     {{end}}
-    {{if .VersionData.Ebuild.Vars.BDEPEND}}
+    {{if .VersionData.BDepends}}
     <h4>BDEPEND</h4>
-    <pre>{{.VersionData.Ebuild.Vars.BDEPEND}}</pre>
+    <p>{{.VersionData.BDepends | parseDependsLink}}</p>
+    {{end}}
+    {{if .VersionData.PDepends}}
+    <h4>PDEPEND</h4>
+    <p>{{.VersionData.PDepends | parseDependsLink}}</p>
+    {{end}}
+    {{if .VersionData.RequiredUse}}
+    <h4>REQUIRED_USE</h4>
+    <p>{{.VersionData.RequiredUse | parseDependsLink}}</p>
     {{end}}
 </div>
 {{end}}

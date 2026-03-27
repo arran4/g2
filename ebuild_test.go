@@ -234,6 +234,111 @@ func TestBlackbox(t *testing.T) {
 	}
 }
 
+func TestParseLicense(t *testing.T) {
+	tests := []struct {
+		name     string
+		license  string
+		expected []string
+	}{
+		{
+			name:     "Empty",
+			license:  "",
+			expected: nil,
+		},
+		{
+			name:     "Single license",
+			license:  "GPL-2",
+			expected: []string{"GPL-2"},
+		},
+		{
+			name:     "Multiple licenses",
+			license:  "GPL-2 MIT",
+			expected: []string{"GPL-2", "MIT"},
+		},
+		{
+			name:     "Conditional license",
+			license:  "USE? ( GPL-2 )",
+			expected: []string{"GPL-2"},
+		},
+		{
+			name:     "Conditional and or license",
+			license:  "3270? ( || ( BSD CC-BY-SA-3.0 ) ) anonymouspro? ( OFL-1.1 ) arimo? ( Apache-2.0 )",
+			expected: []string{"BSD", "CC-BY-SA-3.0", "OFL-1.1", "Apache-2.0"},
+		},
+		{
+			name:     "complex",
+			license:  "0BSD Apache-2.0 Apache-2.0-with-LLVM-exceptions BSD-2 BSD CC0-1.0 CDLA-Permissive-2.0 ISC MIT MPL-2.0 Unicode-3.0 Unicode-DFS-2016 ZLIB BZIP2 openssl",
+			expected: []string{"0BSD", "Apache-2.0", "Apache-2.0-with-LLVM-exceptions", "BSD-2", "BSD", "CC0-1.0", "CDLA-Permissive-2.0", "ISC", "MIT", "MPL-2.0", "Unicode-3.0", "Unicode-DFS-2016", "ZLIB", "BZIP2", "openssl"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := ParseLicense(tt.license)
+			if len(result) != len(tt.expected) {
+				t.Fatalf("ParseLicense() len = %v, want %v. Got %v", len(result), len(tt.expected), result)
+			}
+			for i, v := range result {
+				if v != tt.expected[i] {
+					t.Errorf("ParseLicense()[%d] = %v, want %v", i, v, tt.expected[i])
+				}
+			}
+		})
+	}
+}
+
+func TestParseDepTree(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		opts     []any
+		expected []string
+	}{
+		{
+			name:     "Evaluate with use flags",
+			input:    "3270? ( BSD ) anonymouspro? ( OFL-1.1 )",
+			opts:     []any{UseFlags([]string{"3270"})},
+			expected: []string{"BSD"},
+		},
+		{
+			name:     "Evaluate multiple with ignore",
+			input:    "|| ( A B ) use? ( C ) !use? ( D )",
+			opts:     []any{IgnoreUseFlags(true)},
+			expected: []string{"A", "B", "C", "D"},
+		},
+		{
+			name:     "Evaluate with negated use flag matched",
+			input:    "|| ( A B ) use? ( C ) !use? ( D )",
+			opts:     []any{UseFlags([]string{"use"})},
+			expected: []string{"A", "B", "C"},
+		},
+		{
+			name:     "Evaluate with negated use flag not matched",
+			input:    "|| ( A B ) use? ( C ) !use? ( D )",
+			opts:     []any{UseFlags([]string{})},
+			expected: []string{"A", "B", "D"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tree := ParseDepTree(tt.input)
+			result, err := tree.Evaluate(tt.opts...)
+			if err != nil {
+				t.Fatalf("Evaluate() error = %v", err)
+			}
+			if len(result) != len(tt.expected) {
+				t.Fatalf("Evaluate() len = %v, want %v. Got %v", len(result), len(tt.expected), result)
+			}
+			for i, v := range result {
+				if v != tt.expected[i] {
+					t.Errorf("Evaluate()[%d] = %v, want %v", i, v, tt.expected[i])
+				}
+			}
+		})
+	}
+}
+
 func TestParseIUSE(t *testing.T) {
 	tests := []struct {
 		name     string
