@@ -9,8 +9,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
-	"github.com/hashicorp/go-version"
 	"text/template"
 )
 
@@ -337,24 +337,144 @@ func ExtractURIs(content string, variables map[string]string) ([]URIEntry, error
 }
 
 
-// CompareVersions compares two gentoo versions. Returns > 0 if v1 > v2, < 0 if v1 < v2, and 0 if equal.
-func CompareVersions(v1, v2 string) int {
-	// Attempt parsing via go-version, fallback to strings.Compare
-	parseGentooVersion := func(v string) string {
-		v = regexp.MustCompile(`-r(\d+)$`).ReplaceAllString(v, "+r$1")
-		return v
+var versionRegex = regexp.MustCompile(`^(\d+(?:\.\d+)*)(?:([a-z]))?(?:_(alpha|beta|pre|rc|p)(\d*))?(?:-r(\d+))?$`)
+
+type gentooVersion struct {
+	Nums     []int
+	NumStrs  []string
+	Letter   string
+	Suffix   string
+	SuffixNo int
+	Revision int
+	IsValid  bool
+}
+
+func parseVersion(v string) gentooVersion {
+	m := versionRegex.FindStringSubmatch(v)
+	if m == nil {
+		return gentooVersion{IsValid: false}
 	}
 
-	ver1, err1 := version.NewVersion(parseGentooVersion(v1))
-	ver2, err2 := version.NewVersion(parseGentooVersion(v2))
+	toInt := func(s string) int {
+		if s == "" {
+			return 0
+		}
+		i, _ := strconv.Atoi(s)
+		return i
+	}
 
-	if err1 == nil && err2 == nil {
-		if ver1.LessThan(ver2) {
+	numStrs := strings.Split(m[1], ".")
+	var nums []int
+	for _, n := range numStrs {
+		nums = append(nums, toInt(n))
+	}
+
+	return gentooVersion{
+		Nums:     nums,
+		NumStrs:  numStrs,
+		Letter:   m[2],
+		Suffix:   m[3],
+		SuffixNo: toInt(m[4]),
+		Revision: toInt(m[5]),
+		IsValid:  true,
+	}
+}
+
+func cmpStr(a, b string) int {
+	if a < b {
+		return -1
+	}
+	if a > b {
+		return 1
+	}
+	return 0
+}
+
+func cmpInt(a, b int) int {
+	if a < b {
+		return -1
+	}
+	if a > b {
+		return 1
+	}
+	return 0
+}
+
+func compareGentooVersionParts(v1, v2 gentooVersion) int {
+	maxLen := len(v1.Nums)
+	if len(v2.Nums) > maxLen {
+		maxLen = len(v2.Nums)
+	}
+
+	for i := 0; i < maxLen; i++ {
+		if i >= len(v1.Nums) {
 			return -1
-		} else if ver2.LessThan(ver1) {
+		}
+		if i >= len(v2.Nums) {
 			return 1
 		}
-		return 0
+
+		s1 := v1.NumStrs[i]
+		s2 := v2.NumStrs[i]
+
+		if strings.HasPrefix(s1, "0") || strings.HasPrefix(s2, "0") {
+			if strings.HasPrefix(s1, "0") && !strings.HasPrefix(s2, "0") {
+				return -1
+			}
+			if !strings.HasPrefix(s1, "0") && strings.HasPrefix(s2, "0") {
+				return 1
+			}
+
+			s1Stripped := strings.TrimRight(s1, "0")
+			s2Stripped := strings.TrimRight(s2, "0")
+			if c := cmpStr(s1Stripped, s2Stripped); c != 0 {
+				return c
+			}
+		} else {
+			n1 := v1.Nums[i]
+			n2 := v2.Nums[i]
+			if c := cmpInt(n1, n2); c != 0 {
+				return c
+			}
+		}
+	}
+
+	if c := cmpStr(v1.Letter, v2.Letter); c != 0 {
+		return c
+	}
+
+	suffixOrder := map[string]int{
+		"alpha": 1,
+		"beta":  2,
+		"pre":   3,
+		"rc":    4,
+		"":      5, // no suffix
+		"p":     6,
+	}
+
+	if c := cmpInt(suffixOrder[v1.Suffix], suffixOrder[v2.Suffix]); c != 0 {
+		return c
+	}
+
+	if c := cmpInt(v1.SuffixNo, v2.SuffixNo); c != 0 {
+		return c
+	}
+
+	if c := cmpInt(v1.Revision, v2.Revision); c != 0 {
+		return c
+	}
+
+	return 0
+}
+
+// CompareVersions compares two gentoo versions strictly adhering to PMS.
+// Returns > 0 if v1 > v2, < 0 if v1 < v2, and 0 if equal.
+func CompareVersions(v1, v2 string) int {
+	gv1 := parseVersion(v1)
+	gv2 := parseVersion(v2)
+
+	if gv1.IsValid && gv2.IsValid {
+		return compareGentooVersionParts(gv1, gv2)
 	}
 
 	return strings.Compare(v1, v2)
