@@ -1501,7 +1501,6 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 	aggMoves := make(map[string]*AggPackageMove)
 	var globalNews []AggNewsItem
 
-	var allPackages []PackageData
 	for _, site := range sites {
 		if site.Projects != nil {
 			for i := range site.Projects.Projects {
@@ -1510,9 +1509,6 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 					aggProjects[proj.Email] = &AggProject{Project: proj}
 				}
 			}
-		}
-		for _, cat := range site.Categories {
-			allPackages = append(allPackages, cat.Packages...)
 		}
 	}
 	totalPackages := 0
