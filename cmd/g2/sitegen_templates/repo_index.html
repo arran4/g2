@@ -45,6 +45,9 @@
     {{if gt (len .Repo.AggUseFlags) 0}}
     <li><a href="uses/">USE Flags ({{len .Repo.AggUseFlags}})</a></li>
     {{end}}
+    {{if gt (len .Repo.InfoPkgs) 0}}
+    <li><a href="info_pkgs/">Info Packages ({{len .Repo.InfoPkgs}})</a></li>
+    {{end}}
     {{if gt (len .Repo.Deprecated) 0}}
     <li><a href="deprecated/">Deprecated Packages ({{len .Repo.Deprecated}})</a></li>
     {{end}}

@@ -113,6 +113,7 @@ type SiteData struct {
 	QAPolicy       *g2.QAPolicy
 	UseDesc        *g2.UseDesc
 	UseLocalDesc   *g2.UseLocalDesc
+	InfoPkgs       []g2.InfoPkg
 	Deprecated     []g2.PackageDeprecated
 	PackageCount   int
 	AggUseFlags    []*AggUseFlag
@@ -174,6 +175,9 @@ type PackageData struct {
 
 	// Deprecation
 	Deprecated *g2.PackageDeprecated
+
+	// InfoPkg matching
+	IsInfoPkg bool
 }
 
 type PkgUseFlag struct {
@@ -206,6 +210,9 @@ func (cfg *MainArgConfig) cmdOverlay(args []string) error {
 	subcmd := args[0]
 	if subcmd == "ebuild" {
 		return cfg.cmdOverlayEbuild(args[1:])
+	}
+	if subcmd == "info-pkgs" {
+		return cfg.cmdOverlayInfoPkgs(args[1:])
 	}
 	if subcmd != "site" {
 		return fmt.Errorf("unknown overlay subcommand: %s", subcmd)
@@ -524,6 +531,14 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool) (
 		log.Printf("Warning: failed to parse package.deprecated: %v", err)
 	}
 
+	infoPkgsPath := filepath.Join(repoDir, "profiles", "info_pkgs")
+	var infoPkgs []g2.InfoPkg
+	if parsedInfoPkgs, err := g2.ParseInfoPkgsFS(sysFS, filepath.ToSlash(infoPkgsPath)); err == nil {
+		infoPkgs = parsedInfoPkgs
+	} else if !os.IsNotExist(err) {
+		log.Printf("Warning: failed to parse info_pkgs: %v", err)
+	}
+
 	site := &SiteData{
 		Title:          title,
 		RepoName:       repoName,
@@ -535,6 +550,7 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool) (
 		UseDesc:        useDesc,
 		UseLocalDesc:   useLocalDesc,
 		Deprecated:     deprecated,
+		InfoPkgs:       infoPkgs,
 		PackageCount:   0,
 	}
 
@@ -946,6 +962,22 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool) (
 					Deprecated:   pkgData.Versions[i].Deprecated,
 				})
 			}
+
+			// Add InfoPkg status at the package level
+			for j := range site.InfoPkgs {
+				// We want to exact match the package string (e.g. "app-shells/bash")
+				// with either the full atom or the atom without its slot part (":0").
+				atom := site.InfoPkgs[j].PackageAtom
+				baseAtom := atom
+				if idx := strings.Index(atom, ":"); idx != -1 {
+					baseAtom = atom[:idx]
+				}
+				if baseAtom == pkgStr {
+					pkgData.IsInfoPkg = true
+					break
+				}
+			}
+
 			pkgData.LintWarnings = lints.PerformLinting(repoDir, &g2PkgData)
 
 			catData.Packages = append(catData.Packages, pkgData)
@@ -1858,6 +1890,20 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 				"Title":       site.RepoName + " - Deprecated",
 				"BaseURL":     "../../../",
 				"Breadcrumbs": []Breadcrumb{{Name: title, URL: "../../../"}, {Name: site.RepoName, URL: "../"}, {Name: "Deprecated Packages"}},
+				"Repo":        site,
+			}); err != nil {
+				return fmt.Errorf("rendering page: %w", err)
+			}
+		}
+
+		if len(site.InfoPkgs) > 0 {
+			if err := os.MkdirAll(filepath.Join(repoDir, "info_pkgs"), 0755); err != nil {
+				return fmt.Errorf("creating directory: %w", err)
+			}
+			if err := renderPage(filepath.Join(repoDir, "info_pkgs", "index.html"), tmpl, "repo_info_pkgs.html", map[string]interface{}{
+				"Title":       site.RepoName + " - Info Packages",
+				"BaseURL":     "../../../",
+				"Breadcrumbs": []Breadcrumb{{Name: title, URL: "../../../"}, {Name: site.RepoName, URL: "../"}, {Name: "Info Packages"}},
 				"Repo":        site,
 			}); err != nil {
 				return fmt.Errorf("rendering page: %w", err)

@@ -1,0 +1,17 @@
+<h2>Info Packages in {{.Repo.RepoName}}</h2>
+<p>The following packages are marked as informative (printed with standard `emerge info`).</p>
+
+{{if .Repo.InfoPkgs}}
+<table>
+    <tr>
+        <th>Package Atom</th>
+    </tr>
+    {{range .Repo.InfoPkgs}}
+    <tr>
+        <td><code>{{.PackageAtom}}</code></td>
+    </tr>
+    {{end}}
+</table>
+{{else}}
+<p><em>No packages are listed as info packages in this repository.</em></p>
+{{end}}

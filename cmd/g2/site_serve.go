@@ -688,6 +688,28 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 			if len(parts) >= 3 {
 				switch parts[2] {
+				case "deprecated":
+					if len(parts) == 3 {
+						s.renderPageHTTP(w, "repo_deprecated.html", map[string]interface{}{
+							"Title":       site.RepoName + " - Deprecated",
+							"BaseURL":     baseURL,
+							"Breadcrumbs": []Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: site.RepoName, URL: "../"}, {Name: "Deprecated Packages"}},
+							"Repo":        site,
+							"Version":     version,
+						})
+						return
+					}
+				case "info_pkgs":
+					if len(parts) == 3 {
+						s.renderPageHTTP(w, "repo_info_pkgs.html", map[string]interface{}{
+							"Title":       site.RepoName + " - Info Packages",
+							"BaseURL":     baseURL,
+							"Breadcrumbs": []Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: site.RepoName, URL: "../"}, {Name: "Info Packages"}},
+							"Repo":        site,
+							"Version":     version,
+						})
+						return
+					}
 				case "categories":
 					if len(parts) == 3 {
 						s.renderPageHTTP(w, "categories.html", map[string]interface{}{
