@@ -1224,6 +1224,11 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 		populatePkgUseFlags(site)
 	}
 
+	// Generate search index
+	if err := generateSearchIndex(outDir, sites); err != nil {
+		log.Printf("Warning: failed to generate search index: %v", err)
+	}
+
 	tmpl, err := template.New("").Funcs(getTemplateFuncMap()).ParseFS(siteTemplates, "sitegen_templates/*.html")
 	if err != nil {
 		return fmt.Errorf("parsing templates: %w", err)

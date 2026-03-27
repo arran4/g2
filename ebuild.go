@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"github.com/hashicorp/go-version"
 	"io/fs"
 	"path/filepath"
 	"regexp"
@@ -263,7 +264,7 @@ func ResolveVariables(text string, variables map[string]string) string {
 	// Simple resolution: multiple passes until no change or limit reached
 	// To prevent memory exhaustion from self-referential or heavily nested variables,
 	// cap the maximum expanded length.
-	maxLen := 1024 * 1024 // 1MB limit for expanded strings
+	maxLen := 1024 * 1024    // 1MB limit for expanded strings
 	for i := 0; i < 5; i++ { // Limit recursion depth
 		original := text
 		for key, value := range variables {
@@ -647,4 +648,18 @@ func CompareVersions(v1, v2 string) int {
 	}
 
 	return strings.Compare(v1, v2)
+}
+
+// PadVersionTokens produces a sortable string representation of a gentoo version.
+func PadVersionTokens(v string) string {
+	parseGentooVersion := func(v string) string {
+		v = regexp.MustCompile(`-r(\d+)$`).ReplaceAllString(v, "+r$1")
+		return v
+	}
+
+	v = parseGentooVersion(v)
+	re := regexp.MustCompile(`(\d+)`)
+	return re.ReplaceAllStringFunc(v, func(s string) string {
+		return fmt.Sprintf("%010s", s)
+	})
 }
