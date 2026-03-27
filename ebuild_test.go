@@ -287,6 +287,58 @@ func TestParseLicense(t *testing.T) {
 	}
 }
 
+func TestParseDepTree(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		opts     []any
+		expected []string
+	}{
+		{
+			name:     "Evaluate with use flags",
+			input:    "3270? ( BSD ) anonymouspro? ( OFL-1.1 )",
+			opts:     []any{UseFlags([]string{"3270"})},
+			expected: []string{"BSD"},
+		},
+		{
+			name:     "Evaluate multiple with ignore",
+			input:    "|| ( A B ) use? ( C ) !use? ( D )",
+			opts:     []any{IgnoreUseFlags(true)},
+			expected: []string{"A", "B", "C", "D"},
+		},
+		{
+			name:     "Evaluate with negated use flag matched",
+			input:    "|| ( A B ) use? ( C ) !use? ( D )",
+			opts:     []any{UseFlags([]string{"use"})},
+			expected: []string{"A", "B", "C"},
+		},
+		{
+			name:     "Evaluate with negated use flag not matched",
+			input:    "|| ( A B ) use? ( C ) !use? ( D )",
+			opts:     []any{UseFlags([]string{})},
+			expected: []string{"A", "B", "D"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tree := ParseDepTree(tt.input)
+			result, err := tree.Evaluate(tt.opts...)
+			if err != nil {
+				t.Fatalf("Evaluate() error = %v", err)
+			}
+			if len(result) != len(tt.expected) {
+				t.Fatalf("Evaluate() len = %v, want %v. Got %v", len(result), len(tt.expected), result)
+			}
+			for i, v := range result {
+				if v != tt.expected[i] {
+					t.Errorf("Evaluate()[%d] = %v, want %v", i, v, tt.expected[i])
+				}
+			}
+		})
+	}
+}
+
 func TestParseIUSE(t *testing.T) {
 	tests := []struct {
 		name     string
