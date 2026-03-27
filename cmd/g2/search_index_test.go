@@ -20,6 +20,9 @@ func TestGenerateSearchIndex(t *testing.T) {
 		{
 			Title:    "Test Repo",
 			RepoName: "test-repo",
+			LicenseMapping: map[string][]string{
+				"MIT": {"FREE", "OSI-APPROVED"},
+			},
 			Categories: []CategoryData{
 				{
 					Name: "app-test",
@@ -115,8 +118,8 @@ func TestGenerateSearchIndex(t *testing.T) {
 	if doc.Description != "A test package for testing" {
 		t.Errorf("Expected Description 'A test package for testing', got %s", doc.Description)
 	}
-	if len(doc.Licenses) == 0 || doc.Licenses[0] != "MIT" {
-		t.Errorf("Expected license MIT, got %v", doc.Licenses)
+	if len(doc.Licenses) < 3 || doc.Licenses[0] != "MIT" || doc.Licenses[1] != "FREE" || doc.Licenses[2] != "OSI-APPROVED" {
+		t.Errorf("Expected license MIT, FREE, OSI-APPROVED, got %v", doc.Licenses)
 	}
 	if len(doc.Depends) == 0 || doc.Depends[0] != "dev-lang/go" {
 		t.Errorf("Expected depend dev-lang/go, got %v", doc.Depends)

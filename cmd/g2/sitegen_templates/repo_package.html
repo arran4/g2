@@ -8,6 +8,13 @@
 </div>
 {{end}}
 
+{{if .Package.IsInfoPkg}}
+<div class="alert alert-info" style="border-color: #17a2b8; background-color: #d1ecf1;">
+    <strong>Notice:</strong> This package has been listed as an informative package.
+    <a href="{{.BaseURL}}repos/{{.Repo.RepoName}}/info_pkgs/">View the full list here</a>.
+</div>
+{{end}}
+
 {{if .MovedToName}}
 <div class="alert alert-warning">
     <strong>Notice:</strong> Older versions of this package were moved to <a href="{{.MovedToURL}}">{{.MovedToName}}</a>.

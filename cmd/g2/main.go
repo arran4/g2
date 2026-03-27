@@ -201,12 +201,64 @@ func (cfg *MainArgConfig) cmdManifest(args []string) error {
 	switch cmd {
 	case "upsert-from-url":
 		urlArgs := fs.Args()[1:]
-		if err := config.cmdUpsertFromUrl(urlArgs, getHashes()); err != nil {
+		hashes := getHashes()
+		if len(urlArgs) >= 3 {
+			ebuildDirOrFile := urlArgs[2]
+			dir := filepath.Dir(ebuildDirOrFile)
+			if filepath.Base(ebuildDirOrFile) == "Manifest" {
+				dir = filepath.Dir(ebuildDirOrFile)
+			}
+			repoDir := filepath.Dir(filepath.Dir(dir)) // Assuming category/package
+			layoutConfPath := filepath.Join(repoDir, "metadata", "layout.conf")
+			if lc, err := g2.ParseLayoutConf(layoutConfPath); err == nil {
+				if manifestHashes := lc.GetValuesAsSlice("manifest-hashes"); len(manifestHashes) > 0 {
+					hashes = manifestHashes
+				}
+			}
+		}
+		if err := config.cmdUpsertFromUrl(urlArgs, hashes); err != nil {
 			return fmt.Errorf("upsert file from url: %w", err)
 		}
 	case "verify":
 		verifyArgs := fs.Args()[1:]
-		if err := config.cmdVerify(verifyArgs, getHashes()); err != nil {
+		hashes := getHashes()
+		if len(verifyArgs) > 0 {
+			target := verifyArgs[len(verifyArgs)-1] // Last arg should be target
+			if !strings.HasPrefix(target, "-") {
+				dir := target
+				if !strings.HasSuffix(dir, "/") {
+					// We might be passing a directory or file. Let's make sure we find the repo root properly.
+					if filepath.Base(target) == "Manifest" {
+						dir = filepath.Dir(target)
+					}
+				}
+
+				// Keep going up until we find metadata/layout.conf or hit root
+				currentDir, _ := filepath.Abs(dir)
+				var layoutConfPath string
+				for {
+					candidate := filepath.Join(currentDir, "metadata", "layout.conf")
+					if _, err := os.Stat(candidate); err == nil {
+						layoutConfPath = candidate
+						break
+					}
+					parent := filepath.Dir(currentDir)
+					if parent == currentDir {
+						break // Root reached
+					}
+					currentDir = parent
+				}
+
+				if layoutConfPath != "" {
+					if lc, err := g2.ParseLayoutConf(layoutConfPath); err == nil {
+						if manifestHashes := lc.GetValuesAsSlice("manifest-hashes"); len(manifestHashes) > 0 {
+							hashes = manifestHashes
+						}
+					}
+				}
+			}
+		}
+		if err := config.cmdVerify(verifyArgs, hashes); err != nil {
 			return fmt.Errorf("verify manifest: %w", err)
 		}
 	case "clean":
