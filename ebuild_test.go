@@ -296,3 +296,170 @@ func TestParseIUSE(t *testing.T) {
 		})
 	}
 }
+
+func TestCompareVersions(t *testing.T) {
+	tests := []struct {
+		v1   string
+		v2   string
+		want int
+	}{
+		{"1.0", "1.0", 0},
+		{"1.0.0", "1.0", 0},
+		{"1.0", "1.0.0", 0},
+		{"1.0", "1.1", -1},
+		{"1.1", "1.0", 1},
+		{"1.0-r1", "1.0", 1},
+		{"1.0", "1.0-r1", -1},
+		{"1.0-r1", "1.0-r2", -1},
+		{"1.0-r2", "1.0-r1", 1},
+		{"1.0_alpha", "1.0", -1},
+		{"1.0_beta", "1.0_alpha", 1},
+		{"1.0_pre", "1.0_beta", 1},
+		{"1.0_rc", "1.0_pre", 1},
+		{"1.0", "1.0_rc", 1},
+		{"1.0_p", "1.0", 1},
+		{"1.0_alpha1", "1.0_alpha2", -1},
+		{"1.0_alpha2", "1.0_alpha1", 1},
+		{"1.0_p1", "1.0_p2", -1},
+		{"1.0_p2", "1.0_p1", 1},
+		{"1.0a", "1.0", 1},
+		{"1.0", "1.0a", -1},
+		{"1.0a", "1.0b", -1},
+		{"1.0b", "1.0a", 1},
+		{"1.0.1", "1.0", 1},
+		{"1.0", "1.0.1", -1},
+		{"1.001", "1.01", -1},
+		{"1.01", "1.001", 1},
+		{"1.01", "1.1", -1},
+		{"1.1", "1.01", 1},
+		{"1.0_alpha1-r1", "1.0_alpha1-r2", -1},
+		{"1.0_alpha1-r2", "1.0_alpha1-r1", 1},
+		// Unparseable versions fallback to string compare
+		{"invalid1", "invalid2", -1},
+		{"invalid2", "invalid1", 1},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.v1+"_vs_"+tt.v2, func(t *testing.T) {
+			got := CompareVersions(tt.v1, tt.v2)
+			if got != tt.want {
+				t.Errorf("CompareVersions(%q, %q) = %d, want %d", tt.v1, tt.v2, got, tt.want)
+			}
+		})
+	}
+}
+
+
+func TestGentooVersion_String(t *testing.T) {
+	tests := []string{
+		"1.0",
+		"1.0.0",
+		"1.0-r1",
+		"1.0_alpha",
+		"1.0_alpha1",
+		"1.0_alpha1-r1",
+		"1.0a",
+		"1.0a-r1",
+		"1.0_p1",
+		"1.0_p1-r1",
+		"0.0.1",
+		"0.1.0",
+	}
+
+	for _, tt := range tests {
+		t.Run(tt, func(t *testing.T) {
+			gv := ParseGentooVersion(tt)
+			if !gv.IsValid {
+				t.Fatalf("Failed to parse %s", tt)
+			}
+			got := gv.String()
+			if got != tt {
+				t.Errorf("GentooVersion.String() = %q, want %q", got, tt)
+			}
+		})
+	}
+}
+
+func TestGentooVersion_IncrementRevision(t *testing.T) {
+	tests := []struct {
+		input string
+		want  string
+	}{
+		{"1.0", "1.0-r1"},
+		{"1.0-r1", "1.0-r2"},
+		{"1.0_alpha1", "1.0_alpha1-r1"},
+		{"1.0_alpha1-r1", "1.0_alpha1-r2"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			gv := ParseGentooVersion(tt.input)
+			if !gv.IsValid {
+				t.Fatalf("Failed to parse %s", tt.input)
+			}
+			gv.IncrementRevision()
+			got := gv.String()
+			if got != tt.want {
+				t.Errorf("IncrementRevision() resulted in %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestGentooVersion_IncrementPart(t *testing.T) {
+	tests := []struct {
+		input string
+		part  string
+		want  string
+	}{
+		{"1.2.3_alpha1-r2", "major", "2.0.0"},
+		{"1.2.3_alpha1-r2", "minor", "1.3.0"},
+		{"1.2.3_alpha1-r2", "patch", "1.2.4"},
+		{"1.2.3_alpha1-r2", "suffix", "1.2.3_alpha2"},
+		{"1.2.3_alpha1-r2", "revision", "1.2.3_alpha1-r3"},
+		{"1", "minor", "1.1"},
+		{"1", "patch", "1.0.1"},
+		{"1.0", "patch", "1.0.1"},
+		{"1.0_beta", "suffix", "1.0_beta1"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input+"_"+tt.part, func(t *testing.T) {
+			gv := ParseGentooVersion(tt.input)
+			if !gv.IsValid {
+				t.Fatalf("Failed to parse %s", tt.input)
+			}
+			gv.IncrementPart(tt.part)
+			got := gv.String()
+			if got != tt.want {
+				t.Errorf("IncrementPart(%q) resulted in %q, want %q", tt.part, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestGentooVersion_IncrementPartMultiple(t *testing.T) {
+	tests := []struct {
+		input string
+		parts []any
+		want  string
+	}{
+		{"1.2.3", []any{MinorPart, PatchPart}, "1.3.1"},
+		{"1.2.3_alpha1-r2", []any{MajorPart, "minor", PatchPart}, "2.1.1"},
+		{"1.2.3_alpha1-r2", []any{SuffixPart, RevisionPart}, "1.2.3_alpha2-r1"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			gv := ParseGentooVersion(tt.input)
+			if !gv.IsValid {
+				t.Fatalf("Failed to parse %s", tt.input)
+			}
+			gv.IncrementPart(tt.parts...)
+			got := gv.String()
+			if got != tt.want {
+				t.Errorf("IncrementPart(%v) resulted in %q, want %q", tt.parts, got, tt.want)
+			}
+		})
+	}
+}
