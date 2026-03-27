@@ -98,7 +98,7 @@ func TestBuildManifestData(t *testing.T) {
 }
 
 func TestGenerateSite(t *testing.T) {
-	siteData, err := parseRepo(os.DirFS("../../testdata/test_overlay"), ".", "Test Overlay", false)
+	siteData, err := parseRepo(os.DirFS("../../testdata/test_overlay"), ".", "Test Overlay", false, nil)
 	if err != nil {
 		t.Fatalf("parseRepo failed: %v", err)
 	}
