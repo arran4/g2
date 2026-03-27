@@ -2818,7 +2818,7 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, 
 		// Try to shallow clone
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 		defer cancel()
-		cmd := exec.CommandContext(ctx, "git", "clone", gitUrl, repoPath)
+		cmd := exec.CommandContext(ctx, "git", "clone", "--depth", "1", gitUrl, repoPath)
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 		if err := cmd.Run(); err != nil {
