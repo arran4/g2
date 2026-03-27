@@ -688,39 +688,6 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 			if len(parts) >= 3 {
 				switch parts[2] {
-				case "uses":
-					if len(parts) == 3 {
-						s.renderPageHTTP(w, "uses.html", map[string]interface{}{
-							"Title":       site.RepoName + " - USE Flags",
-							"BaseURL":     baseURL,
-							"Breadcrumbs": []Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: site.RepoName, URL: "../"}, {Name: "USE Flags"}},
-							"UseFlags":    site.AggUseFlags,
-							"Version":     version,
-						})
-						return
-					} else if len(parts) == 4 {
-						flagName := parts[3]
-						var flag *AggUseFlag
-						for _, f := range site.AggUseFlags {
-							if f.Name == flagName {
-								flag = f
-								break
-							}
-						}
-						if flag == nil {
-							http.NotFound(w, r)
-							return
-						}
-
-						s.renderPageHTTP(w, "use.html", map[string]interface{}{
-							"Title":       "USE Flag: " + flag.Name,
-							"BaseURL":     baseURL,
-							"Breadcrumbs": []Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: site.RepoName, URL: "../../"}, {Name: "USE Flags", URL: "../"}, {Name: flag.Name}},
-							"UseFlag":     flag,
-							"Version":     version,
-						})
-						return
-					}
 				case "categories":
 					if len(parts) == 3 {
 						s.renderPageHTTP(w, "categories.html", map[string]interface{}{
