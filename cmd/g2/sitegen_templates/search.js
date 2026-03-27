@@ -83,6 +83,8 @@ class SearchEngine {
             case 'license': return (doc.licenses || []).some(l => l.toLowerCase() === value);
             case 'depends': return (doc.depends || []).some(d => d.toLowerCase().includes(value));
             case 'rdepends': return (doc.rdepends || []).some(d => d.toLowerCase().includes(value));
+            case 'bdepends': return (doc.bdepends || []).some(d => d.toLowerCase().includes(value));
+            case 'pdepends': return (doc.pdepends || []).some(d => d.toLowerCase().includes(value));
             case 'depended': return (doc.depended_by || []).some(d => d.toLowerCase().includes(value));
             case 'rdepended': return (doc.rdepended_by || []).some(d => d.toLowerCase().includes(value));
             case 'manifestfile': return (doc.manifest_files || []).some(m => m.toLowerCase() === value);

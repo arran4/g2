@@ -862,3 +862,29 @@ func PadVersionTokens(v string) string {
 		return fmt.Sprintf("%010s", s)
 	})
 }
+
+// ExtractPackageNameFromDep strips version, slot, and USE flags from a package string
+func ExtractPackageNameFromDep(dep string) string {
+	if idx := strings.Index(dep, "["); idx != -1 {
+		dep = dep[:idx]
+	}
+	if idx := strings.Index(dep, ":"); idx != -1 {
+		dep = dep[:idx]
+	}
+	for len(dep) > 0 && (dep[0] == '>' || dep[0] == '<' || dep[0] == '=' || dep[0] == '~' || dep[0] == '!') {
+		dep = dep[1:]
+	}
+	// Also strip any remaining version parts from the end
+	// E.g., dev-lang/python-3.10.0-r1 -> dev-lang/python
+	parts := strings.Split(dep, "/")
+	if len(parts) == 2 {
+		name := parts[1]
+		// Find first hyphen followed by digit
+		for i := 0; i < len(name)-1; i++ {
+			if name[i] == '-' && name[i+1] >= '0' && name[i+1] <= '9' {
+				return parts[0] + "/" + name[:i]
+			}
+		}
+	}
+	return dep
+}

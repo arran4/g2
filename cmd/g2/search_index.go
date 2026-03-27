@@ -34,8 +34,15 @@ type SearchDocument struct {
 	Mask             string   `json:"mask"` // "none", "soft", "hard"
 	Depends          []string `json:"depends"`
 	Rdepends         []string `json:"rdepends"`
+	Bdepends         []string `json:"bdepends"`
+	Pdepends         []string `json:"pdepends"`
 	DependedBy       []string `json:"depended_by"`
 	RdependedBy      []string `json:"rdepended_by"`
+	RawDepends       string   `json:"raw_depends"`
+	RawRdepends      string   `json:"raw_rdepends"`
+	RawBdepends      string   `json:"raw_bdepends"`
+	RawPdepends      string   `json:"raw_pdepends"`
+	RawRequiredUse   string   `json:"raw_required_use"`
 	ManifestFiles    []string `json:"manifest_files"`
 	SearchText       string   `json:"search_text"`
 	PageURL          string   `json:"page_url"`
@@ -83,6 +90,9 @@ func generateSearchIndex(outDir string, sites []*SiteData) error {
 					var useDescriptions []string
 					var depends []string
 					var rdepends []string
+					var bdepends []string
+					var pdepends []string
+					var rawDepends, rawRdepends, rawBdepends, rawPdepends, rawRequiredUse string
 					var arches []string
 
 					if ver.Ebuild != nil && ver.Ebuild.Vars != nil {
@@ -121,6 +131,7 @@ func generateSearchIndex(outDir string, sites []*SiteData) error {
 						}
 
 						if d := ver.Ebuild.Vars["DEPEND"]; d != "" {
+								rawDepends = d
 							matches := pkgRegex.FindAllString(d, -1)
 							for _, m := range matches {
 								depends = append(depends, m)
@@ -132,6 +143,7 @@ func generateSearchIndex(outDir string, sites []*SiteData) error {
 						}
 
 						if d := ver.Ebuild.Vars["RDEPEND"]; d != "" {
+								rawRdepends = d
 							matches := pkgRegex.FindAllString(d, -1)
 							for _, m := range matches {
 								rdepends = append(rdepends, m)
@@ -141,6 +153,26 @@ func generateSearchIndex(outDir string, sites []*SiteData) error {
 								rdependedBy[m][fullName] = true
 							}
 						}
+
+							if d := ver.Ebuild.Vars["BDEPEND"]; d != "" {
+								rawBdepends = d
+								matches := pkgRegex.FindAllString(d, -1)
+								for _, m := range matches {
+									bdepends = append(bdepends, m)
+								}
+							}
+
+							if d := ver.Ebuild.Vars["PDEPEND"]; d != "" {
+								rawPdepends = d
+								matches := pkgRegex.FindAllString(d, -1)
+								for _, m := range matches {
+									pdepends = append(pdepends, m)
+								}
+							}
+
+							if d := ver.Ebuild.Vars["REQUIRED_USE"]; d != "" {
+								rawRequiredUse = d
+							}
 
 						if inh := ver.Ebuild.Vars["INHERITED"]; inh != "" {
 							inherits = strings.Fields(inh)
@@ -158,6 +190,8 @@ func generateSearchIndex(outDir string, sites []*SiteData) error {
 
 					depends = deduplicateStrings(depends)
 					rdepends = deduplicateStrings(rdepends)
+					bdepends = deduplicateStrings(bdepends)
+					pdepends = deduplicateStrings(pdepends)
 					licenses = deduplicateStrings(licenses)
 					keywords = deduplicateStrings(keywords)
 					arches = deduplicateStrings(arches)
@@ -215,6 +249,13 @@ func generateSearchIndex(outDir string, sites []*SiteData) error {
 						Mask:            mask,
 						Depends:         depends,
 						Rdepends:        rdepends,
+							Bdepends:        bdepends,
+							Pdepends:        pdepends,
+							RawDepends:      rawDepends,
+							RawRdepends:     rawRdepends,
+							RawBdepends:     rawBdepends,
+							RawPdepends:     rawPdepends,
+							RawRequiredUse:  rawRequiredUse,
 						DependedBy:      []string{},
 						RdependedBy:     []string{},
 						ManifestFiles:   manifestFiles,

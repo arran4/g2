@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/xml"
 	"flag"
+	"encoding/json"
 	"fmt"
 	"github.com/arran4/g2"
 	"github.com/arran4/g2/lints"
@@ -195,6 +196,8 @@ type VersionData struct {
 
 	// Moves
 	MovedToSlot string
+
+	ResolvedDepsJSON string
 }
 
 // End model TODO check
@@ -442,6 +445,66 @@ func getHighestVersionsAndCount(versions []VersionData) (template.HTML, template
 	}
 
 	return template.HTML(formatGroups(stableGroup)), template.HTML(formatGroups(testingGroup)), len(versions)
+}
+
+type ResolvedDepNode struct {
+	Type       string            `json:"type"`
+	Name       string            `json:"name,omitempty"`
+	Link       string            `json:"link,omitempty"`
+	Flag       string            `json:"flag,omitempty"`
+	IsNegated  bool              `json:"is_negated,omitempty"`
+	Children   []ResolvedDepNode `json:"children,omitempty"`
+}
+
+func resolveDependencies(node g2.DepNode, site *SiteData) ResolvedDepNode {
+	switch n := node.(type) {
+	case g2.DepString:
+		raw := string(n)
+		pkgName := g2.ExtractPackageNameFromDep(raw)
+		link := ""
+
+		if pkgName != "" {
+			for i := range site.Categories {
+				for j := range site.Categories[i].Packages {
+					if site.Categories[i].Packages[j].Category + "/" + site.Categories[i].Packages[j].Name == pkgName {
+						link = "../../../../../../categories/" + site.Categories[i].Packages[j].Category + "/packages/" + site.Categories[i].Packages[j].Name + "/"
+					}
+				}
+			}
+		}
+
+		return ResolvedDepNode{
+			Type: "string",
+			Name: raw,
+			Link: link,
+		}
+
+	case g2.DepAnyOf:
+		res := ResolvedDepNode{Type: "any_of"}
+		for _, child := range n.Children {
+			res.Children = append(res.Children, resolveDependencies(child, site))
+		}
+		return res
+
+	case g2.DepAllOf:
+		res := ResolvedDepNode{Type: "all_of"}
+		for _, child := range n.Children {
+			res.Children = append(res.Children, resolveDependencies(child, site))
+		}
+		return res
+
+	case g2.DepUseConditional:
+		res := ResolvedDepNode{
+			Type:      "use_conditional",
+			Flag:      n.Flag,
+			IsNegated: n.IsNegated,
+		}
+		for _, child := range n.Children {
+			res.Children = append(res.Children, resolveDependencies(child, site))
+		}
+		return res
+	}
+	return ResolvedDepNode{}
 }
 
 func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool) (*SiteData, error) {
@@ -973,6 +1036,34 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool) (
 	sort.Slice(site.Categories, func(i, j int) bool {
 		return site.Categories[i].Name < site.Categories[j].Name
 	})
+
+		// Finalize ResolvedDepsJSON for each version
+	for i := range site.Categories {
+		for j := range site.Categories[i].Packages {
+			for k := range site.Categories[i].Packages[j].Versions {
+				ver := &site.Categories[i].Packages[j].Versions[k]
+				if ver.Ebuild != nil && ver.Ebuild.Vars != nil {
+					depsMap := map[string][]ResolvedDepNode{}
+
+					types := []string{"DEPEND", "RDEPEND", "BDEPEND", "PDEPEND", "REQUIRED_USE", "LICENSE"}
+					for _, depType := range types {
+						depStr := ver.Ebuild.Vars[depType]
+						if depStr != "" {
+							tree := g2.ParseDepTree(depStr)
+							var nodes []ResolvedDepNode
+							for _, n := range tree.Nodes {
+								nodes = append(nodes, resolveDependencies(n, site))
+							}
+							depsMap[depType] = nodes
+						}
+					}
+
+					jsonData, _ := json.Marshal(depsMap)
+					ver.ResolvedDepsJSON = string(jsonData)
+				}
+			}
+		}
+	}
 
 	return site, nil
 }
