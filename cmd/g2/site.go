@@ -2511,9 +2511,8 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, 
 	}
 	defer func() { _ = os.RemoveAll(tmpDir) }()
 
-	overallSiteData := &g2.SiteData{
-		Title: "Remote Gentoo Repositories",
-	}
+	var allSites []*SiteData
+
 	for _, repo := range repos.Repositories {
 		if len(repo.Sources) == 0 {
 			continue
@@ -2550,41 +2549,12 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, 
 			continue
 		}
 
-		// Since user requested a "list of overlays" we should put each repo in a subfolder
-		// generateSite will write into outDir/repo.Name
-		repoOutDir := filepath.Join(outDir, repo.Name)
-		log.Printf("Generating site for repo: %s", repo.Name)
-		if err := generateSite(repoOutDir, []*SiteData{siteData}, recentDuration, recentDurationStr); err != nil {
-			log.Printf("Failed to generate site for repo %s: %v", repo.Name, err)
-		}
-		// Add as a root category simply so we can create an index.html listing the repos
-		overallSiteData.Categories = append(overallSiteData.Categories, g2.CategoryData{
-			Name: repo.Name,
-		})
+		allSites = append(allSites, siteData)
 	}
 
-	// Sort categories (which are now repos in this context)
-	sort.Slice(overallSiteData.Categories, func(i, j int) bool {
-		return overallSiteData.Categories[i].Name < overallSiteData.Categories[j].Name
-	})
-
-	// Generate the root index.html listing the overlays
-	if err := os.MkdirAll(outDir, 0755); err != nil {
-		return err
-	}
-
-	tmpl, err := template.New("").Funcs(getTemplateFuncMap()).ParseFS(siteTemplates, "sitegen_templates/*.html")
-	if err != nil {
-		return fmt.Errorf("parsing templates: %w", err)
-	}
-
-	if err := renderPage(filepath.Join(outDir, "index.html"), tmpl, "index.html", map[string]interface{}{
-		"Title":       overallSiteData.Title,
-		"BaseURL":     "",
-		"Categories":  overallSiteData.Categories,
-		"Breadcrumbs": []g2.Breadcrumb{},
-	}); err != nil {
-		return fmt.Errorf("rendering overall index page: %w", err)
+	log.Printf("Generating integrated site for %d repos", len(allSites))
+	if err := generateSite(outDir, allSites, recentDuration, recentDurationStr); err != nil {
+		return fmt.Errorf("generating integrated site: %w", err)
 	}
 
 	log.Println("Remote site generation complete.")

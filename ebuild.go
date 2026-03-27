@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"github.com/hashicorp/go-version"
 	"io/fs"
 	"path/filepath"
 	"regexp"
