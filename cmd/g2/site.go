@@ -1563,23 +1563,6 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 		return globalNews[i].Posted.After(globalNews[j].Posted)
 	})
 
-	// Generate Feeds for Repo
-	var repoFeedItems []g2.FeedItem
-	for _, pkg := range allPackages {
-		for _, ver := range pkg.Versions {
-			desc := ""
-			if ver.Ebuild != nil && ver.Ebuild.Vars != nil {
-				desc = ver.Ebuild.Vars["DESCRIPTION"]
-			}
-			_ = append(repoFeedItems, g2.FeedItem{
-				Title:       fmt.Sprintf("%s/%s-%s", pkg.Category, pkg.Name, ver.Version),
-				Link:        fmt.Sprintf("packages/%s/", pkg.Name),
-				Description: desc,
-				PubDate:     time.Now().Format(time.RFC1123Z),
-				Updated:     time.Now().Format(time.RFC3339),
-			})
-		}
-	}
 	var recentNews []AggNewsItem
 	cutoffDate := time.Now().AddDate(0, -3, 0)
 	for _, n := range globalNews {
@@ -1660,98 +1643,6 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 		return fmt.Errorf("rendering page: %w", err)
 	}
 
-	// Generate Global Feeds
-	var globalFeedItems []FeedItem
-	for _, pkg := range sortedPackages {
-		for _, site := range pkg.Repos {
-			var sPkg *PackageData
-			for _, cat := range site.Categories {
-				if cat.Name == pkg.Category {
-					for _, p := range cat.Packages {
-						if p.Name == pkg.Name {
-							sPkg = &p
-							break
-						}
-					}
-				}
-			}
-			if sPkg != nil {
-				for _, ver := range sPkg.Versions {
-					desc := ""
-					if ver.Ebuild != nil && ver.Ebuild.Vars != nil {
-						desc = ver.Ebuild.Vars["DESCRIPTION"]
-					}
-					t := ver.ModTime
-					if t.IsZero() {
-						t = time.Now()
-					}
-					globalFeedItems = append(globalFeedItems, FeedItem{
-						Title:       fmt.Sprintf("%s/%s-%s (%s)", sPkg.Category, sPkg.Name, ver.Version, site.RepoName),
-						Link:        fmt.Sprintf("repos/%s/categories/%s/packages/%s/", site.RepoName, sPkg.Category, sPkg.Name),
-						Description: desc,
-						PubDate:     t.Format(time.RFC1123Z),
-						Updated:     t.Format(time.RFC3339),
-						Time:        t,
-					})
-				}
-			}
-		}
-	}
-	sort.Slice(globalFeedItems, func(i, j int) bool {
-		return globalFeedItems[i].Time.After(globalFeedItems[j].Time)
-	})
-	var recentGlobalUpdates []FeedItem
-	recentLimit := time.Now().Add(-recentDuration)
-	for _, item := range globalFeedItems {
-		if item.Time.After(recentLimit) {
-			recentGlobalUpdates = append(recentGlobalUpdates, item)
-			if len(recentGlobalUpdates) >= 10 {
-				break
-			}
-		}
-	}
-
-	if err := os.MkdirAll(filepath.Join(outDir, "recent"), 0755); err != nil {
-		return err
-	}
-	var allRecentGlobal []FeedItem
-	if len(globalFeedItems) > 500 {
-		allRecentGlobal = append([]FeedItem(nil), globalFeedItems[:500]...)
-	} else {
-		allRecentGlobal = append([]FeedItem(nil), globalFeedItems...)
-	}
-	for i := range allRecentGlobal {
-		if allRecentGlobal[i].Link != "" && !strings.HasPrefix(allRecentGlobal[i].Link, "http") {
-			allRecentGlobal[i].Link = "../" + allRecentGlobal[i].Link
-		}
-	}
-	if err := renderPage(filepath.Join(outDir, "recent", "index.html"), tmpl, "recent.html", map[string]interface{}{
-		"Title":       "Recent Updates",
-		"BaseURL":     "../",
-		"Breadcrumbs": []Breadcrumb{{Name: title, URL: "../"}, {Name: "Recent Updates"}},
-		"Updates":     allRecentGlobal,
-		"Version":     version,
-	}); err != nil {
-		return err
-	}
-
-	if len(globalFeedItems) > 50 {
-		globalFeedItems = globalFeedItems[:50]
-	}
-	var globalG2FeedItems []g2.FeedItem
-	for _, fi := range globalFeedItems {
-		globalG2FeedItems = append(globalG2FeedItems, g2.FeedItem{
-			Title:       fi.Title,
-			Link:        fi.Link,
-			Description: fi.Description,
-			PubDate:     fi.PubDate,
-			Updated:     fi.Updated,
-		})
-	}
-	if err := generateFeeds(filepath.Join(outDir, "index"), title, "Latest updates to global repository", "", globalG2FeedItems); err != nil {
-		log.Printf("Warning: failed to generate global feed: %v", err)
-	}
-
 	// 1. Root Dashboard
 	if err := renderPage(filepath.Join(outDir, "index.html"), tmpl, "dashboard.html", map[string]interface{}{
 		"Title":                title,
@@ -1762,7 +1653,6 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 		"Licenses":             sortedLicenses,
 		"Projects":             sortedProjects,
 		"Profiles":             sortedProfiles,
-		"Updates":              recentGlobalUpdates,
 		"Version":              version,
 		"RecentDurationString": recentDurationStr,
 		"RecentNews":           recentNews,
@@ -2213,82 +2103,6 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 				return fmt.Errorf("rendering page: %w", err)
 			}
 		}
-		var repoFeedItems []FeedItem
-		for _, cat := range site.Categories {
-			for _, pkg := range cat.Packages {
-				for _, ver := range pkg.Versions {
-					desc := ""
-					if ver.Ebuild != nil && ver.Ebuild.Vars != nil {
-						desc = ver.Ebuild.Vars["DESCRIPTION"]
-					}
-					t := ver.ModTime
-					if t.IsZero() {
-						t = time.Now()
-					}
-					repoFeedItems = append(repoFeedItems, FeedItem{
-						Title:       fmt.Sprintf("%s/%s-%s", pkg.Category, pkg.Name, ver.Version),
-						Link:        fmt.Sprintf("categories/%s/packages/%s/", pkg.Category, pkg.Name),
-						Description: desc,
-						PubDate:     t.Format(time.RFC1123Z),
-						Updated:     t.Format(time.RFC3339),
-						Time:        t,
-					})
-				}
-			}
-		}
-		sort.Slice(repoFeedItems, func(i, j int) bool {
-			return repoFeedItems[i].Time.After(repoFeedItems[j].Time)
-		})
-		var recentRepoUpdates []FeedItem
-		for _, item := range repoFeedItems {
-			if item.Time.After(recentLimit) {
-				recentRepoUpdates = append(recentRepoUpdates, item)
-				if len(recentRepoUpdates) >= 10 {
-					break
-				}
-			}
-		}
-
-		if err := os.MkdirAll(filepath.Join(repoDir, "recent"), 0755); err != nil {
-			return err
-		}
-		var allRecentRepo []FeedItem
-		if len(repoFeedItems) > 500 {
-			allRecentRepo = append([]FeedItem(nil), repoFeedItems[:500]...)
-		} else {
-			allRecentRepo = append([]FeedItem(nil), repoFeedItems...)
-		}
-		for i := range allRecentRepo {
-			if allRecentRepo[i].Link != "" && !strings.HasPrefix(allRecentRepo[i].Link, "http") {
-				allRecentRepo[i].Link = "../" + allRecentRepo[i].Link
-			}
-		}
-		if err := renderPage(filepath.Join(repoDir, "recent", "index.html"), tmpl, "recent.html", map[string]interface{}{
-			"Title":       site.RepoName + " - Recent Updates",
-			"BaseURL":     "../../../",
-			"Breadcrumbs": []Breadcrumb{{Name: title, URL: "../../../"}, {Name: site.RepoName, URL: "../"}, {Name: "Recent Updates"}},
-			"Updates":     allRecentRepo,
-			"Version":     version,
-		}); err != nil {
-			return err
-		}
-
-		if len(repoFeedItems) > 50 {
-			repoFeedItems = repoFeedItems[:50]
-		}
-		var repoG2FeedItems []g2.FeedItem
-		for _, fi := range repoFeedItems {
-			repoG2FeedItems = append(repoG2FeedItems, g2.FeedItem{
-				Title:       fi.Title,
-				Link:        fi.Link,
-				Description: fi.Description,
-				PubDate:     fi.PubDate,
-				Updated:     fi.Updated,
-			})
-		}
-		if err := generateFeeds(filepath.Join(repoDir, "index"), site.RepoName, "Latest updates to repository", "", repoG2FeedItems); err != nil {
-			log.Printf("Warning: failed to generate repo feed: %v", err)
-		}
 
 		pkgCount := 0
 		for _, c := range site.Categories {
@@ -2315,7 +2129,6 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 			"Breadcrumbs":           []Breadcrumb{{Name: title, URL: "../../"}, {Name: "Overlays", URL: "../../overlays/"}, {Name: site.RepoName}},
 			"Repo":                  site,
 			"PackageCount":          site.PackageCount,
-			"Updates":               recentRepoUpdates,
 			"Version":               version,
 			"RecentDurationString":  recentDurationStr,
 			"RecentNews":            repoRecentNews,
@@ -2537,42 +2350,6 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 			pkgDir := filepath.Join(repoDir, "categories", pkg.Category, "packages", pkg.Name)
 			if err := os.MkdirAll(pkgDir, 0755); err != nil {
 				return fmt.Errorf("creating directory %s: %w", pkgDir, err)
-			}
-
-			var pkgFeedItems []FeedItem
-			for _, ver := range pkg.Versions {
-				desc := ""
-				if ver.Ebuild != nil && ver.Ebuild.Vars != nil {
-					desc = ver.Ebuild.Vars["DESCRIPTION"]
-				}
-				t := ver.ModTime
-				if t.IsZero() {
-					t = time.Now()
-				}
-				pkgFeedItems = append(pkgFeedItems, FeedItem{
-					Title:       fmt.Sprintf("%s/%s-%s", pkg.Category, pkg.Name, ver.Version),
-					Link:        "",
-					Description: desc,
-					PubDate:     t.Format(time.RFC1123Z),
-					Updated:     t.Format(time.RFC3339),
-					Time:        t,
-				})
-			}
-			sort.Slice(pkgFeedItems, func(i, j int) bool {
-				return pkgFeedItems[i].Time.After(pkgFeedItems[j].Time)
-			})
-			var pkgG2FeedItems []g2.FeedItem
-			for _, fi := range pkgFeedItems {
-				pkgG2FeedItems = append(pkgG2FeedItems, g2.FeedItem{
-					Title:       fi.Title,
-					Link:        fi.Link,
-					Description: fi.Description,
-					PubDate:     fi.PubDate,
-					Updated:     fi.Updated,
-				})
-			}
-			if err := generateFeeds(filepath.Join(pkgDir, "index"), pkg.Category+"/"+pkg.Name, "Latest updates to package", "", pkgG2FeedItems); err != nil {
-				log.Printf("Warning: failed to generate package feed: %v", err)
 			}
 
 			var movedToName, movedToURL string

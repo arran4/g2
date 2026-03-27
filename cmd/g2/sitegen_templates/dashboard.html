@@ -50,12 +50,3 @@
     <li><a href="repos/{{.RepoName}}/">{{.RepoName}}</a></li>
     {{end}}
 </ul>
-<h2>Recent Updates</h2>
-<ul>
-    {{range .Updates}}
-    <li><a href="{{.Link}}">{{.Title}}</a> - {{.Description}} ({{.Updated}})</li>
-    {{else}}
-    <li>No recent updates in the last {{.RecentDurationString}}.</li>
-    {{end}}
-</ul>
-<p><a href="recent/">View all recent updates</a></p>
