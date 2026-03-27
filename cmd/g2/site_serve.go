@@ -989,6 +989,44 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 						})
 						return
 					}
+
+				case "uses":
+					repoUseFlags := getRepoUseFlags(site, s.PkgMap)
+
+					if len(parts) == 3 {
+						s.renderPageHTTP(w, "repo_uses.html", map[string]interface{}{
+							"Title":       site.RepoName + " - USE Flags",
+							"BaseURL":     baseURL,
+							"Breadcrumbs": []Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: site.RepoName, URL: "../"}, {Name: "USE Flags"}},
+							"UseFlags":    repoUseFlags,
+							"Repo":        site,
+							"Version":     version,
+						})
+						return
+					} else if len(parts) == 4 {
+						flagName := parts[3]
+						var flag *AggUseFlag
+						for _, f := range repoUseFlags {
+							if f.Name == flagName {
+								flag = f
+								break
+							}
+						}
+						if flag == nil {
+							http.NotFound(w, r)
+							return
+						}
+
+						s.renderPageHTTP(w, "repo_use.html", map[string]interface{}{
+							"Title":       site.RepoName + " - USE Flag: " + flag.Name,
+							"BaseURL":     baseURL,
+							"Breadcrumbs": []Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: site.RepoName, URL: "../../"}, {Name: "USE Flags", URL: "../"}, {Name: flag.Name}},
+							"UseFlag":     flag,
+							"Repo":        site,
+							"Version":     version,
+						})
+						return
+					}
 				}
 			}
 		}
