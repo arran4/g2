@@ -381,11 +381,82 @@ func (gv *GentooVersion) String() string {
 	return sb.String()
 }
 
-// IncrementRevision increments the Gentoo version revision number (e.g., -r1 -> -r2).
-func (gv *GentooVersion) IncrementRevision() {
-	if gv.IsValid {
+// IncrementPart allows incrementing specific parts of the version string based on common bump operations.
+// Possible parts: "major", "minor", "patch", "revision", "suffix".
+func (gv *GentooVersion) IncrementPart(part string) {
+	if !gv.IsValid {
+		return
+	}
+
+	switch part {
+	case "major":
+		if len(gv.Nums) > 0 {
+			gv.Nums[0]++
+			gv.NumStrs[0] = strconv.Itoa(gv.Nums[0])
+		}
+		// Reset trailing sections
+		for i := 1; i < len(gv.Nums); i++ {
+			gv.Nums[i] = 0
+			gv.NumStrs[i] = "0"
+		}
+		gv.Revision = 0
+		gv.Letter = ""
+		gv.Suffix = ""
+		gv.SuffixNoStr = ""
+		gv.SuffixNo = 0
+	case "minor":
+		if len(gv.Nums) > 1 {
+			gv.Nums[1]++
+			gv.NumStrs[1] = strconv.Itoa(gv.Nums[1])
+		} else if len(gv.Nums) == 1 {
+			gv.Nums = append(gv.Nums, 1)
+			gv.NumStrs = append(gv.NumStrs, "1")
+		}
+		// Reset trailing sections
+		for i := 2; i < len(gv.Nums); i++ {
+			gv.Nums[i] = 0
+			gv.NumStrs[i] = "0"
+		}
+		gv.Revision = 0
+		gv.Letter = ""
+		gv.Suffix = ""
+		gv.SuffixNoStr = ""
+		gv.SuffixNo = 0
+	case "patch":
+		if len(gv.Nums) > 2 {
+			gv.Nums[2]++
+			gv.NumStrs[2] = strconv.Itoa(gv.Nums[2])
+		} else if len(gv.Nums) == 2 {
+			gv.Nums = append(gv.Nums, 1)
+			gv.NumStrs = append(gv.NumStrs, "1")
+		} else if len(gv.Nums) == 1 {
+			gv.Nums = append(gv.Nums, 0, 1)
+			gv.NumStrs = append(gv.NumStrs, "0", "1")
+		}
+		// Reset trailing sections
+		for i := 3; i < len(gv.Nums); i++ {
+			gv.Nums[i] = 0
+			gv.NumStrs[i] = "0"
+		}
+		gv.Revision = 0
+		gv.Letter = ""
+		gv.Suffix = ""
+		gv.SuffixNoStr = ""
+		gv.SuffixNo = 0
+	case "suffix":
+		if gv.Suffix != "" {
+			gv.SuffixNo++
+			gv.SuffixNoStr = strconv.Itoa(gv.SuffixNo)
+		}
+		gv.Revision = 0
+	case "revision":
 		gv.Revision++
 	}
+}
+
+// IncrementRevision increments the Gentoo version revision number (e.g., -r1 -> -r2).
+func (gv *GentooVersion) IncrementRevision() {
+	gv.IncrementPart("revision")
 }
 
 // ParseGentooVersion parses a gentoo version into parts

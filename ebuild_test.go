@@ -405,3 +405,35 @@ func TestGentooVersion_IncrementRevision(t *testing.T) {
 		})
 	}
 }
+
+func TestGentooVersion_IncrementPart(t *testing.T) {
+	tests := []struct {
+		input string
+		part  string
+		want  string
+	}{
+		{"1.2.3_alpha1-r2", "major", "2.0.0"},
+		{"1.2.3_alpha1-r2", "minor", "1.3.0"},
+		{"1.2.3_alpha1-r2", "patch", "1.2.4"},
+		{"1.2.3_alpha1-r2", "suffix", "1.2.3_alpha2"},
+		{"1.2.3_alpha1-r2", "revision", "1.2.3_alpha1-r3"},
+		{"1", "minor", "1.1"},
+		{"1", "patch", "1.0.1"},
+		{"1.0", "patch", "1.0.1"},
+		{"1.0_beta", "suffix", "1.0_beta1"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input+"_"+tt.part, func(t *testing.T) {
+			gv := ParseGentooVersion(tt.input)
+			if !gv.IsValid {
+				t.Fatalf("Failed to parse %s", tt.input)
+			}
+			gv.IncrementPart(tt.part)
+			got := gv.String()
+			if got != tt.want {
+				t.Errorf("IncrementPart(%q) resulted in %q, want %q", tt.part, got, tt.want)
+			}
+		})
+	}
+}
