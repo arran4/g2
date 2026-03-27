@@ -59,30 +59,43 @@ func ParseNewsItem(content string) NewsItem {
 	}
 
 	item.Body = strings.TrimSpace(strings.Join(bodyLines, "\n"))
+
+	if item.NewsItemFormat == "2.0" {
+		item.BodyAST = parseNewsBodyAST(item.Body)
+	}
+
 	return item
 }
 
-// ToHTMLTemplate converts the NewsItem body into an HTML template representation.
-func (n NewsItem) ToHTMLTemplate() template.HTML {
-	if n.NewsItemFormat == "2.0" {
-		return parseNewsBodyHTML(n.Body)
-	}
-	escaped := template.HTMLEscapeString(n.Body)
-	escaped = strings.ReplaceAll(escaped, "\n", "<br>")
-	return template.HTML(escaped)
-}
-
-// ToText returns the plain text body of the NewsItem.
-func (n NewsItem) ToText() string {
-	return n.Body
-}
-
-func parseNewsBodyHTML(body string) template.HTML {
+// parseNewsBodyAST processes the raw text of a Format 2.0 news item body into an AST representation.
+func parseNewsBodyAST(body string) []NewsNode {
 	lines := strings.Split(body, "\n")
-	var out []string
+	var nodes []NewsNode
 
-	inList := false
-	inCode := false
+	var currentList *NewsNode
+	var currentCode *NewsNode
+	var currentText *NewsNode
+
+	flushText := func() {
+		if currentText != nil {
+			nodes = append(nodes, *currentText)
+			currentText = nil
+		}
+	}
+
+	flushCode := func() {
+		if currentCode != nil {
+			nodes = append(nodes, *currentCode)
+			currentCode = nil
+		}
+	}
+
+	flushList := func() {
+		if currentList != nil {
+			nodes = append(nodes, *currentList)
+			currentList = nil
+		}
+	}
 
 	for i := 0; i < len(lines); i++ {
 		line := lines[i]
@@ -91,13 +104,11 @@ func parseNewsBodyHTML(body string) template.HTML {
 		isListStart := strings.HasPrefix(trimmed, "- ") || strings.HasPrefix(trimmed, "* ")
 
 		if isListStart {
-			if inCode {
-				out = append(out, "</code></pre>")
-				inCode = false
-			}
-			if !inList {
-				out = append(out, "<ul>")
-				inList = true
+			flushText()
+			flushCode()
+
+			if currentList == nil {
+				currentList = &NewsNode{Type: NewsNodeList, Lines: []string{}}
 			}
 
 			prefix := "- "
@@ -105,7 +116,7 @@ func parseNewsBodyHTML(body string) template.HTML {
 				prefix = "* "
 			}
 
-			listItem := []string{template.HTMLEscapeString(strings.TrimPrefix(trimmed, prefix))}
+			listItem := []string{strings.TrimPrefix(trimmed, prefix)}
 
 			indent := len(line) - len(strings.TrimLeft(line, " \t"))
 
@@ -122,14 +133,14 @@ func parseNewsBodyHTML(body string) template.HTML {
 				isNextListStart := strings.HasPrefix(nextTrimmed, "- ") || strings.HasPrefix(nextTrimmed, "* ")
 
 				if nextIndent > indent && !isNextListStart {
-					listItem = append(listItem, template.HTMLEscapeString(nextTrimmed))
+					listItem = append(listItem, nextTrimmed)
 					j++
 				} else {
 					break
 				}
 			}
 
-			out = append(out, "<li>"+strings.Join(listItem, " ")+"</li>")
+			currentList.Lines = append(currentList.Lines, strings.Join(listItem, " "))
 			i = j - 1
 			continue
 		}
@@ -137,48 +148,105 @@ func parseNewsBodyHTML(body string) template.HTML {
 		isCodeLine := strings.HasPrefix(line, "  ") && trimmed != ""
 
 		if isCodeLine {
-			if inList {
-				out = append(out, "</ul>")
-				inList = false
-			}
-			if !inCode {
-				out = append(out, "<pre><code>")
-				inCode = true
+			flushText()
+			flushList()
+
+			if currentCode == nil {
+				currentCode = &NewsNode{Type: NewsNodeCode, Lines: []string{}}
 			}
 			if strings.HasPrefix(line, "  ") {
-				out = append(out, template.HTMLEscapeString(line[2:]))
+				currentCode.Lines = append(currentCode.Lines, line[2:])
 			} else {
-				out = append(out, template.HTMLEscapeString(line))
+				currentCode.Lines = append(currentCode.Lines, line)
 			}
 		} else {
-			if inList {
-				out = append(out, "</ul>")
-				inList = false
-			}
-			if inCode {
+			flushList()
+
+			if currentCode != nil {
 				if trimmed == "" {
-					out = append(out, "")
+					// Blank line within code block
+					currentCode.Lines = append(currentCode.Lines, "")
 				} else {
-					out = append(out, "</code></pre>")
-					inCode = false
-					out = append(out, template.HTMLEscapeString(line))
+					flushCode()
+					currentText = &NewsNode{Type: NewsNodeText, Lines: []string{line}}
 				}
 			} else {
-				if trimmed == "" {
-					out = append(out, "<br><br>")
-				} else {
-					out = append(out, template.HTMLEscapeString(line))
+				// Text context
+				if currentText == nil {
+					currentText = &NewsNode{Type: NewsNodeText, Lines: []string{}}
 				}
+				currentText.Lines = append(currentText.Lines, line)
 			}
 		}
 	}
 
-	if inList {
-		out = append(out, "</ul>")
+	flushList()
+	flushCode()
+	flushText()
+
+	return nodes
+}
+
+// ToHTMLTemplate converts the NewsItem body into an HTML template representation.
+func (n NewsItem) ToHTMLTemplate() template.HTML {
+	if n.NewsItemFormat == "2.0" {
+		var out []string
+		for _, node := range n.BodyAST {
+			switch node.Type {
+			case NewsNodeText:
+				for _, line := range node.Lines {
+					if strings.TrimSpace(line) == "" {
+						out = append(out, "<br><br>")
+					} else {
+						out = append(out, template.HTMLEscapeString(line))
+					}
+				}
+			case NewsNodeList:
+				out = append(out, "<ul>")
+				for _, item := range node.Lines {
+					out = append(out, "<li>"+template.HTMLEscapeString(item)+"</li>")
+				}
+				out = append(out, "</ul>")
+			case NewsNodeCode:
+				out = append(out, "<pre><code>")
+				for _, codeLine := range node.Lines {
+					out = append(out, template.HTMLEscapeString(codeLine))
+				}
+				out = append(out, "</code></pre>")
+			}
+		}
+		return template.HTML(strings.Join(out, "\n"))
 	}
-	if inCode {
-		out = append(out, "</code></pre>")
+	escaped := template.HTMLEscapeString(n.Body)
+	escaped = strings.ReplaceAll(escaped, "\n", "<br>")
+	return template.HTML(escaped)
+}
+
+// ToText returns the plain text body of the NewsItem.
+// It will reconstruct it from the AST for 2.0 format to demonstrate serialization.
+func (n NewsItem) ToText() string {
+	if n.NewsItemFormat == "2.0" {
+		var out []string
+		for _, node := range n.BodyAST {
+			switch node.Type {
+			case NewsNodeText:
+				out = append(out, node.Lines...)
+			case NewsNodeList:
+				for _, item := range node.Lines {
+					out = append(out, " - "+item)
+				}
+			case NewsNodeCode:
+				for _, codeLine := range node.Lines {
+					if codeLine == "" {
+						out = append(out, "")
+					} else {
+						out = append(out, "  "+codeLine)
+					}
+				}
+			}
+		}
+		return strings.Join(out, "\n")
 	}
 
-	return template.HTML(strings.Join(out, "\n"))
+	return n.Body
 }
