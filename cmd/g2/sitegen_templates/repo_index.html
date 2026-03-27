@@ -66,16 +66,6 @@
 <p><a href="news/archive/">More... (Archive)</a></p>
 {{end}}
 
-<h2>Recent Updates</h2>
-<ul>
-    {{range .Updates}}
-    <li><a href="{{.Link}}">{{.Title}}</a> - {{.Description}} ({{.Updated}})</li>
-    {{else}}
-    <li>No recent updates in the last {{.RecentDurationString}}.</li>
-    {{end}}
-</ul>
-<p><a href="recent/">View all recent updates</a></p>
-
 {{if .Repo.QAPolicy}}
 <h2>QA Policies</h2>
 <div class="metadata-section">
