@@ -157,8 +157,8 @@ func (cfg *MainArgConfig) cmdOverlayEbuildInstall(args []string) error {
 	if vars == nil {
 		return fmt.Errorf("could not parse PN and PV from ebuild filename %s", filepath.Base(absEbuildPath))
 	}
-	pn := vars["PN"]
-	pv := vars["PV"]
+	pn := vars.PN
+	pv := vars.PV
 
 	category := *categoryFlag
 	if category == "" {

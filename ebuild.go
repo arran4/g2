@@ -167,8 +167,10 @@ func ParseEbuild(fsys fs.FS, path string, mode ParsingMode) (*Ebuild, error) {
 
 	// Always parse metadata from filename
 	vars := ParseEbuildVariables(path)
-	for k, v := range vars {
-		e.Vars[k] = v
+	if vars != nil {
+		e.Vars["P"] = vars.P
+		e.Vars["PN"] = vars.PN
+		e.Vars["PV"] = vars.PV
 	}
 
 	if mode == ParseMetadataOnly {
@@ -237,25 +239,41 @@ func ParseIUSE(iuseStr string) []string {
 	return parsed
 }
 
-// ParseEbuildVariables extracts PN, PV, P from the ebuild filename.
-func ParseEbuildVariables(filename string) map[string]string {
-	basename := filepath.Base(filename)
-	re := regexp.MustCompile(`^(.+)-(\d+(\.\d+)*([a-z]|_p\d*|_pre\d*|_rc\d*|_beta\d*|_alpha\d*)?(-r\d+)?)\.ebuild$`)
-	matches := re.FindStringSubmatch(basename)
+// EbuildVariables represents standard variables parsed from an ebuild filename.
+type EbuildVariables struct {
+	P  string
+	PN string
+	PV string
+}
 
-	if matches == nil {
+// ParseEbuildVariables extracts PN, PV, P from the ebuild filename.
+func ParseEbuildVariables(filename string) *EbuildVariables {
+	basename := filepath.Base(filename)
+	if !strings.HasSuffix(basename, ".ebuild") {
+		return nil
+	}
+	basename = strings.TrimSuffix(basename, ".ebuild")
+
+	parts := strings.Split(basename, "-")
+	if len(parts) < 2 {
 		return nil
 	}
 
-	pn := matches[1]
-	pv := matches[2]
-	p := fmt.Sprintf("%s-%s", pn, pv)
-
-	return map[string]string{
-		"P":  p,
-		"PN": pn,
-		"PV": pv,
+	// Iterate to find the first valid version suffix from the left
+	for i := 1; i < len(parts); i++ {
+		pvCandidate := strings.Join(parts[i:], "-")
+		gv := ParseGentooVersion(pvCandidate)
+		if gv.IsValid {
+			pn := strings.Join(parts[:i], "-")
+			return &EbuildVariables{
+				P:  pn + "-" + pvCandidate,
+				PN: pn,
+				PV: pvCandidate,
+			}
+		}
 	}
+
+	return nil
 }
 
 // ResolveVariables replaces ${VAR} and $VAR in the text with values from variables map.

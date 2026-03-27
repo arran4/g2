@@ -752,7 +752,7 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool) (
 					// Fallback from filename
 					vars := g2.ParseEbuildVariables(file.Name())
 					if vars != nil {
-						version = vars["PV"]
+						version = vars.PV
 					}
 				}
 

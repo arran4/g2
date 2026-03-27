@@ -347,7 +347,12 @@ func (cfg *CmdManifestArgConfig) cmdVerify(args []string, hashes []string) error
 			return fmt.Errorf("reading ebuild %s: %w", ebuildName, err)
 		}
 
-		uris, err := g2.ExtractURIs(string(content), variables)
+		vMap := map[string]string{
+			"P":  variables.P,
+			"PN": variables.PN,
+			"PV": variables.PV,
+		}
+		uris, err := g2.ExtractURIs(string(content), vMap)
 		if err != nil {
 			// Log error but maybe continue?
 			log.Printf("    Error extracting URIs from %s: %v", ebuildName, err)
@@ -440,7 +445,12 @@ func (cfg *CmdManifestArgConfig) cmdClean(args []string) error {
 			return fmt.Errorf("reading ebuild %s: %w", ebuildName, err)
 		}
 
-		uris, err := g2.ExtractURIs(string(content), variables)
+		vMap := map[string]string{
+			"P":  variables.P,
+			"PN": variables.PN,
+			"PV": variables.PV,
+		}
+		uris, err := g2.ExtractURIs(string(content), vMap)
 		if err != nil {
 			continue
 		}
