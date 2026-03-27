@@ -1571,7 +1571,7 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 			if ver.Ebuild != nil && ver.Ebuild.Vars != nil {
 				desc = ver.Ebuild.Vars["DESCRIPTION"]
 			}
-			_ = append(repoFeedItems, g2.FeedItem{
+			repoFeedItems = append(repoFeedItems, g2.FeedItem{
 				Title:       fmt.Sprintf("%s/%s-%s", pkg.Category, pkg.Name, ver.Version),
 				Link:        fmt.Sprintf("packages/%s/", pkg.Name),
 				Description: desc,
