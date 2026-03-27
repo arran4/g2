@@ -114,6 +114,7 @@ type SiteData struct {
 	UseDesc        *g2.UseDesc
 	UseLocalDesc   *g2.UseLocalDesc
 	Deprecated     []g2.PackageDeprecated
+	PackageCount   int
 }
 
 type LicenseData struct {
@@ -533,7 +534,17 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool) (
 		UseDesc:        useDesc,
 		UseLocalDesc:   useLocalDesc,
 		Deprecated:     deprecated,
+		PackageCount:   0,
 	}
+
+	// Calculate PackageCount correctly after parsing all categories
+	defer func() {
+		count := 0
+		for _, cat := range site.Categories {
+			count += len(cat.Packages)
+		}
+		site.PackageCount = count
+	}()
 
 	// Parse News
 	newsDir := filepath.Join(repoDir, "metadata", "news")
@@ -2125,7 +2136,7 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 			"BaseURL":               "../../",
 			"Breadcrumbs":           []Breadcrumb{{Name: title, URL: "../../"}, {Name: "Overlays", URL: "../../overlays/"}, {Name: site.RepoName}},
 			"Repo":                  site,
-			"PackageCount":          pkgCount,
+			"PackageCount":          site.PackageCount,
 			"Updates":               recentRepoUpdates,
 			"Version":               version,
 			"RecentDurationString":  recentDurationStr,
