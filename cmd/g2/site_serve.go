@@ -33,6 +33,7 @@ func (cfg *MainArgConfig) cmdSite(args []string) error {
 func (cfg *MainArgConfig) cmdSiteServe(args []string) error {
 	fs := flag.NewFlagSet("site serve", flag.ExitOnError)
 	port := fs.Int("port", 8080, "Port to run the site server on")
+	jobs := fs.Int("jobs", runtime.GOMAXPROCS(0), "Number of concurrent jobs for repository processing")
 
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -67,7 +68,7 @@ func (cfg *MainArgConfig) cmdSiteServe(args []string) error {
 
 		var sitesMu sync.Mutex
 		eg := new(errgroup.Group)
-		eg.SetLimit(runtime.GOMAXPROCS(0))
+		eg.SetLimit(*jobs)
 
 		for _, entry := range entries {
 			if !entry.IsDir() {

@@ -332,6 +332,7 @@ func (cfg *MainArgConfig) cmdOverlays(args []string) error {
 	recentDurOpt := fs.String("recent-duration", "3mo", "Duration to consider an update 'recent' (e.g. 3mo, 14d, 72h)")
 	fastGit := fs.Bool("fast-git-modtime", false, "Use fast (O(1)) but potentially less reliable go-git file log lookup")
 	useZip := fs.Bool("use-zip", false, "Download repository as a ZIP archive instead of git clone")
+	jobs := fs.Int("jobs", runtime.GOMAXPROCS(0), "Number of concurrent jobs for repository processing")
 
 	if err := fs.Parse(args[2:]); err != nil {
 		return fmt.Errorf("parsing flags: %w", err)
@@ -353,7 +354,7 @@ func (cfg *MainArgConfig) cmdOverlays(args []string) error {
 	}
 
 	log.Printf("Generating site from remote repositories: %s into %s", location, *outDir)
-	return cfg.cmdSiteRemote(location, *outDir, recentDuration, recentDurationStr, *fastGit, *useZip)
+	return cfg.cmdSiteRemote(location, *outDir, recentDuration, recentDurationStr, *fastGit, *useZip, *jobs)
 }
 
 func parseLayoutConfFromFS(sysFS fs.FS, path string) (*g2.LayoutConf, error) {
@@ -2724,7 +2725,7 @@ func extractZip(zipPath string, destDir string) error {
 	return nil
 }
 
-func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, recentDuration time.Duration, recentDurationStr string, fastGit bool, useZip bool) error {
+func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, recentDuration time.Duration, recentDurationStr string, fastGit bool, useZip bool, jobs int) error {
 	var data []byte
 	var err error
 
@@ -2771,7 +2772,7 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, 
 	var sitesMu sync.Mutex
 
 	eg := new(errgroup.Group)
-	eg.SetLimit(runtime.GOMAXPROCS(0))
+	eg.SetLimit(jobs)
 
 	for _, repo := range repos.Repositories {
 		repoCopy := repo
@@ -2797,9 +2798,8 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, 
 			if useZip {
 				// Try to construct zip url
 				zipUrl := gitUrl
-				if strings.HasSuffix(zipUrl, ".git") {
-					zipUrl = zipUrl[:len(zipUrl)-4]
-				}
+					zipUrl = strings.TrimSuffix(zipUrl, ".git")
+
 				if strings.HasPrefix(zipUrl, "https://github.com/") {
 					zipUrl = zipUrl + "/archive/HEAD.zip"
 				} else {
