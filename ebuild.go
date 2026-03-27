@@ -222,6 +222,197 @@ func ParseEbuild(fsys fs.FS, path string, mode ParsingMode) (*Ebuild, error) {
 	return e, nil
 }
 
+type DepNode interface {
+	Evaluate(opts ...any) ([]string, error)
+}
+
+type DepString string
+
+func (d DepString) Evaluate(opts ...any) ([]string, error) {
+	return []string{string(d)}, nil
+}
+
+type DepAnyOf struct {
+	Children []DepNode
+}
+
+func (d DepAnyOf) Evaluate(opts ...any) ([]string, error) {
+	var res []string
+	for _, c := range d.Children {
+		vals, err := c.Evaluate(opts...)
+		if err != nil {
+			return nil, err
+		}
+		res = append(res, vals...)
+	}
+	return res, nil
+}
+
+type DepAllOf struct {
+	Children []DepNode
+}
+
+func (d DepAllOf) Evaluate(opts ...any) ([]string, error) {
+	var res []string
+	for _, c := range d.Children {
+		vals, err := c.Evaluate(opts...)
+		if err != nil {
+			return nil, err
+		}
+		res = append(res, vals...)
+	}
+	return res, nil
+}
+
+type UseFlags []string
+type UseFlag string
+type IgnoreUseFlags bool
+
+type EvaluateConfig struct {
+	UseFlags       map[string]bool
+	IgnoreUseFlags bool
+}
+
+func parseOpts(opts ...any) EvaluateConfig {
+	cfg := EvaluateConfig{
+		UseFlags: make(map[string]bool),
+	}
+	for _, opt := range opts {
+		switch o := opt.(type) {
+		case UseFlags:
+			for _, flag := range o {
+				cfg.UseFlags[flag] = true
+			}
+		case UseFlag:
+			cfg.UseFlags[string(o)] = true
+		case IgnoreUseFlags:
+			cfg.IgnoreUseFlags = bool(o)
+		}
+	}
+	return cfg
+}
+
+type DepUseConditional struct {
+	Flag      string
+	IsNegated bool
+	Children  []DepNode
+}
+
+func (d DepUseConditional) Evaluate(opts ...any) ([]string, error) {
+	cfg := parseOpts(opts...)
+
+	include := cfg.IgnoreUseFlags
+	if !cfg.IgnoreUseFlags {
+		hasFlag := cfg.UseFlags[d.Flag]
+		if d.IsNegated {
+			include = !hasFlag
+		} else {
+			include = hasFlag
+		}
+	}
+
+	if !include {
+		return nil, nil
+	}
+
+	var res []string
+	for _, c := range d.Children {
+		vals, err := c.Evaluate(opts...)
+		if err != nil {
+			return nil, err
+		}
+		res = append(res, vals...)
+	}
+	return res, nil
+}
+
+func parseDepTokens(tokens []string) ([]DepNode, int) {
+	var nodes []DepNode
+	for i := 0; i < len(tokens); i++ {
+		t := tokens[i]
+		if t == "" {
+			continue
+		}
+		if t == "||" {
+			if i+1 < len(tokens) && tokens[i+1] == "(" {
+				children, advance := parseDepTokens(tokens[i+2:])
+				nodes = append(nodes, DepAnyOf{Children: children})
+				i += advance + 1 // +1 for '('
+			} else {
+				nodes = append(nodes, DepString(t))
+			}
+		} else if strings.HasSuffix(t, "?") {
+			flag := strings.TrimSuffix(t, "?")
+			isNegated := false
+			if strings.HasPrefix(flag, "!") {
+				isNegated = true
+				flag = flag[1:]
+			}
+			if i+1 < len(tokens) && tokens[i+1] == "(" {
+				children, advance := parseDepTokens(tokens[i+2:])
+				nodes = append(nodes, DepUseConditional{
+					Flag:      flag,
+					IsNegated: isNegated,
+					Children:  children,
+				})
+				i += advance + 1
+			} else {
+				nodes = append(nodes, DepString(t))
+			}
+		} else if t == "(" {
+			children, advance := parseDepTokens(tokens[i+1:])
+			nodes = append(nodes, DepAllOf{Children: children})
+			i += advance
+		} else if t == ")" {
+			return nodes, i + 1
+		} else {
+			nodes = append(nodes, DepString(t))
+		}
+	}
+	return nodes, len(tokens)
+}
+
+type DepTree struct {
+	Nodes []DepNode
+}
+
+func (d DepTree) Evaluate(opts ...any) ([]string, error) {
+	var res []string
+	for _, n := range d.Nodes {
+		vals, err := n.Evaluate(opts...)
+		if err != nil {
+			return nil, err
+		}
+		res = append(res, vals...)
+	}
+
+	unique := make(map[string]bool)
+	var final []string
+	for _, r := range res {
+		if !unique[r] {
+			unique[r] = true
+			final = append(final, r)
+		}
+	}
+	return final, nil
+}
+
+// ParseDepTree parses a dependency string (like DEPEND, RDEPEND, LICENSE)
+// into an AST that can be evaluated with Evaluate().
+func ParseDepTree(s string) DepTree {
+	tokens := strings.Fields(s)
+	nodes, _ := parseDepTokens(tokens)
+	return DepTree{Nodes: nodes}
+}
+
+// ParseLicense extracts individual license names from a LICENSE string,
+// evaluating all conditionals to true to gather all possible licenses.
+func ParseLicense(licenseStr string) []string {
+	tree := ParseDepTree(licenseStr)
+	res, _ := tree.Evaluate(IgnoreUseFlags(true))
+	return res
+}
+
 // ParseIUSE extracts the actual USE flag names from an IUSE string,
 // stripping prefixes like + and -.
 func ParseIUSE(iuseStr string) []string {

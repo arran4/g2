@@ -1468,37 +1468,41 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 
 				for _, ver := range pkg.Versions {
 					if ver.Ebuild != nil && ver.Ebuild.Vars != nil {
-						lic := ver.Ebuild.Vars["LICENSE"]
-						if lic != "" {
-							if _, ok := aggLicenses[lic]; !ok {
-								aggLicenses[lic] = &AggLicense{Name: lic}
-							}
+						licenseStr := ver.Ebuild.Vars["LICENSE"]
+						licenses := g2.ParseLicense(licenseStr)
 
-							found := false
-							for _, p := range aggLicenses[lic].Packages {
-								if p.Name == pkg.Name && p.Category == pkg.Category {
-									found = true
-									break
+						for _, lic := range licenses {
+							if lic != "" {
+								if _, ok := aggLicenses[lic]; !ok {
+									aggLicenses[lic] = &AggLicense{Name: lic}
 								}
-							}
-							if !found {
-								aggLicenses[lic].Packages = append(aggLicenses[lic].Packages, aggPackages[pkgKey])
-								aggLicenses[lic].Count++
-							}
 
-							// Add aliases from this site's license mapping
-							if site.LicenseMapping != nil {
-								if aliases, ok := site.LicenseMapping[lic]; ok {
-									for _, alias := range aliases {
-										hasAlias := false
-										for _, existing := range aggLicenses[lic].Aliases {
-											if existing == alias {
-												hasAlias = true
-												break
+								found := false
+								for _, p := range aggLicenses[lic].Packages {
+									if p.Name == pkg.Name && p.Category == pkg.Category {
+										found = true
+										break
+									}
+								}
+								if !found {
+									aggLicenses[lic].Packages = append(aggLicenses[lic].Packages, aggPackages[pkgKey])
+									aggLicenses[lic].Count++
+								}
+
+								// Add aliases from this site's license mapping
+								if site.LicenseMapping != nil {
+									if aliases, ok := site.LicenseMapping[lic]; ok {
+										for _, alias := range aliases {
+											hasAlias := false
+											for _, existing := range aggLicenses[lic].Aliases {
+												if existing == alias {
+													hasAlias = true
+													break
+												}
 											}
-										}
-										if !hasAlias {
-											aggLicenses[lic].Aliases = append(aggLicenses[lic].Aliases, alias)
+											if !hasAlias {
+												aggLicenses[lic].Aliases = append(aggLicenses[lic].Aliases, alias)
+											}
 										}
 									}
 								}
