@@ -1,12 +1,14 @@
 package main
 
 import (
+	"archive/zip"
 	"bytes"
 	"encoding/xml"
 	"flag"
 	"fmt"
 	"github.com/arran4/g2"
 	"github.com/arran4/g2/lints"
+	"golang.org/x/sync/errgroup"
 	"html/template"
 	"io"
 	"io/fs"
@@ -15,6 +17,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -328,6 +331,7 @@ func (cfg *MainArgConfig) cmdOverlays(args []string) error {
 	clear := fs.Bool("clear", false, "Clear output directory before generation")
 	recentDurOpt := fs.String("recent-duration", "3mo", "Duration to consider an update 'recent' (e.g. 3mo, 14d, 72h)")
 	fastGit := fs.Bool("fast-git-modtime", false, "Use fast (O(1)) but potentially less reliable go-git file log lookup")
+	useZip := fs.Bool("use-zip", false, "Download repository as a ZIP archive instead of git clone")
 
 	if err := fs.Parse(args[2:]); err != nil {
 		return fmt.Errorf("parsing flags: %w", err)
@@ -349,7 +353,7 @@ func (cfg *MainArgConfig) cmdOverlays(args []string) error {
 	}
 
 	log.Printf("Generating site from remote repositories: %s into %s", location, *outDir)
-	return cfg.cmdSiteRemote(location, *outDir, recentDuration, recentDurationStr, *fastGit)
+	return cfg.cmdSiteRemote(location, *outDir, recentDuration, recentDurationStr, *fastGit, *useZip)
 }
 
 func parseLayoutConfFromFS(sysFS fs.FS, path string) (*g2.LayoutConf, error) {
@@ -1551,7 +1555,6 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 			}
 		}
 	}
-	_ = allPackages
 	totalPackages := 0
 
 	for _, site := range sites {
@@ -2658,7 +2661,70 @@ func renderPage(path string, tmpl *template.Template, name string, data map[stri
 	return nil
 }
 
-func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, recentDuration time.Duration, recentDurationStr string, fastGit bool) error {
+func extractZip(zipPath string, destDir string) error {
+	r, err := zip.OpenReader(zipPath)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = r.Close() }()
+
+	for _, f := range r.File {
+		parts := strings.Split(f.Name, "/")
+		if len(parts) <= 1 {
+			continue // Skip root dir or files in root if they don't have a dir
+		}
+
+		// Skip files directly in the root directory
+		if len(parts) == 1 {
+			continue
+		}
+
+		relPath := strings.Join(parts[1:], "/")
+		if relPath == "" {
+			continue
+		}
+
+		fpath := filepath.Join(destDir, relPath)
+
+		// Check for ZipSlip
+		if !strings.HasPrefix(fpath, filepath.Clean(destDir)+string(os.PathSeparator)) {
+			return fmt.Errorf("%s: illegal file path", fpath)
+		}
+
+		if f.FileInfo().IsDir() {
+			err := os.MkdirAll(fpath, os.ModePerm)
+			if err != nil {
+				return err
+			}
+			continue
+		}
+
+		if err = os.MkdirAll(filepath.Dir(fpath), os.ModePerm); err != nil {
+			return err
+		}
+
+		outFile, err := os.OpenFile(fpath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, f.Mode())
+		if err != nil {
+			return err
+		}
+
+		rc, err := f.Open()
+		if err != nil {
+			_ = outFile.Close()
+			return err
+		}
+
+		_, err = io.Copy(outFile, rc)
+		_ = outFile.Close()
+		_ = rc.Close()
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, recentDuration time.Duration, recentDurationStr string, fastGit bool, useZip bool) error {
 	var data []byte
 	var err error
 
@@ -2702,45 +2768,108 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, 
 	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	var allSites []*SiteData
+	var sitesMu sync.Mutex
+
+	eg := new(errgroup.Group)
+	eg.SetLimit(runtime.GOMAXPROCS(0))
 
 	for _, repo := range repos.Repositories {
-		if len(repo.Sources) == 0 {
-			continue
-		}
-
-		var gitUrl string
-		for _, src := range repo.Sources {
-			if src.Type == "git" && strings.HasPrefix(src.Text, "http") {
-				gitUrl = src.Text
-				break
-			}
-		}
-
-		if gitUrl == "" {
-			continue // skip non-http git repos for this tool
-		}
-
-		log.Printf("Cloning remote repository: %s (%s)", repo.Name, gitUrl)
-
-		repoPath := filepath.Join(tmpDir, repo.Name)
-		// Try to shallow clone
-		cmd := exec.Command("git", "clone", gitUrl, repoPath)
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-		if err := cmd.Run(); err != nil {
-			log.Printf("Failed to clone %s: %v", repo.Name, err)
-			continue
-		}
-
-		log.Printf("Parsing repository: %s", repo.Name)
 		repoCopy := repo
-		siteData, err := parseRepo(os.DirFS(repoPath), ".", repo.Name, fastGit, &repoCopy)
-		if err != nil {
-			log.Printf("Failed to parse repo %s: %v", repo.Name, err)
-			continue
-		}
+		eg.Go(func() error {
+			if len(repoCopy.Sources) == 0 {
+				return nil
+			}
 
-		allSites = append(allSites, siteData)
+			var gitUrl string
+			for _, src := range repoCopy.Sources {
+				if src.Type == "git" && strings.HasPrefix(src.Text, "http") {
+					gitUrl = src.Text
+					break
+				}
+			}
+
+			if gitUrl == "" {
+				return nil // skip non-http git repos for this tool
+			}
+
+			repoPath := filepath.Join(tmpDir, repoCopy.Name)
+
+			if useZip {
+				// Try to construct zip url
+				zipUrl := gitUrl
+				if strings.HasSuffix(zipUrl, ".git") {
+					zipUrl = zipUrl[:len(zipUrl)-4]
+				}
+				if strings.HasPrefix(zipUrl, "https://github.com/") {
+					zipUrl = zipUrl + "/archive/HEAD.zip"
+				} else {
+					zipUrl = zipUrl + "/archive/HEAD.zip" // Assuming standard cgit/gitlab archive structure as fallback
+				}
+
+				log.Printf("Downloading remote repository: %s (%s)", repoCopy.Name, zipUrl)
+
+				// Download zip file to a temp location
+				zipPath := filepath.Join(tmpDir, repoCopy.Name+".zip")
+				resp, err := http.Get(zipUrl)
+				if err != nil {
+					log.Printf("Failed to download zip %s: %v", repoCopy.Name, err)
+					return nil
+				}
+				defer func() { _ = resp.Body.Close() }()
+				if resp.StatusCode != http.StatusOK {
+					log.Printf("Failed to download zip %s: HTTP %s", repoCopy.Name, resp.Status)
+					return nil
+				}
+
+				out, err := os.Create(zipPath)
+				if err != nil {
+					log.Printf("Failed to create zip file %s: %v", repoCopy.Name, err)
+					return nil
+				}
+				_, err = io.Copy(out, resp.Body)
+				_ = out.Close()
+				if err != nil {
+					log.Printf("Failed to write zip file %s: %v", repoCopy.Name, err)
+					return nil
+				}
+
+				// Extract zip file
+				err = extractZip(zipPath, repoPath)
+				if err != nil {
+					log.Printf("Failed to extract zip %s: %v", repoCopy.Name, err)
+					return nil
+				}
+
+			} else {
+				log.Printf("Cloning remote repository: %s (%s)", repoCopy.Name, gitUrl)
+
+				// Try to shallow clone
+				cmd := exec.Command("git", "clone", "--depth", "1", gitUrl, repoPath)
+				var outBuf, errBuf bytes.Buffer
+				cmd.Stdout = &outBuf
+				cmd.Stderr = &errBuf
+				if err := cmd.Run(); err != nil {
+					log.Printf("Failed to clone %s: %v\nStdout: %s\nStderr: %s", repoCopy.Name, err, outBuf.String(), errBuf.String())
+					return nil
+				}
+			}
+
+			log.Printf("Parsing repository: %s", repoCopy.Name)
+			siteData, err := parseRepo(os.DirFS(repoPath), ".", repoCopy.Name, fastGit, &repoCopy)
+			if err != nil {
+				log.Printf("Failed to parse repo %s: %v", repoCopy.Name, err)
+				return nil
+			}
+
+			sitesMu.Lock()
+			allSites = append(allSites, siteData)
+			sitesMu.Unlock()
+			return nil
+		})
+	}
+
+	if err := eg.Wait(); err != nil {
+		return fmt.Errorf("processing repositories: %w", err)
 	}
 
 	log.Printf("Generating integrated site for %d repos", len(allSites))

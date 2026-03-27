@@ -4,13 +4,16 @@ import (
 	"bytes"
 	"flag"
 	"fmt"
+	"golang.org/x/sync/errgroup"
 	"html/template"
 	"log"
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
+	"sync"
 )
 
 func (cfg *MainArgConfig) cmdSite(args []string) error {
@@ -51,28 +54,47 @@ func (cfg *MainArgConfig) cmdSiteServe(args []string) error {
 		}
 		sites = append(sites, siteData)
 	} else {
-		dbReposPath := "/var/db/repos"
-		log.Printf("Location %s is not an overlay, checking %s", location, dbReposPath)
+		dbReposPath := location
+		if location == "." {
+			dbReposPath = "/var/db/repos"
+		}
+		log.Printf("Location %s is not an overlay, treating it as a directory of repositories (checking %s)", location, dbReposPath)
 
 		entries, err := os.ReadDir(dbReposPath)
 		if err != nil {
 			return fmt.Errorf("could not read %s: %w", dbReposPath, err)
 		}
 
+		var sitesMu sync.Mutex
+		eg := new(errgroup.Group)
+		eg.SetLimit(runtime.GOMAXPROCS(0))
+
 		for _, entry := range entries {
 			if !entry.IsDir() {
 				continue
 			}
-			repoPath := filepath.Join(dbReposPath, entry.Name())
-			if isOverlayDir(repoPath) {
-				log.Printf("Parsing repository %s", entry.Name())
-				siteData, err := parseRepo(os.DirFS(repoPath), ".", entry.Name(), false, nil)
-				if err != nil {
-					log.Printf("Warning: failed to parse repo %s: %v", entry.Name(), err)
-					continue
+			entryCopy := entry
+			repoPath := filepath.Join(dbReposPath, entryCopy.Name())
+
+			eg.Go(func() error {
+				if isOverlayDir(repoPath) {
+					log.Printf("Parsing repository %s", entryCopy.Name())
+					siteData, err := parseRepo(os.DirFS(repoPath), ".", entryCopy.Name(), false, nil)
+					if err != nil {
+						log.Printf("Warning: failed to parse repo %s: %v", entryCopy.Name(), err)
+						return nil // Don't fail the whole group on a single parse error
+					}
+
+					sitesMu.Lock()
+					sites = append(sites, siteData)
+					sitesMu.Unlock()
 				}
-				sites = append(sites, siteData)
-			}
+				return nil
+			})
+		}
+
+		if err := eg.Wait(); err != nil {
+			return fmt.Errorf("processing db repos: %w", err)
 		}
 
 		if len(sites) == 0 {
