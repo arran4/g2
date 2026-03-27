@@ -142,3 +142,375 @@
     </table>
 </div>
 {{end}}
+<script src="{{$.BaseURL}}search.js"></script>
+<script>
+    document.addEventListener("DOMContentLoaded", async function() {
+        const searchEngine = new SearchEngine();
+        searchEngine.loaded = true; // prevent loading manifest
+
+        try {
+            const res = await fetch('{{$.BaseURL}}search/data/manifest.json');
+            const manifest = await res.json();
+            for (const file of manifest.data_files) {
+                const dataRes = await fetch('{{$.BaseURL}}search/data/' + file);
+                const data = await dataRes.json();
+                searchEngine.documents = searchEngine.documents.concat(data);
+            }
+        } catch(e) {
+            console.error("Failed to load search data", e);
+        }
+
+        const depsDataEl = document.getElementById("deps-data");
+        let depsMap = {};
+        if (depsDataEl) {
+            try {
+                let raw = JSON.parse(depsDataEl.textContent);
+                if (typeof raw === "string") {
+                    depsMap = JSON.parse(raw);
+                } else {
+                    depsMap = raw;
+                }
+            } catch(e){}
+        }
+
+        const currentPkgName = "{{.Package.Category}}/{{.Package.Name}}";
+
+        const useInput = document.getElementById("use-flags-input");
+        let activeUses = new Set();
+        let disabledUses = new Set();
+
+        let globalSeenNodes = new Set();
+
+        function parseDepString(depStr) {
+            let tokens = depStr.trim().split(/\s+/).filter(Boolean);
+            let pos = 0;
+
+            function parseTokens() {
+                let nodes = [];
+                while (pos < tokens.length) {
+                    let t = tokens[pos];
+                    if (t === "||") {
+                        if (pos + 1 < tokens.length && tokens[pos+1] === "(") {
+                            pos += 2;
+                            let children = parseTokens();
+                            nodes.push({ type: "any_of", children: children });
+                        } else {
+                            nodes.push({ type: "string", name: t });
+                            pos++;
+                        }
+                    } else if (t.endsWith("?")) {
+                        let flag = t.slice(0, -1);
+                        let isNegated = false;
+                        if (flag.startsWith("!")) {
+                            isNegated = true;
+                            flag = flag.substring(1);
+                        }
+                        if (pos + 1 < tokens.length && tokens[pos+1] === "(") {
+                            pos += 2;
+                            let children = parseTokens();
+                            nodes.push({ type: "use_conditional", flag: flag, is_negated: isNegated, children: children });
+                        } else {
+                            nodes.push({ type: "string", name: t });
+                            pos++;
+                        }
+                    } else if (t === "(") {
+                        pos++;
+                        let children = parseTokens();
+                        nodes.push({ type: "all_of", children: children });
+                    } else if (t === ")") {
+                        pos++;
+                        return nodes;
+                    } else {
+                        nodes.push({ type: "string", name: t });
+                        pos++;
+                    }
+                }
+                return nodes;
+            }
+            return parseTokens();
+        }
+
+        function extractPackageName(dep) {
+            let s = dep;
+            let idx = s.indexOf("["); if(idx !== -1) s = s.substring(0, idx);
+            idx = s.indexOf(":"); if(idx !== -1) s = s.substring(0, idx);
+            while(s.length > 0 && ['>','<','=','~','!'].includes(s[0])) s = s.substring(1);
+            s = s.replace(/-[0-9]+(\.[0-9]+)*[a-z]?(_alpha[0-9]*|_beta[0-9]*|_pre[0-9]*|_rc[0-9]*|_p[0-9]*)*(-r[0-9]+)?$/, '');
+            return s;
+        }
+
+        function parseUses() {
+            activeUses.clear();
+            disabledUses.clear();
+            if(!useInput) return;
+            const parts = useInput.value.trim().split(/\s+/);
+            for(let p of parts) {
+                if(!p) continue;
+                if(p.startsWith('-')) {
+                    disabledUses.add(p.substring(1));
+                } else {
+                    activeUses.add(p);
+                }
+            }
+        }
+
+        function isNodeVisible(node) {
+            if(node.type === "use_conditional") {
+                const flag = node.flag;
+                let conditionMet = false;
+
+                if (node.is_negated) {
+                    if (disabledUses.has(flag)) conditionMet = true;
+                    else if (!activeUses.has(flag) && !disabledUses.has(flag)) conditionMet = true; // Assuming implicit active is false
+                    else conditionMet = false;
+                } else {
+                    if (activeUses.has(flag)) conditionMet = true;
+                    else conditionMet = false;
+                }
+                return conditionMet;
+            }
+            return true;
+        }
+
+        function renderNode(node, container, searchDocs, depth = 0) {
+            // Evaluates use conditional directly, if hidden do not render
+            if(node.type === "use_conditional") {
+                if(!isNodeVisible(node)) return;
+
+                const wrapper = document.createElement("div");
+                wrapper.style.marginLeft = "15px";
+                wrapper.style.borderLeft = "1px solid #ccc";
+                wrapper.style.paddingLeft = "10px";
+
+                const title = document.createElement("div");
+                title.style.color = "#666";
+                title.style.fontSize = "0.9em";
+                title.textContent = "USE: " + (node.is_negated ? "!" : "") + node.flag;
+                wrapper.appendChild(title);
+
+                for(const child of (node.children || [])) {
+                    renderNode(child, wrapper, searchDocs, depth);
+                }
+                container.appendChild(wrapper);
+                return;
+            }
+
+            if(node.type === "any_of" || node.type === "all_of") {
+                const wrapper = document.createElement("div");
+                wrapper.style.marginLeft = "15px";
+                const title = document.createElement("div");
+                title.style.fontWeight = "bold";
+                title.textContent = node.type === "any_of" ? "|| (" : "(";
+                wrapper.appendChild(title);
+                for(const child of (node.children || [])) {
+                    renderNode(child, wrapper, searchDocs, depth);
+                }
+                const close = document.createElement("div");
+                close.style.fontWeight = "bold";
+                close.textContent = ")";
+                wrapper.appendChild(close);
+                container.appendChild(wrapper);
+                return;
+            }
+
+            if(node.type === "string") {
+                const el = document.createElement("div");
+                el.style.marginLeft = "15px";
+
+                let pkgName = extractPackageName(node.name);
+
+                // If we don't have a link but we can find it in search docs
+                if (!node.link && pkgName && searchDocs) {
+                    const match = searchDocs.find(d => (d.category + "/" + d.package) === pkgName);
+                    if (match) {
+                        node.link = "../../../../../../categories/" + match.category + "/packages/" + match.package + "/";
+                    }
+                }
+
+                if(node.link) {
+                    let isFirstOccurrence = true;
+                    if(pkgName) {
+                        if(globalSeenNodes.has(pkgName)) {
+                            isFirstOccurrence = false;
+                        } else {
+                            globalSeenNodes.add(pkgName);
+                        }
+                    }
+
+                    const a = document.createElement("a");
+                    a.href = node.link;
+                    a.textContent = node.name;
+                    el.appendChild(a);
+
+                    if(isFirstOccurrence) {
+                        const expBtn = document.createElement("button");
+                        expBtn.textContent = "+";
+                        expBtn.style.marginLeft = "10px";
+                        expBtn.style.fontSize = "10px";
+                        expBtn.style.padding = "2px 5px";
+                        expBtn.onclick = () => {
+                            if(expBtn.textContent === "+") {
+                                expBtn.textContent = "-";
+                                const div = document.createElement("div");
+                                div.id = "exp-" + node.name.replace(/[^a-zA-Z0-9]/g, "-");
+                                el.appendChild(div);
+
+                                // Clean name to pkg name and find in searchDocs
+                                let pkgName = node.name.replace(/\[.*\]/g, '').replace(/:.*/g, '').replace(/^[<>=~!]*/, '');
+                                pkgName = extractPackageName(node.name);
+                                const match = searchDocs.find(d => (d.category + "/" + d.package) === pkgName);
+                                if(match) {
+                                    let combinedDeps = "";
+                                    if(match.raw_depends) combinedDeps += match.raw_depends + " ";
+                                    if(match.raw_rdepends) combinedDeps += match.raw_rdepends;
+                                    if(combinedDeps.trim() !== "") {
+                                        let parsedNodes = parseDepString(combinedDeps);
+                                        for(let n of parsedNodes) {
+                                            renderNode(n, div, searchDocs, depth + 1);
+                                        }
+                                    } else {
+                                        div.textContent = "No dependencies.";
+                                    }
+                                } else {
+                                    div.textContent = "Package not found in index.";
+                                }
+                            } else {
+                                expBtn.textContent = "+";
+                                el.lastChild.remove();
+                            }
+                        };
+                        el.appendChild(expBtn);
+                    }
+
+                } else {
+                    el.textContent = node.name;
+                }
+                container.appendChild(el);
+            }
+        }
+
+        function renderAllDeps() {
+            globalSeenNodes.clear();
+            const container = document.getElementById("dependencies-container");
+            if(!container) return;
+            container.innerHTML = "";
+
+            for(const [depType, nodes] of Object.entries(depsMap)) {
+                if(!nodes || nodes.length === 0) continue;
+                const h4 = document.createElement("h4");
+                h4.textContent = depType;
+                container.appendChild(h4);
+
+                const wrapper = document.createElement("div");
+                for(const node of nodes) {
+                    renderNode(node, wrapper, searchEngine.documents, 0);
+                }
+                container.appendChild(wrapper);
+            }
+        }
+
+        // Helper to check if a target package is present in a parsed dependency tree under currently active USE flags
+        function isTargetInTree(node, targetPkg) {
+            if(node.type === "use_conditional") {
+                if(!isNodeVisible(node)) return false;
+                for(const child of (node.children || [])) {
+                    if(isTargetInTree(child, targetPkg)) return true;
+                }
+                return false;
+            }
+            if(node.type === "any_of" || node.type === "all_of") {
+                for(const child of (node.children || [])) {
+                    if(isTargetInTree(child, targetPkg)) return true;
+                }
+                return false;
+            }
+            if(node.type === "string") {
+                return extractPackageName(node.name) === targetPkg;
+            }
+            return false;
+        }
+
+        function renderRevDeps() {
+            const container = document.getElementById("reverse-dependencies-container");
+            if(!container) return;
+            container.innerHTML = "";
+
+            let foundAny = false;
+            const ul = document.createElement("ul");
+
+            for(const doc of searchEngine.documents) {
+                let matchedTypes = [];
+                let condStrs = []; // Display which USE flags conditionalized this dep (optional context)
+
+                const checkDep = (rawStr, typeName) => {
+                    if(!rawStr || !rawStr.includes(currentPkgName)) return;
+                    let nodes = parseDepString(rawStr);
+                    let matchesTarget = false;
+                    for(const n of nodes) {
+                        if(isTargetInTree(n, currentPkgName)) {
+                            matchesTarget = true;
+                            break;
+                        }
+                    }
+                    if(matchesTarget) {
+                        matchedTypes.push(typeName);
+                    }
+                };
+
+                checkDep(doc.raw_depends, "DEPEND");
+                checkDep(doc.raw_rdepends, "RDEPEND");
+                checkDep(doc.raw_bdepends, "BDEPEND");
+                checkDep(doc.raw_pdepends, "PDEPEND");
+
+                if(matchedTypes.length > 0) {
+                    foundAny = true;
+                    const li = document.createElement("li");
+
+                    const a = document.createElement("a");
+                    const name = doc.category + "/" + doc.package + " (" + doc.version + ")";
+                    a.textContent = name;
+                    a.href = "../../../../../../categories/" + doc.category + "/packages/" + doc.package + "/ebuild/" + doc.version + "/";
+
+                    li.appendChild(a);
+
+                    const span = document.createElement("span");
+                    span.style.color = "#666";
+                    span.style.marginLeft = "10px";
+                    span.textContent = "- " + matchedTypes.join(", ");
+                    li.appendChild(span);
+
+                    ul.appendChild(li);
+                }
+            }
+
+            if(!foundAny) {
+                container.textContent = "No reverse dependencies found (or all filtered out by USE flags).";
+            } else {
+                container.appendChild(ul);
+            }
+        }
+
+        if(useInput) {
+            useInput.addEventListener("input", () => {
+                parseUses();
+                renderAllDeps();
+                renderRevDeps();
+            });
+        }
+
+        parseUses();
+        renderAllDeps();
+
+        // Render RevDeps might need waiting for searchIndex to load
+        let interval = setInterval(() => {
+            if(searchEngine.documents.length > 0) {
+                clearInterval(interval);
+                renderRevDeps();
+            }
+        }, 100);
+        setTimeout(() => clearInterval(interval), 5000);
+    });
+</script>
+<script type="application/json" id="deps-data">
+{{.VersionData.ResolvedDepsJSON}}
+</script>
