@@ -1156,10 +1156,7 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 		return err
 	}
 
-	tmpl, err := template.New("").Funcs(template.FuncMap{
-		"join": strings.Join,
-		"parseIUSEFlags": parseIUSEFlagsFunc,
-	}).ParseFS(siteTemplates, "sitegen_templates/*.html")
+	tmpl, err := template.New("").Funcs(getTemplateFuncMap()).ParseFS(siteTemplates, "sitegen_templates/*.html")
 	if err != nil {
 		return fmt.Errorf("parsing templates: %w", err)
 	}
@@ -2478,9 +2475,7 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, 
 		return err
 	}
 
-	tmpl, err := template.New("").Funcs(template.FuncMap{
-		"join": strings.Join,
-	}).ParseFS(siteTemplates, "sitegen_templates/*.html")
+	tmpl, err := template.New("").Funcs(getTemplateFuncMap()).ParseFS(siteTemplates, "sitegen_templates/*.html")
 	if err != nil {
 		return fmt.Errorf("parsing templates: %w", err)
 	}
