@@ -1,0 +1,26 @@
+Title: Update defaults for various mail packages
+Author: John Doe <john@example.com>
+Translator: Jane Doe <jane@example.com>
+Posted: 2024-03-15
+Revision: 1
+News-Item-Format: 2.0
+Display-If-Installed: mail-mta/postfix
+Display-If-Keyword: x86
+
+This is an important update.
+
+Note things like:
+ - mail-mta/postfix-3.11.0: March 2026. Both lmdb and berkdb USE flags are on
+   by default. BerkeleyDB is still supported but the default database and cache
+   type changes to lmdb.
+ - another point:
+   this point continues here.
+
+Another paragraph here.
+With some more text.
+
+Here is some code block
+  echo "Hello World"
+  return 0
+
+End of file.

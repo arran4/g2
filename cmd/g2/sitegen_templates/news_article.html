@@ -5,7 +5,16 @@
         <span class="news-date">Posted: {{.NewsItem.Posted.Format "2006-01-02"}}</span>
         {{if .NewsItem.Author}}<span class="news-author"> by {{.NewsItem.Author}}</span>{{end}}
         {{if .NewsItem.Revision}}<span class="news-revision"> | Revision: {{.NewsItem.Revision}}</span>{{end}}
+        {{if or .NewsItem.NewsItemFormat .NewsItem.Translator .NewsItem.DisplayIfInstalled .NewsItem.DisplayIfKeyword .NewsItem.DisplayIfProfile}}
+        <dl class="news-headers" style="margin-top: 10px; padding: 10px; background: #f9f9f9; border: 1px solid #ddd; border-radius: 4px;">
+            {{if .NewsItem.NewsItemFormat}}<dt>Format:</dt><dd>{{.NewsItem.NewsItemFormat}}</dd>{{end}}
+            {{range .NewsItem.Translator}}<dt>Translator:</dt><dd>{{.}}</dd>{{end}}
+            {{range .NewsItem.DisplayIfInstalled}}<dt>Display if installed:</dt><dd>{{.}}</dd>{{end}}
+            {{range .NewsItem.DisplayIfKeyword}}<dt>Display if keyword:</dt><dd>{{.}}</dd>{{end}}
+            {{range .NewsItem.DisplayIfProfile}}<dt>Display if profile:</dt><dd>{{.}}</dd>{{end}}
+        </dl>
+        {{end}}
     </div>
 
-    <div class="news-body" style="white-space: pre-wrap; margin-top: 1em;">{{.NewsItem.Body}}</div>
+    <div class="news-body" style="margin-top: 1em;">{{.NewsItem.BodyHTML}}</div>
 </article>
