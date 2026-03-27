@@ -1,4 +1,4 @@
-<h2><a href="../../../">{{.Package.Category}}</a>/<a href="../../">{{.Package.Name}}</a> - {{.VersionData.Version}}</h2>
+<h2><a href="../../../">{{.Package.Category}}</a>/<a href="../../">{{.Package.Name}}</a> - {{.VersionData.Version}} (<a href="../../../../../../">{{.Repo.RepoName}}</a>)</h2>
 
 {{if .VersionData.Deprecated}}
 <div class="alert alert-danger" style="border-color: #ff4c4c; background-color: #ffe6e6;">
@@ -15,6 +15,24 @@
 {{end}}
 
 <div class="metadata-section">
+    <h3>Package Information</h3>
+    <dl>
+        {{if .VersionData.Ebuild.Vars.DESCRIPTION}}
+        <dt><strong>Description:</strong></dt>
+        <dd>{{.VersionData.Ebuild.Vars.DESCRIPTION}}</dd>
+        {{end}}
+        {{if .VersionData.Ebuild.Vars.HOMEPAGE}}
+        <dt><strong>Homepage:</strong></dt>
+        <dd><a href="{{.VersionData.Ebuild.Vars.HOMEPAGE}}">{{.VersionData.Ebuild.Vars.HOMEPAGE}}</a></dd>
+        {{end}}
+        {{if .VersionData.Ebuild.Vars.LICENSE}}
+        <dt><strong>License:</strong></dt>
+        <dd>{{if and .VersionData.Ebuild.Vars.LICENSE (index $.ValidLicenses .VersionData.Ebuild.Vars.LICENSE)}}<a href="../../../../../../licenses/{{.VersionData.Ebuild.Vars.LICENSE}}/">{{.VersionData.Ebuild.Vars.LICENSE}}</a>{{else}}{{.VersionData.Ebuild.Vars.LICENSE}}{{end}}</dd>
+        {{end}}
+    </dl>
+</div>
+
+<div class="metadata-section">
     <h3>Ebuild Details</h3>
     <table>
         <tr>
@@ -22,16 +40,12 @@
             <th>EAPI</th>
             <th>Keywords</th>
             <th>Slot</th>
-            <th>License</th>
-            <th>Description</th>
         </tr>
         <tr>
             <td>{{if .VersionData.Ebuild.Vars.PV}}{{.VersionData.Ebuild.Vars.PV}}{{else}}{{.VersionData.Version}}{{end}}{{if .VersionData.EbuildRawURL}} <a href="{{.VersionData.EbuildRawURL}}" style="font-size: 0.8em; font-weight: normal; color: #888;">(raw)</a>{{end}}</td>
             <td>{{.VersionData.Ebuild.Vars.EAPI}}</td>
             <td>{{.VersionData.Ebuild.Vars.KEYWORDS}}</td>
             <td>{{.VersionData.Ebuild.Vars.SLOT}}</td>
-            <td>{{.VersionData.Ebuild.Vars.LICENSE}}</td>
-            <td>{{.VersionData.Ebuild.Vars.DESCRIPTION}}</td>
         </tr>
     </table>
 </div>

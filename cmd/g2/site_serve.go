@@ -851,11 +851,11 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 						pkgName := parts[5]
 
 						var pkgData *PackageData
-						for i := range site.Categories {
-							if site.Categories[i].Name == catName {
-								for j := range site.Categories[i].Packages {
-									if site.Categories[i].Packages[j].Name == pkgName {
-										pkgData = &site.Categories[i].Packages[j]
+						for _, c := range site.Categories {
+							if c.Name == catName {
+								for _, p := range c.Packages {
+									if p.Name == pkgName {
+										pkgData = &p
 										break
 									}
 								}
@@ -865,6 +865,11 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 							http.NotFound(w, r)
 							return
 						}
+
+            validLicenses := make(map[string]bool)
+            for _, lic := range s.AggLicenses {
+              validLicenses[lic.Name] = true
+							}
 
 						if len(parts) == 6 {
 							s.renderPageHTTP(w, "repo_package.html", map[string]interface{}{
@@ -880,7 +885,7 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 								"Repo":    site,
 								"Package": *pkgData,
 								"Version": version,
-								"ValidLicenses": map[string]bool{},
+									"ValidLicenses": validLicenses,
 							})
 							return
 						} else if len(parts) == 8 && parts[6] == "ebuild" {
@@ -926,6 +931,7 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 								"VersionData":      *versionData,
 								"FilteredManifest": filteredManifest,
 								"Version":          version,
+									"ValidLicenses":    validLicenses,
 							})
 							return
 						} else if len(parts) == 8 && parts[6] == "manifest" {

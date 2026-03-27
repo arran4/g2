@@ -1,4 +1,3 @@
-
 <h2><a href="../../">{{.Package.Category}}</a>/<a href="">{{.Package.Name}}</a> (<a href="../../../../">{{.Repo.RepoName}}</a>)</h2>
 
 {{if .Package.Deprecated}}
@@ -16,6 +15,24 @@
 {{end}}
 
 <div class="metadata-section">
+    <h3>Package Information</h3>
+    <dl>
+        {{if .Package.DominantDescription}}
+        <dt><strong>Description:</strong></dt>
+        <dd>{{.Package.DominantDescription}}</dd>
+        {{end}}
+        {{if .Package.DominantHomepage}}
+        <dt><strong>Homepage:</strong></dt>
+        <dd><a href="{{.Package.DominantHomepage}}">{{.Package.DominantHomepage}}</a></dd>
+        {{end}}
+        {{if .Package.DominantLicense}}
+        <dt><strong>License:</strong></dt>
+        <dd>{{if and .Package.DominantLicense (index $.ValidLicenses .Package.DominantLicense)}}<a href="../../../../../../licenses/{{.Package.DominantLicense}}/">{{.Package.DominantLicense}}</a>{{else}}{{.Package.DominantLicense}}{{end}}</dd>
+        {{end}}
+    </dl>
+</div>
+
+<div class="metadata-section">
     <h3>Versions</h3>
     <table>
         <tr>
@@ -23,8 +40,6 @@
             <th>EAPI</th>
             <th>Keywords</th>
             <th>Slot</th>
-            <th>License</th>
-            <th>Description</th>
         </tr>
         {{range .Package.Versions}}
         <tr>
@@ -32,8 +47,6 @@
             <td>{{.Ebuild.Vars.EAPI}}</td>
             <td>{{.Ebuild.Vars.KEYWORDS}}</td>
             <td>{{.Ebuild.Vars.SLOT}}</td>
-            <td>{{if and .Ebuild.Vars.LICENSE (index $.ValidLicenses .Ebuild.Vars.LICENSE)}}<a href="../../../../../../licenses/{{.Ebuild.Vars.LICENSE}}/">{{.Ebuild.Vars.LICENSE}}</a>{{else}}{{.Ebuild.Vars.LICENSE}}{{end}}</td>
-            <td>{{.Ebuild.Vars.DESCRIPTION}}</td>
         </tr>
         {{end}}
     </table>
