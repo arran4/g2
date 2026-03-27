@@ -793,7 +793,7 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					"BaseURL":      baseURL,
 					"Breadcrumbs":  []Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: "Overlays", URL: baseURL + "overlays/"}, {Name: site.RepoName}},
 					"Repo":         site,
-					"PackageCount": pkgCount,
+					"PackageCount": site.PackageCount,
 					"Updates":      repoFeedItems,
 					"Version":      version,
 				})
