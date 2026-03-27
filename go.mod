@@ -7,6 +7,7 @@ toolchain go1.24.1
 require (
 	github.com/go-git/go-git/v5 v5.17.0
 	golang.org/x/crypto v0.46.0
+	golang.org/x/sync v0.19.0
 	golang.org/x/text v0.32.0
 	golang.org/x/tools v0.40.0
 )
