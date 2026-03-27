@@ -85,22 +85,6 @@ type ProfileData struct {
 	Children []string
 }
 
-type NewsItem struct {
-	Title              string
-	Author             string
-	Translator         []string
-	Posted             time.Time
-	Revision           string
-	NewsItemFormat     string
-	DisplayIfInstalled []string
-	DisplayIfKeyword   []string
-	DisplayIfProfile   []string
-	Body               string
-	BodyHTML           template.HTML
-	DirName            string
-	FileName           string
-}
-
 type SiteData struct {
 	Title          string
 	RepoName       string
@@ -113,7 +97,7 @@ type SiteData struct {
 	AuthorsURL     string
 	Moves          []g2.PackageMove
 	SlotMoves      []g2.PackageSlotMove
-	News           []NewsItem
+	News           []g2.NewsItem
 	LayoutConf     *g2.LayoutConf
 	LicenseMapping map[string][]string
 	QAPolicy       *g2.QAPolicy
@@ -449,121 +433,6 @@ func getHighestVersionsAndCount(versions []VersionData) (template.HTML, template
 	return template.HTML(formatGroups(stableGroup)), template.HTML(formatGroups(testingGroup)), len(versions)
 }
 
-func stripEmail(s string) string {
-	start := strings.Index(s, "<")
-	end := strings.Index(s, ">")
-	if start != -1 && end != -1 && start < end {
-		s = s[:start] + s[end+1:]
-	}
-	return strings.TrimSpace(s)
-}
-
-func parseNewsBodyHTML(body string) template.HTML {
-	lines := strings.Split(body, "\n")
-	var out []string
-
-	inList := false
-	inCode := false
-
-	for i := 0; i < len(lines); i++ {
-		line := lines[i]
-		trimmed := strings.TrimSpace(line)
-
-		isListStart := strings.HasPrefix(trimmed, "- ") || strings.HasPrefix(trimmed, "* ")
-
-		if isListStart {
-			if inCode {
-				out = append(out, "</code></pre>")
-				inCode = false
-			}
-			if !inList {
-				out = append(out, "<ul>")
-				inList = true
-			}
-
-			prefix := "- "
-			if strings.HasPrefix(trimmed, "* ") {
-				prefix = "* "
-			}
-
-			listItem := []string{template.HTMLEscapeString(strings.TrimPrefix(trimmed, prefix))}
-
-			indent := len(line) - len(strings.TrimLeft(line, " \t"))
-
-			j := i + 1
-			for j < len(lines) {
-				nextLine := lines[j]
-				nextTrimmed := strings.TrimSpace(nextLine)
-				nextIndent := len(nextLine) - len(strings.TrimLeft(nextLine, " \t"))
-
-				if nextTrimmed == "" {
-					break
-				}
-
-				isNextListStart := strings.HasPrefix(nextTrimmed, "- ") || strings.HasPrefix(nextTrimmed, "* ")
-
-				if nextIndent > indent && !isNextListStart {
-					listItem = append(listItem, template.HTMLEscapeString(nextTrimmed))
-					j++
-				} else {
-					break
-				}
-			}
-
-			out = append(out, "<li>"+strings.Join(listItem, " ")+"</li>")
-			i = j - 1
-			continue
-		}
-
-		isCodeLine := strings.HasPrefix(line, "  ") && trimmed != ""
-
-		if isCodeLine {
-			if inList {
-				out = append(out, "</ul>")
-				inList = false
-			}
-			if !inCode {
-				out = append(out, "<pre><code>")
-				inCode = true
-			}
-			if strings.HasPrefix(line, "  ") {
-				out = append(out, template.HTMLEscapeString(line[2:]))
-			} else {
-				out = append(out, template.HTMLEscapeString(line))
-			}
-		} else {
-			if inList {
-				out = append(out, "</ul>")
-				inList = false
-			}
-			if inCode {
-				if trimmed == "" {
-					out = append(out, "")
-				} else {
-					out = append(out, "</code></pre>")
-					inCode = false
-					out = append(out, template.HTMLEscapeString(line))
-				}
-			} else {
-				if trimmed == "" {
-					out = append(out, "<br><br>")
-				} else {
-					out = append(out, template.HTMLEscapeString(line))
-				}
-			}
-		}
-	}
-
-	if inList {
-		out = append(out, "</ul>")
-	}
-	if inCode {
-		out = append(out, "</code></pre>")
-	}
-
-	return template.HTML(strings.Join(out, "\n"))
-}
-
 func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool) (*SiteData, error) {
 	title := defaultTitle
 	var repoName string
@@ -682,67 +551,9 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool) (
 				continue
 			}
 
-			lines := strings.Split(string(content), "\n")
-			var item NewsItem
+			item := g2.ParseNewsItem(string(content))
 			item.DirName = dirName
 			item.FileName = dirName + ".en.txt"
-
-			inBody := false
-			var bodyLines []string
-
-			for _, line := range lines {
-				if inBody {
-					bodyLines = append(bodyLines, line)
-					continue
-				}
-
-				if strings.TrimSpace(line) == "" {
-					inBody = true
-					continue
-				}
-
-				parts := strings.SplitN(line, ":", 2)
-				if len(parts) != 2 {
-					continue
-				}
-
-				key := strings.TrimSpace(parts[0])
-				val := strings.TrimSpace(parts[1])
-
-				switch key {
-				case "Title":
-					item.Title = val
-				case "Author":
-					item.Author = stripEmail(val)
-				case "Translator":
-					item.Translator = append(item.Translator, stripEmail(val))
-				case "Posted":
-					t, err := time.Parse("2006-01-02", val)
-					if err == nil {
-						item.Posted = t
-					}
-				case "Revision":
-					item.Revision = val
-				case "News-Item-Format":
-					item.NewsItemFormat = val
-				case "Display-If-Installed":
-					item.DisplayIfInstalled = append(item.DisplayIfInstalled, val)
-				case "Display-If-Keyword":
-					item.DisplayIfKeyword = append(item.DisplayIfKeyword, val)
-				case "Display-If-Profile":
-					item.DisplayIfProfile = append(item.DisplayIfProfile, val)
-				}
-			}
-
-			item.Body = strings.TrimSpace(strings.Join(bodyLines, "\n"))
-
-			if item.NewsItemFormat == "2.0" {
-				item.BodyHTML = parseNewsBodyHTML(item.Body)
-			} else {
-				escaped := template.HTMLEscapeString(item.Body)
-				escaped = strings.ReplaceAll(escaped, "\n", "<br>")
-				item.BodyHTML = template.HTML(escaped)
-			}
 
 			site.News = append(site.News, item)
 		}
@@ -1365,7 +1176,7 @@ type AggPackageMove struct {
 }
 
 type AggNewsItem struct {
-	NewsItem
+	g2.NewsItem
 	RepoName string
 }
 
@@ -2272,7 +2083,7 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 			pkgCount += len(c.Packages)
 		}
 
-		var repoRecentNews []NewsItem
+		var repoRecentNews []g2.NewsItem
 		for _, n := range site.News {
 			if n.Posted.After(cutoffDate) {
 				repoRecentNews = append(repoRecentNews, n)
