@@ -101,13 +101,13 @@ func (cfg *MainArgConfig) cmdOverlayLicenseAdd(args []string) error {
 	if err != nil {
 		return fmt.Errorf("opening source file %s: %w", file, err)
 	}
-	defer srcFile.Close()
+	defer func() { _ = srcFile.Close() }()
 
 	destFile, err := os.Create(path)
 	if err != nil {
 		return fmt.Errorf("creating license file %s: %w", path, err)
 	}
-	defer destFile.Close()
+	defer func() { _ = destFile.Close() }()
 
 	if _, err := io.Copy(destFile, srcFile); err != nil {
 		return fmt.Errorf("copying license content: %w", err)
@@ -173,7 +173,7 @@ func (cfg *MainArgConfig) cmdOverlayLicenseAliasList(args []string) error {
 		}
 		return fmt.Errorf("opening license groups file: %w", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	groups, err := g2.ParseLicenseGroups(f)
 	if err != nil {

@@ -119,9 +119,7 @@ type SiteData struct {
 	PackageCount      int
 	AggUseFlags       []*AggUseFlag
 	ThirdPartyMirrors map[string][]string
-	InfoVars       []string
-	PackageCount   int
-	AggUseFlags    []*AggUseFlag
+	InfoVars          []string
 }
 
 type LicenseData struct {
@@ -1503,7 +1501,6 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 	aggMoves := make(map[string]*AggPackageMove)
 	var globalNews []AggNewsItem
 
-	var allPackages []PackageData
 	for _, site := range sites {
 		if site.Projects != nil {
 			for i := range site.Projects.Projects {
@@ -1512,9 +1509,6 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 					aggProjects[proj.Email] = &AggProject{Project: proj}
 				}
 			}
-		}
-		for _, cat := range site.Categories {
-			allPackages = append(allPackages, cat.Packages...)
 		}
 	}
 	totalPackages := 0
@@ -1680,22 +1674,6 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 	})
 
 	// Generate Feeds for Repo
-	var repoFeedItems []g2.FeedItem
-	for _, pkg := range allPackages {
-		for _, ver := range pkg.Versions {
-			desc := ""
-			if ver.Ebuild != nil && ver.Ebuild.Vars != nil {
-				desc = ver.Ebuild.Vars["DESCRIPTION"]
-			}
-			repoFeedItems = append(repoFeedItems, g2.FeedItem{
-				Title:       fmt.Sprintf("%s/%s-%s", pkg.Category, pkg.Name, ver.Version),
-				Link:        fmt.Sprintf("packages/%s/", pkg.Name),
-				Description: desc,
-				PubDate:     time.Now().Format(time.RFC1123Z),
-				Updated:     time.Now().Format(time.RFC3339),
-			})
-		}
-	}
 	var recentNews []AggNewsItem
 	cutoffDate := time.Now().AddDate(0, -3, 0)
 	for _, n := range globalNews {
