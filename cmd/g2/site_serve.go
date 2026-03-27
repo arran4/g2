@@ -176,7 +176,6 @@ func newSiteServer(sites []*SiteData) (*SiteServer, error) {
 	aggPackages := make(map[string]*AggPackage)
 	aggLicenses := make(map[string]*AggLicense)
 	aggProjects := make(map[string]*AggProject)
-	aggUseFlags := make(map[string]*AggUseFlag)
 
 	for _, site := range sites {
 		if site.Projects != nil {
@@ -228,67 +227,6 @@ func newSiteServer(sites []*SiteData) (*SiteServer, error) {
 
 				for _, ver := range pkg.Versions {
 					if ver.Ebuild != nil && ver.Ebuild.Vars != nil {
-						// Extract IUSE flags
-						iuse := ver.Ebuild.Vars["IUSE"]
-						if iuse != "" {
-							parsedFlags := parseIUSEFlagsFunc(iuse)
-							for _, flagObj := range parsedFlags {
-								flag := flagObj.Name
-								if _, ok := aggUseFlags[flag]; !ok {
-									aggUseFlags[flag] = &AggUseFlag{
-										Name:          flag,
-										LocalDescs:    make(map[string]string),
-										MetadataDescs: make(map[string]string),
-									}
-								}
-
-								foundPkg := false
-								for _, p := range aggUseFlags[flag].Packages {
-									if p.Name == pkg.Name && p.Category == pkg.Category {
-										foundPkg = true
-										break
-									}
-								}
-								if !foundPkg {
-									aggUseFlags[flag].Packages = append(aggUseFlags[flag].Packages, aggPackages[pkgKey])
-									aggUseFlags[flag].Count++
-								}
-							}
-						}
-
-						// Extract REQUIRED_USE flags
-						requiredUse := ver.Ebuild.Vars["REQUIRED_USE"]
-						if requiredUse != "" {
-							parsedFlags := parseIUSEFlagsFunc(requiredUse)
-							for _, flagObj := range parsedFlags {
-								flag := flagObj.Name
-								if flag == "(" || flag == ")" || flag == "||" || flag == "^^" || flag == "??" || strings.HasSuffix(flag, "?") {
-									continue
-								}
-								flag = strings.TrimPrefix(flag, "!") // remove negations
-
-								if _, ok := aggUseFlags[flag]; !ok {
-									aggUseFlags[flag] = &AggUseFlag{
-										Name:          flag,
-										LocalDescs:    make(map[string]string),
-										MetadataDescs: make(map[string]string),
-									}
-								}
-
-								foundPkg := false
-								for _, p := range aggUseFlags[flag].Packages {
-									if p.Name == pkg.Name && p.Category == pkg.Category {
-										foundPkg = true
-										break
-									}
-								}
-								if !foundPkg {
-									aggUseFlags[flag].Packages = append(aggUseFlags[flag].Packages, aggPackages[pkgKey])
-									aggUseFlags[flag].Count++
-								}
-							}
-						}
-
 						lic := ver.Ebuild.Vars["LICENSE"]
 						if lic != "" {
 							if _, ok := aggLicenses[lic]; !ok {
@@ -346,75 +284,7 @@ func newSiteServer(sites []*SiteData) (*SiteServer, error) {
 		return server.AggPackages[i].Category < server.AggPackages[j].Category
 	})
 
-	for _, site := range sites {
-		for _, pkg := range site.Categories {
-			for _, p := range pkg.Packages {
-				pkgKey := p.Category + "/" + p.Name
-				if p.Metadata != nil {
-					pkgMd := p.Metadata
-					if pkgMd != nil {
-						for _, useBlock := range pkgMd.Use {
-							for _, flag := range useBlock.Flags {
-								if aggFlag, ok := aggUseFlags[flag.Name]; ok {
-									if flag.Text != "" {
-										aggFlag.MetadataDescs[pkgKey] = flag.Text
-									}
-								}
-							}
-						}
-					}
-				}
-			}
-		}
-
-		if site.UseDesc != nil {
-			for flag, desc := range site.UseDesc.Flags {
-				if _, ok := aggUseFlags[flag]; !ok {
-					aggUseFlags[flag] = &AggUseFlag{
-						Name:          flag,
-						LocalDescs:    make(map[string]string),
-						MetadataDescs: make(map[string]string),
-					}
-				}
-				aggUseFlags[flag].GlobalDesc = desc
-			}
-		}
-
-		if site.UseLocalDesc != nil {
-			for pkg, flags := range site.UseLocalDesc.Flags {
-				for flag, desc := range flags {
-					if aggFlag, ok := aggUseFlags[flag]; ok {
-						aggFlag.LocalDescs[pkg] = desc
-					}
-				}
-			}
-		}
-	}
-
-	var sortedUseFlags []*AggUseFlag
-	for _, flag := range aggUseFlags {
-		if flag.GlobalDesc == "" && len(flag.Packages) > 0 {
-			flag.Warnings = append(flag.Warnings, fmt.Sprintf("Warning: USE flag '%s' is used in ebuilds/metadata but is not defined in profiles/use.desc", flag.Name))
-		}
-		if flag.GlobalDesc != "" && len(flag.Packages) == 0 {
-			flag.Warnings = append(flag.Warnings, fmt.Sprintf("Warning: USE flag '%s' is defined in use.desc but is never used by any package", flag.Name))
-		}
-
-		for _, pkg := range flag.Packages {
-			pkgKey := pkg.Category + "/" + pkg.Name
-			hasLocal := flag.LocalDescs[pkgKey] != ""
-			hasMetadata := flag.MetadataDescs[pkgKey] != ""
-
-			if !hasMetadata && !hasLocal && flag.GlobalDesc == "" {
-				flag.Warnings = append(flag.Warnings, fmt.Sprintf("Warning: USE flag '%s' used by %s but has no description in metadata.xml, use.local.desc or use.desc", flag.Name, pkgKey))
-			} else if !hasMetadata && flag.GlobalDesc == "" {
-				flag.Warnings = append(flag.Warnings, fmt.Sprintf("Warning: USE flag '%s' used by %s but not documented in its metadata.xml", flag.Name, pkgKey))
-			}
-		}
-
-		sortedUseFlags = append(sortedUseFlags, flag)
-	}
-	sort.Slice(sortedUseFlags, func(i, j int) bool { return sortedUseFlags[i].Name < sortedUseFlags[j].Name })
+	sortedUseFlags, aggUseFlags := AggregateUseFlags(sites, aggPackages)
 
 	for _, l := range aggLicenses {
 		sort.Strings(l.Aliases)
@@ -808,12 +678,49 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					"PackageCount": site.PackageCount,
 					"Updates":      repoFeedItems,
 					"Version":      version,
+					"GlobalCategoriesCount": len(s.AggCategories),
+					"GlobalPackagesCount":   len(s.AggPackages),
+					"GlobalLicensesCount":   len(s.AggLicenses),
+					"GlobalProfilesCount":   0,
 				})
 				return
 			}
 
 			if len(parts) >= 3 {
 				switch parts[2] {
+				case "uses":
+					if len(parts) == 3 {
+						s.renderPageHTTP(w, "uses.html", map[string]interface{}{
+							"Title":       site.RepoName + " - USE Flags",
+							"BaseURL":     baseURL,
+							"Breadcrumbs": []Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: site.RepoName, URL: "../"}, {Name: "USE Flags"}},
+							"UseFlags":    site.AggUseFlags,
+							"Version":     version,
+						})
+						return
+					} else if len(parts) == 4 {
+						flagName := parts[3]
+						var flag *AggUseFlag
+						for _, f := range site.AggUseFlags {
+							if f.Name == flagName {
+								flag = f
+								break
+							}
+						}
+						if flag == nil {
+							http.NotFound(w, r)
+							return
+						}
+
+						s.renderPageHTTP(w, "use.html", map[string]interface{}{
+							"Title":       "USE Flag: " + flag.Name,
+							"BaseURL":     baseURL,
+							"Breadcrumbs": []Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: site.RepoName, URL: "../../"}, {Name: "USE Flags", URL: "../"}, {Name: flag.Name}},
+							"UseFlag":     flag,
+							"Version":     version,
+						})
+						return
+					}
 				case "categories":
 					if len(parts) == 3 {
 						s.renderPageHTTP(w, "categories.html", map[string]interface{}{
