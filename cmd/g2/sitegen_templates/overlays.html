@@ -1,7 +1,23 @@
-
 <h2>Overlays</h2>
-<ul>
-    {{range .Repos}}
-    <li><a href="../repos/{{.RepoName}}/">{{.RepoName}}</a></li>
-    {{end}}
-</ul>
+<table class="metadata-table">
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Source</th>
+            <th>Categories</th>
+            <th>Packages</th>
+            <th>Profiles</th>
+        </tr>
+    </thead>
+    <tbody>
+        {{range .Repos}}
+        <tr>
+            <td><a href="../repos/{{.RepoName}}/">{{.RepoName}}</a></td>
+            <td>{{if .RemoteURL}}<a href="{{.RemoteURL}}">{{.RemoteURL}}</a>{{end}}</td>
+            <td>{{len .Categories}}</td>
+            <td>{{.PackageCount}}</td>
+            <td>{{len .Profiles}}</td>
+        </tr>
+        {{end}}
+    </tbody>
+</table>

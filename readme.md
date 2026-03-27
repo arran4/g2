@@ -342,3 +342,10 @@ jobs:
           # Optional: skip installation if already installed
           mode: 'run'
 ```
+
+### Search Features
+`g2 site` features a fully integrated browser-side search accessible from the main dashboard.
+Search indexes are emitted automatically to `search/data`.
+Users can query package names, descriptions, use flags, and numerous field filters (`category`, `license`, `mask`, `version`, `depends`, etc.).
+Advanced queries support boolean logic (AND, OR, NOT), grouping `()`, and sequence matching (`'sequence of words'`).
+Gentoo version ordering is natively supported for range queries like `version:>1.2.3`.

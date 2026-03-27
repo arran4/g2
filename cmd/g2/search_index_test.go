@@ -41,6 +41,15 @@ func TestGenerateSearchIndex(t *testing.T) {
 									},
 								},
 							},
+							PkgUseFlags: []PkgUseFlag{
+								{
+									Name: "test-flag",
+									Desc: "Enables testing",
+									Versions: map[string]string{
+										"1.0": "test-flag",
+									},
+								},
+							},
 						},
 					},
 				},
@@ -111,5 +120,11 @@ func TestGenerateSearchIndex(t *testing.T) {
 	}
 	if len(doc.Depends) == 0 || doc.Depends[0] != "dev-lang/go" {
 		t.Errorf("Expected depend dev-lang/go, got %v", doc.Depends)
+	}
+	if len(doc.UseDescriptions) == 0 || doc.UseDescriptions[0] != "Enables testing" {
+		t.Errorf("Expected use description 'Enables testing', got %v", doc.UseDescriptions)
+	}
+	if doc.VersionSortKey == "" {
+		t.Errorf("Expected VersionSortKey to be populated, got empty string")
 	}
 }

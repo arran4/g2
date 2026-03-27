@@ -36,7 +36,7 @@ class SearchEngine {
             if (a.full_name !== b.full_name) {
                 return a.full_name.localeCompare(b.full_name);
             }
-            return b.version.localeCompare(a.version); // Basic fallback sort for versions
+            return (b.version_sort_key || b.version).localeCompare(a.version_sort_key || a.version);
         });
 
         return results;
@@ -90,7 +90,7 @@ class SearchEngine {
             case 'slot': return (doc.slot || "") === value;
             case 'inherit': return (doc.inherits || []).some(i => i.toLowerCase() === value);
             case 'use': return (doc.uses || []).some(u => u.toLowerCase() === value);
-            case 'version': return this.matchVersion(doc.version, value);
+            case 'version': return this.matchVersion(doc, value);
             default:
                 // Fallback to text matching if field is unknown
                 return this.matchTerm(doc, value);
@@ -99,10 +99,19 @@ class SearchEngine {
 
     matchSequence(doc, seq) {
         seq = seq.toLowerCase();
-        return doc.search_text.includes(seq);
+        const words = seq.trim().split(/\s+/);
+        if (words.length === 0) return true;
+
+        let lastIndex = -1;
+        for (const word of words) {
+            const idx = doc.search_text.indexOf(word, lastIndex + 1);
+            if (idx === -1) return false;
+            lastIndex = idx;
+        }
+        return true;
     }
 
-    matchVersion(docVersion, queryVersion) {
+    matchVersion(doc, queryVersion) {
         // Support exact, >, <
         let op = "==";
         let v = queryVersion;
@@ -111,13 +120,22 @@ class SearchEngine {
         else if (queryVersion.startsWith(">")) { op = ">"; v = queryVersion.substring(1); }
         else if (queryVersion.startsWith("<")) { op = "<"; v = queryVersion.substring(1); }
 
-        // Simple lexical comparison for now, assuming standard gentoo versions or sortable
-        // Can be improved to use proper version segment comparison
-        if (op === "==") return docVersion === v;
-        if (op === ">") return docVersion > v;
-        if (op === "<") return docVersion < v;
-        if (op === ">=") return docVersion >= v;
-        if (op === "<=") return docVersion <= v;
+        // We could write a small padding function here to match what Go does for `v`,
+        // since `doc.version_sort_key` is already padded.
+        const padVersion = (ver) => {
+            if (!ver) return "";
+            let pVer = ver.replace(/-r(\d+)$/, "+r$1");
+            return pVer.replace(/\d+/g, (s) => s.padStart(10, "0"));
+        };
+
+        const docVersionPadded = doc.version_sort_key || padVersion(doc.version);
+        const queryVersionPadded = padVersion(v);
+
+        if (op === "==") return docVersionPadded === queryVersionPadded;
+        if (op === ">") return docVersionPadded > queryVersionPadded;
+        if (op === "<") return docVersionPadded < queryVersionPadded;
+        if (op === ">=") return docVersionPadded >= queryVersionPadded;
+        if (op === "<=") return docVersionPadded <= queryVersionPadded;
 
         return false;
     }

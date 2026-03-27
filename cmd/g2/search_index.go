@@ -20,6 +20,7 @@ type SearchDocument struct {
 	Package          string   `json:"package"`
 	FullName         string   `json:"full_name"`
 	Version          string   `json:"version"`
+	VersionSortKey   string   `json:"version_sort_key"`
 	Description      string   `json:"description"`
 	Urls             []string `json:"urls"`
 	Licenses         []string `json:"licenses"`
@@ -146,6 +147,15 @@ func generateSearchIndex(outDir string, sites []*SiteData) error {
 						}
 					}
 
+					// Map package USE descriptions to populate search
+					for _, pUse := range pkg.PkgUseFlags {
+						// Since we search by ebuild version, and we only have the aggregated USE flags for the whole pkg here,
+						// check if this specific use flag applies to this version
+						if pUse.Versions[verStr] != "" {
+							useDescriptions = append(useDescriptions, pUse.Desc)
+						}
+					}
+
 					depends = deduplicateStrings(depends)
 					rdepends = deduplicateStrings(rdepends)
 					licenses = deduplicateStrings(licenses)
@@ -153,6 +163,7 @@ func generateSearchIndex(outDir string, sites []*SiteData) error {
 					arches = deduplicateStrings(arches)
 					uses = deduplicateStrings(uses)
 					urls = deduplicateStrings(urls)
+					useDescriptions = deduplicateStrings(useDescriptions)
 
 					mask := "none"
 					allMasked := true
@@ -173,7 +184,7 @@ func generateSearchIndex(outDir string, sites []*SiteData) error {
 						}
 					}
 
-					searchText := strings.ToLower(fmt.Sprintf("%s %s %s %s", fullName, desc, strings.Join(uses, " "), strings.Join(urls, " ")))
+					searchText := strings.ToLower(fmt.Sprintf("%s %s %s %s %s", fullName, desc, strings.Join(uses, " "), strings.Join(urls, " "), strings.Join(useDescriptions, " ")))
 
 					var manifestFiles []string
 					for _, m := range pkg.ManifestData {
@@ -210,6 +221,8 @@ func generateSearchIndex(outDir string, sites []*SiteData) error {
 						SearchText:      searchText,
 						PageURL:         fmt.Sprintf("../repos/%s/categories/%s/packages/%s/ebuild/%s/index.html", site.RepoName, cat.Name, pkg.Name, verStr),
 					}
+
+					doc.VersionSortKey = g2.PadVersionTokens(verStr)
 
 					documents = append(documents, doc)
 				}

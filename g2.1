@@ -393,3 +393,10 @@ jobs:
           # Optional: skip installation if already installed
           mode: 'run'
 .EE
+
+.SS Search Features
+\fBg2 site\fR features a fully integrated browser-side search accessible from the main dashboard.
+Search indexes are emitted automatically to \fBsearch/data\fR\&.
+Users can query package names, descriptions, use flags, and numerous field filters (\fBcategory\fR, \fBlicense\fR, \fBmask\fR, \fBversion\fR, \fBdepends\fR, etc.).
+Advanced queries support boolean logic (AND, OR, NOT), grouping \fB()\fR, and sequence matching (\fB\&'sequence of words'\fR).
+Gentoo version ordering is natively supported for range queries like \fBversion:>1.2.3\fR\&.
