@@ -53,7 +53,7 @@
 <h2>Recent Updates</h2>
 <ul>
     {{range .Updates}}
-    <li><a href="{{.Link}}">{{.Title}}</a> - {{.Description}} ({{.Updated}})</li>
+    <li><a href="{{.Link}}">{{.Title}}</a> - {{.Description}}</li>
     {{else}}
     <li>No recent updates in the last {{.RecentDurationString}}.</li>
     {{end}}

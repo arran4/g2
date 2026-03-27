@@ -135,7 +135,7 @@ func doCacheVerify(cfs CacheFS, repoDir string) error {
 		}
 	}
 
-	siteData, err := parseRepo(cfs, repoDir, "Cache Verification", false)
+	siteData, err := parseRepo(cfs, repoDir, "Cache Verification", false, nil)
 	if err != nil {
 		return fmt.Errorf("parsing repo: %w", err)
 	}
@@ -198,7 +198,7 @@ func doCacheGenerate(cfs CacheFS, repoDir string) error {
 		}
 	}
 
-	siteData, err := parseRepo(cfs, repoDir, "Cache Generation", false)
+	siteData, err := parseRepo(cfs, repoDir, "Cache Generation", false, nil)
 	if err != nil {
 		return fmt.Errorf("parsing repo: %w", err)
 	}
@@ -345,7 +345,7 @@ func doCacheClean(cfs CacheFS, repoDir string) error {
 		}
 	}
 
-	siteData, err := parseRepo(cfs, repoDir, "Cache Cleaning", false)
+	siteData, err := parseRepo(cfs, repoDir, "Cache Cleaning", false, nil)
 	if err != nil {
 		return fmt.Errorf("parsing repo: %w", err)
 	}

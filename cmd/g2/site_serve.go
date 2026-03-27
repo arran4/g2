@@ -46,7 +46,7 @@ func (cfg *MainArgConfig) cmdSiteServe(args []string) error {
 
 	if isOverlayDir(location) {
 		log.Printf("Parsing local overlay at %s", location)
-		siteData, err := parseRepo(os.DirFS(location), ".", "Gentoo Packages", false)
+		siteData, err := parseRepo(os.DirFS(location), ".", "Gentoo Packages", false, nil)
 		if err != nil {
 			return fmt.Errorf("parsing repo %s: %w", location, err)
 		}
@@ -67,7 +67,7 @@ func (cfg *MainArgConfig) cmdSiteServe(args []string) error {
 			repoPath := filepath.Join(dbReposPath, entry.Name())
 			if isOverlayDir(repoPath) {
 				log.Printf("Parsing repository %s", entry.Name())
-				siteData, err := parseRepo(os.DirFS(repoPath), ".", entry.Name(), false)
+				siteData, err := parseRepo(os.DirFS(repoPath), ".", entry.Name(), false, nil)
 				if err != nil {
 					log.Printf("Warning: failed to parse repo %s: %v", entry.Name(), err)
 					continue

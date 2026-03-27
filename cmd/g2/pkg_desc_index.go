@@ -55,7 +55,7 @@ func (cfg *MainArgConfig) cmdPkgDescIndexGenerate(args []string) error {
 	}
 
 	cfs := NewOsCacheFS(*repoDir)
-	siteData, err := parseRepo(cfs, ".", "Pkg Desc Index Generation", true)
+	siteData, err := parseRepo(cfs, ".", "Pkg Desc Index Generation", true, nil)
 	if err != nil {
 		return fmt.Errorf("parsing repo: %w", err)
 	}
@@ -121,7 +121,7 @@ func (cfg *MainArgConfig) cmdPkgDescIndexVerify(args []string) error {
 	}
 
 	cfs := NewOsCacheFS(*repoDir)
-	siteData, err := parseRepo(cfs, ".", "Pkg Desc Index Verification", true)
+	siteData, err := parseRepo(cfs, ".", "Pkg Desc Index Verification", true, nil)
 	if err != nil {
 		return fmt.Errorf("parsing repo: %w", err)
 	}

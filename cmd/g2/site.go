@@ -99,6 +99,7 @@ type SiteData struct {
 	Title          string
 	RepoName       string
 	RemoteURL      string
+	Repository     *g2.Repository
 	EAPI           string
 	Projects       *g2.Projects
 	Categories     []CategoryData
@@ -273,7 +274,7 @@ func (cfg *MainArgConfig) cmdOverlay(args []string) error {
 	}
 	defer cleanup()
 
-	siteData, err := parseRepo(os.DirFS(parseLocation), ".", "Gentoo Packages", *fastGit)
+	siteData, err := parseRepo(os.DirFS(parseLocation), ".", "Gentoo Packages", *fastGit, nil)
 	if err != nil {
 		return fmt.Errorf("parsing repo: %w", err)
 	}
@@ -444,7 +445,7 @@ func getHighestVersionsAndCount(versions []VersionData) (template.HTML, template
 	return template.HTML(formatGroups(stableGroup)), template.HTML(formatGroups(testingGroup)), len(versions)
 }
 
-func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool) (*SiteData, error) {
+func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool, repoInfo *g2.Repository) (*SiteData, error) {
 	title := defaultTitle
 	var repoName string
 
@@ -528,6 +529,7 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool) (
 		Title:          title,
 		RepoName:       repoName,
 		RemoteURL:      remoteURL,
+		Repository:     repoInfo,
 		EAPI:           eapi,
 		LayoutConf:     lc,
 		LicenseMapping: licenseMapping,
@@ -2750,7 +2752,7 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, 
 
 		repoPath := filepath.Join(tmpDir, repo.Name)
 		// Try to shallow clone
-		cmd := exec.Command("git", "clone", "--depth", "1", gitUrl, repoPath)
+		cmd := exec.Command("git", "clone", gitUrl, repoPath)
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 		if err := cmd.Run(); err != nil {
@@ -2759,7 +2761,8 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, 
 		}
 
 		log.Printf("Parsing repository: %s", repo.Name)
-		siteData, err := parseRepo(os.DirFS(repoPath), ".", repo.Name, fastGit)
+		repoCopy := repo
+		siteData, err := parseRepo(os.DirFS(repoPath), ".", repo.Name, fastGit, &repoCopy)
 		if err != nil {
 			log.Printf("Failed to parse repo %s: %v", repo.Name, err)
 			continue
