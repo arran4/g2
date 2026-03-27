@@ -6,6 +6,83 @@
     <p>And sync it:</p>
     <pre><code>emerge --sync {{.Repo.RepoName}}</code></pre>
 </div>
+
+{{if .Repo.Repository}}
+<div class="metadata-section">
+    <h3>Repository Details</h3>
+    <table class="table">
+        <tbody>
+            {{if .Repo.Repository.Quality}}
+            <tr>
+                <th>Quality</th>
+                <td>{{.Repo.Repository.Quality}}</td>
+            </tr>
+            {{end}}
+            {{if .Repo.Repository.Status}}
+            <tr>
+                <th>Status</th>
+                <td>{{.Repo.Repository.Status}}</td>
+            </tr>
+            {{end}}
+            {{if .Repo.Repository.Homepage}}
+            <tr>
+                <th>Homepage</th>
+                <td><a href="{{.Repo.Repository.Homepage}}">{{.Repo.Repository.Homepage}}</a></td>
+            </tr>
+            {{end}}
+            {{if .Repo.Repository.Owners}}
+            <tr>
+                <th>Owners</th>
+                <td>
+                    <ul>
+                        {{range .Repo.Repository.Owners}}
+                        <li>{{if .Name}}{{.Name}}{{else}}Unknown{{end}} {{if .Email}}({{.Email}}){{end}} {{if .Type}}[{{.Type}}]{{end}}</li>
+                        {{end}}
+                    </ul>
+                </td>
+            </tr>
+            {{end}}
+            {{if .Repo.Repository.Sources}}
+            <tr>
+                <th>Sources</th>
+                <td>
+                    <ul>
+                        {{range .Repo.Repository.Sources}}
+                        <li>[{{.Type}}] <a href="{{.Text}}">{{.Text}}</a></li>
+                        {{end}}
+                    </ul>
+                </td>
+            </tr>
+            {{end}}
+            {{if .Repo.Repository.Descriptions}}
+            <tr>
+                <th>Description</th>
+                <td>
+                    <ul>
+                        {{range .Repo.Repository.Descriptions}}
+                        <li>{{if .Lang}}[{{.Lang}}] {{end}}{{.Text}}</li>
+                        {{end}}
+                    </ul>
+                </td>
+            </tr>
+            {{end}}
+            {{if .Repo.Repository.LongDescriptions}}
+            <tr>
+                <th>Long Description</th>
+                <td>
+                    <ul>
+                        {{range .Repo.Repository.LongDescriptions}}
+                        <li>{{if .Lang}}[{{.Lang}}] {{end}}{{.Text}}</li>
+                        {{end}}
+                    </ul>
+                </td>
+            </tr>
+            {{end}}
+        </tbody>
+    </table>
+</div>
+{{end}}
+
 <ul>
     {{if .Repo.RemoteURL}}
     <li>Git Source: <a href="{{.Repo.RemoteURL}}">{{.Repo.RemoteURL}}</a></li>
@@ -19,6 +96,24 @@
         {{end}}
         {{if .Repo.LayoutConf.GetValue "eapis-deprecated"}}
             <li>EAPIs Deprecated: {{.Repo.LayoutConf.GetValue "eapis-deprecated"}}</li>
+        {{end}}
+        {{if .Repo.LayoutConf.GetValue "profile-eapis-banned"}}
+            <li>Profile EAPIs Banned: {{.Repo.LayoutConf.GetValue "profile-eapis-banned"}}</li>
+        {{end}}
+        {{if .Repo.LayoutConf.GetValue "profile-eapis-deprecated"}}
+            <li>Profile EAPIs Deprecated: {{.Repo.LayoutConf.GetValue "profile-eapis-deprecated"}}</li>
+        {{end}}
+        {{if .Repo.LayoutConf.GetValue "restrict-allowed"}}
+            <li>Restrict Allowed: {{.Repo.LayoutConf.GetValue "restrict-allowed"}}</li>
+        {{end}}
+        {{if .Repo.LayoutConf.GetValue "properties-allowed"}}
+            <li>Properties Allowed: {{.Repo.LayoutConf.GetValue "properties-allowed"}}</li>
+        {{end}}
+        {{if .Repo.LayoutConf.GetValue "manifest-hashes"}}
+            <li>Manifest Hashes: {{.Repo.LayoutConf.GetValue "manifest-hashes"}}</li>
+        {{end}}
+        {{if .Repo.LayoutConf.GetValue "manifest-required-hashes"}}
+            <li>Manifest Required Hashes: {{.Repo.LayoutConf.GetValue "manifest-required-hashes"}}</li>
         {{end}}
     {{end}}
     {{if gt (len .Repo.Categories) 0}}
@@ -45,6 +140,9 @@
     {{if gt (len .Repo.AggUseFlags) 0}}
     <li><a href="uses/">USE Flags ({{len .Repo.AggUseFlags}})</a></li>
     {{end}}
+    {{if gt (len .Repo.InfoPkgs) 0}}
+    <li><a href="info_pkgs/">Info Packages ({{len .Repo.InfoPkgs}})</a></li>
+    {{end}}
     {{if gt (len .Repo.Deprecated) 0}}
     <li><a href="deprecated/">Deprecated Packages ({{len .Repo.Deprecated}})</a></li>
     {{end}}
@@ -69,16 +167,6 @@
 </ul>
 <p><a href="news/archive/">More... (Archive)</a></p>
 {{end}}
-
-<h2>Recent Updates</h2>
-<ul>
-    {{range .Updates}}
-    <li><a href="{{.Link}}">{{.Title}}</a> - {{.Description}} ({{.Updated}})</li>
-    {{else}}
-    <li>No recent updates in the last {{.RecentDurationString}}.</li>
-    {{end}}
-</ul>
-<p><a href="recent/">View all recent updates</a></p>
 
 {{if .Repo.QAPolicy}}
 <h2>QA Policies</h2>
