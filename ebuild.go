@@ -41,10 +41,11 @@ func (m ParsingMode) String() string {
 }
 
 type Ebuild struct {
-	Path   string
-	Vars   map[string]string
-	SrcUri []URIEntry
-	Mode   ParsingMode
+	Path    string
+	Vars    map[string]string
+	SrcUri  []URIEntry
+	Mode    ParsingMode
+	RawText string
 }
 
 const ebuildTemplate = `{{- range .Vars -}}
@@ -180,6 +181,7 @@ func ParseEbuild(fsys fs.FS, path string, mode ParsingMode) (*Ebuild, error) {
 		return nil, fmt.Errorf("reading file %s: %w", path, err)
 	}
 	content := string(contentBytes)
+	e.RawText = content
 
 	if mode >= ParseVariables {
 		// Use the recursive descent parser
