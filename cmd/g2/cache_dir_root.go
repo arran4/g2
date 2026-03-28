@@ -1,4 +1,5 @@
 //go:build root
+// +build root
 
 package main
 
