@@ -1841,6 +1841,20 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 		return fmt.Errorf("rendering page: %w", err)
 	}
 
+	// Generate Stats Page
+	if err := os.MkdirAll(filepath.Join(outDir, "stats"), 0755); err != nil {
+		return err
+	}
+	if err := renderPage(filepath.Join(outDir, "stats", "index.html"), tmpl, "stats.html", map[string]interface{}{
+		"Title":       "Generation Statistics",
+		"BaseURL":     "../",
+		"Breadcrumbs": []Breadcrumb{{Name: title, URL: "../"}, {Name: "Statistics"}},
+		"Version":     version,
+		"GenInfo":     genInfo,
+	}); err != nil {
+		return fmt.Errorf("rendering page: %w", err)
+	}
+
 	// 1. Root Dashboard
 	if err := renderPage(filepath.Join(outDir, "index.html"), tmpl, "dashboard.html", map[string]interface{}{
 		"Title":                title,

@@ -603,6 +603,18 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+	case "stats":
+		if len(parts) == 1 {
+			s.renderPageHTTP(w, "stats.html", map[string]interface{}{
+				"Title":       "Generation Statistics",
+				"BaseURL":     baseURL,
+				"Breadcrumbs": []Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: "Statistics"}},
+				"Version":     version,
+				"GenInfo":     s.GenInfo,
+			})
+			return
+		}
+
 	case "help":
 		if len(parts) == 1 {
 			s.renderPageHTTP(w, "help.html", map[string]interface{}{
