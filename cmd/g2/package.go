@@ -30,6 +30,7 @@ func (cfg *MainArgConfig) cmdPackage(args []string) error {
 		fmt.Printf("\t\t %s \t\t %s\n", "index-overlay", "index a single overlay")
 		fmt.Printf("\t\t %s \t\t %s\n", "index-repositories", "index multiple repositories from an xml file")
 		fmt.Printf("\t\t %s \t\t %s\n", "index", "index local repositories")
+		fmt.Printf("\t\t %s \t\t %s\n", "update", "update the local index from a remote zip file")
 	}
 
 	if err := fs.Parse(args); err != nil {
@@ -63,6 +64,10 @@ func (cfg *MainArgConfig) cmdPackage(args []string) error {
 		}
 	case "index":
 		if err := config.cmdIndex(fs.Args()[1:]); err != nil {
+			return err
+		}
+	case "update":
+		if err := config.cmdUpdate(fs.Args()[1:]); err != nil {
 			return err
 		}
 	case "help", "-help", "--help":
@@ -521,5 +526,93 @@ func (cfg *CmdPackageArgConfig) cmdIndex(args []string) error {
 	}
 
 	log.Printf("Done generating search data.")
+	return nil
+}
+
+func (cfg *CmdPackageArgConfig) cmdUpdate(args []string) error {
+	fs := flag.NewFlagSet("update", flag.ExitOnError)
+	outDir := fs.String("out-dir", "", "Directory to write the search index (default: standard cache dir)")
+	fs.StringVar(outDir, "o", "", "Directory to write the search index (shorthand)")
+	urlOpt := fs.String("url", "https://github.com/arran4/gentoo-packages/releases/latest/download/search-data.zip", "URL to the search data zip file")
+
+	fs.Usage = func() {
+		fmt.Printf("Usage:\n")
+		fmt.Printf("\t%s\n", strings.Join(cfg.Args, " "))
+		fs.PrintDefaults()
+	}
+
+	if err := fs.Parse(args); err != nil {
+		return fmt.Errorf("parsing flags: %w", err)
+	}
+
+	if *outDir == "" {
+		*outDir = fmt.Sprintf("%s/g2/search", getCacheDir())
+	}
+
+	log.Printf("Updating search index from %s to %s", *urlOpt, *outDir)
+
+	resp, err := http.Get(*urlOpt)
+	if err != nil {
+		return fmt.Errorf("downloading search data: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("failed to download search data, status code: %d", resp.StatusCode)
+	}
+
+	tmpFile, err := os.CreateTemp("", "search-data-*.zip")
+	if err != nil {
+		return fmt.Errorf("creating temp file: %w", err)
+	}
+	defer os.Remove(tmpFile.Name())
+
+	if _, err := io.Copy(tmpFile, resp.Body); err != nil {
+		return fmt.Errorf("writing to temp file: %w", err)
+	}
+
+	tmpFile.Close()
+
+	z, err := zip.OpenReader(tmpFile.Name())
+	if err != nil {
+		return fmt.Errorf("opening zip file: %w", err)
+	}
+	defer func() { _ = z.Close() }()
+
+	dataDir := filepath.Join(*outDir, "data")
+	if err := os.MkdirAll(dataDir, 0755); err != nil {
+		return fmt.Errorf("creating search data directory: %w", err)
+	}
+
+	for _, f := range z.File {
+		if f.FileInfo().IsDir() {
+			continue
+		}
+
+		rc, err := f.Open()
+		if err != nil {
+			return fmt.Errorf("opening file %s from zip: %w", f.Name, err)
+		}
+
+		destPath := filepath.Join(dataDir, filepath.Base(f.Name))
+		destFile, err := os.Create(destPath)
+		if err != nil {
+			_ = rc.Close()
+			return fmt.Errorf("creating file %s: %w", destPath, err)
+		}
+
+		if _, err := io.Copy(destFile, rc); err != nil {
+			_ = destFile.Close()
+			_ = rc.Close()
+			return fmt.Errorf("writing file %s: %w", destPath, err)
+		}
+
+		_ = destFile.Close()
+		_ = rc.Close()
+
+		log.Printf("Extracted %s", destPath)
+	}
+
+	log.Printf("Done updating search index.")
 	return nil
 }
