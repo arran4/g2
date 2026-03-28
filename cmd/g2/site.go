@@ -1847,11 +1847,13 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 		"Categories":           sortedCategories,
 		"Packages":             sortedPackages,
 		"Licenses":             sortedLicenses,
+		"UseFlags":             sortedUseFlags,
 		"Projects":             sortedProjects,
 		"Profiles":             sortedProfiles,
 		"Version":              version,
 		"RecentDurationString": recentDurationStr,
 		"RecentNews":           recentNews,
+		"GlobalNews":           globalNews,
 	}); err != nil {
 		return fmt.Errorf("rendering page: %w", err)
 	}
