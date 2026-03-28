@@ -13,7 +13,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
 	"sort"
@@ -259,9 +258,6 @@ func (cfg *MainArgConfig) cmdOverlay(args []string) error {
 		log.Printf("Cloning remote repository: %s", location)
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 		defer cancel()
-		cmd := exec.CommandContext(ctx, "git", "clone", "--depth", "1", location, tmpDir)
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
 
 		t0 := time.Now()
 		if err := FetchRepo(ctx, location, tmpDir, *useZip); err != nil {

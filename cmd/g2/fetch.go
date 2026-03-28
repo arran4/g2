@@ -141,13 +141,18 @@ func downloadAndExtractZip(ctx context.Context, zipUrl string, destDir string) e
 
 		out, err := os.Create(targetPath)
 		if err != nil {
-			rc.Close()
+			_ = rc.Close()
 			return err
 		}
 
 		_, err = io.Copy(out, rc)
-		out.Close()
-		rc.Close()
+
+		if outErr := out.Close(); outErr != nil && err == nil {
+			err = outErr
+		}
+		if rcErr := rc.Close(); rcErr != nil && err == nil {
+			err = rcErr
+		}
 		if err != nil {
 			return err
 		}
