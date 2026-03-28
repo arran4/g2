@@ -3,9 +3,9 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"encoding/xml"
 	"flag"
-	"encoding/json"
 	"fmt"
 	"github.com/arran4/g2"
 	"github.com/arran4/g2/lints"
@@ -89,26 +89,26 @@ type ProfileData struct {
 }
 
 type SiteData struct {
-	Title          string
-	RepoName       string
-	RemoteURL      string
-	Repository     *g2.Repository
-	EAPI           string
-	Projects       *g2.Projects
-	Categories     []CategoryData
-	Profiles       []ProfileData
-	Authors        []g2.Author
-	AuthorsURL     string
-	Moves          []g2.PackageMove
-	SlotMoves      []g2.PackageSlotMove
-	News           []g2.NewsItem
-	LayoutConf     *g2.LayoutConf
-	LicenseMapping map[string][]string
-	QAPolicy       *g2.QAPolicy
-	UseDesc        *g2.UseDesc
-	UseLocalDesc   *g2.UseLocalDesc
-	InfoPkgs       []g2.InfoPkg
-	Deprecated     []g2.PackageDeprecated
+	Title             string
+	RepoName          string
+	RemoteURL         string
+	Repository        *g2.Repository
+	EAPI              string
+	Projects          *g2.Projects
+	Categories        []CategoryData
+	Profiles          []ProfileData
+	Authors           []g2.Author
+	AuthorsURL        string
+	Moves             []g2.PackageMove
+	SlotMoves         []g2.PackageSlotMove
+	News              []g2.NewsItem
+	LayoutConf        *g2.LayoutConf
+	LicenseMapping    map[string][]string
+	QAPolicy          *g2.QAPolicy
+	UseDesc           *g2.UseDesc
+	UseLocalDesc      *g2.UseLocalDesc
+	InfoPkgs          []g2.InfoPkg
+	Deprecated        []g2.PackageDeprecated
 	PackageCount      int
 	AggUseFlags       []*AggUseFlag
 	ThirdPartyMirrors map[string][]string
@@ -145,14 +145,14 @@ type ManifestEntryData struct {
 }
 
 type PackageData struct {
-	Name          string
-	Category      string
-	Versions      []VersionData
-	Metadata      *g2.PkgMetadata
-	MetadataError error
-	Manifest      *g2.Manifest
-	ManifestData  []ManifestEntryData
-	Files         []FileData
+	Name                  string
+	Category              string
+	Versions              []VersionData
+	Metadata              *g2.PkgMetadata
+	MetadataError         error
+	Manifest              *g2.Manifest
+	ManifestData          []ManifestEntryData
+	Files                 []FileData
 	HighestStableVersion  template.HTML
 	HighestTestingVersion template.HTML
 	EbuildCount           int
@@ -215,10 +215,10 @@ func (cfg *MainArgConfig) cmdOverlay(args []string) error {
 	}
 	if subcmd == "license" {
 		return cfg.cmdOverlayLicense(args[1:])
-  }
+	}
 	if subcmd == "info-vars" {
 		return cfg.cmdOverlayInfoVars(args[1:])
-  }
+	}
 	if subcmd == "info-pkgs" {
 		return cfg.cmdOverlayInfoPkgs(args[1:])
 	}
@@ -295,7 +295,8 @@ func (cfg *MainArgConfig) cmdOverlay(args []string) error {
 		return fmt.Errorf("parsing repo: %w", err)
 	}
 
-	if err := generateSite(*outDir, []*SiteData{siteData}, recentDuration, recentDurationStr); err != nil {
+	genInfo := GenerationInfo{Args: cfg.Args, FastGit: *fastGit, RecentDuration: recentDurationStr}
+	if err := generateSite(*outDir, []*SiteData{siteData}, recentDuration, recentDurationStr, genInfo); err != nil {
 		return fmt.Errorf("generating site: %w", err)
 	}
 
@@ -376,8 +377,6 @@ func parseManifestFromFS(sysFS fs.FS, path string) (*g2.Manifest, error) {
 	return g2.ParseManifestFromReader(file)
 }
 
-
-
 func getHighestVersionsAndCount(versions []VersionData) (template.HTML, template.HTML, int) {
 	// Parse KEYWORDS and group versions
 
@@ -433,11 +432,11 @@ func getHighestVersionsAndCount(versions []VersionData) (template.HTML, template
 
 		// Sort descending
 		for i := 0; i < len(sortedVersions); i++ {
-		    for j := i+1; j < len(sortedVersions); j++ {
-		        if g2.CompareVersions(sortedVersions[i], sortedVersions[j]) < 0 {
-		            sortedVersions[i], sortedVersions[j] = sortedVersions[j], sortedVersions[i]
-		        }
-		    }
+			for j := i + 1; j < len(sortedVersions); j++ {
+				if g2.CompareVersions(sortedVersions[i], sortedVersions[j]) < 0 {
+					sortedVersions[i], sortedVersions[j] = sortedVersions[j], sortedVersions[i]
+				}
+			}
 		}
 
 		var parts []string
@@ -446,13 +445,13 @@ func getHighestVersionsAndCount(versions []VersionData) (template.HTML, template
 
 			// sort archs
 			for i := 0; i < len(archs); i++ {
-			    for j := i+1; j < len(archs); j++ {
-			        if archs[i] > archs[j] {
-			            archs[i], archs[j] = archs[j], archs[i]
-			        }
-			    }
+				for j := i + 1; j < len(archs); j++ {
+					if archs[i] > archs[j] {
+						archs[i], archs[j] = archs[j], archs[i]
+					}
+				}
 			}
-			parts = append(parts, "<span title=\"" + strings.Join(archs, " ") + "\">" + ver + "</span>")
+			parts = append(parts, "<span title=\""+strings.Join(archs, " ")+"\">"+ver+"</span>")
 		}
 
 		return strings.Join(parts, ", ")
@@ -462,12 +461,12 @@ func getHighestVersionsAndCount(versions []VersionData) (template.HTML, template
 }
 
 type ResolvedDepNode struct {
-	Type       string            `json:"type"`
-	Name       string            `json:"name,omitempty"`
-	Link       string            `json:"link,omitempty"`
-	Flag       string            `json:"flag,omitempty"`
-	IsNegated  bool              `json:"is_negated,omitempty"`
-	Children   []ResolvedDepNode `json:"children,omitempty"`
+	Type      string            `json:"type"`
+	Name      string            `json:"name,omitempty"`
+	Link      string            `json:"link,omitempty"`
+	Flag      string            `json:"flag,omitempty"`
+	IsNegated bool              `json:"is_negated,omitempty"`
+	Children  []ResolvedDepNode `json:"children,omitempty"`
 }
 
 func resolveDependencies(node g2.DepNode, site *SiteData) ResolvedDepNode {
@@ -480,7 +479,7 @@ func resolveDependencies(node g2.DepNode, site *SiteData) ResolvedDepNode {
 		if pkgName != "" {
 			for i := range site.Categories {
 				for j := range site.Categories[i].Packages {
-					if site.Categories[i].Packages[j].Category + "/" + site.Categories[i].Packages[j].Name == pkgName {
+					if site.Categories[i].Packages[j].Category+"/"+site.Categories[i].Packages[j].Name == pkgName {
 						link = "../../../../../../categories/" + site.Categories[i].Packages[j].Category + "/packages/" + site.Categories[i].Packages[j].Name + "/"
 					}
 				}
@@ -621,7 +620,7 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool, r
 		if uld, err := g2.ParseUseLocalDesc(f); err == nil {
 			useLocalDesc = uld
 		}
-  }
+	}
 	packageDeprecatedPath := filepath.Join(repoDir, "profiles", "package.deprecated")
 	var deprecated []g2.PackageDeprecated
 	if parsedDeprecated, err := g2.ParsePackageDeprecatedFS(sysFS, filepath.ToSlash(packageDeprecatedPath)); err == nil {
@@ -635,14 +634,14 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool, r
 		thirdPartyMirrors = tm
 	} else if !os.IsNotExist(err) {
 		log.Printf("Warning: failed to parse thirdpartymirrors: %v", err)
-  }
+	}
 	infoVarsPath := filepath.Join(repoDir, "profiles", "info_vars")
 	var infoVars []string
 	if parsedInfoVars, err := g2.ParseInfoVarsFS(sysFS, filepath.ToSlash(infoVarsPath)); err == nil {
 		infoVars = parsedInfoVars
 	} else if !os.IsNotExist(err) {
 		log.Printf("Warning: failed to parse info_vars: %v", err)
-  }
+	}
 	infoPkgsPath := filepath.Join(repoDir, "profiles", "info_pkgs")
 	var infoPkgs []g2.InfoPkg
 	if parsedInfoPkgs, err := g2.ParseInfoPkgsFS(sysFS, filepath.ToSlash(infoPkgsPath)); err == nil {
@@ -652,21 +651,21 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool, r
 	}
 
 	site := &SiteData{
-		Title:          title,
-		RepoName:       repoName,
-		RemoteURL:      remoteURL,
-		Repository:     repoInfo,
-		EAPI:           eapi,
-		LayoutConf:     lc,
-		LicenseMapping: licenseGroups,
-		QAPolicy:       qa,
-		UseDesc:        useDesc,
-		UseLocalDesc:   useLocalDesc,
+		Title:             title,
+		RepoName:          repoName,
+		RemoteURL:         remoteURL,
+		Repository:        repoInfo,
+		EAPI:              eapi,
+		LayoutConf:        lc,
+		LicenseMapping:    licenseGroups,
+		QAPolicy:          qa,
+		UseDesc:           useDesc,
+		UseLocalDesc:      useLocalDesc,
 		ThirdPartyMirrors: thirdPartyMirrors,
-		Deprecated:     deprecated,
-		InfoVars:       infoVars,
-		InfoPkgs:       infoPkgs,
-		PackageCount:   0,
+		Deprecated:        deprecated,
+		InfoVars:          infoVars,
+		InfoPkgs:          infoPkgs,
+		PackageCount:      0,
 	}
 
 	// Calculate PackageCount correctly after parsing all categories
@@ -938,12 +937,12 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool, r
 				targetEbuild = highestMasked
 			}
 			if targetEbuild == nil && len(pkgData.Versions) > 0 {
-			    for _, v := range pkgData.Versions {
-			        if v.Ebuild != nil && v.Ebuild.Vars != nil {
-			            targetEbuild = v.Ebuild
-			            break
-			        }
-			    }
+				for _, v := range pkgData.Versions {
+					if v.Ebuild != nil && v.Ebuild.Vars != nil {
+						targetEbuild = v.Ebuild
+						break
+					}
+				}
 			}
 
 			if pkgData.Metadata != nil && len(pkgData.Metadata.LongDescription) > 0 {
@@ -1103,7 +1102,7 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool, r
 		return site.Categories[i].Name < site.Categories[j].Name
 	})
 
-		// Finalize ResolvedDepsJSON for each version
+	// Finalize ResolvedDepsJSON for each version
 	for i := range site.Categories {
 		for j := range site.Categories[i].Packages {
 			for k := range site.Categories[i].Packages[j].Versions {
@@ -1346,13 +1345,13 @@ type AggLicense struct {
 }
 
 type AggUseFlag struct {
-	Name             string
-	Count            int
-	GlobalDesc       string
-	LocalDescs       map[string]string
-	MetadataDescs    map[string]string
-	Packages         []*AggPackage
-	Warnings         []string
+	Name          string
+	Count         int
+	GlobalDesc    string
+	LocalDescs    map[string]string
+	MetadataDescs map[string]string
+	Packages      []*AggPackage
+	Warnings      []string
 }
 
 func getRepoUseFlags(site *SiteData, aggPackages map[string]*AggPackage) []*AggUseFlag {
@@ -1483,9 +1482,9 @@ func getRepoUseFlags(site *SiteData, aggPackages map[string]*AggPackage) []*AggU
 	var sortedUseFlags []*AggUseFlag
 	for _, flag := range aggUseFlags {
 		for _, pkg := range flag.Packages {
-		    if pkg == nil {
-		        continue
-		    }
+			if pkg == nil {
+				continue
+			}
 			pkgKey := pkg.Category + "/" + pkg.Name
 			hasLocal := flag.LocalDescs[pkgKey] != ""
 			hasMetadata := flag.MetadataDescs[pkgKey] != ""
@@ -1560,7 +1559,7 @@ type AggNewsItem struct {
 	RepoName string
 }
 
-func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration, recentDurationStr string) error {
+func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration, recentDurationStr string, genInfo GenerationInfo) error {
 	if err := os.MkdirAll(outDir, 0755); err != nil {
 		return err
 	}
@@ -1822,6 +1821,7 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 			"NewName":     move.New,
 			"NewURL":      "../../" + newParts[0] + "/" + newParts[1] + "/",
 			"Version":     version,
+			"GenInfo":     genInfo,
 		}); err != nil {
 			return fmt.Errorf("rendering page: %w", err)
 		}
@@ -1836,6 +1836,7 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 		"BaseURL":     "../",
 		"Breadcrumbs": []Breadcrumb{{Name: title, URL: "../"}, {Name: "Help"}},
 		"Version":     version,
+		"GenInfo":     genInfo,
 	}); err != nil {
 		return fmt.Errorf("rendering page: %w", err)
 	}
@@ -1852,6 +1853,7 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 		"Projects":             sortedProjects,
 		"Profiles":             sortedProfiles,
 		"Version":              version,
+		"GenInfo":              genInfo,
 		"RecentDurationString": recentDurationStr,
 		"RecentNews":           recentNews,
 		"GlobalNews":           globalNews,
@@ -1870,6 +1872,7 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 			"Breadcrumbs": []Breadcrumb{{Name: title, URL: "../"}, {Name: "News"}},
 			"RecentNews":  recentNews,
 			"Version":     version,
+			"GenInfo":     genInfo,
 		}); err != nil {
 			return fmt.Errorf("rendering page: %w", err)
 		}
@@ -1884,6 +1887,7 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 			"Breadcrumbs": []Breadcrumb{{Name: title, URL: "../../"}, {Name: "News", URL: "../"}, {Name: "Archive"}},
 			"News":        globalNews,
 			"Version":     version,
+			"GenInfo":     genInfo,
 		}); err != nil {
 			return fmt.Errorf("rendering page: %w", err)
 		}
@@ -1900,6 +1904,7 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 				"Breadcrumbs": []Breadcrumb{{Name: title, URL: "../../../"}, {Name: "News", URL: "../../"}, {Name: "Archive", URL: "../"}, {Name: n.Title}},
 				"NewsItem":    n,
 				"Version":     version,
+				"GenInfo":     genInfo,
 			}); err != nil {
 				return fmt.Errorf("rendering page: %w", err)
 			}
@@ -1920,6 +1925,7 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 				"Breadcrumbs": []Breadcrumb{{Name: title, URL: "../../../"}, {Name: site.RepoName, URL: "../"}, {Name: "USE Flags"}},
 				"UseFlags":    site.AggUseFlags,
 				"Version":     version,
+				"GenInfo":     genInfo,
 			}); err != nil {
 				return fmt.Errorf("rendering page: %w", err)
 			}
@@ -1937,6 +1943,7 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 					"Breadcrumbs": []Breadcrumb{{Name: title, URL: "../../../../"}, {Name: site.RepoName, URL: "../../"}, {Name: "USE Flags", URL: "../"}, {Name: f.Name}},
 					"UseFlag":     f,
 					"Version":     version,
+					"GenInfo":     genInfo,
 				}); err != nil {
 					return err
 				}
@@ -1969,7 +1976,7 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 			}); err != nil {
 				return fmt.Errorf("rendering page: %w", err)
 			}
-    }
+		}
 		if len(site.InfoPkgs) > 0 {
 			if err := os.MkdirAll(filepath.Join(repoDir, "info_pkgs"), 0755); err != nil {
 				return fmt.Errorf("creating directory: %w", err)
@@ -1995,6 +2002,7 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 		"Breadcrumbs": []Breadcrumb{{Name: title, URL: "../"}, {Name: "Overlays"}},
 		"Repos":       sites,
 		"Version":     version,
+		"GenInfo":     genInfo,
 	}); err != nil {
 		return fmt.Errorf("rendering page: %w", err)
 	}
@@ -2009,6 +2017,7 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 		"Breadcrumbs": []Breadcrumb{{Name: title, URL: "../"}, {Name: "Categories"}},
 		"Categories":  sortedCategories,
 		"Version":     version,
+		"GenInfo":     genInfo,
 	}); err != nil {
 		return fmt.Errorf("rendering page: %w", err)
 	}
@@ -2045,15 +2054,15 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 		for _, p := range catPkgs {
 			var allVersions []VersionData
 			for _, r := range p.Repos {
-			    for _, c := range r.Categories {
-			        if c.Name == cat.Name {
-			            for _, pkgData := range c.Packages {
-			                if pkgData.Name == p.Name {
-                                allVersions = append(allVersions, pkgData.Versions...)
-			                }
-			            }
-			        }
-			    }
+				for _, c := range r.Categories {
+					if c.Name == cat.Name {
+						for _, pkgData := range c.Packages {
+							if pkgData.Name == p.Name {
+								allVersions = append(allVersions, pkgData.Versions...)
+							}
+						}
+					}
+				}
 			}
 			hs, ht, count := getHighestVersionsAndCount(allVersions)
 			tmplPkgs = append(tmplPkgs, TmplPkg{Name: p.Name, ReposList: mapToList(p.Repos), EbuildCount: count, HighestStableVersion: hs, HighestTestingVersion: ht, DominantDescription: p.DominantDescription, DominantHomepage: p.DominantHomepage, DominantLicense: p.DominantLicense})
@@ -2065,6 +2074,7 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 			"Breadcrumbs": []Breadcrumb{{Name: title, URL: "../../"}, {Name: "Categories", URL: "../"}, {Name: cat.Name}},
 			"Category":    map[string]interface{}{"Name": cat.Name, "Packages": tmplPkgs},
 			"Version":     version,
+			"GenInfo":     genInfo,
 		}); err != nil {
 			return fmt.Errorf("rendering page: %w", err)
 		}
@@ -2081,6 +2091,7 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 			"Breadcrumbs": []Breadcrumb{{Name: title, URL: "../"}, {Name: "Profiles"}},
 			"Profiles":    sortedProfiles,
 			"Version":     version,
+			"GenInfo":     genInfo,
 		}); err != nil {
 			return fmt.Errorf("rendering page: %w", err)
 		}
@@ -2103,6 +2114,7 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 				"ProfilePath": p.Path,
 				"ProfileList": p.Repos,
 				"Version":     version,
+				"GenInfo":     genInfo,
 			}); err != nil {
 				return fmt.Errorf("rendering page: %w", err)
 			}
@@ -2119,6 +2131,7 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 		"Breadcrumbs": []Breadcrumb{{Name: title, URL: "../"}, {Name: "Packages"}},
 		"Packages":    sortedPackages,
 		"Version":     version,
+		"GenInfo":     genInfo,
 	}); err != nil {
 		return fmt.Errorf("rendering page: %w", err)
 	}
@@ -2155,6 +2168,7 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 				"MovedToName": movedToName,
 				"MovedToURL":  movedToURL,
 				"Version":     version,
+				"GenInfo":     genInfo,
 			}); err != nil {
 				return fmt.Errorf("rendering page: %w", err)
 			}
@@ -2175,6 +2189,7 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 		"Breadcrumbs": []Breadcrumb{{Name: title, URL: "../"}, {Name: "USE Flags"}},
 		"UseFlags":    sortedUseFlags,
 		"Version":     version,
+		"GenInfo":     genInfo,
 	}); err != nil {
 		return err
 	}
@@ -2192,6 +2207,7 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 			"Breadcrumbs": []Breadcrumb{{Name: title, URL: "../../"}, {Name: "USE Flags", URL: "../"}, {Name: f.Name}},
 			"UseFlag":     f,
 			"Version":     version,
+			"GenInfo":     genInfo,
 		}); err != nil {
 			return err
 		}
@@ -2203,6 +2219,7 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 		"Breadcrumbs": []Breadcrumb{{Name: title, URL: "../"}, {Name: "Licenses"}},
 		"Licenses":    sortedLicenses,
 		"Version":     version,
+		"GenInfo":     genInfo,
 	}); err != nil {
 		return fmt.Errorf("rendering page: %w", err)
 	}
@@ -2233,6 +2250,7 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 			"Breadcrumbs": []Breadcrumb{{Name: title, URL: "../../"}, {Name: "Licenses", URL: "../"}, {Name: lic.Name}},
 			"License":     map[string]interface{}{"Name": lic.Name, "Packages": tmplPkgs, "Text": lic.Text, "Aliases": lic.Aliases},
 			"Version":     version,
+			"GenInfo":     genInfo,
 		}); err != nil {
 			return fmt.Errorf("rendering page: %w", err)
 		}
@@ -2249,6 +2267,7 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 			"Breadcrumbs": []Breadcrumb{{Name: title, URL: "../"}, {Name: "Projects"}},
 			"Projects":    sortedProjects,
 			"Version":     version,
+			"GenInfo":     genInfo,
 		}); err != nil {
 			return fmt.Errorf("rendering page: %w", err)
 		}
@@ -2280,6 +2299,7 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 				"Project":     proj,
 				"Packages":    tmplPkgs,
 				"Version":     version,
+				"GenInfo":     genInfo,
 			}); err != nil {
 				return fmt.Errorf("rendering page: %w", err)
 			}
@@ -2339,6 +2359,7 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 				"NewName":     move.New,
 				"NewURL":      "../../../" + newParts[0] + "/packages/" + newParts[1] + "/",
 				"Version":     version,
+				"GenInfo":     genInfo,
 			}); err != nil {
 				return fmt.Errorf("rendering page: %w", err)
 			}
@@ -2370,6 +2391,7 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 			"Repo":                  site,
 			"PackageCount":          site.PackageCount,
 			"Version":               version,
+			"GenInfo":               genInfo,
 			"RecentDurationString":  recentDurationStr,
 			"RecentNews":            repoRecentNews,
 			"GlobalCategoriesCount": len(sortedCategories),
@@ -2390,6 +2412,7 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 				"Breadcrumbs": []Breadcrumb{{Name: title, URL: "../../../"}, {Name: site.RepoName, URL: "../"}, {Name: "Profiles"}},
 				"Repo":        site,
 				"Version":     version,
+				"GenInfo":     genInfo,
 			}); err != nil {
 				return fmt.Errorf("rendering page: %w", err)
 			}
@@ -2413,6 +2436,7 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 					"ProfilePath": p.Path,
 					"Profile":     p,
 					"Version":     version,
+					"GenInfo":     genInfo,
 				}); err != nil {
 					return fmt.Errorf("rendering page: %w", err)
 				}
@@ -2430,6 +2454,7 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 				"Breadcrumbs": []Breadcrumb{{Name: title, URL: "../../../"}, {Name: "Overlays", URL: "../../../overlays/"}, {Name: site.RepoName, URL: "../"}, {Name: "News"}},
 				"RecentNews":  repoRecentNews,
 				"Version":     version,
+				"GenInfo":     genInfo,
 			}); err != nil {
 				return fmt.Errorf("rendering page: %w", err)
 			}
@@ -2444,6 +2469,7 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 				"Breadcrumbs": []Breadcrumb{{Name: title, URL: "../../../../"}, {Name: "Overlays", URL: "../../../../overlays/"}, {Name: site.RepoName, URL: "../../"}, {Name: "News", URL: "../"}, {Name: "Archive"}},
 				"News":        site.News,
 				"Version":     version,
+				"GenInfo":     genInfo,
 			}); err != nil {
 				return fmt.Errorf("rendering page: %w", err)
 			}
@@ -2460,6 +2486,7 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 					"Breadcrumbs": []Breadcrumb{{Name: title, URL: "../../../../../"}, {Name: "Overlays", URL: "../../../../../overlays/"}, {Name: site.RepoName, URL: "../../../"}, {Name: "News", URL: "../../"}, {Name: "Archive", URL: "../"}, {Name: n.Title}},
 					"NewsItem":    n,
 					"Version":     version,
+					"GenInfo":     genInfo,
 				}); err != nil {
 					return fmt.Errorf("rendering page: %w", err)
 				}
@@ -2475,6 +2502,7 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 			"Breadcrumbs": []Breadcrumb{{Name: title, URL: "../../../"}, {Name: site.RepoName, URL: "../"}, {Name: "Categories"}},
 			"Categories":  site.Categories,
 			"Version":     version,
+			"GenInfo":     genInfo,
 		}); err != nil {
 			return fmt.Errorf("rendering page: %w", err)
 		}
@@ -2490,6 +2518,7 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 				"Authors":     site.Authors,
 				"Repo":        site,
 				"Version":     version,
+				"GenInfo":     genInfo,
 			}); err != nil {
 				return fmt.Errorf("rendering page: %w", err)
 			}
@@ -2525,6 +2554,7 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 				"Breadcrumbs": []Breadcrumb{{Name: title, URL: "../../../../"}, {Name: site.RepoName, URL: "../../"}, {Name: "Categories", URL: "../"}, {Name: cat.Name}},
 				"Category":    map[string]interface{}{"Name": cat.Name, "Packages": tmplPkgs},
 				"Version":     version,
+				"GenInfo":     genInfo,
 			}); err != nil {
 				return fmt.Errorf("rendering page: %w", err)
 			}
@@ -2551,6 +2581,7 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 			"Packages":    repoPkgs,
 			"Repo":        site,
 			"Version":     version,
+			"GenInfo":     genInfo,
 		}); err != nil {
 			return fmt.Errorf("rendering page: %w", err)
 		}
@@ -2567,6 +2598,7 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 			"UseFlags":    repoUseFlags,
 			"Repo":        site,
 			"Version":     version,
+			"GenInfo":     genInfo,
 		}); err != nil {
 			return err
 		}
@@ -2585,6 +2617,7 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 				"UseFlag":     f,
 				"Repo":        site,
 				"Version":     version,
+				"GenInfo":     genInfo,
 			}); err != nil {
 				return err
 			}
@@ -2617,6 +2650,7 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 				"MovedToName":   movedToName,
 				"MovedToURL":    movedToURL,
 				"Version":       version,
+				"GenInfo":       genInfo,
 				"ValidLicenses": validLicenses,
 			}); err != nil {
 				return fmt.Errorf("rendering page: %w", err)
@@ -2637,11 +2671,12 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 						"Package":     pkg,
 						"Manifest":    md,
 						"Version":     version,
+						"GenInfo":     genInfo,
 					}); err != nil {
 						return fmt.Errorf("rendering page: %w", err)
 					}
 				}
-      }
+			}
 			for _, v := range pkg.Versions {
 				versionStr := v.Version
 				if v.Ebuild != nil && v.Ebuild.Vars != nil && v.Ebuild.Vars["PV"] != "" {
@@ -2674,6 +2709,7 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 					"VersionData":      v,
 					"FilteredManifest": filteredManifest,
 					"Version":          version,
+					"GenInfo":          genInfo,
 					"ValidLicenses":    validLicenses,
 				}); err != nil {
 					return fmt.Errorf("rendering page: %w", err)
@@ -2793,7 +2829,7 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, 
 	}
 
 	log.Printf("Generating integrated site for %d repos", len(allSites))
-	if err := generateSite(outDir, allSites, recentDuration, recentDurationStr); err != nil {
+	if err := generateSite(outDir, allSites, recentDuration, recentDurationStr, GenerationInfo{}); err != nil {
 		return fmt.Errorf("generating integrated site: %w", err)
 	}
 

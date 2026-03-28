@@ -4,6 +4,7 @@ import (
 	"html/template"
 	"net/url"
 	"strings"
+	"time"
 )
 
 func getTemplateFuncMap() template.FuncMap {
@@ -11,6 +12,7 @@ func getTemplateFuncMap() template.FuncMap {
 		"join":                strings.Join,
 		"parseIUSEFlags":      parseIUSEFlagsFunc,
 		"buildOwnerEmailLink": buildOwnerEmailLinkFunc,
+		"now":                 time.Now,
 	}
 }
 
