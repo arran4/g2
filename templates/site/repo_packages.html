@@ -4,7 +4,7 @@
     {{range .Packages}}
     <li>
         <a href="../categories/{{.Category}}/packages/{{.Name}}/">{{.Category}}/{{.Name}}</a>
-        - Ebuilds: {{.EbuildCount}}{{if .HighestStableVersion}}, Stable: {{.HighestStableVersion}}{{end}}{{if .HighestTestingVersion}}, Testing: {{.HighestTestingVersion}}{{end}}
+        - Ebuilds: {{.EbuildCount}}, Stable: {{.HighestStableVersion}}, Testing: {{.HighestTestingVersion}}
     </li>
     {{end}}
 </ul>

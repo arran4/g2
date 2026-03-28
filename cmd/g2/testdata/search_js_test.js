@@ -2,8 +2,8 @@ const fs = require('fs');
 const assert = require('assert');
 const vm = require('vm');
 
-const parserCode = fs.readFileSync('templates/site/search_parser.js', 'utf8');
-const engineCode = fs.readFileSync('templates/site/search.js', 'utf8');
+const parserCode = fs.readFileSync('cmd/g2/sitegen_templates/search_parser.js', 'utf8');
+const engineCode = fs.readFileSync('cmd/g2/sitegen_templates/search.js', 'utf8');
 
 vm.runInThisContext(parserCode);
 vm.runInThisContext(engineCode);

@@ -1,13 +1,6 @@
 
 <h2>Repository: {{.Repo.RepoName}}</h2>
 <div class="metadata-section">
-    <h3>Search</h3>
-    <form action="{{.BaseURL}}search/" method="get">
-        <input type="text" name="q" value="overlay:{{.Repo.RepoName}} " placeholder="Search packages, descriptions, use flags..." style="width: 80%; padding: 0.5rem;" />
-        <button type="submit" style="padding: 0.5rem;">Search</button>
-    </form>
-</div>
-<div class="metadata-section">
     <p>To use this repository, you can enable it via eselect:</p>
     <pre><code>eselect repository enable {{.Repo.RepoName}}</code></pre>
     <p>And sync it:</p>

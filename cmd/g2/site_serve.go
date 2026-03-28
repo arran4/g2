@@ -83,8 +83,7 @@ func (cfg *MainArgConfig) cmdSiteServe(args []string) error {
 	}
 
 	log.Printf("Pre-calculating site data for %d repositories", len(sites))
-	genInfo := GenerationInfo{Args: cfg.Args}
-	handler, err := newSiteServer(sites, genInfo)
+	handler, err := newSiteServer(sites)
 	if err != nil {
 		return fmt.Errorf("initializing site server: %w", err)
 	}
@@ -104,7 +103,6 @@ func isOverlayDir(dir string) bool {
 }
 
 type SiteServer struct {
-	GenInfo       GenerationInfo
 	tmpl          *template.Template
 	Title         string
 	Sites         []*SiteData
@@ -153,7 +151,7 @@ func parseIUSEFlagsFunc(iuse string) []ParsedIUSEFlag {
 	return flags
 }
 
-func newSiteServer(sites []*SiteData, genInfo GenerationInfo) (*SiteServer, error) {
+func newSiteServer(sites []*SiteData) (*SiteServer, error) {
 	for _, site := range sites {
 		populatePkgUseFlags(site)
 	}
@@ -171,7 +169,6 @@ func newSiteServer(sites []*SiteData, genInfo GenerationInfo) (*SiteServer, erro
 		LicMap:  make(map[string]*AggLicense),
 		ProjMap: make(map[string]*AggProject),
 		RepoMap: make(map[string]*SiteData),
-		GenInfo: genInfo,
 	}
 
 	// Similar aggregation logic to generateSite
@@ -210,6 +207,33 @@ func newSiteServer(sites []*SiteData, genInfo GenerationInfo) (*SiteServer, erro
 					aggPackages[pkgKey].DominantLicense = pkg.DominantLicense
 				}
 				aggCategories[cat.Name].Packages[pkg.Name] = aggPackages[pkgKey]
+				for _, rev := range pkg.ReverseVirtuals {
+					found := false
+					for _, existingRev := range aggPackages[pkgKey].ReverseVirtuals {
+						if existingRev == rev {
+							found = true
+							break
+						}
+					}
+					if !found {
+						aggPackages[pkgKey].ReverseVirtuals = append(aggPackages[pkgKey].ReverseVirtuals, rev)
+					}
+				}
+				sort.Strings(aggPackages[pkgKey].ReverseVirtuals)
+
+				for _, dep := range pkg.VirtualDeps {
+					found := false
+					for _, existingDep := range aggPackages[pkgKey].VirtualDeps {
+						if existingDep == dep {
+							found = true
+							break
+						}
+					}
+					if !found {
+						aggPackages[pkgKey].VirtualDeps = append(aggPackages[pkgKey].VirtualDeps, dep)
+					}
+				}
+				sort.Strings(aggPackages[pkgKey].VirtualDeps)
 
 				if pkg.Metadata != nil {
 					for _, maint := range pkg.Metadata.Maintainers {
@@ -366,7 +390,6 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			"Projects":   s.AggProjects,
 			"Profiles":   []interface{}{},
 			"Version":    version,
-			"GenInfo":    s.GenInfo,
 		})
 		return
 	}
@@ -387,7 +410,6 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				"Breadcrumbs": []Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: "Overlays"}},
 				"Repos":       s.Sites,
 				"Version":     version,
-				"GenInfo":     s.GenInfo,
 			})
 			return
 		}
@@ -400,7 +422,6 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				"Breadcrumbs": []Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: "Categories"}},
 				"Categories":  s.AggCategories,
 				"Version":     version,
-				"GenInfo":     s.GenInfo,
 			})
 			return
 		} else if len(parts) == 2 {
@@ -451,7 +472,6 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				"Breadcrumbs": []Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: "Categories", URL: "../"}, {Name: cat.Name}},
 				"Category":    map[string]interface{}{"Name": cat.Name, "Packages": tmplPkgs},
 				"Version":     version,
-				"GenInfo":     s.GenInfo,
 			})
 			return
 		}
@@ -464,7 +484,6 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				"Breadcrumbs": []Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: "Packages"}},
 				"Packages":    s.AggPackages,
 				"Version":     version,
-				"GenInfo":     s.GenInfo,
 			})
 			return
 		} else if len(parts) == 3 {
@@ -491,7 +510,6 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					"Breadcrumbs": []Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: "Packages", URL: "../../"}, {Name: pkg.Category, URL: "../../../categories/" + pkg.Category + "/"}, {Name: pkg.Name}},
 					"Package":     map[string]interface{}{"Category": pkg.Category, "Name": pkg.Name, "ReposList": reposList},
 					"Version":     version,
-					"GenInfo":     s.GenInfo,
 				})
 				return
 			}
@@ -505,7 +523,6 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				"Breadcrumbs": []Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: "USE Flags"}},
 				"UseFlags":    s.AggUseFlags,
 				"Version":     version,
-				"GenInfo":     s.GenInfo,
 			})
 			return
 		} else if len(parts) == 2 {
@@ -521,7 +538,6 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				"Breadcrumbs": []Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: "USE Flags", URL: "../"}, {Name: flag.Name}},
 				"UseFlag":     flag,
 				"Version":     version,
-				"GenInfo":     s.GenInfo,
 			})
 			return
 		}
@@ -534,7 +550,6 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				"Breadcrumbs": []Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: "Licenses"}},
 				"Licenses":    s.AggLicenses,
 				"Version":     version,
-				"GenInfo":     s.GenInfo,
 			})
 			return
 		} else if len(parts) == 2 {
@@ -567,7 +582,6 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				"Breadcrumbs": []Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: "Licenses", URL: "../"}, {Name: lic.Name}},
 				"License":     map[string]interface{}{"Name": lic.Name, "Packages": tmplPkgs, "Text": lic.Text, "Aliases": lic.Aliases},
 				"Version":     version,
-				"GenInfo":     s.GenInfo,
 			})
 			return
 		}
@@ -580,7 +594,6 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				"Breadcrumbs": []Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: "Projects"}},
 				"Projects":    s.AggProjects,
 				"Version":     version,
-				"GenInfo":     s.GenInfo,
 			})
 			return
 		} else if len(parts) == 2 {
@@ -608,19 +621,6 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				"Project":     proj,
 				"Packages":    tmplPkgs,
 				"Version":     version,
-				"GenInfo":     s.GenInfo,
-			})
-			return
-		}
-
-	case "stats":
-		if len(parts) == 1 {
-			s.renderPageHTTP(w, "stats.html", map[string]interface{}{
-				"Title":       "Generation Statistics",
-				"BaseURL":     baseURL,
-				"Breadcrumbs": []Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: "Statistics"}},
-				"Version":     version,
-				"GenInfo":     s.GenInfo,
 			})
 			return
 		}
@@ -632,7 +632,6 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				"BaseURL":     baseURL,
 				"Breadcrumbs": []Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: "Help"}},
 				"Version":     version,
-				"GenInfo":     s.GenInfo,
 			})
 			return
 		}
@@ -659,7 +658,6 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					"Repo":                  site,
 					"PackageCount":          site.PackageCount,
 					"Version":               version,
-					"GenInfo":               s.GenInfo,
 					"GlobalCategoriesCount": len(s.AggCategories),
 					"GlobalPackagesCount":   len(s.AggPackages),
 					"GlobalLicensesCount":   len(s.AggLicenses),
@@ -678,7 +676,6 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 							"Breadcrumbs": []Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: site.RepoName, URL: "../"}, {Name: "Deprecated Packages"}},
 							"Repo":        site,
 							"Version":     version,
-							"GenInfo":     s.GenInfo,
 						})
 						return
 					}
@@ -690,7 +687,6 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 							"Breadcrumbs": []Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: site.RepoName, URL: "../"}, {Name: "Info Packages"}},
 							"Repo":        site,
 							"Version":     version,
-							"GenInfo":     s.GenInfo,
 						})
 						return
 					}
@@ -702,7 +698,6 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 							"Breadcrumbs": []Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: site.RepoName, URL: "../"}, {Name: "Categories"}},
 							"Categories":  site.Categories,
 							"Version":     version,
-							"GenInfo":     s.GenInfo,
 						})
 						return
 					} else if len(parts) == 4 {
@@ -740,7 +735,6 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 							"Breadcrumbs": []Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: site.RepoName, URL: "../../"}, {Name: "Categories", URL: "../"}, {Name: catData.Name}},
 							"Category":    map[string]interface{}{"Name": catData.Name, "Packages": tmplPkgs},
 							"Version":     version,
-							"GenInfo":     s.GenInfo,
 						})
 						return
 					} else if len(parts) >= 6 && parts[4] == "packages" {
@@ -782,7 +776,6 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 								"Repo":          site,
 								"Package":       *pkgData,
 								"Version":       version,
-								"GenInfo":       s.GenInfo,
 								"ValidLicenses": validLicenses,
 							})
 							return
@@ -829,7 +822,6 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 								"VersionData":      *versionData,
 								"FilteredManifest": filteredManifest,
 								"Version":          version,
-								"GenInfo":          s.GenInfo,
 								"ValidLicenses":    validLicenses,
 							})
 							return
@@ -865,7 +857,6 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 								"Package":  *pkgData,
 								"Manifest": *targetMD,
 								"Version":  version,
-								"GenInfo":  s.GenInfo,
 							})
 							return
 						}
@@ -892,7 +883,6 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 							"Packages":    repoPkgs,
 							"Repo":        site,
 							"Version":     version,
-							"GenInfo":     s.GenInfo,
 						})
 						return
 					}
@@ -908,7 +898,6 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 							"UseFlags":    repoUseFlags,
 							"Repo":        site,
 							"Version":     version,
-							"GenInfo":     s.GenInfo,
 						})
 						return
 					} else if len(parts) == 4 {
@@ -932,7 +921,6 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 							"UseFlag":     flag,
 							"Repo":        site,
 							"Version":     version,
-							"GenInfo":     s.GenInfo,
 						})
 						return
 					}

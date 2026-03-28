@@ -1,14 +1,5 @@
 
 <h2>License: {{.License.Name}}</h2>
-
-<div class="metadata-section">
-    <h3>Search</h3>
-    <form action="{{.BaseURL}}search/" method="get">
-        <input type="text" name="q" value="license:{{.License.Name}} " placeholder="Search packages, descriptions, use flags..." style="width: 80%; padding: 0.5rem;" />
-        <button type="submit" style="padding: 0.5rem;">Search</button>
-    </form>
-</div>
-
 {{if .License.Aliases}}
 <p><strong>Aliases:</strong> {{join .License.Aliases ", "}}</p>
 {{end}}
