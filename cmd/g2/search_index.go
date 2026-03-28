@@ -16,38 +16,38 @@ import (
 )
 
 type SearchDocument struct {
-	ID               int      `json:"id"`
-	Overlay          string   `json:"overlay"`
-	Category         string   `json:"category"`
-	Package          string   `json:"package"`
-	FullName         string   `json:"full_name"`
-	Version          string   `json:"version"`
-	VersionSortKey   string   `json:"version_sort_key"`
-	Description      string   `json:"description"`
-	Urls             []string `json:"urls"`
-	Licenses         []string `json:"licenses"`
-	EAPI             string   `json:"eapi"`
-	Slot             string   `json:"slot"`
-	Inherits         []string `json:"inherits"`
-	Uses             []string `json:"uses"`
-	UseDescriptions  []string `json:"use_descriptions"`
-	Keywords         []string `json:"keywords"`
-	Arches           []string `json:"arches"`
-	Mask             string   `json:"mask"` // "none", "soft", "hard"
-	Depends          []string `json:"depends"`
-	Rdepends         []string `json:"rdepends"`
-	Bdepends         []string `json:"bdepends"`
-	Pdepends         []string `json:"pdepends"`
-	DependedBy       []string `json:"depended_by"`
-	RdependedBy      []string `json:"rdepended_by"`
-	RawDepends       string   `json:"raw_depends"`
-	RawRdepends      string   `json:"raw_rdepends"`
-	RawBdepends      string   `json:"raw_bdepends"`
-	RawPdepends      string   `json:"raw_pdepends"`
-	RawRequiredUse   string   `json:"raw_required_use"`
-	ManifestFiles    []string `json:"manifest_files"`
-	SearchText       string   `json:"search_text"`
-	PageURL          string   `json:"page_url"`
+	ID              int      `json:"id"`
+	Overlay         string   `json:"overlay"`
+	Category        string   `json:"category"`
+	Package         string   `json:"package"`
+	FullName        string   `json:"full_name"`
+	Version         string   `json:"version"`
+	VersionSortKey  string   `json:"version_sort_key"`
+	Description     string   `json:"description"`
+	Urls            []string `json:"urls"`
+	Licenses        []string `json:"licenses"`
+	EAPI            string   `json:"eapi"`
+	Slot            string   `json:"slot"`
+	Inherits        []string `json:"inherits"`
+	Uses            []string `json:"uses"`
+	UseDescriptions []string `json:"use_descriptions"`
+	Keywords        []string `json:"keywords"`
+	Arches          []string `json:"arches"`
+	Mask            string   `json:"mask"` // "none", "soft", "hard"
+	Depends         []string `json:"depends"`
+	Rdepends        []string `json:"rdepends"`
+	Bdepends        []string `json:"bdepends"`
+	Pdepends        []string `json:"pdepends"`
+	DependedBy      []string `json:"depended_by"`
+	RdependedBy     []string `json:"rdepended_by"`
+	RawDepends      string   `json:"raw_depends"`
+	RawRdepends     string   `json:"raw_rdepends"`
+	RawBdepends     string   `json:"raw_bdepends"`
+	RawPdepends     string   `json:"raw_pdepends"`
+	RawRequiredUse  string   `json:"raw_required_use"`
+	ManifestFiles   []string `json:"manifest_files"`
+	SearchText      string   `json:"search_text"`
+	PageURL         string   `json:"page_url"`
 }
 
 type SearchManifest struct {
@@ -138,7 +138,7 @@ func generateSearchIndex(outDir string, sites []*SiteData) error {
 						}
 
 						if d := ver.Ebuild.Vars["DEPEND"]; d != "" {
-								rawDepends = d
+							rawDepends = d
 							matches := pkgRegex.FindAllString(d, -1)
 							for _, m := range matches {
 								depends = append(depends, m)
@@ -150,7 +150,7 @@ func generateSearchIndex(outDir string, sites []*SiteData) error {
 						}
 
 						if d := ver.Ebuild.Vars["RDEPEND"]; d != "" {
-								rawRdepends = d
+							rawRdepends = d
 							matches := pkgRegex.FindAllString(d, -1)
 							for _, m := range matches {
 								rdepends = append(rdepends, m)
@@ -161,21 +161,21 @@ func generateSearchIndex(outDir string, sites []*SiteData) error {
 							}
 						}
 
-							if d := ver.Ebuild.Vars["BDEPEND"]; d != "" {
-								rawBdepends = d
-								matches := pkgRegex.FindAllString(d, -1)
-								bdepends = append(bdepends, matches...)
-							}
+						if d := ver.Ebuild.Vars["BDEPEND"]; d != "" {
+							rawBdepends = d
+							matches := pkgRegex.FindAllString(d, -1)
+							bdepends = append(bdepends, matches...)
+						}
 
-							if d := ver.Ebuild.Vars["PDEPEND"]; d != "" {
-								rawPdepends = d
-								matches := pkgRegex.FindAllString(d, -1)
-								pdepends = append(pdepends, matches...)
-							}
+						if d := ver.Ebuild.Vars["PDEPEND"]; d != "" {
+							rawPdepends = d
+							matches := pkgRegex.FindAllString(d, -1)
+							pdepends = append(pdepends, matches...)
+						}
 
-							if d := ver.Ebuild.Vars["REQUIRED_USE"]; d != "" {
-								rawRequiredUse = d
-							}
+						if d := ver.Ebuild.Vars["REQUIRED_USE"]; d != "" {
+							rawRequiredUse = d
+						}
 
 						if inh := ver.Ebuild.Vars["INHERITED"]; inh != "" {
 							inherits = strings.Fields(inh)
@@ -252,13 +252,13 @@ func generateSearchIndex(outDir string, sites []*SiteData) error {
 						Mask:            mask,
 						Depends:         depends,
 						Rdepends:        rdepends,
-							Bdepends:        bdepends,
-							Pdepends:        pdepends,
-							RawDepends:      rawDepends,
-							RawRdepends:     rawRdepends,
-							RawBdepends:     rawBdepends,
-							RawPdepends:     rawPdepends,
-							RawRequiredUse:  rawRequiredUse,
+						Bdepends:        bdepends,
+						Pdepends:        pdepends,
+						RawDepends:      rawDepends,
+						RawRdepends:     rawRdepends,
+						RawBdepends:     rawBdepends,
+						RawPdepends:     rawPdepends,
+						RawRequiredUse:  rawRequiredUse,
 						DependedBy:      []string{},
 						RdependedBy:     []string{},
 						ManifestFiles:   manifestFiles,

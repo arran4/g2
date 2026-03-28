@@ -1,8 +1,8 @@
 package main
 
 import (
-	"testing"
 	"github.com/arran4/g2"
+	"testing"
 )
 
 func TestResolveDependencies(t *testing.T) {

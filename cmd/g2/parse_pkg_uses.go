@@ -391,7 +391,7 @@ func populatePkgUseFlags(site *SiteData) {
 						for _, f := range parsed {
 							if _, ok := flagsMap[f.Name]; !ok {
 								flagsMap[f.Name] = &PkgUseFlag{
-									Name: f.Name,
+									Name:     f.Name,
 									Versions: make(map[string]string),
 								}
 							}

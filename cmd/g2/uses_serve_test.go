@@ -19,7 +19,7 @@ func TestGenerateUsesPages(t *testing.T) {
 		t.Fatalf("generateSite failed: %v", err)
 	}
 
-		if _, err := os.Stat(outDir + "/uses/index.html"); os.IsNotExist(err) {
+	if _, err := os.Stat(outDir + "/uses/index.html"); os.IsNotExist(err) {
 		t.Errorf("Expected /uses/index.html to be generated, got error: %v", err)
 	}
 }

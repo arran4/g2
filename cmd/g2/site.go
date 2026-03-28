@@ -11,17 +11,19 @@ import (
 	"github.com/arran4/g2/lints"
 	"github.com/arran4/g2/lints/ebuild"
 	"github.com/arran4/g2/templates"
+	"golang.org/x/sync/errgroup"
 	"html/template"
 	"io"
 	"io/fs"
 	"log"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -209,6 +211,7 @@ func (cfg *MainArgConfig) cmdOverlay(args []string) error {
 	clear := fs.Bool("clear", false, "Clear output directory before generation")
 	recentDurOpt := fs.String("recent-duration", "3mo", "Duration to consider an update 'recent' (e.g. 3mo, 14d, 72h)")
 	fastGit := fs.Bool("fast-git-modtime", false, "Use fast (O(1)) but potentially less reliable go-git file log lookup")
+	useZip := fs.Bool("use-zip", false, "Download zip archives instead of git clone when supported")
 
 	if err := fs.Parse(args[2:]); err != nil {
 		return fmt.Errorf("parsing flags: %w", err)
@@ -246,10 +249,7 @@ func (cfg *MainArgConfig) cmdOverlay(args []string) error {
 		log.Printf("Cloning remote repository: %s", location)
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 		defer cancel()
-		cmd := exec.CommandContext(ctx, "git", "clone", "--depth", "1", location, tmpDir)
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-		if err := cmd.Run(); err != nil {
+		if err := FetchRepo(ctx, location, tmpDir, *useZip); err != nil {
 			cleanup()
 			return fmt.Errorf("cloning repository: %w", err)
 		}
@@ -297,6 +297,7 @@ func (cfg *MainArgConfig) cmdOverlays(args []string) error {
 	clear := fs.Bool("clear", false, "Clear output directory before generation")
 	recentDurOpt := fs.String("recent-duration", "3mo", "Duration to consider an update 'recent' (e.g. 3mo, 14d, 72h)")
 	fastGit := fs.Bool("fast-git-modtime", false, "Use fast (O(1)) but potentially less reliable go-git file log lookup")
+	useZip := fs.Bool("use-zip", false, "Download zip archives instead of git clone when supported")
 
 	if err := fs.Parse(args[2:]); err != nil {
 		return fmt.Errorf("parsing flags: %w", err)
@@ -318,7 +319,7 @@ func (cfg *MainArgConfig) cmdOverlays(args []string) error {
 	}
 
 	log.Printf("Generating site from remote repositories: %s into %s", location, *outDir)
-	return cfg.cmdSiteRemote(location, *outDir, recentDuration, recentDurationStr, *fastGit)
+	return cfg.cmdSiteRemote(location, *outDir, recentDuration, recentDurationStr, *fastGit, *useZip)
 }
 
 func parseLayoutConfFromFS(sysFS fs.FS, path string) (*g2.LayoutConf, error) {
@@ -2760,7 +2761,7 @@ func renderPage(path string, tmpl *template.Template, name string, data map[stri
 	return nil
 }
 
-func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, recentDuration time.Duration, recentDurationStr string, fastGit bool) error {
+func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, recentDuration time.Duration, recentDurationStr string, fastGit bool, useZip bool) error {
 	var data []byte
 	var err error
 
@@ -2804,48 +2805,62 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, 
 	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	var allSites []*SiteData
+	var allSitesMu sync.Mutex
+
+	g, ctx := errgroup.WithContext(context.Background())
+	g.SetLimit(runtime.GOMAXPROCS(0))
 
 	for _, repo := range repos.Repositories {
-		if len(repo.Sources) == 0 {
-			continue
-		}
-
-		var gitUrl string
-		for _, src := range repo.Sources {
-			if src.Type == "git" && strings.HasPrefix(src.Text, "http") {
-				gitUrl = src.Text
-				break
+		repo := repo // capture loop variable
+		g.Go(func() error {
+			if len(repo.Sources) == 0 {
+				return nil
 			}
-		}
 
-		if gitUrl == "" {
-			continue // skip non-http git repos for this tool
-		}
+			var gitUrl string
+			for _, src := range repo.Sources {
+				if src.Type == "git" && strings.HasPrefix(src.Text, "http") {
+					gitUrl = src.Text
+					break
+				}
+			}
 
-		log.Printf("Cloning remote repository: %s (%s)", repo.Name, gitUrl)
+			if gitUrl == "" {
+				return nil // skip non-http git repos for this tool
+			}
 
-		repoPath := filepath.Join(tmpDir, repo.Name)
-		// Try to shallow clone
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
-		defer cancel()
-		cmd := exec.CommandContext(ctx, "git", "clone", "--depth", "1", gitUrl, repoPath)
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-		if err := cmd.Run(); err != nil {
-			log.Printf("Failed to clone %s: %v", repo.Name, err)
-			continue
-		}
+			log.Printf("Fetching remote repository: %s (%s)", repo.Name, gitUrl)
 
-		log.Printf("Parsing repository: %s", repo.Name)
-		repoCopy := repo
-		siteData, err := parseRepo(os.DirFS(repoPath), ".", repo.Name, fastGit, &repoCopy)
-		if err != nil {
-			log.Printf("Failed to parse repo %s: %v", repo.Name, err)
-			continue
-		}
+			repoPath := filepath.Join(tmpDir, repo.Name)
+			fetchCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
+			defer cancel()
 
-		allSites = append(allSites, siteData)
+			if err := FetchRepo(fetchCtx, gitUrl, repoPath, useZip); err != nil {
+				log.Printf("Failed to fetch %s: %v", repo.Name, err)
+				return nil // Don't fail the whole group for one bad repo
+			}
+
+			log.Printf("Parsing repository: %s", repo.Name)
+			siteData, err := parseRepo(os.DirFS(repoPath), ".", repo.Name, fastGit, &repo)
+			if err != nil {
+				log.Printf("Failed to parse repo %s: %v", repo.Name, err)
+				return nil
+			}
+
+			allSitesMu.Lock()
+			allSites = append(allSites, siteData)
+			allSitesMu.Unlock()
+			return nil
+		})
 	}
+
+	if err := g.Wait(); err != nil {
+		return fmt.Errorf("concurrent repository processing failed: %w", err)
+	}
+
+	sort.Slice(allSites, func(i, j int) bool {
+		return allSites[i].Title < allSites[j].Title
+	})
 
 	log.Printf("Generating integrated site for %d repos", len(allSites))
 	if err := generateSite(outDir, allSites, recentDuration, recentDurationStr, GenerationInfo{}); err != nil {

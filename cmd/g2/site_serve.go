@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"flag"
 	"fmt"
 	"html/template"
@@ -9,10 +10,13 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/arran4/g2/templates"
+	"golang.org/x/sync/errgroup"
 )
 
 func (cfg *MainArgConfig) cmdSite(args []string) error {
@@ -61,21 +65,41 @@ func (cfg *MainArgConfig) cmdSiteServe(args []string) error {
 			return fmt.Errorf("could not read %s: %w", dbReposPath, err)
 		}
 
+		var sitesMu sync.Mutex
+		g, _ := errgroup.WithContext(context.Background())
+		g.SetLimit(runtime.GOMAXPROCS(0))
+
 		for _, entry := range entries {
 			if !entry.IsDir() {
 				continue
 			}
+			entry := entry
 			repoPath := filepath.Join(dbReposPath, entry.Name())
+
 			if isOverlayDir(repoPath) {
-				log.Printf("Parsing repository %s", entry.Name())
-				siteData, err := parseRepo(os.DirFS(repoPath), ".", entry.Name(), false, nil)
-				if err != nil {
-					log.Printf("Warning: failed to parse repo %s: %v", entry.Name(), err)
-					continue
-				}
-				sites = append(sites, siteData)
+				g.Go(func() error {
+					log.Printf("Parsing repository %s", entry.Name())
+					siteData, err := parseRepo(os.DirFS(repoPath), ".", entry.Name(), false, nil)
+					if err != nil {
+						log.Printf("Warning: failed to parse repo %s: %v", entry.Name(), err)
+						return nil // Don't fail entire group
+					}
+
+					sitesMu.Lock()
+					sites = append(sites, siteData)
+					sitesMu.Unlock()
+					return nil
+				})
 			}
 		}
+
+		if err := g.Wait(); err != nil {
+			return fmt.Errorf("concurrent repository processing failed: %w", err)
+		}
+
+		sort.Slice(sites, func(i, j int) bool {
+			return sites[i].Title < sites[j].Title
+		})
 
 		if len(sites) == 0 {
 			return fmt.Errorf("no valid repositories found in %s", dbReposPath)
