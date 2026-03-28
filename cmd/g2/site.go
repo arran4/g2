@@ -1847,6 +1847,7 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 		"Categories":           sortedCategories,
 		"Packages":             sortedPackages,
 		"Licenses":             sortedLicenses,
+		"UseFlags":             sortedUseFlags,
 		"Projects":             sortedProjects,
 		"Profiles":             sortedProfiles,
 		"Version":              version,
