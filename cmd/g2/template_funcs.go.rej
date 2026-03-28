@@ -1,0 +1,8 @@
+diff a/cmd/g2/template_funcs.go b/cmd/g2/template_funcs.go	(rejected hunks)
+@@ -12,6 +12,7 @@ func getTemplateFuncMap() template.FuncMap {
+		"parseIUSEFlags":      parseIUSEFlagsFunc,
+		"buildOwnerEmailLink": buildOwnerEmailLinkFunc,
+		"slugify":             sanitizeFilename,
++		"split":               strings.Split,
+	}
+ }

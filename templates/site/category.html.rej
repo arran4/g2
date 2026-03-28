@@ -1,0 +1,11 @@
+diff a/templates/site/category.html b/templates/site/category.html	(rejected hunks)
+@@ -34,6 +34,9 @@ <h2>Category: {{.Category.Name}}</h2>
+                 <a href="{{$.BaseURL}}packages/{{$.Category.Name}}/{{.Name}}/">{{.Name}}</a> (ambiguous, available in {{len .ReposList}} overlays)
+             {{end}}
+             - Ebuilds: {{.EbuildCount}}, Stable: {{.HighestStableVersion}}, Testing: {{.HighestTestingVersion}}
++            {{if .ReverseVirtuals}}
++            <span class="badge" style="background-color: #17a2b8; color: white; padding: 2px 5px; border-radius: 3px; font-size: 0.8em;">Virtual</span>
++            {{end}}
+             <span class="package-details">
+             {{if .DominantDescription}}<br/><small><b>Description:</b> {{.DominantDescription}}</small>{{end}}
+             {{if .DominantHomepage}}<br/><small><b>Homepage:</b> <a href="{{.DominantHomepage}}">{{.DominantHomepage}}</a></small>{{end}}
