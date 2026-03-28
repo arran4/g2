@@ -113,7 +113,7 @@ func (cfg *CmdPackageArgConfig) cmdSearch(args []string) error {
 		if err != nil {
 			return fmt.Errorf("fetching manifest: %w", err)
 		}
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 
 		var manifest SearchManifest
 		if err := json.NewDecoder(resp.Body).Decode(&manifest); err != nil {
@@ -126,7 +126,7 @@ func (cfg *CmdPackageArgConfig) cmdSearch(args []string) error {
 			if err != nil {
 				return fmt.Errorf("fetching data file %s: %w", file, err)
 			}
-			defer dataResp.Body.Close()
+			defer func() { _ = dataResp.Body.Close() }()
 
 			var docs []SearchDocument
 			if err := json.NewDecoder(dataResp.Body).Decode(&docs); err != nil {
@@ -139,7 +139,7 @@ func (cfg *CmdPackageArgConfig) cmdSearch(args []string) error {
 		if err != nil {
 			return fmt.Errorf("opening zip file: %w", err)
 		}
-		defer z.Close()
+		defer func() { _ = z.Close() }()
 
 		var manifest SearchManifest
 		var manifestFound bool
@@ -151,7 +151,7 @@ func (cfg *CmdPackageArgConfig) cmdSearch(args []string) error {
 					return err
 				}
 				err = json.NewDecoder(rc).Decode(&manifest)
-				rc.Close()
+				_ = rc.Close()
 				if err != nil {
 					return fmt.Errorf("decoding manifest from zip: %w", err)
 				}
@@ -173,7 +173,7 @@ func (cfg *CmdPackageArgConfig) cmdSearch(args []string) error {
 					}
 					var docs []SearchDocument
 					err = json.NewDecoder(rc).Decode(&docs)
-					rc.Close()
+					_ = rc.Close()
 					if err != nil {
 						return fmt.Errorf("decoding data file %s from zip: %w", mf, err)
 					}
@@ -186,7 +186,7 @@ func (cfg *CmdPackageArgConfig) cmdSearch(args []string) error {
 		if err != nil {
 			return fmt.Errorf("opening tar file: %w", err)
 		}
-		defer f.Close()
+		defer func() { _ = f.Close() }()
 
 		var tr *tar.Reader
 		if strings.HasSuffix(searchPath, ".tar.gz") {
@@ -194,7 +194,7 @@ func (cfg *CmdPackageArgConfig) cmdSearch(args []string) error {
 			if err != nil {
 				return fmt.Errorf("opening gzip reader: %w", err)
 			}
-			defer gzr.Close()
+			defer func() { _ = gzr.Close() }()
 			tr = tar.NewReader(gzr)
 		} else {
 			tr = tar.NewReader(f)
@@ -292,7 +292,7 @@ func (cfg *CmdPackageArgConfig) cmdSearch(args []string) error {
 		if err != nil {
 			return fmt.Errorf("opening manifest: %w", err)
 		}
-		defer mf.Close()
+		defer func() { _ = mf.Close() }()
 
 		var manifest SearchManifest
 		if err := json.NewDecoder(mf).Decode(&manifest); err != nil {
@@ -307,10 +307,10 @@ func (cfg *CmdPackageArgConfig) cmdSearch(args []string) error {
 			}
 			var docs []SearchDocument
 			if err := json.NewDecoder(df).Decode(&docs); err != nil {
-				df.Close()
+				_ = df.Close()
 				return fmt.Errorf("decoding data file %s: %w", file, err)
 			}
-			df.Close()
+			_ = df.Close()
 			engine.LoadDocuments(docs)
 		}
 	}

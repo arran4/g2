@@ -1,4 +1,4 @@
-// +build !root
+//go:build !root
 
 package main
 

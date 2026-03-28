@@ -105,13 +105,14 @@ func (p *SearchParser) tokenize(query string) []Token {
 			}
 
 			termStr := term.String()
-			if termStr == "AND" {
+			switch termStr {
+			case "AND":
 				tokens = append(tokens, Token{Type: AND, Value: termStr})
-			} else if termStr == "OR" {
+			case "OR":
 				tokens = append(tokens, Token{Type: OR, Value: termStr})
-			} else if termStr == "NOT" {
+			case "NOT":
 				tokens = append(tokens, Token{Type: NOT, Value: termStr})
-			} else {
+			default:
 				tokens = append(tokens, Token{Type: TERM, Value: termStr})
 			}
 		}
