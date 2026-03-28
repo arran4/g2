@@ -11,6 +11,7 @@ func getTemplateFuncMap() template.FuncMap {
 		"join":                strings.Join,
 		"parseIUSEFlags":      parseIUSEFlagsFunc,
 		"buildOwnerEmailLink": buildOwnerEmailLinkFunc,
+		"slugify":             sanitizeFilename,
 	}
 }
 
