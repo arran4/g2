@@ -33,7 +33,7 @@
             {{else}}
                 <a href="{{$.BaseURL}}packages/{{$.Category.Name}}/{{.Name}}/">{{.Name}}</a> (ambiguous, available in {{len .ReposList}} overlays)
             {{end}}
-            - Ebuilds: {{.EbuildCount}}, Stable: {{.HighestStableVersion}}, Testing: {{.HighestTestingVersion}}
+            - Ebuilds: {{.EbuildCount}}{{if .HighestStableVersion}}, Stable: {{.HighestStableVersion}}{{end}}{{if .HighestTestingVersion}}, Testing: {{.HighestTestingVersion}}{{end}}
             <span class="package-details">
             {{if .DominantDescription}}<br/><small><b>Description:</b> {{.DominantDescription}}</small>{{end}}
             {{if .DominantHomepage}}<br/><small><b>Homepage:</b> <a href="{{.DominantHomepage}}">{{.DominantHomepage}}</a></small>{{end}}
