@@ -2475,6 +2475,20 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 			return fmt.Errorf("rendering page: %w", err)
 		}
 
+		if err := os.MkdirAll(filepath.Join(repoDir, "stats"), 0755); err != nil {
+			return fmt.Errorf("creating directory: %w", err)
+		}
+		if err := renderPage(filepath.Join(repoDir, "stats", "index.html"), tmpl, "repo_stats.html", map[string]interface{}{
+			"Title":       site.RepoName + " - Statistics",
+			"BaseURL":     "../../../",
+			"Breadcrumbs": []Breadcrumb{{Name: title, URL: "../../../"}, {Name: "Overlays", URL: "../../../overlays/"}, {Name: site.RepoName, URL: "../"}, {Name: "Statistics"}},
+			"Repo":        site,
+			"Version":     version,
+			"GenInfo":     genInfo,
+		}); err != nil {
+			return fmt.Errorf("rendering page: %w", err)
+		}
+
 		if len(site.Profiles) > 0 {
 			if err := os.MkdirAll(filepath.Join(repoDir, "profiles"), 0755); err != nil {
 				return fmt.Errorf("creating directory: %w", err)

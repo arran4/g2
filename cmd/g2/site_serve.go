@@ -670,6 +670,18 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 			if len(parts) >= 3 {
 				switch parts[2] {
+					case "stats":
+						if len(parts) == 3 {
+							s.renderPageHTTP(w, "repo_stats.html", map[string]interface{}{
+								"Title":       site.RepoName + " - Statistics",
+								"BaseURL":     baseURL,
+								"Breadcrumbs": []Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: site.RepoName, URL: "../"}, {Name: "Statistics"}},
+								"Repo":        site,
+								"Version":     version,
+								"GenInfo":     s.GenInfo,
+							})
+							return
+						}
 				case "deprecated":
 					if len(parts) == 3 {
 						s.renderPageHTTP(w, "repo_deprecated.html", map[string]interface{}{
