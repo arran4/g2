@@ -2,13 +2,11 @@ package main
 
 import (
 	"bytes"
-	"embed"
 	"fmt"
 	"text/template"
-)
 
-//go:embed templates/*.ebuild
-var templateFiles embed.FS
+	"github.com/arran4/g2/templates"
+)
 
 type EbuildParams struct {
 	EAPI        string
@@ -38,7 +36,7 @@ type Template struct {
 }
 
 func (t *Template) Execute(params EbuildParams) (string, error) {
-	content, err := templateFiles.ReadFile(fmt.Sprintf("templates/%s.ebuild", t.Name))
+	content, err := templates.EbuildFS.ReadFile(fmt.Sprintf("ebuild/%s.ebuild", t.Name))
 	if err != nil {
 		return "", err
 	}

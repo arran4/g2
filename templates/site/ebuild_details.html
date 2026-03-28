@@ -50,6 +50,15 @@
     </table>
 </div>
 
+{{if not .VersionData.EbuildRawURL}}
+<div class="metadata-section">
+    <details>
+        <summary style="cursor: pointer;"><strong>View Raw Ebuild</strong></summary>
+        <pre style="background: #f4f4f4; padding: 10px; overflow-x: auto;">{{.VersionData.Ebuild.RawText}}</pre>
+    </details>
+</div>
+{{end}}
+
 <style>
     .iuse-flag { display: inline-block; margin-right: 15px; font-family: monospace; }
     .iuse-tooltip { position: relative; display: inline-block; cursor: help; }

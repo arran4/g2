@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"github.com/arran4/g2"
 	"github.com/arran4/g2/lints"
+	"github.com/arran4/g2/templates"
 	"html/template"
 	"io"
 	"io/fs"
@@ -177,8 +178,9 @@ type PackageData struct {
 }
 
 type PkgUseFlag struct {
-	Name string
-	Desc string
+	Name     string
+	Desc     string
+	Source   string
 	Versions map[string]string // Version -> Unicode symbol representing state
 }
 
@@ -1572,7 +1574,7 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 		log.Printf("Warning: failed to generate search index: %v", err)
 	}
 
-	tmpl, err := template.New("").Funcs(getTemplateFuncMap()).ParseFS(siteTemplates, "sitegen_templates/*.html")
+	tmpl, err := template.New("").Funcs(getTemplateFuncMap()).ParseFS(templates.SiteFS, "site/*.html")
 	if err != nil {
 		return fmt.Errorf("parsing templates: %w", err)
 	}
@@ -1846,11 +1848,13 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 		"Categories":           sortedCategories,
 		"Packages":             sortedPackages,
 		"Licenses":             sortedLicenses,
+		"UseFlags":             sortedUseFlags,
 		"Projects":             sortedProjects,
 		"Profiles":             sortedProfiles,
 		"Version":              version,
 		"RecentDurationString": recentDurationStr,
 		"RecentNews":           recentNews,
+		"GlobalNews":           globalNews,
 	}); err != nil {
 		return fmt.Errorf("rendering page: %w", err)
 	}

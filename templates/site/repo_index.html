@@ -36,7 +36,14 @@
                 <td>
                     <ul>
                         {{range .Repo.Repository.Owners}}
-                        <li>{{if .Name}}{{.Name}}{{else}}Unknown{{end}} {{if .Email}}({{.Email}}){{end}} {{if .Type}}[{{.Type}}]{{end}}</li>
+                        <li>{{if .Name}}{{.Name}}{{else}}Unknown{{end}} {{if .Email}}
+                            {{$link := buildOwnerEmailLink $.Repo.RemoteURL .Email}}
+                            {{if $link}}
+                                (<a href="{{$link}}">Email hidden</a>)
+                            {{else}}
+                                (Email hidden)
+                            {{end}}
+                        {{end}} {{if .Type}}[{{.Type}}]{{end}}</li>
                         {{end}}
                     </ul>
                 </td>
