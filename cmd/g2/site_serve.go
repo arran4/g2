@@ -11,6 +11,8 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/arran4/g2/templates"
 )
 
 func (cfg *MainArgConfig) cmdSite(args []string) error {
@@ -154,7 +156,7 @@ func newSiteServer(sites []*SiteData) (*SiteServer, error) {
 		populatePkgUseFlags(site)
 	}
 
-	tmpl, err := template.New("").Funcs(getTemplateFuncMap()).ParseFS(siteTemplates, "sitegen_templates/*.html")
+	tmpl, err := template.New("").Funcs(getTemplateFuncMap()).ParseFS(templates.SiteFS, "site/*.html")
 	if err != nil {
 		return nil, fmt.Errorf("parsing templates: %w", err)
 	}
