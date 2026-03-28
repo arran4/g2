@@ -41,10 +41,11 @@ func (m ParsingMode) String() string {
 }
 
 type Ebuild struct {
-	Path   string
-	Vars   map[string]string
-	SrcUri []URIEntry
-	Mode   ParsingMode
+	Path          string
+	Vars          map[string]string
+	SrcUri        []URIEntry
+	Mode          ParsingMode
+	ParseWarnings []string
 }
 
 const ebuildTemplate = `{{- range .Vars -}}
@@ -188,6 +189,8 @@ func ParseEbuild(fsys fs.FS, path string, mode ParsingMode) (*Ebuild, error) {
 		if err != nil {
 			return nil, fmt.Errorf("parsing ebuild variables: %w", err)
 		}
+
+		e.ParseWarnings = parser.Warnings
 
 		// Since variables might depend on each other, we need to iterate
 		// or at least resolve using the whole parsedVars map.

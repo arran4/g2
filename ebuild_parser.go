@@ -90,6 +90,8 @@ type EbuildParser struct {
 	peekRune rune
 	peekErr  error
 	hasPeek  bool
+
+	Warnings []string
 }
 
 func NewEbuildParser(ctx context.Context, reader io.Reader) *EbuildParser {
@@ -411,7 +413,9 @@ func (p *EbuildParser) skipFunctionBody() error {
 	closer := '}'
 	if r != '{' {
 		if r == '(' {
-			log.Printf("Warning: parsing ebuild variables: expected '{' for function body but found '(', treating as subshell body")
+			msg := "expected '{' for function body but found '(', treating as subshell body"
+			log.Printf("Warning: parsing ebuild variables: %s", msg)
+			p.Warnings = append(p.Warnings, msg)
 			opener = '('
 			closer = ')'
 		} else {
