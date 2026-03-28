@@ -30,9 +30,17 @@ class SearchEngine {
         // Match against all documents
         const results = this.documents.filter(doc => this.matchDoc(doc, ast));
 
-        // Rank results: simpler version, sort by length of full name to favor exact matches,
-        // then by version string descending. (Or use VersionSortKey if we implement it client-side)
+        const terms = this.getTerms(ast);
+        results.forEach(doc => {
+            doc._score = this.scoreDoc(doc, terms);
+        });
+
+        // Rank results: score descending, then by full name alphabetical,
+        // then by version string descending.
         results.sort((a, b) => {
+            if (a._score !== b._score) {
+                return b._score - a._score;
+            }
             if (a.full_name !== b.full_name) {
                 return a.full_name.localeCompare(b.full_name);
             }
@@ -40,6 +48,53 @@ class SearchEngine {
         });
 
         return results;
+    }
+
+    getTerms(ast) {
+        if (!ast) return [];
+        switch(ast.type) {
+            case 'OR':
+            case 'AND':
+                return this.getTerms(ast.left).concat(this.getTerms(ast.right));
+            case 'NOT':
+                return [];
+            case 'GROUP':
+                return this.getTerms(ast.expr);
+            case 'TERM':
+                return [ast.value.toLowerCase()];
+            case 'FIELD':
+                if (ast.field === 'category' || ast.field === 'overlay' || ast.field === 'arch' || ast.field === 'license' || ast.field === 'keyword') {
+                    return [];
+                }
+                return [ast.value.toLowerCase()];
+            case 'SEQUENCE':
+                return [ast.value.toLowerCase()];
+            default:
+                return [];
+        }
+    }
+
+    escapeRegExp(string) {
+        return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    }
+
+    scoreDoc(doc, terms) {
+        let score = 0;
+        const search_text = doc.search_text || "";
+        const full_name = (doc.full_name || "").toLowerCase();
+        for (const term of terms) {
+            if (!term) continue;
+            if (full_name === term || full_name.endsWith("/" + term)) {
+                score += 100;
+            } else if (full_name.includes(term)) {
+                score += 50;
+            } else if (new RegExp(`\\b${this.escapeRegExp(term)}\\b`, 'i').test(search_text)) {
+                score += 10;
+            } else if (search_text.includes(term)) {
+                score += 1;
+            }
+        }
+        return score;
     }
 
     matchDoc(doc, ast) {
