@@ -1,0 +1,32 @@
+<h2>Repository Statistics: {{.Repo.RepoName}}</h2>
+
+<div class="metadata-section">
+    <table class="table">
+        <tbody>
+            {{if .Repo.GitSize}}
+            <tr>
+                <th>Git Size</th>
+                <td>{{.Repo.GitSize}}</td>
+            </tr>
+            {{end}}
+            {{if .Repo.CheckoutTime}}
+            <tr>
+                <th>Checkout Time</th>
+                <td>{{.Repo.CheckoutTime}}</td>
+            </tr>
+            {{end}}
+            {{if .Repo.ProcessTime}}
+            <tr>
+                <th>Processing Time</th>
+                <td>{{.Repo.ProcessTime}}</td>
+            </tr>
+            {{end}}
+            {{if .Repo.SourceURL}}
+            <tr>
+                <th>Source URL</th>
+                <td><a href="{{.Repo.SourceURL}}">{{.Repo.SourceURL}}</a></td>
+            </tr>
+            {{end}}
+        </tbody>
+    </table>
+</div>
