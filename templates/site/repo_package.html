@@ -34,7 +34,7 @@
         {{end}}
         {{if .Package.DominantLicense}}
         <dt><strong>License:</strong></dt>
-        <dd>{{if and .Package.DominantLicense (index $.ValidLicenses .Package.DominantLicense)}}<a href="../../../../../../licenses/{{.Package.DominantLicense}}/">{{.Package.DominantLicense}}</a>{{else}}{{.Package.DominantLicense}}{{end}}</dd>
+        <dd>{{if and .Package.DominantLicense (index $.ValidLicenses .Package.DominantLicense)}}<a href="../../../../../../licenses/{{slugify .Package.DominantLicense}}/">{{.Package.DominantLicense}}</a>{{else}}{{.Package.DominantLicense}}{{end}}</dd>
         {{end}}
     </dl>
 </div>

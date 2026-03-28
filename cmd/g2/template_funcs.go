@@ -13,6 +13,7 @@ func getTemplateFuncMap() template.FuncMap {
 		"parseIUSEFlags":      parseIUSEFlagsFunc,
 		"buildOwnerEmailLink": buildOwnerEmailLinkFunc,
 		"now":                 time.Now,
+		"slugify":             sanitizeFilename,
 	}
 }
 

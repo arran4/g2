@@ -232,6 +232,10 @@ func newSiteServer(sites []*SiteData, genInfo GenerationInfo) (*SiteServer, erro
 					if ver.Ebuild != nil && ver.Ebuild.Vars != nil {
 						lic := ver.Ebuild.Vars["LICENSE"]
 						if lic != "" {
+							if !isValidLicense(lic) {
+								log.Printf("Warning: Invalid license skipped: %q in package %s", lic, pkgKey)
+								continue
+							}
 							if _, ok := aggLicenses[lic]; !ok {
 								aggLicenses[lic] = &AggLicense{Name: lic}
 							}
@@ -534,9 +538,15 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			})
 			return
 		} else if len(parts) == 2 {
-			licName := parts[1]
-			lic, ok := s.LicMap[licName]
-			if !ok {
+			licNameSlug := parts[1]
+			var lic *AggLicense
+			for _, l := range s.AggLicenses {
+				if sanitizeFilename(l.Name) == licNameSlug {
+					lic = l
+					break
+				}
+			}
+			if lic == nil {
 				http.NotFound(w, r)
 				return
 			}
