@@ -14,7 +14,7 @@ func TestGenerateUsesPages(t *testing.T) {
 
 	outDir := t.TempDir()
 
-	err = generateSite(outDir, []*SiteData{siteData}, 90*24*time.Hour, "3 months")
+	err = generateSite(outDir, []*SiteData{siteData}, 90*24*time.Hour, "3 months", GenerationInfo{})
 	if err != nil {
 		t.Fatalf("generateSite failed: %v", err)
 	}

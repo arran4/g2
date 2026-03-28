@@ -105,7 +105,7 @@ func TestGenerateSite(t *testing.T) {
 
 	outDir := t.TempDir()
 
-	err = generateSite(outDir, []*SiteData{siteData}, 90*24*time.Hour, "3 months")
+	err = generateSite(outDir, []*SiteData{siteData}, 90*24*time.Hour, "3 months", GenerationInfo{})
 	if err != nil {
 		t.Fatalf("generateSite failed: %v", err)
 	}
@@ -134,7 +134,7 @@ func TestGenerateSite_TemplateError(t *testing.T) {
 	}
 	outDir := t.TempDir()
 
-	err := generateSite(outDir, []*SiteData{siteData}, 90*24*time.Hour, "3 months")
+	err := generateSite(outDir, []*SiteData{siteData}, 90*24*time.Hour, "3 months", GenerationInfo{})
 
 	if err == nil {
 		t.Fatalf("generateSite unexpectedly succeeded with bad parameters, template/file errors are likely being swallowed")
