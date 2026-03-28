@@ -565,13 +565,13 @@ func (cfg *CmdPackageArgConfig) cmdUpdate(args []string) error {
 	if err != nil {
 		return fmt.Errorf("creating temp file: %w", err)
 	}
-	defer os.Remove(tmpFile.Name())
+	defer func() { _ = os.Remove(tmpFile.Name()) }()
 
 	if _, err := io.Copy(tmpFile, resp.Body); err != nil {
 		return fmt.Errorf("writing to temp file: %w", err)
 	}
 
-	tmpFile.Close()
+	_ = tmpFile.Close()
 
 	z, err := zip.OpenReader(tmpFile.Name())
 	if err != nil {
