@@ -332,10 +332,7 @@ func generateSearchIndex(outDir string, sites []*SiteData) error {
 		}
 	}
 
-	tmpl, err := template.New("").Funcs(template.FuncMap{
-		"join": strings.Join,
-		"parseIUSEFlags": parseIUSEFlagsFunc,
-	}).ParseFS(templates.SiteFS, "site/*.html")
+	tmpl, err := template.New("").Funcs(getTemplateFuncMap()).ParseFS(templates.SiteFS, "site/*.html")
 	if err != nil {
 		return fmt.Errorf("parsing search templates: %w", err)
 	}

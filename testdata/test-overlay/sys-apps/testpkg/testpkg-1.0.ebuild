@@ -1,1 +1,0 @@
-KEYWORDS="~amd64 x86"

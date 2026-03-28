@@ -520,6 +520,16 @@ func resolveDependencies(node g2.DepNode, site *SiteData) ResolvedDepNode {
 	return ResolvedDepNode{}
 }
 
+// isValidLicense checks if a license string contains at least one alphanumeric character
+func isValidLicense(s string) bool {
+	for _, r := range s {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') {
+			return true
+		}
+	}
+	return false
+}
+
 // sanitizeFilename restricts a string to characters safe for file and directory names
 // and limits its length to prevent "file name too long" errors.
 func sanitizeFilename(s string) string {
@@ -533,7 +543,12 @@ func sanitizeFilename(s string) string {
 			log.Printf("Warning: name %q contains null bytes, stripping them", s)
 			continue
 		}
-		sb.WriteRune(r)
+		// Replace characters that are invalid or problematic in file names and URLs
+		if r == '/' || r == '\\' || r == ':' || r == '*' || r == '?' || r == '"' || r == '<' || r == '>' || r == '|' || r == ' ' {
+			sb.WriteRune('_')
+		} else {
+			sb.WriteRune(r)
+		}
 	}
 	res := sb.String()
 	if res != s {
@@ -1668,6 +1683,11 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 
 						for _, lic := range licenses {
 							if lic != "" {
+								if !isValidLicense(lic) {
+									log.Printf("Warning: Invalid license skipped: %q in package %s", lic, pkgKey)
+									continue
+								}
+
 								if _, ok := aggLicenses[lic]; !ok {
 									aggLicenses[lic] = &AggLicense{Name: lic}
 								}
