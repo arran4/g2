@@ -2933,7 +2933,9 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, 
 			return nil
 		})
 	}
-	g.Wait()
+	if err := g.Wait(); err != nil {
+		log.Printf("Warning: error during parallel repository fetching: %v", err)
+	}
 
 	// Sort the resulting sites alphabetically by RepoName for deterministic ordering
 	sort.Slice(allSites, func(i, j int) bool {

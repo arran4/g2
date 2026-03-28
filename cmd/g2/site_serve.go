@@ -91,7 +91,9 @@ func (cfg *MainArgConfig) cmdSiteServe(args []string) error {
 				})
 			}
 		}
-		g.Wait()
+		if err := g.Wait(); err != nil {
+			log.Printf("Warning: error during parallel repository parsing: %v", err)
+		}
 
 		// Sort the resulting sites alphabetically by RepoName for deterministic ordering
 		sort.Slice(sites, func(i, j int) bool {
