@@ -70,6 +70,22 @@ func (r *LicenseSanityLintRule) LintWithQA(repoDir string, pkg *g2.PackageData, 
 					}
 				}
 
+				for _, lic := range parsedLicenses {
+					hasAlphanumeric := false
+					for _, r := range lic {
+						if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') {
+							hasAlphanumeric = true
+							break
+						}
+					}
+
+					if !hasAlphanumeric {
+						warnings = append(warnings, fmt.Sprintf("[%s] Ebuild %s has a LICENSE '%s' without valid characters.", severity, ver.Version, lic))
+					} else if strings.Contains(lic, "/") {
+						warnings = append(warnings, fmt.Sprintf("[%s] Ebuild %s has a LICENSE '%s' containing a slash, which may break URLs.", severity, ver.Version, lic))
+					}
+				}
+
 				if isFullText {
 					warnings = append(warnings, fmt.Sprintf("[%s] Ebuild %s has a LICENSE variable that looks like a full-text license rather than a license identifier.", severity, ver.Version))
 				}

@@ -27,7 +27,7 @@
         {{end}}
         {{if .VersionData.Ebuild.Vars.LICENSE}}
         <dt><strong>License:</strong></dt>
-        <dd>{{if and .VersionData.Ebuild.Vars.LICENSE (index $.ValidLicenses .VersionData.Ebuild.Vars.LICENSE)}}<a href="../../../../../../licenses/{{.VersionData.Ebuild.Vars.LICENSE}}/">{{.VersionData.Ebuild.Vars.LICENSE}}</a>{{else}}{{.VersionData.Ebuild.Vars.LICENSE}}{{end}}</dd>
+        <dd>{{if and .VersionData.Ebuild.Vars.LICENSE (index $.ValidLicenses .VersionData.Ebuild.Vars.LICENSE)}}<a href="../../../../../../licenses/{{slugify .VersionData.Ebuild.Vars.LICENSE}}/">{{.VersionData.Ebuild.Vars.LICENSE}}</a>{{else}}{{.VersionData.Ebuild.Vars.LICENSE}}{{end}}</dd>
         {{end}}
     </dl>
 </div>
