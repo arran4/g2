@@ -1,6 +1,7 @@
 package main
 
 import (
+	"archive/zip"
 	"encoding/json"
 	"fmt"
 	"html/template"
@@ -55,14 +56,7 @@ type SearchManifest struct {
 	DataFiles     []string `json:"data_files"`
 }
 
-func generateSearchIndex(outDir string, sites []*SiteData) error {
-	searchDir := filepath.Join(outDir, "search")
-	dataDir := filepath.Join(searchDir, "data")
-
-	if err := os.MkdirAll(dataDir, 0755); err != nil {
-		return fmt.Errorf("creating search data directory: %w", err)
-	}
-
+func generateSearchData(outDir, outZip string, sites []*SiteData) error {
 	var documents []SearchDocument
 	docID := 0
 
@@ -182,10 +176,7 @@ func generateSearchIndex(outDir string, sites []*SiteData) error {
 						}
 					}
 
-					// Map package USE descriptions to populate search
 					for _, pUse := range pkg.PkgUseFlags {
-						// Since we search by ebuild version, and we only have the aggregated USE flags for the whole pkg here,
-						// check if this specific use flag applies to this version
 						if pUse.Versions[verStr] != "" {
 							useDescriptions = append(useDescriptions, pUse.Desc)
 						}
@@ -289,35 +280,88 @@ func generateSearchIndex(outDir string, sites []*SiteData) error {
 		}
 	}
 
-	dataFile := "docs-0.json"
-	dataFilePath := filepath.Join(dataDir, dataFile)
-
-	f, err := os.Create(dataFilePath)
-	if err != nil {
-		return fmt.Errorf("creating docs data file: %w", err)
-	}
-	defer func() { _ = f.Close() }()
-
-	encoder := json.NewEncoder(f)
-	if err := encoder.Encode(documents); err != nil {
-		return fmt.Errorf("encoding search docs: %w", err)
-	}
-
 	manifest := SearchManifest{
 		DocumentCount: len(documents),
-		DataFiles:     []string{dataFile},
+		DataFiles:     []string{"docs-0.json"},
 	}
 
-	manifestPath := filepath.Join(dataDir, "manifest.json")
-	mf, err := os.Create(manifestPath)
-	if err != nil {
-		return fmt.Errorf("creating search manifest: %w", err)
-	}
-	defer func() { _ = mf.Close() }()
+	if outZip != "" {
+		f, err := os.Create(outZip)
+		if err != nil {
+			return fmt.Errorf("creating search zip file: %w", err)
+		}
+		defer func() { _ = f.Close() }()
 
-	mEncoder := json.NewEncoder(mf)
-	if err := mEncoder.Encode(manifest); err != nil {
-		return fmt.Errorf("encoding search manifest: %w", err)
+		z := zip.NewWriter(f)
+		defer func() { _ = z.Close() }()
+
+		// Create data dir
+		docsWriter, err := z.Create("data/docs-0.json")
+		if err != nil {
+			return fmt.Errorf("creating docs-0.json in zip: %w", err)
+		}
+		encoder := json.NewEncoder(docsWriter)
+		if err := encoder.Encode(documents); err != nil {
+			return fmt.Errorf("encoding search docs: %w", err)
+		}
+
+		manifestWriter, err := z.Create("data/manifest.json")
+		if err != nil {
+			return fmt.Errorf("creating manifest.json in zip: %w", err)
+		}
+		mEncoder := json.NewEncoder(manifestWriter)
+		if err := mEncoder.Encode(manifest); err != nil {
+			return fmt.Errorf("encoding search manifest: %w", err)
+		}
+		return nil
+	}
+
+	if outDir != "" {
+		dataDir := filepath.Join(outDir, "data")
+		if err := os.MkdirAll(dataDir, 0755); err != nil {
+			return fmt.Errorf("creating search data directory: %w", err)
+		}
+
+		dataFile := "docs-0.json"
+		dataFilePath := filepath.Join(dataDir, dataFile)
+
+		f, err := os.Create(dataFilePath)
+		if err != nil {
+			return fmt.Errorf("creating docs data file: %w", err)
+		}
+		defer func() { _ = f.Close() }()
+
+		encoder := json.NewEncoder(f)
+		if err := encoder.Encode(documents); err != nil {
+			return fmt.Errorf("encoding search docs: %w", err)
+		}
+
+		manifestPath := filepath.Join(dataDir, "manifest.json")
+		mf, err := os.Create(manifestPath)
+		if err != nil {
+			return fmt.Errorf("creating search manifest: %w", err)
+		}
+		defer func() { _ = mf.Close() }()
+
+		mEncoder := json.NewEncoder(mf)
+		if err := mEncoder.Encode(manifest); err != nil {
+			return fmt.Errorf("encoding search manifest: %w", err)
+		}
+	}
+
+	return nil
+}
+
+func generateSearchIndex(outDir string, sites []*SiteData) error {
+	searchDir := filepath.Join(outDir, "search")
+	dataDir := filepath.Join(searchDir, "data")
+
+	if err := os.MkdirAll(dataDir, 0755); err != nil {
+		return fmt.Errorf("creating search data directory: %w", err)
+	}
+
+	if err := generateSearchData(searchDir, "", sites); err != nil {
+		return fmt.Errorf("generating search data: %w", err)
 	}
 
 	jsFiles := []string{"search_parser.js", "search.js", "search_ui.js"}
