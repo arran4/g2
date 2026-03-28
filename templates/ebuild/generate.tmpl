@@ -1,0 +1,10 @@
+{{- range .Vars -}}
+{{ .Key }}="{{ .Value }}"
+{{ end -}}
+{{- if .SrcUri -}}
+SRC_URI="
+{{- range .SrcUri }}
+	{{ .URL }}{{ if .Filename }} -> {{ .Filename }}{{ end }}
+{{- end }}
+"
+{{ end -}}

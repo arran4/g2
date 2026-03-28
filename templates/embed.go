@@ -4,7 +4,7 @@ import (
 	"embed"
 )
 
-//go:embed ebuild/*.ebuild
+//go:embed ebuild/*.ebuild ebuild/*.tmpl
 var EbuildFS embed.FS
 
 //go:embed site/*.html site/*.xml site/*.js
