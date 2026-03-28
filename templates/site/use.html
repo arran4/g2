@@ -1,5 +1,13 @@
 <h2>USE Flag: {{.UseFlag.Name}}</h2>
 
+<div class="metadata-section">
+    <h3>Search</h3>
+    <form action="{{.BaseURL}}search/" method="get">
+        <input type="text" name="q" value="use:{{.UseFlag.Name}} " placeholder="Search packages, descriptions, use flags..." style="width: 80%; padding: 0.5rem;" />
+        <button type="submit" style="padding: 0.5rem;">Search</button>
+    </form>
+</div>
+
 {{if .UseFlag.GlobalDesc}}
 <div class="metadata-section">
     <h3>Global Description</h3>
@@ -51,8 +59,10 @@
         </tr>
         {{range .UseFlag.Packages}}
         {{$pkgKey := printf "%s/%s" .Category .Name}}
+        {{$firstRepo := ""}}
+        {{range $r, $d := .Repos}}{{$firstRepo = $r}}{{end}}
         <tr>
-            <td><a href="../../repos/{{$.Repo.RepoName}}/categories/{{.Category}}/packages/{{.Name}}/">{{$pkgKey}}</a></td>
+            <td><a href="{{$.BaseURL}}repos/{{$firstRepo}}/categories/{{.Category}}/packages/{{.Name}}/">{{$pkgKey}}</a></td>
             <td>
                 {{$localDesc := index $.UseFlag.LocalDescs $pkgKey}}
                 {{if $localDesc}}{{$localDesc}}{{else}}<em>-</em>{{end}}

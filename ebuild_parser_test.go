@@ -96,3 +96,73 @@ func TestParserCatchesNullBytes(t *testing.T) {
 		t.Errorf("Expected null byte error, got: %v", err)
 	}
 }
+
+func TestEbuildParserEdgeCases(t *testing.T) {
+	tests := []struct {
+		name      string
+		ebuild    string
+		wantError bool
+		wantVars  map[string]string
+	}{
+		{
+			name: "Subshell function body",
+			ebuild: `
+src_prepare() (
+	default
+)
+`,
+			wantError: false,
+			wantVars:  map[string]string{},
+		},
+		{
+			name: "Array with mismatched parens in quotes",
+			ebuild: `
+MY_ARRAY=(
+	"foo)("
+)
+`,
+			wantError: false,
+			wantVars:  map[string]string{"MY_ARRAY": "(\n\t\"foo)(\"\n)"},
+		},
+		{
+			name: "Array with mismatched parens in single quotes",
+			ebuild: `
+MY_ARRAY=(
+	'foo)('
+)
+`,
+			wantError: false,
+			wantVars:  map[string]string{"MY_ARRAY": "(\n\t'foo)('\n)"},
+		},
+		{
+			name: "Array with comment inside",
+			ebuild: `
+MY_ARRAY=(
+	"foo" # some comment
+	"bar"
+)
+`,
+			wantError: false,
+			wantVars:  map[string]string{"MY_ARRAY": "(\n\t\"foo\" \t\"bar\"\n)"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			parser := NewEbuildParser(context.Background(), strings.NewReader(tt.ebuild))
+			vars, err := parser.Parse()
+
+			if (err != nil) != tt.wantError {
+				t.Errorf("expected error: %v, got: %v", tt.wantError, err)
+			}
+
+			if !tt.wantError {
+				for k, v := range tt.wantVars {
+					if vars[k] != v {
+						t.Errorf("var %s expected %q, got %q", k, v, vars[k])
+					}
+				}
+			}
+		})
+	}
+}

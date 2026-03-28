@@ -1,0 +1,8 @@
+Title: Test News Item
+Author: Test Author <test@example.com>
+Posted: 2026-03-27
+Revision: 1
+News-Item-Format: 2.0
+Display-If-Installed: sys-apps/testpkg
+
+This is a test news item for verification.

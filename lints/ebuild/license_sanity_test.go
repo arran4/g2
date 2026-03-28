@@ -44,6 +44,16 @@ func TestLicenseSanityLintRule(t *testing.T) {
 			licenseStr: "Some, license, with, lots, of, commas",
 			expectWarn: true,
 		},
+		{
+			name:       "Invalid characters only",
+			licenseStr: "//",
+			expectWarn: true,
+		},
+		{
+			name:       "Contains slash",
+			licenseStr: "GPL/2",
+			expectWarn: true,
+		},
 	}
 
 	for _, tc := range tests {

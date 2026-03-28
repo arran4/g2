@@ -1,6 +1,13 @@
 
 <h2>Repository: {{.Repo.RepoName}}</h2>
 <div class="metadata-section">
+    <h3>Search</h3>
+    <form action="{{.BaseURL}}search/" method="get">
+        <input type="text" name="q" value="overlay:{{.Repo.RepoName}} " placeholder="Search packages, descriptions, use flags..." style="width: 80%; padding: 0.5rem;" />
+        <button type="submit" style="padding: 0.5rem;">Search</button>
+    </form>
+</div>
+<div class="metadata-section">
     <p>To use this repository, you can enable it via eselect:</p>
     <pre><code>eselect repository enable {{.Repo.RepoName}}</code></pre>
     <p>And sync it:</p>
@@ -36,7 +43,14 @@
                 <td>
                     <ul>
                         {{range .Repo.Repository.Owners}}
-                        <li>{{if .Name}}{{.Name}}{{else}}Unknown{{end}} {{if .Email}}({{.Email}}){{end}} {{if .Type}}[{{.Type}}]{{end}}</li>
+                        <li>{{if .Name}}{{.Name}}{{else}}Unknown{{end}} {{if .Email}}
+                            {{$link := buildOwnerEmailLink $.Repo.RemoteURL .Email}}
+                            {{if $link}}
+                                (<a href="{{$link}}">Email hidden</a>)
+                            {{else}}
+                                (Email hidden)
+                            {{end}}
+                        {{end}} {{if .Type}}[{{.Type}}]{{end}}</li>
                         {{end}}
                     </ul>
                 </td>

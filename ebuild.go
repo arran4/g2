@@ -12,6 +12,8 @@ import (
 	"strconv"
 	"strings"
 	"text/template"
+
+	"github.com/arran4/g2/templates"
 )
 
 type URIEntry struct {
@@ -41,23 +43,13 @@ func (m ParsingMode) String() string {
 }
 
 type Ebuild struct {
-	Path   string
-	Vars   map[string]string
-	SrcUri []URIEntry
-	Mode   ParsingMode
+	Path          string
+	Vars          map[string]string
+	SrcUri        []URIEntry
+	Mode          ParsingMode
+	RawText       string
+	ParseWarnings []string
 }
-
-const ebuildTemplate = `{{- range .Vars -}}
-{{ .Key }}="{{ .Value }}"
-{{ end -}}
-{{- if .SrcUri -}}
-SRC_URI="
-{{- range .SrcUri }}
-	{{ .URL }}{{ if .Filename }} -> {{ .Filename }}{{ end }}
-{{- end }}
-"
-{{ end -}}
-`
 
 type varEntry struct {
 	Key   string
@@ -148,7 +140,7 @@ func (e *Ebuild) String() string {
 		}
 	}
 
-	tmpl := template.Must(template.New("ebuild").Parse(ebuildTemplate))
+	tmpl := template.Must(template.ParseFS(templates.EbuildFS, "ebuild/generate.tmpl"))
 	var buf bytes.Buffer
 	if err := tmpl.Execute(&buf, data); err != nil {
 		// Should not happen with valid data
@@ -180,6 +172,7 @@ func ParseEbuild(fsys fs.FS, path string, mode ParsingMode) (*Ebuild, error) {
 		return nil, fmt.Errorf("reading file %s: %w", path, err)
 	}
 	content := string(contentBytes)
+	e.RawText = content
 
 	if mode >= ParseVariables {
 		// Use the recursive descent parser
@@ -188,6 +181,8 @@ func ParseEbuild(fsys fs.FS, path string, mode ParsingMode) (*Ebuild, error) {
 		if err != nil {
 			return nil, fmt.Errorf("parsing ebuild variables: %w", err)
 		}
+
+		e.ParseWarnings = parser.Warnings
 
 		// Since variables might depend on each other, we need to iterate
 		// or at least resolve using the whole parsedVars map.

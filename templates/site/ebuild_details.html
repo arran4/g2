@@ -1,5 +1,13 @@
 <h2><a href="../../../">{{.Package.Category}}</a>/<a href="../../">{{.Package.Name}}</a> - {{.VersionData.Version}} (<a href="../../../../../../">{{.Repo.RepoName}}</a>)</h2>
 
+<div class="metadata-section">
+    <h3>Search</h3>
+    <form action="{{.BaseURL}}search/" method="get">
+        <input type="text" name="q" value="overlay:{{.Repo.RepoName}} category:{{.Package.Category}} {{.Package.Name}} " placeholder="Search packages, descriptions, use flags..." style="width: 80%; padding: 0.5rem;" />
+        <button type="submit" style="padding: 0.5rem;">Search</button>
+    </form>
+</div>
+
 {{if .VersionData.Deprecated}}
 <div class="alert alert-danger" style="border-color: #ff4c4c; background-color: #ffe6e6;">
     <strong>Deprecated:</strong> This version is deprecated.
@@ -27,7 +35,7 @@
         {{end}}
         {{if .VersionData.Ebuild.Vars.LICENSE}}
         <dt><strong>License:</strong></dt>
-        <dd>{{if and .VersionData.Ebuild.Vars.LICENSE (index $.ValidLicenses .VersionData.Ebuild.Vars.LICENSE)}}<a href="../../../../../../licenses/{{.VersionData.Ebuild.Vars.LICENSE}}/">{{.VersionData.Ebuild.Vars.LICENSE}}</a>{{else}}{{.VersionData.Ebuild.Vars.LICENSE}}{{end}}</dd>
+        <dd>{{if and .VersionData.Ebuild.Vars.LICENSE (index $.ValidLicenses .VersionData.Ebuild.Vars.LICENSE)}}<a href="../../../../../../licenses/{{slugify .VersionData.Ebuild.Vars.LICENSE}}/">{{.VersionData.Ebuild.Vars.LICENSE}}</a>{{else}}{{.VersionData.Ebuild.Vars.LICENSE}}{{end}}</dd>
         {{end}}
     </dl>
 </div>
@@ -49,6 +57,15 @@
         </tr>
     </table>
 </div>
+
+{{if not .VersionData.EbuildRawURL}}
+<div class="metadata-section">
+    <details>
+        <summary style="cursor: pointer;"><strong>View Raw Ebuild</strong></summary>
+        <pre style="background: #f4f4f4; padding: 10px; overflow-x: auto;">{{.VersionData.Ebuild.RawText}}</pre>
+    </details>
+</div>
+{{end}}
 
 <style>
     .iuse-flag { display: inline-block; margin-right: 15px; font-family: monospace; }
