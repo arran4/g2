@@ -220,6 +220,7 @@ func (cfg *MainArgConfig) cmdOverlay(args []string) error {
 	clear := fs.Bool("clear", false, "Clear output directory before generation")
 	recentDurOpt := fs.String("recent-duration", "3mo", "Duration to consider an update 'recent' (e.g. 3mo, 14d, 72h)")
 	fastGit := fs.Bool("fast-git-modtime", false, "Use fast (O(1)) but potentially less reliable go-git file log lookup")
+	useZip := fs.Bool("use-zip", false, "Download zip archives instead of git clone when supported")
 
 	if err := fs.Parse(args[2:]); err != nil {
 		return fmt.Errorf("parsing flags: %w", err)
@@ -263,7 +264,7 @@ func (cfg *MainArgConfig) cmdOverlay(args []string) error {
 		cmd.Stderr = os.Stderr
 
 		t0 := time.Now()
-		if err := cmd.Run(); err != nil {
+		if err := FetchRepo(ctx, location, tmpDir, *useZip); err != nil {
 			cleanup()
 			return fmt.Errorf("cloning repository: %w", err)
 		}
@@ -344,6 +345,7 @@ func (cfg *MainArgConfig) cmdOverlays(args []string) error {
 	clear := fs.Bool("clear", false, "Clear output directory before generation")
 	recentDurOpt := fs.String("recent-duration", "3mo", "Duration to consider an update 'recent' (e.g. 3mo, 14d, 72h)")
 	fastGit := fs.Bool("fast-git-modtime", false, "Use fast (O(1)) but potentially less reliable go-git file log lookup")
+	useZip := fs.Bool("use-zip", false, "Download zip archives instead of git clone when supported")
 
 	if err := fs.Parse(args[2:]); err != nil {
 		return fmt.Errorf("parsing flags: %w", err)
@@ -365,7 +367,7 @@ func (cfg *MainArgConfig) cmdOverlays(args []string) error {
 	}
 
 	log.Printf("Generating site from remote repositories: %s into %s", location, *outDir)
-	return cfg.cmdSiteRemote(location, *outDir, recentDuration, recentDurationStr, *fastGit)
+	return cfg.cmdSiteRemote(location, *outDir, recentDuration, recentDurationStr, *fastGit, *useZip)
 }
 
 func parseLayoutConfFromFS(sysFS fs.FS, path string) (*g2.LayoutConf, error) {
@@ -2924,7 +2926,7 @@ func renderPage(path string, tmpl *template.Template, name string, data map[stri
 	return nil
 }
 
-func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, recentDuration time.Duration, recentDurationStr string, fastGit bool) error {
+func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, recentDuration time.Duration, recentDurationStr string, fastGit bool, useZip bool) error {
 	var data []byte
 	var err error
 
@@ -2992,19 +2994,15 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, 
 		}
 
 		g.Go(func() error {
-			log.Printf("Cloning remote repository: %s (%s)", repo.Name, gitUrl)
+			log.Printf("Fetching remote repository: %s (%s)", repo.Name, gitUrl)
 
 			repoPath := filepath.Join(tmpDir, repo.Name)
-			// Try to shallow clone
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 			defer cancel()
-			cmd := exec.CommandContext(ctx, "git", "clone", "--depth", "1", gitUrl, repoPath)
-			cmd.Stdout = os.Stdout
-			cmd.Stderr = os.Stderr
 
 			t0 := time.Now()
-			if err := cmd.Run(); err != nil {
-				log.Printf("Failed to clone %s: %v", repo.Name, err)
+			if err := FetchRepo(ctx, gitUrl, repoPath, useZip); err != nil {
+				log.Printf("Failed to fetch %s: %v", repo.Name, err)
 				return nil
 			}
 			checkoutTime := time.Since(t0)
