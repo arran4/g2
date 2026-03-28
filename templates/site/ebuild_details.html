@@ -14,6 +14,14 @@
 </div>
 {{end}}
 
+{{if .Package.ReverseVirtuals}}
+<div class="alert alert-info">
+    <strong>Notice:</strong> This package is in a virtual group:
+    {{range $index, $virtual := .Package.ReverseVirtuals}}{{if $index}}, {{end}}
+    <a href="{{$.BaseURL}}packages/virtual/{{index (split $virtual "/") 1}}/">{{$virtual}}</a>{{end}}
+</div>
+{{end}}
+
 <div class="metadata-section">
     <h3>Package Information</h3>
     <dl>
