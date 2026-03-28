@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"flag"
 	"fmt"
 	"html/template"
@@ -9,10 +10,13 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/arran4/g2/templates"
+	"golang.org/x/sync/errgroup"
 )
 
 func (cfg *MainArgConfig) cmdSite(args []string) error {
@@ -61,21 +65,40 @@ func (cfg *MainArgConfig) cmdSiteServe(args []string) error {
 			return fmt.Errorf("could not read %s: %w", dbReposPath, err)
 		}
 
+		var sitesMu sync.Mutex
+
+		g, _ := errgroup.WithContext(context.Background())
+		g.SetLimit(runtime.GOMAXPROCS(0))
+
 		for _, entry := range entries {
+			entry := entry // capture loop variable
 			if !entry.IsDir() {
 				continue
 			}
 			repoPath := filepath.Join(dbReposPath, entry.Name())
 			if isOverlayDir(repoPath) {
-				log.Printf("Parsing repository %s", entry.Name())
-				siteData, err := parseRepo(os.DirFS(repoPath), ".", entry.Name(), false, nil)
-				if err != nil {
-					log.Printf("Warning: failed to parse repo %s: %v", entry.Name(), err)
-					continue
-				}
-				sites = append(sites, siteData)
+				g.Go(func() error {
+					log.Printf("Parsing repository %s", entry.Name())
+					siteData, err := parseRepo(os.DirFS(repoPath), ".", entry.Name(), false, nil)
+					if err != nil {
+						log.Printf("Warning: failed to parse repo %s: %v", entry.Name(), err)
+						return nil
+					}
+					sitesMu.Lock()
+					sites = append(sites, siteData)
+					sitesMu.Unlock()
+					return nil
+				})
 			}
 		}
+		if err := g.Wait(); err != nil {
+			log.Printf("Warning: error during parallel repository parsing: %v", err)
+		}
+
+		// Sort the resulting sites alphabetically by RepoName for deterministic ordering
+		sort.Slice(sites, func(i, j int) bool {
+			return sites[i].RepoName < sites[j].RepoName
+		})
 
 		if len(sites) == 0 {
 			return fmt.Errorf("no valid repositories found in %s", dbReposPath)
@@ -670,18 +693,18 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 			if len(parts) >= 3 {
 				switch parts[2] {
-					case "stats":
-						if len(parts) == 3 {
-							s.renderPageHTTP(w, "repo_stats.html", map[string]interface{}{
-								"Title":       site.RepoName + " - Statistics",
-								"BaseURL":     baseURL,
-								"Breadcrumbs": []Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: site.RepoName, URL: "../"}, {Name: "Statistics"}},
-								"Repo":        site,
-								"Version":     version,
-								"GenInfo":     s.GenInfo,
-							})
-							return
-						}
+				case "stats":
+					if len(parts) == 3 {
+						s.renderPageHTTP(w, "repo_stats.html", map[string]interface{}{
+							"Title":       site.RepoName + " - Statistics",
+							"BaseURL":     baseURL,
+							"Breadcrumbs": []Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: site.RepoName, URL: "../"}, {Name: "Statistics"}},
+							"Repo":        site,
+							"Version":     version,
+							"GenInfo":     s.GenInfo,
+						})
+						return
+					}
 				case "deprecated":
 					if len(parts) == 3 {
 						s.renderPageHTTP(w, "repo_deprecated.html", map[string]interface{}{

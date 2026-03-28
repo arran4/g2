@@ -7,10 +7,6 @@ import (
 	"encoding/xml"
 	"flag"
 	"fmt"
-	"github.com/arran4/g2"
-	"github.com/arran4/g2/lints"
-	"github.com/arran4/g2/lints/ebuild"
-	"github.com/arran4/g2/templates"
 	"html/template"
 	"io"
 	"io/fs"
@@ -19,10 +15,18 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
+
+	"github.com/arran4/g2"
+	"github.com/arran4/g2/lints"
+	"github.com/arran4/g2/lints/ebuild"
+	"github.com/arran4/g2/templates"
+	"golang.org/x/sync/errgroup"
 )
 
 // TODO evaluate the following they should be redundant OR moved to `/`
@@ -2858,8 +2862,13 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, 
 	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	var allSites []*SiteData
+	var allSitesMu sync.Mutex
+
+	g, _ := errgroup.WithContext(context.Background())
+	g.SetLimit(runtime.GOMAXPROCS(0))
 
 	for _, repo := range repos.Repositories {
+		repo := repo // loop variable capture
 		if len(repo.Sources) == 0 {
 			continue
 		}
@@ -2876,48 +2885,62 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, 
 			continue // skip non-http git repos for this tool
 		}
 
-		log.Printf("Cloning remote repository: %s (%s)", repo.Name, gitUrl)
+		g.Go(func() error {
+			log.Printf("Cloning remote repository: %s (%s)", repo.Name, gitUrl)
 
-		repoPath := filepath.Join(tmpDir, repo.Name)
-		// Try to shallow clone
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
-		defer cancel()
-		cmd := exec.CommandContext(ctx, "git", "clone", "--depth", "1", gitUrl, repoPath)
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
+			repoPath := filepath.Join(tmpDir, repo.Name)
+			// Try to shallow clone
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+			defer cancel()
+			cmd := exec.CommandContext(ctx, "git", "clone", "--depth", "1", gitUrl, repoPath)
+			cmd.Stdout = os.Stdout
+			cmd.Stderr = os.Stderr
 
-		t0 := time.Now()
-		if err := cmd.Run(); err != nil {
-			log.Printf("Failed to clone %s: %v", repo.Name, err)
-			continue
-		}
-		checkoutTime := time.Since(t0)
+			t0 := time.Now()
+			if err := cmd.Run(); err != nil {
+				log.Printf("Failed to clone %s: %v", repo.Name, err)
+				return nil
+			}
+			checkoutTime := time.Since(t0)
 
-		log.Printf("Parsing repository: %s", repo.Name)
+			log.Printf("Parsing repository: %s", repo.Name)
 
-		size, err := getDirSize(repoPath)
-		var gitSize string
-		if err == nil {
-			gitSize = fmt.Sprintf("%.2f MB", float64(size)/(1024*1024))
-		}
+			size, err := getDirSize(repoPath)
+			var gitSize string
+			if err == nil {
+				gitSize = fmt.Sprintf("%.2f MB", float64(size)/(1024*1024))
+			}
 
-		repoCopy := repo
+			repoCopy := repo
 
-		t1 := time.Now()
-		siteData, err := parseRepo(os.DirFS(repoPath), ".", repo.Name, fastGit, &repoCopy)
-		if err != nil {
-			log.Printf("Failed to parse repo %s: %v", repo.Name, err)
-			continue
-		}
-		processTime := time.Since(t1)
+			t1 := time.Now()
+			siteData, err := parseRepo(os.DirFS(repoPath), ".", repo.Name, fastGit, &repoCopy)
+			if err != nil {
+				log.Printf("Failed to parse repo %s: %v", repo.Name, err)
+				return nil
+			}
+			processTime := time.Since(t1)
 
-		siteData.CheckoutTime = checkoutTime.String()
-		siteData.ProcessTime = processTime.String()
-		siteData.GitSize = gitSize
-		siteData.SourceURL = gitUrl
+			siteData.CheckoutTime = checkoutTime.String()
+			siteData.ProcessTime = processTime.String()
+			siteData.GitSize = gitSize
+			siteData.SourceURL = gitUrl
 
-		allSites = append(allSites, siteData)
+			allSitesMu.Lock()
+			allSites = append(allSites, siteData)
+			allSitesMu.Unlock()
+
+			return nil
+		})
 	}
+	if err := g.Wait(); err != nil {
+		log.Printf("Warning: error during parallel repository fetching: %v", err)
+	}
+
+	// Sort the resulting sites alphabetically by RepoName for deterministic ordering
+	sort.Slice(allSites, func(i, j int) bool {
+		return allSites[i].RepoName < allSites[j].RepoName
+	})
 
 	log.Printf("Generating integrated site for %d repos", len(allSites))
 	if err := generateSite(outDir, allSites, recentDuration, recentDurationStr, GenerationInfo{}); err != nil {
