@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"github.com/arran4/g2"
 	"github.com/arran4/g2/lints"
+	"github.com/arran4/g2/lints/ebuild"
 	"html/template"
 	"io"
 	"io/fs"
@@ -20,42 +21,10 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 )
 
 // TODO evaluate the following they should be redundant OR moved to `/`
-
-var (
-	mainGentooCategories map[string]bool
-	mainGentooOnce       sync.Once
-)
-
-func fetchMainGentooCategories() map[string]bool {
-	mainGentooOnce.Do(func() {
-		mainGentooCategories = make(map[string]bool)
-		client := http.Client{Timeout: 5 * time.Second}
-		resp, err := client.Get("https://raw.githubusercontent.com/gentoo-mirror/gentoo/stable/profiles/categories")
-		if err == nil {
-			defer func() { _ = resp.Body.Close() }()
-			if resp.StatusCode == http.StatusOK {
-				data, err := io.ReadAll(resp.Body)
-				if err == nil {
-					lines := strings.Split(string(data), "\n")
-					for _, line := range lines {
-						cat := strings.TrimSpace(line)
-						if cat != "" && !strings.HasPrefix(cat, "#") {
-							mainGentooCategories[cat] = true
-						}
-					}
-				}
-			}
-		} else {
-			log.Printf("Warning: failed to fetch main gentoo categories: %v", err)
-		}
-	})
-	return mainGentooCategories
-}
 
 type RemoteRepositories struct {
 	XMLName xml.Name     `xml:"repositories"`
@@ -204,6 +173,7 @@ type VersionData struct {
 // End model TODO check
 
 func (cfg *MainArgConfig) cmdOverlay(args []string) error {
+	ebuild.SkipForSiteGen = true
 	if len(args) < 1 {
 		return fmt.Errorf("missing subcommand for overlay (e.g., site)")
 	}
@@ -302,6 +272,7 @@ func (cfg *MainArgConfig) cmdOverlay(args []string) error {
 }
 
 func (cfg *MainArgConfig) cmdOverlays(args []string) error {
+	ebuild.SkipForSiteGen = true
 	if len(args) < 1 {
 		return fmt.Errorf("missing subcommand for overlays (e.g., site)")
 	}
@@ -791,7 +762,7 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool, r
 		catPath := filepath.Join(repoDir, name)
 
 		inRepo := len(supportedCategories) == 0 || supportedCategories[name]
-		mainCats := fetchMainGentooCategories()
+		mainCats := g2.FetchMainGentooCategories()
 		inMain := len(mainCats) == 0 || mainCats[name]
 
 		pkgEntries, err := fs.ReadDir(sysFS, filepath.ToSlash(catPath))
@@ -1079,30 +1050,28 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool, r
 
 			pkgData.LintWarnings = lints.PerformLinting(repoDir, &g2PkgData)
 
-			if len(mainCats) > 0 && !inMain {
-				pkgData.LintWarnings = append(pkgData.LintWarnings, fmt.Sprintf("Note: category '%s' is not in the main gentoo categories list", name))
-			}
 			if len(supportedCategories) > 0 && !inRepo {
 				if inMain {
 					pkgData.LintWarnings = append(pkgData.LintWarnings, fmt.Sprintf("Warning: category '%s' is not listed in repo's profiles/categories", name))
 				} else {
 					pkgData.LintWarnings = append(pkgData.LintWarnings, fmt.Sprintf("Error: category '%s' is not listed in repo's profiles/categories or the main gentoo categories list", name))
 				}
+			} else if len(mainCats) > 0 && !inMain {
+				pkgData.LintWarnings = append(pkgData.LintWarnings, fmt.Sprintf("Note: category '%s' is not in the main gentoo categories list", name))
 			}
 
 			catData.Packages = append(catData.Packages, pkgData)
 		}
 
 		if len(catData.Packages) > 0 {
-			if len(mainCats) > 0 && !inMain {
-				log.Printf("Note: category '%s' is not in the main gentoo categories list", name)
-			}
 			if len(supportedCategories) > 0 && !inRepo {
 				if inMain {
 					log.Printf("Warning: category '%s' is not listed in repo's profiles/categories", name)
 				} else {
 					log.Printf("Error: category '%s' is not listed in repo's profiles/categories or the main gentoo categories list", name)
 				}
+			} else if len(mainCats) > 0 && !inMain {
+				log.Printf("Note: category '%s' is not in the main gentoo categories list", name)
 			}
 
 			// Sort packages by name
