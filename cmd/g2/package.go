@@ -8,6 +8,7 @@ import (
 	"flag"
 	"fmt"
 	"github.com/arran4/g2"
+	"github.com/arran4/g2/cmd/g2/internal/cacheconfig"
 	"golang.org/x/tools/txtar"
 	"io"
 	"log"
@@ -103,7 +104,7 @@ func (cfg *CmdPackageArgConfig) cmdSearch(args []string) error {
 	searchPath := *path
 
 	if searchPath == "" {
-		searchPath = fmt.Sprintf("%s/g2/search", getCacheDir())
+		searchPath = fmt.Sprintf("%s/g2/search", cacheconfig.GetCacheDir())
 	}
 
 	engine := NewSearchEngine()
@@ -361,7 +362,7 @@ func (cfg *CmdPackageArgConfig) cmdIndexOverlay(args []string) error {
 	overlayPath := fs.Arg(0)
 
 	if *outDir == "" && *outZip == "" {
-		*outDir = fmt.Sprintf("%s/g2/search", getCacheDir())
+		*outDir = fmt.Sprintf("%s/g2/search", cacheconfig.GetCacheDir())
 	}
 
 	log.Printf("Indexing overlay: %s", overlayPath)
@@ -408,7 +409,7 @@ func (cfg *CmdPackageArgConfig) cmdIndexRepositories(args []string) error {
 	reposFile := fs.Arg(0)
 
 	if *outDir == "" && *outZip == "" {
-		*outDir = fmt.Sprintf("%s/g2/search", getCacheDir())
+		*outDir = fmt.Sprintf("%s/g2/search", cacheconfig.GetCacheDir())
 	}
 
 	var allowRepos map[string]bool
@@ -479,7 +480,7 @@ func (cfg *CmdPackageArgConfig) cmdIndex(args []string) error {
 	}
 
 	if *outDir == "" && *outZip == "" {
-		*outDir = fmt.Sprintf("%s/g2/search", getCacheDir())
+		*outDir = fmt.Sprintf("%s/g2/search", cacheconfig.GetCacheDir())
 	}
 
 	var allowRepos map[string]bool
@@ -546,7 +547,7 @@ func (cfg *CmdPackageArgConfig) cmdUpdate(args []string) error {
 	}
 
 	if *outDir == "" {
-		*outDir = fmt.Sprintf("%s/g2/search", getCacheDir())
+		*outDir = fmt.Sprintf("%s/g2/search", cacheconfig.GetCacheDir())
 	}
 
 	log.Printf("Updating search index from %s to %s", *urlOpt, *outDir)
