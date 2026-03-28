@@ -22,6 +22,28 @@
 </div>
 {{end}}
 
+{{if .Package.ReverseVirtuals}}
+<div class="alert alert-info">
+    <strong>Notice:</strong> This package is in a virtual group:
+    {{range $index, $virtual := .Package.ReverseVirtuals}}{{if $index}}, {{end}}
+    <a href="{{$.BaseURL}}packages/virtual/{{index (split $virtual "/") 1}}/">{{$virtual}}</a>{{end}}
+</div>
+{{end}}
+
+{{if and (eq $.Package.Category "virtual") .Package.VirtualDeps}}
+<div class="metadata-section">
+    <h3>Virtual Group Dependencies</h3>
+    <p>This virtual package provides the following dependencies:</p>
+    <ul>
+        {{range .Package.VirtualDeps}}
+        <li>
+            <a href="{{$.BaseURL}}packages/{{.}}/">{{.}}</a>
+        </li>
+        {{end}}
+    </ul>
+</div>
+{{end}}
+
 <div class="metadata-section">
     <h3>Package Information</h3>
     <dl>

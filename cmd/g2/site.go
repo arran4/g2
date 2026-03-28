@@ -148,6 +148,9 @@ type PackageData struct {
 
 	// InfoPkg matching
 	IsInfoPkg bool
+
+	ReverseVirtuals []string
+	VirtualDeps     []string
 }
 
 type PkgUseFlag struct {
@@ -810,7 +813,7 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool, r
 			continue
 		}
 
-		if len(supportedCategories) > 0 && !supportedCategories[name] {
+		if len(supportedCategories) > 0 && !supportedCategories[name] && name != "virtual" {
 			continue
 		}
 
@@ -1171,7 +1174,79 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool, r
 		}
 	}
 
+	extractVirtualDeps(site)
 	return site, nil
+}
+
+func extractVirtualDeps(site *SiteData) {
+	for i := range site.Categories {
+		if site.Categories[i].Name != "virtual" {
+			continue
+		}
+		for j := range site.Categories[i].Packages {
+			pkg := &site.Categories[i].Packages[j]
+			depsMap := make(map[string]bool)
+			for _, ver := range pkg.Versions {
+				if ver.Ebuild != nil && ver.Ebuild.Vars != nil {
+					types := []string{"DEPEND", "RDEPEND", "PDEPEND"}
+					for _, depType := range types {
+						depStr := ver.Ebuild.Vars[depType]
+						if depStr != "" {
+							tree := g2.ParseDepTree(depStr)
+							extractDepNodes(tree.Nodes, depsMap)
+						}
+					}
+				}
+			}
+			for dep := range depsMap {
+				pkg.VirtualDeps = append(pkg.VirtualDeps, dep)
+				depParts := strings.Split(dep, "/")
+				if len(depParts) == 2 {
+					depCat := depParts[0]
+					depName := depParts[1]
+					for k := range site.Categories {
+						if site.Categories[k].Name == depCat {
+							for l := range site.Categories[k].Packages {
+								if site.Categories[k].Packages[l].Name == depName {
+									targetPkg := &site.Categories[k].Packages[l]
+									virtualName := pkg.Category + "/" + pkg.Name
+									found := false
+									for _, v := range targetPkg.ReverseVirtuals {
+										if v == virtualName {
+											found = true
+											break
+										}
+									}
+									if !found {
+										targetPkg.ReverseVirtuals = append(targetPkg.ReverseVirtuals, virtualName)
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+			sort.Strings(pkg.VirtualDeps)
+		}
+	}
+}
+
+func extractDepNodes(nodes []g2.DepNode, depsMap map[string]bool) {
+	for _, node := range nodes {
+		switch n := node.(type) {
+		case g2.DepString:
+			pkgName := g2.ExtractPackageNameFromDep(string(n))
+			if pkgName != "" {
+				depsMap[pkgName] = true
+			}
+		case g2.DepAnyOf:
+			extractDepNodes(n.Children, depsMap)
+		case g2.DepAllOf:
+			extractDepNodes(n.Children, depsMap)
+		case g2.DepUseConditional:
+			extractDepNodes(n.Children, depsMap)
+		}
+	}
 }
 
 func buildManifestData(manifest *g2.Manifest, versions []VersionData, thirdPartyMirrors map[string][]string) []ManifestEntryData {
@@ -1371,6 +1446,8 @@ type AggPackage struct {
 	DominantDescription string
 	DominantHomepage    string
 	DominantLicense     string
+	ReverseVirtuals     []string
+	VirtualDeps         []string
 }
 type AggProject struct {
 	Project  *g2.Project
@@ -1684,6 +1761,33 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 					aggPackages[pkgKey].DominantLicense = pkg.DominantLicense
 				}
 				aggCategories[cat.Name].Packages[pkg.Name] = aggPackages[pkgKey]
+				for _, rev := range pkg.ReverseVirtuals {
+					found := false
+					for _, existingRev := range aggPackages[pkgKey].ReverseVirtuals {
+						if existingRev == rev {
+							found = true
+							break
+						}
+					}
+					if !found {
+						aggPackages[pkgKey].ReverseVirtuals = append(aggPackages[pkgKey].ReverseVirtuals, rev)
+					}
+				}
+				sort.Strings(aggPackages[pkgKey].ReverseVirtuals)
+
+				for _, dep := range pkg.VirtualDeps {
+					found := false
+					for _, existingDep := range aggPackages[pkgKey].VirtualDeps {
+						if existingDep == dep {
+							found = true
+							break
+						}
+					}
+					if !found {
+						aggPackages[pkgKey].VirtualDeps = append(aggPackages[pkgKey].VirtualDeps, dep)
+					}
+				}
+				sort.Strings(aggPackages[pkgKey].VirtualDeps)
 
 				if pkg.Metadata != nil {
 					for _, maint := range pkg.Metadata.Maintainers {
@@ -2108,6 +2212,7 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 			DominantDescription   string
 			DominantHomepage      string
 			DominantLicense       string
+			ReverseVirtuals       []string
 		}
 		var tmplPkgs []TmplPkg
 		for _, p := range catPkgs {
@@ -2124,7 +2229,7 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 				}
 			}
 			hs, ht, count := getHighestVersionsAndCount(allVersions)
-			tmplPkgs = append(tmplPkgs, TmplPkg{Name: p.Name, ReposList: mapToList(p.Repos), EbuildCount: count, HighestStableVersion: hs, HighestTestingVersion: ht, DominantDescription: p.DominantDescription, DominantHomepage: p.DominantHomepage, DominantLicense: p.DominantLicense})
+			tmplPkgs = append(tmplPkgs, TmplPkg{Name: p.Name, ReposList: mapToList(p.Repos), EbuildCount: count, HighestStableVersion: hs, HighestTestingVersion: ht, DominantDescription: p.DominantDescription, DominantHomepage: p.DominantHomepage, DominantLicense: p.DominantLicense, ReverseVirtuals: p.ReverseVirtuals})
 		}
 
 		if err := renderPage(filepath.Join(catDir, "index.html"), tmpl, "category.html", map[string]interface{}{
@@ -2615,10 +2720,11 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 				DominantDescription   string
 				DominantHomepage      string
 				DominantLicense       string
+				ReverseVirtuals       []string
 			}
 			var tmplPkgs []TmplPkg
 			for _, p := range cat.Packages {
-				tmplPkgs = append(tmplPkgs, TmplPkg{Name: p.Name, ReposList: []*SiteData{site}, EbuildCount: p.EbuildCount, HighestStableVersion: p.HighestStableVersion, HighestTestingVersion: p.HighestTestingVersion, DominantDescription: p.DominantDescription, DominantHomepage: p.DominantHomepage, DominantLicense: p.DominantLicense})
+				tmplPkgs = append(tmplPkgs, TmplPkg{Name: p.Name, ReposList: []*SiteData{site}, EbuildCount: p.EbuildCount, HighestStableVersion: p.HighestStableVersion, HighestTestingVersion: p.HighestTestingVersion, DominantDescription: p.DominantDescription, DominantHomepage: p.DominantHomepage, DominantLicense: p.DominantLicense, ReverseVirtuals: p.ReverseVirtuals})
 			}
 
 			if err := renderPage(filepath.Join(catDir, "index.html"), tmpl, "category.html", map[string]interface{}{
