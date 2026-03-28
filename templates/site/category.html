@@ -1,6 +1,30 @@
 
 <h2>Category: {{.Category.Name}}</h2>
-<ul>
+
+<button id="toggle-view-btn" style="float: right; margin-bottom: 1em;">Compact View</button>
+<style>
+    ul.short-mode .package-details {
+        display: none;
+    }
+</style>
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        var btn = document.getElementById("toggle-view-btn");
+        var list = document.getElementById("package-list");
+        if (btn && list) {
+            btn.addEventListener("click", function() {
+                list.classList.toggle("short-mode");
+                if (list.classList.contains("short-mode")) {
+                    btn.textContent = "Detailed View";
+                } else {
+                    btn.textContent = "Compact View";
+                }
+            });
+        }
+    });
+</script>
+
+<ul id="package-list" style="clear: both;">
     {{range .Category.Packages}}
         <li>
             {{if eq (len .ReposList) 1}}
@@ -10,9 +34,11 @@
                 <a href="{{$.BaseURL}}packages/{{$.Category.Name}}/{{.Name}}/">{{.Name}}</a> (ambiguous, available in {{len .ReposList}} overlays)
             {{end}}
             - Ebuilds: {{.EbuildCount}}, Stable: {{.HighestStableVersion}}, Testing: {{.HighestTestingVersion}}
+            <span class="package-details">
             {{if .DominantDescription}}<br/><small><b>Description:</b> {{.DominantDescription}}</small>{{end}}
             {{if .DominantHomepage}}<br/><small><b>Homepage:</b> <a href="{{.DominantHomepage}}">{{.DominantHomepage}}</a></small>{{end}}
             {{if .DominantLicense}}<br/><small><b>License:</b> {{.DominantLicense}}</small>{{end}}
+            </span>
         </li>
     {{end}}
 </ul>
