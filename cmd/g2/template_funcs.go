@@ -14,6 +14,7 @@ func getTemplateFuncMap() template.FuncMap {
 		"buildOwnerEmailLink": buildOwnerEmailLinkFunc,
 		"now":                 time.Now,
 		"slugify":             sanitizeFilename,
+		"split":               strings.Split,
 	}
 }
 

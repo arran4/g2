@@ -449,6 +449,7 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				DominantDescription   string
 				DominantHomepage      string
 				DominantLicense       string
+				ReverseVirtuals       []string
 			}
 			var tmplPkgs []TmplPkg
 			for _, p := range catPkgs {
@@ -465,7 +466,7 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					}
 				}
 				hs, ht, count := getHighestVersionsAndCount(allVersions)
-				tmplPkgs = append(tmplPkgs, TmplPkg{Name: p.Name, ReposList: mapToList(p.Repos), EbuildCount: count, HighestStableVersion: hs, HighestTestingVersion: ht, DominantDescription: p.DominantDescription, DominantHomepage: p.DominantHomepage, DominantLicense: p.DominantLicense})
+				tmplPkgs = append(tmplPkgs, TmplPkg{Name: p.Name, ReposList: mapToList(p.Repos), EbuildCount: count, HighestStableVersion: hs, HighestTestingVersion: ht, DominantDescription: p.DominantDescription, DominantHomepage: p.DominantHomepage, DominantLicense: p.DominantLicense, ReverseVirtuals: p.ReverseVirtuals})
 			}
 
 			s.renderPageHTTP(w, "category.html", map[string]interface{}{
@@ -763,10 +764,11 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 							DominantDescription   string
 							DominantHomepage      string
 							DominantLicense       string
+							ReverseVirtuals       []string
 						}
 						var tmplPkgs []TmplPkg
 						for _, p := range catData.Packages {
-							tmplPkgs = append(tmplPkgs, TmplPkg{Name: p.Name, ReposList: []*SiteData{site}, EbuildCount: p.EbuildCount, HighestStableVersion: p.HighestStableVersion, HighestTestingVersion: p.HighestTestingVersion, DominantDescription: p.DominantDescription, DominantHomepage: p.DominantHomepage, DominantLicense: p.DominantLicense})
+							tmplPkgs = append(tmplPkgs, TmplPkg{Name: p.Name, ReposList: []*SiteData{site}, EbuildCount: p.EbuildCount, HighestStableVersion: p.HighestStableVersion, HighestTestingVersion: p.HighestTestingVersion, DominantDescription: p.DominantDescription, DominantHomepage: p.DominantHomepage, DominantLicense: p.DominantLicense, ReverseVirtuals: p.ReverseVirtuals})
 						}
 
 						s.renderPageHTTP(w, "category.html", map[string]interface{}{

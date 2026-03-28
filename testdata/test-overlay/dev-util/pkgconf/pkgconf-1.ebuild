@@ -1,0 +1,4 @@
+EAPI=8
+DESCRIPTION="pkgconf"
+SLOT="0"
+KEYWORDS="amd64"
