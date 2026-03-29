@@ -15,7 +15,6 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/arran4/g2/templates"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -181,9 +180,9 @@ func newSiteServer(sites []*SiteData, genInfo GenerationInfo) (*SiteServer, erro
 		populatePkgUseFlags(site)
 	}
 
-	tmpl, err := template.New("").Funcs(getTemplateFuncMap()).ParseFS(templates.SiteFS, "site/*.html")
+	tmpl, err := GetSiteTemplates()
 	if err != nil {
-		return nil, fmt.Errorf("parsing templates: %w", err)
+		return nil, fmt.Errorf("loading templates: %w", err)
 	}
 
 	server := &SiteServer{
