@@ -24,26 +24,66 @@ var ZipUrlRegistry = map[string]ZipUrlConverter{
 		path := strings.TrimSuffix(u.Path, ".git")
 		return fmt.Sprintf("https://%s%s/archive/HEAD.zip", u.Host, path), nil
 	},
-	"gitlab.com": func(gitUrl string) (string, error) {
+	"gitlab.com": gitlabUrlConverter,
+	"bitbucket.org": func(gitUrl string) (string, error) {
 		u, err := url.Parse(gitUrl)
 		if err != nil {
 			return "", err
 		}
 		path := strings.TrimSuffix(u.Path, ".git")
-		parts := strings.Split(strings.Trim(path, "/"), "/")
-		if len(parts) < 2 {
-			return "", fmt.Errorf("invalid gitlab url")
-		}
-		repo := parts[len(parts)-1]
-		return fmt.Sprintf("https://%s%s/-/archive/HEAD/%s-HEAD.zip", u.Host, path, repo), nil
+		return fmt.Sprintf("https://%s%s/get/HEAD.zip", u.Host, path), nil
 	},
+	"codeberg.org": giteaUrlConverter,
+	"gitea.com":    giteaUrlConverter,
+	"git.sr.ht": func(gitUrl string) (string, error) {
+		u, err := url.Parse(gitUrl)
+		if err != nil {
+			return "", err
+		}
+		path := strings.TrimSuffix(u.Path, ".git")
+		return fmt.Sprintf("https://%s%s/archive/HEAD.tar.gz", u.Host, path), nil // SourceHut defaults to tar.gz
+	},
+}
+
+func gitlabUrlConverter(gitUrl string) (string, error) {
+	u, err := url.Parse(gitUrl)
+	if err != nil {
+		return "", err
+	}
+	path := strings.TrimSuffix(u.Path, ".git")
+	parts := strings.Split(strings.Trim(path, "/"), "/")
+	if len(parts) < 2 {
+		return "", fmt.Errorf("invalid gitlab url")
+	}
+	repo := parts[len(parts)-1]
+	return fmt.Sprintf("https://%s%s/-/archive/HEAD/%s-HEAD.zip", u.Host, path, repo), nil
+}
+
+func giteaUrlConverter(gitUrl string) (string, error) {
+	u, err := url.Parse(gitUrl)
+	if err != nil {
+		return "", err
+	}
+	path := strings.TrimSuffix(u.Path, ".git")
+	return fmt.Sprintf("https://%s%s/archive/HEAD.zip", u.Host, path), nil
 }
 
 func FetchRepo(ctx context.Context, gitUrl string, destDir string, useZip bool) error {
 	if useZip {
 		u, err := url.Parse(gitUrl)
 		if err == nil {
-			if converter, ok := ZipUrlRegistry[u.Host]; ok {
+			converter, ok := ZipUrlRegistry[u.Host]
+
+			if !ok {
+				// Best-effort generic fallback
+				if strings.Contains(u.Host, "gitlab") {
+					converter = gitlabUrlConverter
+				} else if strings.Contains(u.Host, "gitea") || strings.Contains(u.Host, "codeberg") || strings.Contains(u.Host, "forgejo") {
+					converter = giteaUrlConverter
+				}
+			}
+
+			if converter != nil {
 				zipUrl, err := converter(gitUrl)
 				if err == nil {
 					if err := downloadAndExtractZip(ctx, zipUrl, destDir); err == nil {
