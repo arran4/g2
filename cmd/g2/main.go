@@ -35,7 +35,6 @@ func main() {
 		fmt.Printf("\t\t %s \t\t %s\n", "cache", "commands relating to md5-dict/cache")
 		fmt.Printf("\t\t %s \t\t %s\n", "pkg-desc-index", "commands relating to pkg_desc_index")
 		fmt.Printf("\t\t %s \t\t %s\n", "package", "commands relating to packages and search indexing")
-		fmt.Printf("\t\t %s \t\t %s\n", "readme-gen", "generates the readme.md file")
 	}
 	if err := fs.Parse(os.Args); err != nil {
 		log.Printf("Flag parse error: %s", err)
@@ -120,12 +119,6 @@ func main() {
 	case "package":
 		if err := cfg.cmdPackage(fs.Args()[2:]); err != nil {
 			log.Printf("package error: %s", err)
-			os.Exit(-1)
-			return
-		}
-	case "readme-gen":
-		if err := cfg.cmdReadmeGen(fs.Args()[2:]); err != nil {
-			log.Printf("readme-gen error: %s", err)
 			os.Exit(-1)
 			return
 		}

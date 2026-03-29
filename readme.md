@@ -1,11 +1,13 @@
 # g2
 
-Some Gentoo CLI tools I wrote for myself.
+A comprehensive, multifaceted command-line toolkit for Gentoo Linux overlays and package management.
 
 ## Project overview
 
-`g2` is a suite of tools for working with Gentoo packages, overlays, and metadata.
-It helps with fetching distfiles, managing Manifests, building search indexes, and generating a static HTML dashboard representing a repository.
+`g2` is a powerful suite of tools built to assist developers and maintainers in working with Gentoo packages, overlays, and metadata efficiently.
+Designed initially for personal use, it has evolved into a robust project capable of generating static HTML sites representing repository dashboards, indexing packages for rapid client-side search, managing Manifests and checksums automatically, and applying linting checks to ensure code quality within the ebuild ecosystem.
+
+It streamlines workflows by automating repetitive repository administration tasks—like dependency resolution, `pkg_desc_index` generation, and USE flag documentation parsing.
 
 ## Useful links
 
