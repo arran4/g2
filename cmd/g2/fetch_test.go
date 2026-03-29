@@ -28,9 +28,10 @@ func TestDownloadAndExtractZipRootPrefix(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if name == "myrepo-HEAD/README.md" {
+		switch name {
+		case "myrepo-HEAD/README.md":
 			_, _ = f.Write([]byte("readme content"))
-		} else if name == "myrepo-HEAD/src/main.go" {
+		case "myrepo-HEAD/src/main.go":
 			_, _ = f.Write([]byte("package main"))
 		}
 	}
@@ -50,7 +51,7 @@ func TestDownloadAndExtractZipRootPrefix(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(destDir)
+	defer func() { _ = os.RemoveAll(destDir) }()
 
 	err = downloadAndExtractZip(context.Background(), ts.URL, destDir)
 	if err != nil {
