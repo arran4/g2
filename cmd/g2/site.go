@@ -50,6 +50,8 @@ type ProfileDescEntry struct {
 	Status string
 }
 
+type SourceURL string
+
 type ProfileData struct {
 	Path     string
 	IsDesc   bool
@@ -274,7 +276,7 @@ func (cfg *MainArgConfig) cmdOverlay(args []string) error {
 		}
 
 		t1 := time.Now()
-		siteData, err = parseRepo(os.DirFS(parseLocation), ".", "Gentoo Packages", *fastGit, nil)
+		siteData, err = parseRepo(os.DirFS(parseLocation), ".", "Gentoo Packages", *fastGit, nil, SourceURL(location))
 		if err != nil {
 			return fmt.Errorf("parsing repo: %w", err)
 		}
@@ -283,7 +285,6 @@ func (cfg *MainArgConfig) cmdOverlay(args []string) error {
 		siteData.CheckoutTime = checkoutTime.String()
 		siteData.ProcessTime = processTime.String()
 		siteData.GitSize = gitSize
-		siteData.SourceURL = location
 
 	} else {
 		parseLocation = location
@@ -296,7 +297,7 @@ func (cfg *MainArgConfig) cmdOverlay(args []string) error {
 		}
 
 		t1 := time.Now()
-		siteData, err = parseRepo(os.DirFS(parseLocation), ".", "Gentoo Packages", *fastGit, nil)
+		siteData, err = parseRepo(os.DirFS(parseLocation), ".", "Gentoo Packages", *fastGit, nil, SourceURL(location))
 		if err != nil {
 			return fmt.Errorf("parsing repo: %w", err)
 		}
@@ -304,7 +305,6 @@ func (cfg *MainArgConfig) cmdOverlay(args []string) error {
 
 		siteData.ProcessTime = processTime.String()
 		siteData.GitSize = gitSize
-		siteData.SourceURL = location
 	}
 	defer cleanup()
 
@@ -572,14 +572,25 @@ func sanitizeFilename(s string) string {
 	return res
 }
 
-func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool, repoInfo *g2.Repository) (*SiteData, error) {
+func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool, repoInfo *g2.Repository, opts ...any) (*SiteData, error) {
 	title := defaultTitle
 	var repoName string
+	var remoteURL string
 
-	// Get Git Info
-	remoteURL, err := getGitOriginURL(repoDir)
-	if err != nil {
-		log.Printf("Warning: failed to get git origin url: %v", err)
+	for _, opt := range opts {
+		switch o := opt.(type) {
+		case SourceURL:
+			remoteURL = string(o)
+		}
+	}
+
+	// Get Git Info if not injected
+	if remoteURL == "" {
+		var err error
+		remoteURL, err = getGitOriginURL(repoDir)
+		if err != nil {
+			log.Printf("Warning: failed to get git origin url: %v", err)
+		}
 	}
 
 	repoNameBytes, err := fs.ReadFile(sysFS, filepath.ToSlash(filepath.Join(repoDir, "profiles", "repo_name")))
@@ -684,6 +695,7 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool, r
 		Title:             title,
 		RepoName:          repoName,
 		RemoteURL:         remoteURL,
+		SourceURL:         remoteURL,
 		Repository:        repoInfo,
 		EAPI:              eapi,
 		LayoutConf:        lc,
@@ -3094,7 +3106,7 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, 
 			repoCopy := repo
 
 			t1 := time.Now()
-			siteData, err := parseRepo(os.DirFS(repoPath), ".", repo.Name, fastGit, &repoCopy)
+			siteData, err := parseRepo(os.DirFS(repoPath), ".", repo.Name, fastGit, &repoCopy, SourceURL(gitUrl))
 			if err != nil {
 				log.Printf("Failed to parse repo %s: %v", repo.Name, err)
 				return nil
@@ -3104,7 +3116,6 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, 
 			siteData.CheckoutTime = checkoutTime.String()
 			siteData.ProcessTime = processTime.String()
 			siteData.GitSize = gitSize
-			siteData.SourceURL = gitUrl
 
 			allSitesMu.Lock()
 			allSites = append(allSites, siteData)
