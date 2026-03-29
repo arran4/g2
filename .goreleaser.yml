@@ -3,7 +3,7 @@ project_name: g2
 
 before:
   hooks:
-    - go run github.com/cpuguy83/go-md2man/v2@latest -in readme.md -out g2.1
+    - go run github.com/cpuguy83/go-md2man/v2@latest -in doc/g2.1.md -out doc/g2.1
 
 builds:
   -
@@ -37,7 +37,7 @@ builds:
 archives:
   -
     files:
-      - g2.1
+      - doc/g2.1
     format_overrides:
       - goos: windows
         formats: [zip]
@@ -68,7 +68,7 @@ nfpms:
     section: default
     priority: extra
     contents:
-      - src: g2.1
+      - src: doc/g2.1
         dst: /usr/share/man/man1/g2.1
         file_info:
           mode: 0644
