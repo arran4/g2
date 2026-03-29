@@ -1,31 +1,27 @@
 package main
 
 import (
-	"bytes"
-	"io"
 	"os"
 	"strings"
 	"testing"
 )
 
 func TestReadmeGen(t *testing.T) {
-	// Let's capture stdout to see the generated readme output
-	oldStdout := os.Stdout
-	r, w, _ := os.Pipe()
-	os.Stdout = w
+	// Let's output to a temporary file instead of stdout to avoid pipe blocking
+	tmpDir := t.TempDir()
+	outPath := tmpDir + "/readme.md"
 
 	cfg := &MainArgConfig{}
-	err := cfg.cmdReadmeGen([]string{})
+	err := cfg.cmdReadmeGen([]string{outPath})
 	if err != nil {
 		t.Fatalf("cmdReadmeGen failed: %v", err)
 	}
 
-	w.Close()
-	os.Stdout = oldStdout
-
-	var buf bytes.Buffer
-	io.Copy(&buf, r)
-	output := buf.String()
+	content, err := os.ReadFile(outPath)
+	if err != nil {
+		t.Fatalf("Failed to read generated readme: %v", err)
+	}
+	output := string(content)
 
 	requiredStrings := []string{
 		"# g2",

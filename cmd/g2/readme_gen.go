@@ -331,10 +331,10 @@ func renderModel(model DocModel, headerLevel int) string {
 	var sb strings.Builder
 
 	h := strings.Repeat("#", headerLevel)
-	sb.WriteString(fmt.Sprintf("%s `%s`\n\n", h, model.Name))
+	fmt.Fprintf(&sb, "%s `%s`\n\n", h, model.Name)
 
 	if model.Description != "" {
-		sb.WriteString(fmt.Sprintf("%s\n\n", model.Description))
+		fmt.Fprintf(&sb, "%s\n\n", model.Description)
 	}
 
 	if model.Usage != "" {
@@ -346,7 +346,7 @@ func renderModel(model DocModel, headerLevel int) string {
 	if len(model.Args) > 0 {
 		sb.WriteString("**Arguments:**\n\n")
 		for _, arg := range model.Args {
-			sb.WriteString(fmt.Sprintf("* %s\n", arg))
+			fmt.Fprintf(&sb, "* %s\n", arg)
 		}
 		sb.WriteString("\n")
 	}
@@ -354,7 +354,7 @@ func renderModel(model DocModel, headerLevel int) string {
 	if len(model.Flags) > 0 {
 		sb.WriteString("**Flags:**\n\n")
 		for _, f := range model.Flags {
-			sb.WriteString(fmt.Sprintf("* %s\n", f))
+			fmt.Fprintf(&sb, "* %s\n", f)
 		}
 		sb.WriteString("\n")
 	}
@@ -376,7 +376,7 @@ func renderModel(model DocModel, headerLevel int) string {
 			}
 		} else {
 			for _, ssub := range model.Subcommands {
-				sb.WriteString(fmt.Sprintf("* `%s`: %s\n", ssub.Name, ssub.Description))
+				fmt.Fprintf(&sb, "* `%s`: %s\n", ssub.Name, ssub.Description)
 			}
 			sb.WriteString("\n")
 		}
@@ -389,7 +389,7 @@ func renderModel(model DocModel, headerLevel int) string {
 			sb.WriteString("**Example Usage:**\n\n")
 		}
 		for _, ex := range model.Examples {
-			sb.WriteString(fmt.Sprintf("%s\n\n", ex))
+			fmt.Fprintf(&sb, "%s\n\n", ex)
 		}
 	}
 
