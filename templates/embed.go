@@ -7,5 +7,5 @@ import (
 //go:embed ebuild/*.ebuild ebuild/*.tmpl
 var EbuildFS embed.FS
 
-//go:embed site/*.html site/*.xml site/*.js
+//go:embed app/*.html partials/*.html views/*.html site/*.xml site/*.js
 var SiteFS embed.FS
