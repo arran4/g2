@@ -8,22 +8,25 @@ import (
 	"github.com/arran4/g2/lints"
 )
 
+var ruleSubshellFunction = lints.RuleMetadata{
+	ID:          "SubshellFunction",
+	Title:       "Subshell Function Usage",
+	Description: "Warns about the use of subshell bodies `func() ( ... )` which is not standard PMS compliant but often found in older ebuilds.",
+	URL:         "https://devmanual.gentoo.org/ebuild-writing/functions/",
+	Severity:    lints.SeverityWarning,
+	Source:      lints.SourceG2,
+	Tags:        []string{"ebuild", "gentoo-policy"},
+}
+
 func init() {
+	lints.RegisterRuleMetadata(ruleSubshellFunction)
 	lints.RegisterLintRule(&SubshellFunctionLintRule{})
 }
 
 type SubshellFunctionLintRule struct{}
 
-func (l *SubshellFunctionLintRule) Name() string {
-	return "SubshellFunction"
-}
-
-func (l *SubshellFunctionLintRule) Description() string {
-	return "Warns when an ebuild uses parentheses (...) instead of braces {...} for function bodies"
-}
-
-func (l *SubshellFunctionLintRule) Lint(repoDir string, pkgData *g2.PackageData) []string {
-	var results []string
+func (l *SubshellFunctionLintRule) Lint(repoDir string, pkgData *g2.PackageData) []lints.LintResult {
+	var results []lints.LintResult
 
 	for _, version := range pkgData.Versions {
 		if version.Ebuild == nil {
@@ -32,7 +35,12 @@ func (l *SubshellFunctionLintRule) Lint(repoDir string, pkgData *g2.PackageData)
 
 		for _, warning := range version.Ebuild.ParseWarnings {
 			if strings.Contains(warning, "treating as subshell body") {
-				results = append(results, fmt.Sprintf("Warning: Ebuild %s uses a subshell for a function body instead of braces", version.Ebuild.Path))
+				res := lints.LintResult{
+					RuleMetadata: ruleSubshellFunction,
+					Message:      fmt.Sprintf("[Warning] Ebuild %s uses a subshell for a function body instead of braces", version.Ebuild.Path),
+					Package:      pkgData.Category + "/" + pkgData.Name,
+				}
+				results = append(results, res)
 			}
 		}
 	}

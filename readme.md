@@ -349,3 +349,25 @@ Search indexes are emitted automatically to `search/data`.
 Users can query package names, descriptions, use flags, and numerous field filters (`category`, `license`, `mask`, `version`, `depends`, etc.).
 Advanced queries support boolean logic (AND, OR, NOT), grouping `()`, and sequence matching (`'sequence of words'`).
 Gentoo version ordering is natively supported for range queries like `version:>1.2.3`.
+
+**Flags:**
+
+*   `-format <string>`: Output format: `text` or `json` (default `text`).
+*   `-severity <string>`: Only show warnings of this severity (`Error`, `Warning`, `Notice`, `Info`).
+*   `-only-source <string>`: Only show warnings from this source (`g2`, `pkgcheck`).
+*   `-only-tag <string>`: Only show warnings with this tag (e.g., `site-quality`, `metadata.xml`).
+
+**Example JSON Output:**
+
+```bash
+g2 lint -format=json /var/db/repos/my-overlay
+```
+### `lint list`
+
+Lists all available lint rules.
+
+**Usage:**
+
+```bash
+g2 lint list
+```

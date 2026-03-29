@@ -11,9 +11,18 @@ import (
 	"github.com/arran4/g2/lints"
 )
 
+var ruleCategorySanity = lints.RuleMetadata{
+	ID:          "CategorySanity",
+	Title:       "Category Sanity",
+	Description: "Checks if the package category exists in profiles/categories and main gentoo categories.",
+	Severity:    lints.SeverityError,
+	Source:      lints.SourceG2,
+	Tags:        []string{"repo-layout"},
+}
+
 // CategorySanityLintRule checks if the package category exists in profiles/categories and main gentoo categories.
 type CategorySanityLintRule struct {
-	mu           sync.RWMutex
+	mu            sync.RWMutex
 	repoCatsCache map[string]map[string]bool // map[repoDir]map[category]bool
 }
 
@@ -21,15 +30,16 @@ type CategorySanityLintRule struct {
 var SkipForSiteGen bool
 
 func init() {
+	lints.RegisterRuleMetadata(ruleCategorySanity)
 	lints.RegisterLintRule(&CategorySanityLintRule{})
 }
 
-func (l *CategorySanityLintRule) Lint(repoDir string, pkg *g2.PackageData) []string {
+func (l *CategorySanityLintRule) Lint(repoDir string, pkg *g2.PackageData) []lints.LintResult {
 	if SkipForSiteGen {
 		return nil
 	}
 
-	var warnings []string
+	var results []lints.LintResult
 	name := pkg.Category
 
 	l.mu.RLock()
@@ -72,13 +82,29 @@ func (l *CategorySanityLintRule) Lint(repoDir string, pkg *g2.PackageData) []str
 
 	if len(supportedCategories) > 0 && !inRepo {
 		if inMain {
-			warnings = append(warnings, fmt.Sprintf("Warning: category '%s' is not listed in repo's profiles/categories", name))
+			res := lints.LintResult{
+				RuleMetadata: ruleCategorySanity,
+				Message:      fmt.Sprintf("Warning: category '%s' is not listed in repo's profiles/categories", name),
+				Package:      pkg.Category + "/" + pkg.Name,
+			}
+			res.RuleMetadata.Severity = lints.SeverityWarning
+			results = append(results, res)
 		} else {
-			warnings = append(warnings, fmt.Sprintf("Error: category '%s' is not listed in repo's profiles/categories or the main gentoo categories list", name))
+			results = append(results, lints.LintResult{
+				RuleMetadata: ruleCategorySanity,
+				Message:      fmt.Sprintf("Error: category '%s' is not listed in repo's profiles/categories or the main gentoo categories list", name),
+				Package:      pkg.Category + "/" + pkg.Name,
+			})
 		}
 	} else if len(mainCats) > 0 && !inMain {
-		warnings = append(warnings, fmt.Sprintf("Note: category '%s' is not in the main gentoo categories list", name))
+		res := lints.LintResult{
+			RuleMetadata: ruleCategorySanity,
+			Message:      fmt.Sprintf("Note: category '%s' is not in the main gentoo categories list", name),
+			Package:      pkg.Category + "/" + pkg.Name,
+		}
+		res.RuleMetadata.Severity = lints.SeverityNotice
+		results = append(results, res)
 	}
 
-	return warnings
+	return results
 }

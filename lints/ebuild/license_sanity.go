@@ -10,87 +10,98 @@ import (
 	"golang.org/x/text/language"
 )
 
+var ruleLicenseSanity = lints.RuleMetadata{
+	ID:          "LicenseSanity",
+	Title:       "License Sanity",
+	Description: "Identifies ebuilds improperly placing full-text licenses in the LICENSE variable, missing alphanumeric characters (e.g., //), or containing URL-breaking slashes.",
+	URL:         "https://devmanual.gentoo.org/ebuild-writing/variables/index.html#license",
+	Severity:    lints.SeverityError,
+	Source:      lints.SourceG2,
+	Tags:        []string{"ebuild", "site-quality", "gentoo-policy"},
+}
+
 func init() {
+	lints.RegisterRuleMetadata(ruleLicenseSanity)
 	lints.RegisterLintRule(&LicenseSanityLintRule{})
 }
 
 type LicenseSanityLintRule struct{}
 
-func (r *LicenseSanityLintRule) Lint(repoDir string, pkg *g2.PackageData) []string {
+func (r *LicenseSanityLintRule) Lint(repoDir string, pkg *g2.PackageData) []lints.LintResult {
 	return r.LintWithQA(repoDir, pkg, nil)
 }
 
-func (r *LicenseSanityLintRule) LintWithQA(repoDir string, pkg *g2.PackageData, qa *g2.QAPolicy) []string {
-	var warnings []string
-
-	severity := "Warning"
+func (r *LicenseSanityLintRule) LintWithQA(repoDir string, pkg *g2.PackageData, qa *g2.QAPolicy) []lints.LintResult {
+	var results []lints.LintResult
+	severity := lints.SeverityError
 	if qa != nil && qa.Policies != nil {
-		if val, ok := qa.Policies["PG0802"]; ok { // Arbitrary PG code mapping for License Sanity for example, or general
+		if val, ok := qa.Policies["PG0804"]; ok {
 			if val == "notice" || val == "error" || val == "warning" {
-				severity = cases.Title(language.English).String(val)
+				switch val {
+				case "notice":
+					severity = lints.SeverityNotice
+				case "error":
+					severity = lints.SeverityError
+				case "warning":
+					severity = lints.SeverityWarning
+				}
 			}
 		}
 	}
 
 	for _, ver := range pkg.Versions {
 		if ver.Ebuild != nil && ver.Ebuild.Vars != nil {
-			licenseStr := ver.Ebuild.Vars["LICENSE"]
-			if licenseStr != "" {
-				parsedLicenses := g2.ParseLicense(licenseStr)
+			license := ver.Ebuild.Vars["LICENSE"]
+			if license == "" {
+				continue // handled by another lint possibly
+			}
 
-				isFullText := false
-
-				if len(licenseStr) > 400 {
-					isFullText = true
-				} else {
-					punctuationCount := 0
-					stopWordCount := 0
-
-					stopWords := map[string]bool{
-						"the": true, "and": true, "this": true, "that": true, "for": true,
-						"with": true, "without": true, "copyright": true, "software": true,
-						"permission": true, "provided": true, "conditions": true,
-						"is": true, "not": true, "are": true, "be": true, "or": true,
-					}
-
-					for _, lic := range parsedLicenses {
-						if strings.Contains(lic, ",") || strings.Contains(lic, ";") {
-							punctuationCount++
-						}
-
-						lowerLic := strings.ToLower(lic)
-						lowerLic = strings.Trim(lowerLic, ".,;:\"'")
-						if stopWords[lowerLic] {
-							stopWordCount++
-						}
-					}
-
-					if punctuationCount >= 2 || stopWordCount >= 3 {
-						isFullText = true
-					}
+			// check if it's potentially a full text instead of identifiers
+			// e.g. contains lots of spaces or common full-text phrases
+			if strings.Contains(strings.ToLower(license), "copyright (c)") ||
+				strings.Contains(strings.ToLower(license), "all rights reserved") ||
+				len(strings.Fields(license)) > 20 {
+				res := lints.LintResult{
+					RuleMetadata: ruleLicenseSanity,
+					Message:      fmt.Sprintf("[%s] Ebuild %s appears to have full-text license in LICENSE variable instead of identifiers", cases.Title(language.English).String(string(severity)), ver.Version),
+					Package:      pkg.Category + "/" + pkg.Name,
 				}
-
-				for _, lic := range parsedLicenses {
-					hasAlphanumeric := false
-					for _, r := range lic {
-						if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') {
-							hasAlphanumeric = true
+				res.RuleMetadata.Severity = severity
+				results = append(results, res)
+			} else {
+				// parse to individual licenses to check for alphanumerics and slashes
+				licenses := g2.ParseLicense(license)
+				for _, lic := range licenses {
+					if lic == "" {
+						continue
+					}
+					hasAlnum := false
+					for _, ch := range lic {
+						if (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') {
+							hasAlnum = true
 							break
 						}
 					}
-
-					if !hasAlphanumeric {
-						warnings = append(warnings, fmt.Sprintf("[%s] Ebuild %s has a LICENSE '%s' without valid characters.", severity, ver.Version, lic))
+					if !hasAlnum {
+						res := lints.LintResult{
+							RuleMetadata: ruleLicenseSanity,
+							Message:      fmt.Sprintf("[%s] Ebuild %s contains invalid license identifier '%s' (missing alphanumeric characters)", cases.Title(language.English).String(string(severity)), ver.Version, lic),
+							Package:      pkg.Category + "/" + pkg.Name,
+						}
+						res.RuleMetadata.Severity = severity
+						results = append(results, res)
 					} else if strings.Contains(lic, "/") {
-						warnings = append(warnings, fmt.Sprintf("[%s] Ebuild %s has a LICENSE '%s' containing a slash, which may break URLs.", severity, ver.Version, lic))
+						res := lints.LintResult{
+							RuleMetadata: ruleLicenseSanity,
+							Message:      fmt.Sprintf("[%s] Ebuild %s contains license identifier '%s' with a slash, which breaks URLs", cases.Title(language.English).String(string(severity)), ver.Version, lic),
+							Package:      pkg.Category + "/" + pkg.Name,
+						}
+						res.RuleMetadata.Severity = severity
+						results = append(results, res)
 					}
-				}
-
-				if isFullText {
-					warnings = append(warnings, fmt.Sprintf("[%s] Ebuild %s has a LICENSE variable that looks like a full-text license rather than a license identifier.", severity, ver.Version))
 				}
 			}
 		}
 	}
-	return warnings
+	return results
 }
