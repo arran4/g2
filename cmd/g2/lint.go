@@ -16,6 +16,23 @@ import (
 )
 
 func (cfg *MainArgConfig) cmdLint(args []string) error {
+
+	if len(args) > 0 && args[0] == "list" {
+		rules := lints.GetAllRules()
+		if len(args) > 1 && args[1] == "--format=json" {
+			out, _ := json.MarshalIndent(rules, "", "  ")
+			fmt.Println(string(out))
+			return nil
+		}
+		fmt.Println("Available Lint Rules:")
+		for _, r := range rules {
+			fmt.Printf("- %s [%s] (%s): %s\n", r.ID, r.Severity, r.Source, r.Description)
+			if r.URL != "" {
+				fmt.Printf("  URL: %s\n", r.URL)
+			}
+		}
+		return nil
+	}
 	fs := flag.NewFlagSet("lint", flag.ExitOnError)
 	format := fs.String("format", "text", "Output format: text or json")
 	severityFilter := fs.String("severity", "", "Only show warnings of this severity (error, warning, notice, info)")

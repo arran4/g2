@@ -21,6 +21,7 @@ var ruleMissingKeyword = lints.RuleMetadata{
 }
 
 func init() {
+	lints.RegisterRuleMetadata(ruleMissingKeyword)
 	lints.RegisterLintRule(&MissingKeywordLintRule{})
 }
 

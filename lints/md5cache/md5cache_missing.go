@@ -22,6 +22,7 @@ var ruleMD5CacheMissing = lints.RuleMetadata{
 }
 
 func init() {
+	lints.RegisterRuleMetadata(ruleMD5CacheMissing)
 	lints.RegisterLintRule(&MD5CacheLintRule{})
 }
 

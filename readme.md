@@ -362,3 +362,12 @@ Gentoo version ordering is natively supported for range queries like `version:>1
 ```bash
 g2 lint -format=json /var/db/repos/my-overlay
 ```
+### `lint list`
+
+Lists all available lint rules.
+
+**Usage:**
+
+```bash
+g2 lint list
+```

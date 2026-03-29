@@ -25,6 +25,7 @@ var ruleInvalidSlot = lints.RuleMetadata{
 var validSlotRegex = regexp.MustCompile(`^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)?$`)
 
 func init() {
+	lints.RegisterRuleMetadata(ruleInvalidSlot)
 	lints.RegisterLintRule(&InvalidSlotLintRule{})
 }
 

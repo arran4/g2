@@ -21,6 +21,7 @@ var ruleManifestChecks = lints.RuleMetadata{
 }
 
 func init() {
+	lints.RegisterRuleMetadata(ruleManifestChecks)
 	lints.RegisterLintRule(&ManifestLintRule{})
 }
 

@@ -22,6 +22,7 @@ var ruleLayoutConf = lints.RuleMetadata{
 }
 
 func init() {
+	lints.RegisterRuleMetadata(ruleLayoutConf)
 	lints.RegisterLintRule(&LayoutConfLintRule{})
 }
 

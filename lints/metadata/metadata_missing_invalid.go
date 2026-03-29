@@ -20,6 +20,7 @@ var ruleMetadataMissing = lints.RuleMetadata{
 }
 
 func init() {
+	lints.RegisterRuleMetadata(ruleMetadataMissing)
 	lints.RegisterLintRule(&MetadataLintRule{})
 }
 

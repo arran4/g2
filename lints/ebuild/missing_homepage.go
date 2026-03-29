@@ -21,6 +21,7 @@ var ruleMissingHomepage = lints.RuleMetadata{
 }
 
 func init() {
+	lints.RegisterRuleMetadata(ruleMissingHomepage)
 	lints.RegisterLintRule(&MissingHomepageLintRule{})
 }
 

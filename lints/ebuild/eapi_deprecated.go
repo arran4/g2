@@ -20,6 +20,7 @@ var ruleEAPIDeprecated = lints.RuleMetadata{
 }
 
 func init() {
+	lints.RegisterRuleMetadata(ruleEAPIDeprecated)
 	lints.RegisterLintRule(&EAPIDeprecatedLintRule{})
 }
 

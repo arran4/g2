@@ -82,3 +82,18 @@ func PerformLinting(repoDir string, pkg *g2.PackageData) []string {
 	}
 	return warnings
 }
+
+type MetadataAwareLintRule interface {
+	LintRule
+	Metadata() RuleMetadata
+}
+
+var registeredMetadata []RuleMetadata
+
+func RegisterRuleMetadata(meta RuleMetadata) {
+	registeredMetadata = append(registeredMetadata, meta)
+}
+
+func GetAllRules() []RuleMetadata {
+	return registeredMetadata
+}

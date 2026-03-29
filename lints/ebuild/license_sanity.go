@@ -21,6 +21,7 @@ var ruleLicenseSanity = lints.RuleMetadata{
 }
 
 func init() {
+	lints.RegisterRuleMetadata(ruleLicenseSanity)
 	lints.RegisterLintRule(&LicenseSanityLintRule{})
 }
 

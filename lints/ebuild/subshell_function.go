@@ -19,6 +19,7 @@ var ruleSubshellFunction = lints.RuleMetadata{
 }
 
 func init() {
+	lints.RegisterRuleMetadata(ruleSubshellFunction)
 	lints.RegisterLintRule(&SubshellFunctionLintRule{})
 }
 

@@ -21,6 +21,7 @@ var ruleIUSEDocumented = lints.RuleMetadata{
 }
 
 func init() {
+	lints.RegisterRuleMetadata(ruleIUSEDocumented)
 	lints.RegisterLintRule(&IUSELintRule{})
 }
 

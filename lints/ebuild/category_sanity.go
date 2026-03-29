@@ -30,6 +30,7 @@ type CategorySanityLintRule struct {
 var SkipForSiteGen bool
 
 func init() {
+	lints.RegisterRuleMetadata(ruleCategorySanity)
 	lints.RegisterLintRule(&CategorySanityLintRule{})
 }
 
