@@ -62,14 +62,14 @@ func TestParserTxtar(t *testing.T) {
 			}
 
 			parser := NewEbuildParser(context.Background(), bytes.NewReader(ebuildData))
-			variables, err := parser.Parse()
+			parsedEbuild, err := parser.Parse()
 			if err != nil {
 				t.Fatalf("Parse error: %v", err)
 			}
 
 			// Normalize spaces in arrays/values to make json assertions easier in txtar
-			for k, v := range variables {
-				variables[k] = normalize(v)
+			for k, v := range parsedEbuild.Variables {
+				parsedEbuild.Variables[k] = normalize(v)
 			}
 
 			var expected map[string]string
@@ -77,8 +77,8 @@ func TestParserTxtar(t *testing.T) {
 				t.Fatalf("unmarshal expected JSON: %v", err)
 			}
 
-			if !reflect.DeepEqual(variables, expected) {
-				t.Errorf("Mismatch.\nGot:\n%v\nExpected:\n%v", variables, expected)
+			if !reflect.DeepEqual(parsedEbuild.Variables, expected) {
+				t.Errorf("Mismatch.\nGot:\n%v\nExpected:\n%v", parsedEbuild.Variables, expected)
 			}
 		})
 	}
@@ -150,7 +150,7 @@ MY_ARRAY=(
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			parser := NewEbuildParser(context.Background(), strings.NewReader(tt.ebuild))
-			vars, err := parser.Parse()
+			parsedEbuild, err := parser.Parse()
 
 			if (err != nil) != tt.wantError {
 				t.Errorf("expected error: %v, got: %v", tt.wantError, err)
@@ -158,8 +158,8 @@ MY_ARRAY=(
 
 			if !tt.wantError {
 				for k, v := range tt.wantVars {
-					if vars[k] != v {
-						t.Errorf("var %s expected %q, got %q", k, v, vars[k])
+					if parsedEbuild.Variables[k] != v {
+						t.Errorf("var %s expected %q, got %q", k, v, parsedEbuild.Variables[k])
 					}
 				}
 			}

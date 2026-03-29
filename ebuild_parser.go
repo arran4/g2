@@ -25,6 +25,10 @@ func (p Position) String() string {
 	return fmt.Sprintf("line %d, col %d", p.Line, p.Column)
 }
 
+type AST struct {
+	Value string
+}
+
 type ParseError struct {
 	Pos Position
 	Err error
@@ -154,10 +158,68 @@ func (p *EbuildParser) consumeWhitespaceAndComments() error {
 	}
 }
 
-// Parse extracts variables from the ebuild using a recursive descent approach
+func (p *EbuildParser) consumeHeaderAndWhitespace() (string, error) {
+	var header strings.Builder
+	inHeader := true
+	for {
+		r, err := p.peek()
+		if err != nil {
+			return header.String(), err
+		}
+		if unicode.IsSpace(r) {
+			_, _ = p.nextRune()
+			if inHeader && r == '\n' {
+				header.WriteRune(r)
+			}
+			continue
+		}
+		if r == '#' {
+			// consume until newline
+			_, _ = p.nextRune()
+			if inHeader {
+				header.WriteRune('#')
+			}
+			for {
+				nr, err := p.nextRune()
+				if err != nil {
+					return strings.TrimSpace(header.String()), err
+				}
+				if inHeader {
+					header.WriteRune(nr)
+				}
+				if nr == '\n' {
+					break
+				}
+			}
+			continue
+		}
+		inHeader = false
+		return strings.TrimSpace(header.String()), nil // Not space or comment
+	}
+}
+
+// ParsedEbuild contains the results of parsing an ebuild
+type ParsedEbuild struct {
+	Variables    map[string]string
+	Functions    map[string]AST
+	Order        []string
+	EbuildHeader string
+}
+
+// Parse extracts variables and functions from the ebuild using a recursive descent approach
 // tailored specifically for ebuilds, bypassing full bash posix rules.
-func (p *EbuildParser) Parse() (map[string]string, error) {
-	variables := make(map[string]string)
+func (p *EbuildParser) Parse() (ParsedEbuild, error) {
+	result := ParsedEbuild{
+		Variables: make(map[string]string),
+		Functions: make(map[string]AST),
+		Order:     make([]string, 0),
+	}
+
+	header, err := p.consumeHeaderAndWhitespace()
+	if err != nil && !errors.Is(err, io.EOF) {
+		return result, err
+	}
+	result.EbuildHeader = header
 
 	for {
 		err := p.consumeWhitespaceAndComments()
@@ -165,7 +227,7 @@ func (p *EbuildParser) Parse() (map[string]string, error) {
 			if errors.Is(err, io.EOF) {
 				break
 			}
-			return nil, err
+			return result, err
 		}
 
 		r, err := p.peek()
@@ -173,25 +235,25 @@ func (p *EbuildParser) Parse() (map[string]string, error) {
 			if errors.Is(err, io.EOF) {
 				break
 			}
-			return nil, err
+			return result, err
 		}
 
 		if unicode.IsLetter(r) || r == '_' {
 			// Possibly a variable assignment, function decl, or command
 			ident, err := p.consumeIdent()
 			if err != nil {
-				return nil, err
+				return result, err
 			}
 
 			// check what's next
 			err = p.consumeWhitespaceAndComments()
 			if err != nil && !errors.Is(err, io.EOF) {
-				return nil, err
+				return result, err
 			}
 
 			nextR, err := p.peek()
 			if err != nil && !errors.Is(err, io.EOF) {
-				return nil, err
+				return result, err
 			}
 
 			switch nextR {
@@ -199,17 +261,21 @@ func (p *EbuildParser) Parse() (map[string]string, error) {
 				_, _ = p.nextRune() // consume '='
 				val, err := p.consumeValue()
 				if err != nil && !errors.Is(err, io.EOF) {
-					return nil, err
+					return result, err
 				}
 				if strings.HasSuffix(ident, "+") {
 					ident = strings.TrimSuffix(ident, "+")
-					if variables[ident] != "" {
-						variables[ident] += " " + val
+					if result.Variables[ident] != "" {
+						result.Variables[ident] += " " + val
 					} else {
-						variables[ident] = val
+						result.Variables[ident] = val
+						result.Order = append(result.Order, ident)
 					}
 				} else {
-					variables[ident] = val
+					if _, exists := result.Variables[ident]; !exists {
+						result.Order = append(result.Order, ident)
+					}
+					result.Variables[ident] = val
 				}
 			case '(':
 				// Function declaration e.g. `src_prepare() {`
@@ -221,21 +287,25 @@ func (p *EbuildParser) Parse() (map[string]string, error) {
 					p.skipLine()
 					continue
 				}
-				err = p.skipFunctionBody()
+				body, err := p.consumeFunctionBody()
 				if err != nil {
-					return nil, err
+					return result, err
 				}
+				if _, exists := result.Functions[ident]; !exists {
+					result.Order = append(result.Order, ident)
+				}
+				result.Functions[ident] = AST{Value: body}
 			default:
 				if ident == "inherit" {
 					// Collect inherited eclasses
 					val, err := p.consumeLine()
 					if err != nil && !errors.Is(err, io.EOF) {
-						return nil, err
+						return result, err
 					}
-					if variables["INHERITED"] != "" {
-						variables["INHERITED"] += " " + val
+					if result.Variables["INHERITED"] != "" {
+						result.Variables["INHERITED"] += " " + val
 					} else {
-						variables["INHERITED"] = val
+						result.Variables["INHERITED"] = val
 					}
 				} else {
 					// Bare command or reserved word. Skip line.
@@ -248,7 +318,7 @@ func (p *EbuildParser) Parse() (map[string]string, error) {
 		}
 	}
 
-	return variables, nil
+	return result, nil
 }
 
 func (p *EbuildParser) consumeIdent() (string, error) {
@@ -399,15 +469,17 @@ func (p *EbuildParser) consumeArray() (string, error) {
 	return sb.String(), nil
 }
 
-func (p *EbuildParser) skipFunctionBody() error {
+func (p *EbuildParser) consumeFunctionBody() (string, error) {
 	err := p.consumeWhitespaceAndComments()
 	if err != nil {
-		return err
+		return "", err
 	}
 	r, err := p.nextRune()
 	if err != nil {
-		return err
+		return "", err
 	}
+
+	var sb strings.Builder
 
 	opener := '{'
 	closer := '}'
@@ -419,9 +491,10 @@ func (p *EbuildParser) skipFunctionBody() error {
 			opener = '('
 			closer = ')'
 		} else {
-			return fmt.Errorf("%w: expected '{' for function body", ErrSyntaxError)
+			return "", fmt.Errorf("%w: expected '{' for function body", ErrSyntaxError)
 		}
 	}
+	sb.WriteRune(r)
 
 	braces := 1
 	for {
@@ -429,10 +502,11 @@ func (p *EbuildParser) skipFunctionBody() error {
 		if err != nil {
 			// If we hit EOF, it's just the end of the file. Ignore unterminated function for best-effort parsing.
 			if errors.Is(err, io.EOF) {
-				return nil
+				return sb.String(), nil
 			}
-			return fmt.Errorf("%w: unterminated function %v", ErrSyntaxError, err)
+			return "", fmt.Errorf("%w: unterminated function %v", ErrSyntaxError, err)
 		}
+		sb.WriteRune(r)
 		if r == opener {
 			braces++
 		} else if r == closer {
@@ -450,6 +524,7 @@ func (p *EbuildParser) skipFunctionBody() error {
 				if nerr != nil {
 					break
 				}
+				sb.WriteRune(nr)
 				if escape {
 					escape = false
 					continue
@@ -466,7 +541,11 @@ func (p *EbuildParser) skipFunctionBody() error {
 			// Skip backticks as well
 			for {
 				br, berr := p.nextRune()
-				if berr != nil || br == '`' {
+				if berr != nil {
+					break
+				}
+				sb.WriteRune(br)
+				if br == '`' {
 					break
 				}
 			}
@@ -474,13 +553,17 @@ func (p *EbuildParser) skipFunctionBody() error {
 			// skip comments
 			for {
 				nr, err := p.nextRune()
-				if err != nil || nr == '\n' {
+				if err != nil {
+					break
+				}
+				sb.WriteRune(nr)
+				if nr == '\n' {
 					break
 				}
 			}
 		}
 	}
-	return nil
+	return sb.String(), nil
 }
 
 func (p *EbuildParser) skipLine() {
