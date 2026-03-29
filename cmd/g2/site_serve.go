@@ -341,14 +341,6 @@ func newSiteServer(sites []*SiteData, genInfo GenerationInfo) (*SiteServer, erro
 	return server, nil
 }
 
-func mapToList(m map[string]*SiteData) []*SiteData {
-	var l []*SiteData
-	for _, v := range m {
-		l = append(l, v)
-	}
-	sort.Slice(l, func(i, j int) bool { return l[i].RepoName < l[j].RepoName })
-	return l
-}
 
 func (s *SiteServer) renderPageHTTP(w http.ResponseWriter, name string, data map[string]interface{}) {
 	log.Printf("Serving page using template %s", name)
