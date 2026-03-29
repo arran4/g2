@@ -9,32 +9,48 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"golang.org/x/tools/txtar"
 )
 
 func TestDownloadAndExtractZipRootPrefix(t *testing.T) {
+	// We use txtar to define the structure and content of our archive clearly.
+	// Since txtar only stores files (not empty directories), we also add explicit directory
+	// entries to simulate real ZIP archives where directories appear before or after files.
+	fixture := `
+-- myrepo-HEAD/README.md --
+readme content
+-- myrepo-HEAD/src/main.go --
+package main
+`
+	ar := txtar.Parse([]byte(fixture))
+
 	// Create a zip file in memory
 	buf := new(bytes.Buffer)
 	zw := zip.NewWriter(buf)
 
-	files := []string{
+	// Explicitly create directory entries first, in a mixed order
+	dirs := []string{
 		"myrepo-HEAD/src/",
-		"myrepo-HEAD/README.md",
 		"myrepo-HEAD/",
-		"myrepo-HEAD/src/main.go",
+	}
+	for _, d := range dirs {
+		if _, err := zw.Create(d); err != nil {
+			t.Fatal(err)
+		}
 	}
 
-	for _, name := range files {
-		f, err := zw.Create(name)
+	// Add the actual files from the txtar
+	for _, f := range ar.Files {
+		w, err := zw.Create(f.Name)
 		if err != nil {
 			t.Fatal(err)
 		}
-		switch name {
-		case "myrepo-HEAD/README.md":
-			_, _ = f.Write([]byte("readme content"))
-		case "myrepo-HEAD/src/main.go":
-			_, _ = f.Write([]byte("package main"))
+		if _, err := w.Write(f.Data); err != nil {
+			t.Fatal(err)
 		}
 	}
+
 	err := zw.Close()
 	if err != nil {
 		t.Fatal(err)
