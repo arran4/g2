@@ -34,6 +34,7 @@ func main() {
 		fmt.Printf("\t\t %s \t\t %s\n", "site", "commands relating to static sites")
 		fmt.Printf("\t\t %s \t\t %s\n", "cache", "commands relating to md5-dict/cache")
 		fmt.Printf("\t\t %s \t\t %s\n", "pkg-desc-index", "commands relating to pkg_desc_index")
+		fmt.Printf("\t\t %s \t\t %s\n", "dev", "tools for developers and agents")
 		fmt.Printf("\t\t %s \t\t %s\n", "package", "commands relating to packages and search indexing")
 	}
 	if err := fs.Parse(os.Args); err != nil {
@@ -122,6 +123,9 @@ func main() {
 			os.Exit(-1)
 			return
 		}
+	case "dev":
+		cmdDev()
+		return
 	case "help", "-help", "--help":
 		fs.Usage()
 		os.Exit(-1)

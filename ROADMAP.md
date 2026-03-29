@@ -9,10 +9,10 @@
 
 ## Milestone 2: Enhanced Parsing & Writing
 - [ ] Complete variable resolution (e.g., recursive expansion, shell substitutions)
-- [ ] Parsing of ebuild functions (`src_compile`, `src_install`, etc.)
+- [x] Parsing of ebuild functions (`src_compile`, `src_install`, etc.)
 - [ ] Handling of conditional blocks (`if use ...`, `case ...`)
 - [ ] Improved `inherit` handling and eclass awareness
-- [ ] Support for all checksum algorithms in Manifests (currently limited set enabled by default)
+- [x] Support for all checksum algorithms in Manifests (currently limited set enabled by default)
 
 ## Milestone 3: Full Overlay Management
 - [ ] Integration with `arrans_overlay_workflow_builder`

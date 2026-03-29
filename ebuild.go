@@ -11,9 +11,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"text/template"
-
-	"github.com/arran4/g2/templates"
 )
 
 type URIEntry struct {
@@ -45,10 +42,14 @@ func (m ParsingMode) String() string {
 type Ebuild struct {
 	Path          string
 	Vars          map[string]string
+	Functions     map[string]AST
 	SrcUri        []URIEntry
 	Mode          ParsingMode
 	RawText       string
 	ParseWarnings []string
+
+	orderOverride []string
+	EbuildHeader  string
 }
 
 type varEntry struct {
@@ -56,9 +57,9 @@ type varEntry struct {
 	Value string
 }
 
-type ebuildData struct {
-	Vars   []varEntry
-	SrcUri []URIEntry
+type funcEntry struct {
+	Key   string
+	Value AST
 }
 
 func (e *Ebuild) String() string {
@@ -67,30 +68,28 @@ func (e *Ebuild) String() string {
 	// We do NOT output PN/PV/P variables as they are implicit from filename usually,
 	// but if we parsed them from filename, we don't need to write them back to file.
 
-	// Write variables
-	// Sort keys for deterministic output
-	keys := make([]string, 0, len(e.Vars))
-	for k := range e.Vars {
-		// Skip P, PN, PV if they match what we parsed from metadata
-		// But wait, if we are generating "valid" from parsing, maybe we should output them?
-		// No, real ebuilds don't define PN/PV usually.
-		if k == "P" || k == "PN" || k == "PV" {
-			continue
-		}
-		// If we are printing full ebuild with SRC_URI, don't print SRC_URI variable
-		if k == "SRC_URI" && e.Mode == ParseFull && len(e.SrcUri) > 0 {
-			continue
-		}
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
+	// Map to keep track of added items to prevent duplication
+	addedVars := make(map[string]bool)
+	addedFuncs := make(map[string]bool)
 
-	var entries []varEntry
-	for _, k := range keys {
-		val := e.Vars[k]
-		// Clean up value: strip trailing whitespace from each line
-		// This avoids issues where editors or tools strip trailing whitespace from golden files
-		// causing mismatch with generated output.
+	var orderedItems []interface{}
+
+	// Helper function to add a variable
+	addVar := func(k string) {
+		if addedVars[k] {
+			return
+		}
+		if k == "P" || k == "PN" || k == "PV" {
+			return
+		}
+		if k == "SRC_URI" && e.Mode == ParseFull && len(e.SrcUri) > 0 {
+			return
+		}
+		val, ok := e.Vars[k]
+		if !ok {
+			return
+		}
+
 		if strings.Contains(val, "\n") {
 			lines := strings.Split(val, "\n")
 			for i, line := range lines {
@@ -98,54 +97,96 @@ func (e *Ebuild) String() string {
 			}
 			val = strings.Join(lines, "\n")
 		}
-		entries = append(entries, varEntry{Key: k, Value: val})
+		orderedItems = append(orderedItems, &varEntry{Key: k, Value: val})
+		addedVars[k] = true
 	}
 
-	data := ebuildData{
-		Vars: entries,
+	// Helper function to add a function
+	addFunc := func(k string) {
+		if addedFuncs[k] {
+			return
+		}
+		val, ok := e.Functions[k]
+		if !ok {
+			return
+		}
+
+		if strings.Contains(val.Value, "\n") {
+			lines := strings.Split(val.Value, "\n")
+			for i, line := range lines {
+				lines[i] = strings.TrimRight(line, " \t")
+			}
+			val.Value = strings.Join(lines, "\n")
+		}
+		orderedItems = append(orderedItems, &funcEntry{Key: k, Value: val})
+		addedFuncs[k] = true
+	}
+
+	// 1. Process items in the exact order they appeared in the original source
+	for _, name := range e.orderOverride {
+		if _, isFunc := e.Functions[name]; isFunc {
+			addFunc(name)
+		} else if _, isVar := e.Vars[name]; isVar {
+			addVar(name)
+		}
+	}
+
+	// 2. Add remaining variables alphabetically
+	var remainingVars []string
+	for k := range e.Vars {
+		if !addedVars[k] {
+			remainingVars = append(remainingVars, k)
+		}
+	}
+	sort.Strings(remainingVars)
+	for _, k := range remainingVars {
+		addVar(k)
+	}
+
+	// 3. Add remaining functions alphabetically
+	var remainingFuncs []string
+	for k := range e.Functions {
+		if !addedFuncs[k] {
+			remainingFuncs = append(remainingFuncs, k)
+		}
+	}
+	sort.Strings(remainingFuncs)
+	for _, k := range remainingFuncs {
+		addFunc(k)
+	}
+
+	var buf bytes.Buffer
+	if e.EbuildHeader != "" {
+		buf.WriteString(e.EbuildHeader)
+		buf.WriteString("\n\n")
+	}
+
+	for _, item := range orderedItems {
+		switch v := item.(type) {
+		case *varEntry:
+			fmt.Fprintf(&buf, "%s=\"%s\"\n", v.Key, v.Value)
+		case *funcEntry:
+			fmt.Fprintf(&buf, "%s() %s\n", v.Key, v.Value.Value)
+		}
 	}
 
 	if e.Mode == ParseFull && len(e.SrcUri) > 0 {
-		// Populate SrcUri entries with filename logic
-		for i, u := range e.SrcUri {
-			base := filepath.Base(u.URL)
-			if u.Filename == base || u.Filename == "" {
-				// Don't duplicate if filename matches base
-				// But wait, template expects filename to be empty if we want to skip "->".
-				// Copy struct to avoid modifying original?
-				// Actually, if filename matches, we should set it to empty in the copy for template.
-				newU := u
-				newU.Filename = ""
-				if len(data.SrcUri) == 0 {
-					data.SrcUri = make([]URIEntry, len(e.SrcUri))
-				}
-				data.SrcUri[i] = newU
-			} else {
-				if len(data.SrcUri) == 0 {
-					data.SrcUri = make([]URIEntry, len(e.SrcUri))
-				}
-				data.SrcUri[i] = u
-			}
-		}
-		// Wait, loop above initializes slice only once? No.
-		// Let's rewrite cleaner.
-		data.SrcUri = make([]URIEntry, len(e.SrcUri))
-		for i, u := range e.SrcUri {
+		buf.WriteString("SRC_URI=\"\n")
+		for _, u := range e.SrcUri {
 			base := filepath.Base(u.URL)
 			filename := u.Filename
 			if filename == base {
 				filename = ""
 			}
-			data.SrcUri[i] = URIEntry{URL: u.URL, Filename: filename}
+			fmt.Fprintf(&buf, "\t%s", u.URL)
+			if filename != "" {
+				fmt.Fprintf(&buf, " -> %s", filename)
+			}
+			buf.WriteString("\n")
 		}
+		buf.WriteString("\"\n")
 	}
 
-	tmpl := template.Must(template.ParseFS(templates.EbuildFS, "ebuild/generate.tmpl"))
-	var buf bytes.Buffer
-	if err := tmpl.Execute(&buf, data); err != nil {
-		// Should not happen with valid data
-		return fmt.Sprintf("Error generating ebuild: %v", err)
-	}
 	return buf.String()
 }
 
@@ -177,7 +218,7 @@ func ParseEbuild(fsys fs.FS, path string, mode ParsingMode) (*Ebuild, error) {
 	if mode >= ParseVariables {
 		// Use the recursive descent parser
 		parser := NewEbuildParser(context.Background(), strings.NewReader(content))
-		parsedVars, err := parser.Parse()
+		parsedEbuild, err := parser.Parse()
 		if err != nil {
 			return nil, fmt.Errorf("parsing ebuild variables: %w", err)
 		}
@@ -187,9 +228,16 @@ func ParseEbuild(fsys fs.FS, path string, mode ParsingMode) (*Ebuild, error) {
 		// Since variables might depend on each other, we need to iterate
 		// or at least resolve using the whole parsedVars map.
 		// Add parsed vars to e.Vars
-		for k, v := range parsedVars {
+		for k, v := range parsedEbuild.Variables {
 			e.Vars[k] = v
 		}
+
+		e.Functions = make(map[string]AST)
+		for k, v := range parsedEbuild.Functions {
+			e.Functions[k] = v
+		}
+		e.orderOverride = parsedEbuild.Order
+		e.EbuildHeader = parsedEbuild.EbuildHeader
 		// Resolve all values now that all vars are added
 		// Using a multi-pass approach to resolve nested variables
 		for pass := 0; pass < 5; pass++ {
