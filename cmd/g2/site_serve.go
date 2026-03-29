@@ -65,24 +65,25 @@ func (cfg *MainArgConfig) cmdSiteServe(args []string) error {
 		}
 
 		var sitesMu sync.Mutex
-
 		g, _ := errgroup.WithContext(context.Background())
 		g.SetLimit(runtime.GOMAXPROCS(0))
 
 		for _, entry := range entries {
-			entry := entry // capture loop variable
 			if !entry.IsDir() {
 				continue
 			}
+			entry := entry
 			repoPath := filepath.Join(dbReposPath, entry.Name())
+
 			if isOverlayDir(repoPath) {
 				g.Go(func() error {
 					log.Printf("Parsing repository %s", entry.Name())
 					siteData, err := parseRepo(os.DirFS(repoPath), ".", entry.Name(), false, nil)
 					if err != nil {
 						log.Printf("Warning: failed to parse repo %s: %v", entry.Name(), err)
-						return nil
+						return nil // Don't fail entire group
 					}
+
 					sitesMu.Lock()
 					sites = append(sites, siteData)
 					sitesMu.Unlock()
@@ -90,13 +91,13 @@ func (cfg *MainArgConfig) cmdSiteServe(args []string) error {
 				})
 			}
 		}
+
 		if err := g.Wait(); err != nil {
-			log.Printf("Warning: error during parallel repository parsing: %v", err)
+			return fmt.Errorf("concurrent repository processing failed: %w", err)
 		}
 
-		// Sort the resulting sites alphabetically by RepoName for deterministic ordering
 		sort.Slice(sites, func(i, j int) bool {
-			return sites[i].RepoName < sites[j].RepoName
+			return sites[i].Title < sites[j].Title
 		})
 
 		if len(sites) == 0 {
