@@ -122,6 +122,12 @@ func main() {
 			os.Exit(-1)
 			return
 		}
+	case "readme-gen":
+		if err := cfg.cmdReadmeGen(fs.Args()[2:]); err != nil {
+			log.Printf("readme-gen error: %s", err)
+			os.Exit(-1)
+			return
+		}
 	case "help", "-help", "--help":
 		fs.Usage()
 		os.Exit(-1)
