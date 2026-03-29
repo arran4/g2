@@ -2980,7 +2980,7 @@ func renderPage(path string, tmpl *template.Template, name string, data interfac
 	}
 
 	// Update Content field
-	var layoutData interface{} = data
+	var layoutData = data
 	if ctx, ok := data.(GenericPageContext); ok {
 		ctx.Content = template.HTML(buf.String())
 		layoutData = ctx
