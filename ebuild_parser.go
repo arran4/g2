@@ -306,10 +306,32 @@ func (p *EbuildParser) Parse() (ParsedEbuild, error) {
 					} else {
 						result.Variables["INHERITED"] = val
 					}
+				} else if ident == "if" || ident == "elif" || ident == "while" || ident == "until" || ident == "for" || ident == "case" {
+					// These reserved words open bash blocks, we shouldn't skip the whole line blindly
+					// and just ignore the keyword itself so the parser continues into the block
+					// We just skip the condition part
+					err := p.consumeCondition()
+					if err != nil && !errors.Is(err, io.EOF) {
+						return result, err
+					}
+					continue
+				} else if ident == "fi" || ident == "done" || ident == "esac" || ident == "then" || ident == "else" || ident == "do" {
+					// Block closers / continuations. Ignore.
+					continue
 				} else {
 					// Bare command or reserved word. Skip line.
 					p.skipLine()
 				}
+			}
+		} else if r == ';' {
+			// Statement separator
+			_, _ = p.nextRune()
+		} else if r == ')' {
+			// Case statement condition close e.g. `a)`
+			_, _ = p.nextRune()
+			r, err := p.peek()
+			if err == nil && r == ';' {
+				_, _ = p.nextRune()
 			}
 		} else {
 			// Not an assignment or function we care about right now at top level.
@@ -468,6 +490,24 @@ func (p *EbuildParser) consumeArray() (string, error) {
 	return sb.String(), nil
 }
 
+func (p *EbuildParser) consumeCondition() error {
+	// Consumes up to the next `;` or `\n` to skip the conditional test.
+	// E.g., `if use x; then` -> we skip `use x;`
+	// Or `case $V1 in` -> we skip `$V1 in`
+	for {
+		r, err := p.peek()
+		if err != nil {
+			return err
+		}
+		if r == ';' || r == '\n' {
+			_, _ = p.nextRune() // consume it
+			break
+		}
+		_, _ = p.nextRune()
+	}
+	return nil
+}
+
 func (p *EbuildParser) consumeFunctionBody() (string, error) {
 	err := p.consumeWhitespaceAndComments()
 	if err != nil {
@@ -581,6 +621,18 @@ func (p *EbuildParser) consumeLine() (string, error) {
 		if err != nil {
 			return strings.TrimSpace(sb.String()), err
 		}
+		if r == '\\' {
+			nextR, nextErr := p.peek()
+			if nextErr == nil && nextR == '\n' {
+				// line continuation, skip the newline
+				_, _ = p.nextRune()
+				continue
+			}
+		}
+		if r == ';' {
+			// Statement separator - end of this line's command
+			break
+		}
 		if r == '\n' {
 			break
 		}
@@ -590,5 +642,8 @@ func (p *EbuildParser) consumeLine() (string, error) {
 		}
 		sb.WriteRune(r)
 	}
-	return strings.TrimSpace(sb.String()), nil
+	// clean up any excessive whitespace or escaped newlines
+	out := strings.ReplaceAll(sb.String(), "\\\n", " ")
+	out = strings.Join(strings.Fields(out), " ")
+	return out, nil
 }

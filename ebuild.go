@@ -501,27 +501,101 @@ func ParseEbuildVariables(filename string) map[string]string {
 	return nil
 }
 
+var varExpansionRegex = regexp.MustCompile(`\$\{([a-zA-Z0-9_]+)([^}]*)\}`)
+
 // ResolveVariables replaces ${VAR} and $VAR in the text with values from variables map.
 func ResolveVariables(text string, variables map[string]string) string {
 	// Simple resolution: multiple passes until no change or limit reached
 	// To prevent memory exhaustion from self-referential or heavily nested variables,
 	// cap the maximum expanded length.
 	maxLen := 1024 * 1024    // 1MB limit for expanded strings
+
+	// 1. Sort keys by length descending to prevent $P from matching before $PN
+	var keys []string
+	for k := range variables {
+		keys = append(keys, k)
+	}
+	sort.Slice(keys, func(i, j int) bool {
+		return len(keys[i]) > len(keys[j])
+	})
+
 	for i := 0; i < 5; i++ { // Limit recursion depth
 		original := text
-		for key, value := range variables {
-			if strings.Contains(text, fmt.Sprintf("${%s}", key)) || strings.Contains(text, fmt.Sprintf("$%s", key)) {
-				// Prevent replacing if the value itself contains the key, preventing infinite growth in edge cases
-				if strings.Contains(value, fmt.Sprintf("${%s}", key)) || strings.Contains(value, fmt.Sprintf("$%s", key)) {
+
+		// 1. Replace all simple $VAR substitutions
+		for _, key := range keys {
+			value := variables[key]
+			varRef := fmt.Sprintf("$%s", key)
+			if strings.Contains(text, varRef) {
+				if strings.Contains(value, varRef) {
 					continue
 				}
-				text = strings.ReplaceAll(text, fmt.Sprintf("${%s}", key), value)
-				text = strings.ReplaceAll(text, fmt.Sprintf("$%s", key), value)
-				if len(text) > maxLen {
-					return text[:maxLen]
-				}
+				text = strings.ReplaceAll(text, varRef, value)
 			}
 		}
+
+		// 2. Replace all ${VAR...} substitutions
+		text = varExpansionRegex.ReplaceAllStringFunc(text, func(match string) string {
+			parts := varExpansionRegex.FindStringSubmatch(match)
+			if len(parts) != 3 {
+				return match
+			}
+			k := parts[1]
+			op := parts[2]
+			v, ok := variables[k]
+
+			if op == "" {
+				if ok { return v }
+				return ""
+			}
+			if strings.HasPrefix(op, ":-") || strings.HasPrefix(op, "-") {
+				defVal := strings.TrimPrefix(strings.TrimPrefix(op, ":-"), "-")
+				if v != "" { return v }
+				return defVal
+			}
+			if strings.HasPrefix(op, "//") {
+				replParts := strings.SplitN(op[2:], "/", 2)
+				if len(replParts) == 2 {
+					return strings.ReplaceAll(v, replParts[0], replParts[1])
+				}
+				return strings.ReplaceAll(v, replParts[0], "")
+			}
+			if strings.HasPrefix(op, "/") {
+				replParts := strings.SplitN(op[1:], "/", 2)
+				if len(replParts) == 2 {
+					return strings.Replace(v, replParts[0], replParts[1], 1)
+				}
+				return strings.Replace(v, replParts[0], "", 1)
+			}
+			if strings.HasPrefix(op, "##") {
+				prefix := op[2:]
+				if strings.HasPrefix(v, prefix) { return v[len(prefix):] }
+				return v
+			}
+			if strings.HasPrefix(op, "#") {
+				prefix := op[1:]
+				if strings.HasPrefix(v, prefix) { return v[len(prefix):] }
+				return v
+			}
+			if strings.HasPrefix(op, "%%") {
+				suffix := op[2:]
+				if strings.HasSuffix(v, suffix) { return v[:len(v)-len(suffix)] }
+				return v
+			}
+			if strings.HasPrefix(op, "%") {
+				suffix := op[1:]
+				if strings.HasSuffix(v, suffix) { return v[:len(v)-len(suffix)] }
+				return v
+			}
+
+			// Unknown operation
+			return match
+		})
+
+		if len(text) > maxLen {
+			return text[:maxLen]
+		}
+
 		if text == original {
 			break
 		}
