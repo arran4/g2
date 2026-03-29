@@ -62,7 +62,7 @@ func (cfg *MainArgConfig) cmdLint(args []string) error {
 			// Filter warnings
 			var filteredWarnings []lints.LintResult
 			for _, w := range lintWarnings {
-				if *severityFilter != "" && strings.ToLower(string(w.RuleMetadata.Severity)) != strings.ToLower(*severityFilter) {
+				if *severityFilter != "" && !strings.EqualFold(string(w.RuleMetadata.Severity), *severityFilter) {
 					continue
 				}
 				if *sourceFilter != "" && string(w.RuleMetadata.Source) != *sourceFilter {
