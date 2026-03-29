@@ -139,16 +139,20 @@ func downloadAndExtractZip(ctx context.Context, zipUrl string, destDir string) e
 	defer func() { _ = zr.Close() }()
 
 	var rootPrefix string
-	for _, f := range zr.File {
-		if f.FileInfo().IsDir() {
-			rootPrefix = f.Name
-			break
-		}
-	}
-	if rootPrefix == "" && len(zr.File) > 0 {
+	if len(zr.File) > 0 {
 		parts := strings.Split(zr.File[0].Name, "/")
 		if len(parts) > 1 {
-			rootPrefix = parts[0] + "/"
+			potentialRoot := parts[0] + "/"
+			allMatch := true
+			for _, f := range zr.File {
+				if !strings.HasPrefix(f.Name, potentialRoot) {
+					allMatch = false
+					break
+				}
+			}
+			if allMatch {
+				rootPrefix = potentialRoot
+			}
 		}
 	}
 
