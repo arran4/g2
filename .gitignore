@@ -12,8 +12,6 @@
 site_out/
 test_repo/
 test_site/
-/*.py
 /site_out
-site_out/
 testrepo/
 playwright-script.js
