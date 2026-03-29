@@ -6,7 +6,19 @@ import (
 
 	"github.com/arran4/g2"
 	"github.com/arran4/g2/lints"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 )
+
+var ruleManifestChecks = lints.RuleMetadata{
+	ID:          "ManifestChecks",
+	Title:       "Manifest File Checks",
+	Description: "Ensures the Manifest file exists and conforms to layout.conf.",
+	URL:         "https://devmanual.gentoo.org/general-concepts/manifest/index.html",
+	Severity:    lints.SeverityError,
+	Source:      lints.SourceG2,
+	Tags:        []string{"manifest"},
+}
 
 func init() {
 	lints.RegisterLintRule(&ManifestLintRule{})
@@ -14,33 +26,38 @@ func init() {
 
 type ManifestLintRule struct{}
 
-func (r *ManifestLintRule) Lint(repoDir string, pkg *g2.PackageData) []string {
+func (r *ManifestLintRule) Lint(repoDir string, pkg *g2.PackageData) []lints.LintResult {
 	return r.LintWithQA(repoDir, pkg, nil)
 }
 
-func (r *ManifestLintRule) LintWithQA(repoDir string, pkg *g2.PackageData, qa *g2.QAPolicy) []string {
-	var warnings []string
+func (r *ManifestLintRule) LintWithQA(repoDir string, pkg *g2.PackageData, qa *g2.QAPolicy) []lints.LintResult {
+	var results []lints.LintResult
 
+	// Check if missing entirely
+	if pkg.Manifest == nil {
+		if len(pkg.Versions) > 0 {
+			res := lints.LintResult{
+				RuleMetadata: ruleManifestChecks,
+				Message:      fmt.Sprintf("[%s] Missing or unparsable Manifest file", cases.Title(language.English).String(string(lints.SeverityError))),
+				Package:      pkg.Category + "/" + pkg.Name,
+			}
+			res.RuleMetadata.Severity = lints.SeverityError
+			results = append(results, res)
+		}
+		return results
+	}
+
+	// layout.conf checks
 	layoutConfPath := filepath.Join(repoDir, "metadata", "layout.conf")
 	lc, err := g2.ParseLayoutConf(layoutConfPath)
 	if err != nil {
-		return warnings
+		return results
 	}
 
 	manifestHashes := lc.GetValuesAsSlice("manifest-hashes")
 	manifestRequiredHashes := lc.GetValuesAsSlice("manifest-required-hashes")
 
-	if len(manifestRequiredHashes) == 0 {
-		return warnings
-	}
-
-	manifestPath := filepath.Join(repoDir, pkg.Category, pkg.Name, "Manifest")
-	manifest, err := g2.ParseManifest(manifestPath)
-	if err != nil {
-		return warnings
-	}
-
-	for _, entry := range manifest.Entries {
+	for _, entry := range pkg.Manifest.Entries {
 		for _, requiredHash := range manifestRequiredHashes {
 			found := false
 			for _, hash := range entry.Hashes {
@@ -50,7 +67,13 @@ func (r *ManifestLintRule) LintWithQA(repoDir string, pkg *g2.PackageData, qa *g
 				}
 			}
 			if !found {
-				warnings = append(warnings, fmt.Sprintf("[Error] Manifest entry %s is missing required hash '%s'", entry.Filename, requiredHash))
+				res := lints.LintResult{
+					RuleMetadata: ruleManifestChecks,
+					Message:      fmt.Sprintf("[%s] Manifest entry %s is missing required hash '%s'", cases.Title(language.English).String(string(lints.SeverityError)), entry.Filename, requiredHash),
+					Package:      pkg.Category + "/" + pkg.Name,
+				}
+				res.RuleMetadata.Severity = lints.SeverityError
+				results = append(results, res)
 			}
 		}
 
@@ -64,11 +87,17 @@ func (r *ManifestLintRule) LintWithQA(repoDir string, pkg *g2.PackageData, qa *g
 					}
 				}
 				if !allowed {
-					warnings = append(warnings, fmt.Sprintf("[Warning] Manifest entry %s has unallowed hash '%s'", entry.Filename, hash.Type))
+					res := lints.LintResult{
+						RuleMetadata: ruleManifestChecks,
+						Message:      fmt.Sprintf("[%s] Manifest entry %s has unallowed hash '%s'", cases.Title(language.English).String(string(lints.SeverityWarning)), entry.Filename, hash.Type),
+						Package:      pkg.Category + "/" + pkg.Name,
+					}
+					res.RuleMetadata.Severity = lints.SeverityWarning
+					results = append(results, res)
 				}
 			}
 		}
 	}
 
-	return warnings
+	return results
 }

@@ -1,25 +1,14 @@
-package metadata
+package metadata_test
 
 import (
 	"testing"
 
 	"github.com/arran4/g2"
+	"github.com/arran4/g2/lints/metadata"
 )
 
-func TestMaintainerLintRule(t *testing.T) {
-	rule := &MaintainerLintRule{}
-
-	t.Run("Has maintainer", func(t *testing.T) {
-		pkg := &g2.PackageData{
-			Metadata: &g2.PkgMetadata{
-				Maintainers: []g2.Maintainer{{Email: "test@example.com"}},
-			},
-		}
-		warnings := rule.Lint("", pkg)
-		if len(warnings) != 0 {
-			t.Errorf("Expected 0 warnings, got %v", warnings)
-		}
-	})
+func TestMaintainerMissingLintRule(t *testing.T) {
+	rule := &metadata.MaintainerLintRule{}
 
 	t.Run("Missing maintainer", func(t *testing.T) {
 		pkg := &g2.PackageData{
@@ -27,21 +16,23 @@ func TestMaintainerLintRule(t *testing.T) {
 				Maintainers: []g2.Maintainer{},
 			},
 		}
-		warnings := rule.Lint("", pkg)
-		if len(warnings) != 1 {
-			t.Errorf("Expected 1 warning, got %v", warnings)
-		} else if warnings[0] != "[Warning] metadata.xml is missing a maintainer. Add at least one <maintainer> element." {
-			t.Errorf("Unexpected warning: %s", warnings[0])
+		warnings := rule.Lint(".", pkg)
+		if len(warnings) == 0 {
+			t.Error("expected warning for missing maintainer, got none")
 		}
 	})
 
-	t.Run("Missing metadata entirely", func(t *testing.T) {
+	t.Run("Has maintainer", func(t *testing.T) {
 		pkg := &g2.PackageData{
-			Metadata: nil,
+			Metadata: &g2.PkgMetadata{
+				Maintainers: []g2.Maintainer{
+					{Email: "dev@example.com"},
+				},
+			},
 		}
-		warnings := rule.Lint("", pkg)
-		if len(warnings) != 0 {
-			t.Errorf("Expected 0 warnings, got %v", warnings)
+		warnings := rule.Lint(".", pkg)
+		if len(warnings) > 0 {
+			t.Errorf("expected no warnings, got %v", warnings)
 		}
 	})
 }

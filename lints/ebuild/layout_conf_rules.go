@@ -3,10 +3,23 @@ package ebuild
 import (
 	"fmt"
 	"path/filepath"
+	"strings"
 
 	"github.com/arran4/g2"
 	"github.com/arran4/g2/lints"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 )
+
+var ruleLayoutConf = lints.RuleMetadata{
+	ID:          "LayoutConfRules",
+	Title:       "Layout Conf Checks",
+	Description: "Validates layout.conf elements like manifest-hashes and eapis-deprecated.",
+	URL:         "https://devmanual.gentoo.org/general-concepts/overlay-layout/",
+	Severity:    lints.SeverityWarning,
+	Source:      lints.SourceG2,
+	Tags:        []string{"repo-layout", "manifest"},
+}
 
 func init() {
 	lints.RegisterLintRule(&LayoutConfLintRule{})
@@ -14,90 +27,103 @@ func init() {
 
 type LayoutConfLintRule struct{}
 
-func (r *LayoutConfLintRule) Lint(repoDir string, pkg *g2.PackageData) []string {
+func (r *LayoutConfLintRule) Lint(repoDir string, pkg *g2.PackageData) []lints.LintResult {
 	return r.LintWithQA(repoDir, pkg, nil)
 }
 
-func (r *LayoutConfLintRule) LintWithQA(repoDir string, pkg *g2.PackageData, qa *g2.QAPolicy) []string {
-	var warnings []string
+func (r *LayoutConfLintRule) LintWithQA(repoDir string, pkg *g2.PackageData, qa *g2.QAPolicy) []lints.LintResult {
+	var results []lints.LintResult
+	severity := lints.SeverityWarning
 
 	layoutConfPath := filepath.Join(repoDir, "metadata", "layout.conf")
 	lc, err := g2.ParseLayoutConf(layoutConfPath)
 	if err != nil {
-		// Cannot lint without layout.conf or if it doesn't exist. Assuming valid or not our place to report here.
-		return warnings
+		return results
 	}
 
-	eapisBanned := append(lc.GetValuesAsSlice("eapis-banned"), lc.GetValuesAsSlice("profile-eapis-banned")...)
-	eapisDeprecated := append(lc.GetValuesAsSlice("eapis-deprecated"), lc.GetValuesAsSlice("profile-eapis-deprecated")...)
-	restrictAllowed := lc.GetValuesAsSlice("restrict-allowed")
+	eapisDeprecated := lc.GetValuesAsSlice("eapis-deprecated")
+	eapisBanned := lc.GetValuesAsSlice("eapis-banned")
 	propertiesAllowed := lc.GetValuesAsSlice("properties-allowed")
-
-	isBanned := func(eapi string, banned []string) bool {
-		for _, b := range banned {
-			if b == eapi {
-				return true
-			}
-		}
-		return false
-	}
-
-	isAllowed := func(val string, allowed []string) bool {
-		if len(allowed) == 0 {
-			return true // If not specified, anything is allowed
-		}
-		for _, a := range allowed {
-			if a == val || val == "" {
-				return true
-			}
-		}
-		return false
-	}
-
-	checkTokens := func(field string, rawValue string, allowed []string) []string {
-		var errs []string
-		tree := g2.ParseDepTree(rawValue)
-		tokens, _ := tree.Evaluate(g2.IgnoreUseFlags(true))
-		for _, token := range tokens {
-			if !isAllowed(token, allowed) {
-				errs = append(errs, fmt.Sprintf("unallowed %s token '%s'", field, token))
-			}
-		}
-		return errs
-	}
+	restrictAllowed := lc.GetValuesAsSlice("restrict-allowed")
 
 	for _, ver := range pkg.Versions {
-		if ver.Ebuild != nil && ver.Ebuild.Vars != nil {
-			eapi := ver.Ebuild.Vars["EAPI"]
-			if eapi == "" {
-				eapi = "0"
-			}
+		if ver.Ebuild == nil || ver.Ebuild.Vars == nil {
+			continue
+		}
 
-			if isBanned(eapi, eapisBanned) {
-				warnings = append(warnings, fmt.Sprintf("[Error] Ebuild %s uses banned EAPI '%s'", ver.Version, eapi))
-			} else if isBanned(eapi, eapisDeprecated) {
-				warnings = append(warnings, fmt.Sprintf("[Warning] Ebuild %s uses deprecated EAPI '%s'", ver.Version, eapi))
-			}
+		eapi := ver.Ebuild.Vars["EAPI"]
+		if eapi == "" {
+			eapi = "0"
+		}
 
-			if len(restrictAllowed) > 0 {
-				restrict := ver.Ebuild.Vars["RESTRICT"]
-				if errs := checkTokens("RESTRICT", restrict, restrictAllowed); len(errs) > 0 {
-					for _, e := range errs {
-						warnings = append(warnings, fmt.Sprintf("[Error] Ebuild %s: %s", ver.Version, e))
+		for _, dep := range eapisBanned {
+			if eapi == dep {
+				res := lints.LintResult{
+					RuleMetadata: ruleLayoutConf,
+					Message:      fmt.Sprintf("[%s] EAPI %s is banned in layout.conf", cases.Title(language.English).String(string(lints.SeverityError)), eapi),
+					Package:      pkg.Category + "/" + pkg.Name,
+				}
+				res.RuleMetadata.Severity = lints.SeverityError
+				results = append(results, res)
+			}
+		}
+
+		for _, dep := range eapisDeprecated {
+			if eapi == dep {
+				res := lints.LintResult{
+					RuleMetadata: ruleLayoutConf,
+					Message:      fmt.Sprintf("[%s] EAPI %s is deprecated in layout.conf", cases.Title(language.English).String(string(severity)), eapi),
+					Package:      pkg.Category + "/" + pkg.Name,
+				}
+				res.RuleMetadata.Severity = severity
+				results = append(results, res)
+			}
+		}
+
+		if len(propertiesAllowed) > 0 {
+			props := ver.Ebuild.Vars["PROPERTIES"]
+			for _, prop := range strings.Fields(props) {
+				allowed := false
+				for _, a := range propertiesAllowed {
+					if prop == a || prop == "-"+a {
+						allowed = true
+						break
 					}
 				}
-			}
-
-			if len(propertiesAllowed) > 0 {
-				properties := ver.Ebuild.Vars["PROPERTIES"]
-				if errs := checkTokens("PROPERTIES", properties, propertiesAllowed); len(errs) > 0 {
-					for _, e := range errs {
-						warnings = append(warnings, fmt.Sprintf("[Error] Ebuild %s: %s", ver.Version, e))
+				if !allowed {
+					res := lints.LintResult{
+						RuleMetadata: ruleLayoutConf,
+						Message:      fmt.Sprintf("[%s] PROPERTY '%s' is not listed in layout.conf properties-allowed", cases.Title(language.English).String(string(severity)), prop),
+						Package:      pkg.Category + "/" + pkg.Name,
 					}
+					res.RuleMetadata.Severity = severity
+					results = append(results, res)
+				}
+			}
+		}
+
+		if len(restrictAllowed) > 0 {
+			restr := ver.Ebuild.Vars["RESTRICT"]
+			for _, r := range strings.Fields(restr) {
+				allowed := false
+				for _, a := range restrictAllowed {
+					if r == a || r == "-"+a {
+						allowed = true
+						break
+					}
+				}
+				if !allowed {
+					res := lints.LintResult{
+						RuleMetadata: ruleLayoutConf,
+						Message:      fmt.Sprintf("[%s] RESTRICT '%s' is not listed in layout.conf restrict-allowed", cases.Title(language.English).String(string(severity)), r),
+						Package:      pkg.Category + "/" + pkg.Name,
+					}
+					res.RuleMetadata.Severity = severity
+					results = append(results, res)
 				}
 			}
 		}
 	}
 
-	return warnings
+	return results
 }
