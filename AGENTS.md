@@ -7,7 +7,13 @@
 * All test data should be in `/testdata` if it is required for tests. Otherwise, test generated data must be git ignored and not added to the repo.
 * Do not hardcode specific remote URLs (e.g. `https://github.com/gentoo-mirror/gentoo/blob/stable/` etc) in generic generation templates since the application is used against many different overlays. Ensure variables or configuration dictate correct URLs dynamically.
 * Ensure generated site features remain repository neutral (e.g. do not hardcode links to Gentoo's GitHub or policy guide) as this tool supports importing multiple independent overlay repositories.
-* When `doc/g2.1.md` is modified, you must regenerate the man page `doc/g2.1` using `go run github.com/cpuguy83/go-md2man/v2@latest -in doc/g2.1.md -out doc/g2.1`.
+
+- `doc/g2.1.md` is the canonical maintained man-page source. The generated `md2man` output is build/test output and should not be committed to the repository.
+- Man page updates should aim for actual man-page conventions (e.g., concise, declarative, no marketing bloat, using standard sections like NAME, SYNOPSIS, DESCRIPTION), not README-style feature dumping.
+- When adding or changing commands/features, agents must update:
+  - `doc/g2.1.md` to reflect the new functionality.
+  - `readme.md` where appropriate.
+- Agents should inspect the real command tree using `go run ./cmd/g2 ...` to document commands accurately, rather than relying on stale markdown docs.
 
 - When creating or modifying test data, **always anonymize individuals and strip real email addresses**. Use generic names (e.g., "Jane Doe") and example domains (e.g., "example.com").
 
