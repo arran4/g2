@@ -62,12 +62,6 @@ type funcEntry struct {
 	Value AST
 }
 
-type ebuildData struct {
-	Vars      []varEntry
-	Functions []funcEntry
-	SrcUri    []URIEntry
-}
-
 func (e *Ebuild) String() string {
 	// Reconstruct a valid-ish ebuild
 	// Since we don't preserve the whole file, we reconstruct what we know.
@@ -170,9 +164,9 @@ func (e *Ebuild) String() string {
 	for _, item := range orderedItems {
 		switch v := item.(type) {
 		case *varEntry:
-			buf.WriteString(fmt.Sprintf("%s=\"%s\"\n", v.Key, v.Value))
+			fmt.Fprintf(&buf, "%s=\"%s\"\n", v.Key, v.Value)
 		case *funcEntry:
-			buf.WriteString(fmt.Sprintf("%s() %s\n", v.Key, v.Value.Value))
+			fmt.Fprintf(&buf, "%s() %s\n", v.Key, v.Value.Value)
 		}
 	}
 
@@ -184,9 +178,9 @@ func (e *Ebuild) String() string {
 			if filename == base {
 				filename = ""
 			}
-			buf.WriteString(fmt.Sprintf("\t%s", u.URL))
+			fmt.Fprintf(&buf, "\t%s", u.URL)
 			if filename != "" {
-				buf.WriteString(fmt.Sprintf(" -> %s", filename))
+				fmt.Fprintf(&buf, " -> %s", filename)
 			}
 			buf.WriteString("\n")
 		}

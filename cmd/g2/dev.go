@@ -70,9 +70,13 @@ func cmdDevUpdateTxtarTests() {
 			if err != nil {
 				panic(err)
 			}
-			defer os.Remove(tmp.Name())
-			tmp.Write(ebuildData)
-			tmp.Close()
+			defer func() { _ = os.Remove(tmp.Name()) }()
+			if _, err := tmp.Write(ebuildData); err != nil {
+				fmt.Printf("Warning: failed to write temp file for %s: %v\n", ebuildName, err)
+				_ = tmp.Close()
+				continue
+			}
+			_ = tmp.Close()
 
 			eb, err := g2.ParseEbuild(os.DirFS(filepath.Dir(tmp.Name())), filepath.Base(tmp.Name()), g2.ParseFull)
 			if err != nil {

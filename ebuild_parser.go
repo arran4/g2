@@ -193,7 +193,6 @@ func (p *EbuildParser) consumeHeaderAndWhitespace() (string, error) {
 			}
 			continue
 		}
-		inHeader = false
 		return strings.TrimSpace(header.String()), nil // Not space or comment
 	}
 }
