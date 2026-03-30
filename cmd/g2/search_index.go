@@ -55,7 +55,7 @@ type SearchManifest struct {
 	DataFiles     []string `json:"data_files"`
 }
 
-func generateSearchData(outDir, outZip string, sites []*SiteData) error {
+func generateSearchData(outDir, outZip string, sites []*SiteData, maxChunkSizeOverride ...int) error {
 	var documents []SearchDocument
 	docID := 0
 
@@ -282,7 +282,10 @@ func generateSearchData(outDir, outZip string, sites []*SiteData) error {
 	var dataFiles []string
 	var chunks [][]SearchDocument
 
-	const maxChunkSize = 20 * 1024 * 1024 // 20 MB
+	maxChunkSize := 2 * 1024 * 1024 // 2 MB
+	if len(maxChunkSizeOverride) > 0 {
+		maxChunkSize = maxChunkSizeOverride[0]
+	}
 
 	currentChunk := make([]SearchDocument, 0)
 	currentChunkSize := 2 // []
