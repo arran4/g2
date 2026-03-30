@@ -14,7 +14,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -341,7 +340,7 @@ func (cfg *MainArgConfig) cmdOverlays(args []string) error {
 	recentDurOpt := fs.String("recent-duration", "3mo", "Duration to consider an update 'recent' (e.g. 3mo, 14d, 72h)")
 	fastGit := fs.Bool("fast-git-modtime", false, "Use fast (O(1)) but potentially less reliable go-git file log lookup")
 	useZip := fs.Bool("use-zip", false, "Download zip archives instead of git clone when supported")
-	concurrency := fs.Int("concurrency", runtime.GOMAXPROCS(0), "Maximum number of concurrent repository fetches/parses")
+	concurrency := fs.Int("concurrency", 4, "Maximum number of concurrent repository fetches/parses")
 
 	if err := fs.Parse(args[2:]); err != nil {
 		return fmt.Errorf("parsing flags: %w", err)
