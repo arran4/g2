@@ -279,9 +279,38 @@ func generateSearchData(outDir, outZip string, sites []*SiteData) error {
 		}
 	}
 
+	var dataFiles []string
+	var chunks [][]SearchDocument
+
+	const maxChunkSize = 20 * 1024 * 1024 // 20 MB
+
+	currentChunk := make([]SearchDocument, 0)
+	currentChunkSize := 2 // []
+
+	for _, doc := range documents {
+		b, _ := json.Marshal(doc)
+		docSize := len(b) + 1 // +1 for comma
+
+		if currentChunkSize+docSize > maxChunkSize && len(currentChunk) > 0 {
+			chunks = append(chunks, currentChunk)
+			currentChunk = make([]SearchDocument, 0)
+			currentChunkSize = 2
+		}
+
+		currentChunk = append(currentChunk, doc)
+		currentChunkSize += docSize
+	}
+	if len(currentChunk) > 0 {
+		chunks = append(chunks, currentChunk)
+	}
+
+	for i := range chunks {
+		dataFiles = append(dataFiles, fmt.Sprintf("docs-%d.json", i))
+	}
+
 	manifest := SearchManifest{
 		DocumentCount: len(documents),
-		DataFiles:     []string{"docs-0.json"},
+		DataFiles:     dataFiles,
 	}
 
 	if outZip != "" {
@@ -295,13 +324,15 @@ func generateSearchData(outDir, outZip string, sites []*SiteData) error {
 		defer func() { _ = z.Close() }()
 
 		// Create data dir
-		docsWriter, err := z.Create("data/docs-0.json")
-		if err != nil {
-			return fmt.Errorf("creating docs-0.json in zip: %w", err)
-		}
-		encoder := json.NewEncoder(docsWriter)
-		if err := encoder.Encode(documents); err != nil {
-			return fmt.Errorf("encoding search docs: %w", err)
+		for i, chunk := range chunks {
+			docsWriter, err := z.Create(fmt.Sprintf("data/docs-%d.json", i))
+			if err != nil {
+				return fmt.Errorf("creating docs-%d.json in zip: %w", i, err)
+			}
+			encoder := json.NewEncoder(docsWriter)
+			if err := encoder.Encode(chunk); err != nil {
+				return fmt.Errorf("encoding search docs %d: %w", i, err)
+			}
 		}
 
 		manifestWriter, err := z.Create("data/manifest.json")
@@ -321,18 +352,20 @@ func generateSearchData(outDir, outZip string, sites []*SiteData) error {
 			return fmt.Errorf("creating search data directory: %w", err)
 		}
 
-		dataFile := "docs-0.json"
-		dataFilePath := filepath.Join(dataDir, dataFile)
+		for i, chunk := range chunks {
+			dataFile := fmt.Sprintf("docs-%d.json", i)
+			dataFilePath := filepath.Join(dataDir, dataFile)
 
-		f, err := os.Create(dataFilePath)
-		if err != nil {
-			return fmt.Errorf("creating docs data file: %w", err)
-		}
-		defer func() { _ = f.Close() }()
-
-		encoder := json.NewEncoder(f)
-		if err := encoder.Encode(documents); err != nil {
-			return fmt.Errorf("encoding search docs: %w", err)
+			f, err := os.Create(dataFilePath)
+			if err != nil {
+				return fmt.Errorf("creating docs data file %d: %w", i, err)
+			}
+			encoder := json.NewEncoder(f)
+			err = encoder.Encode(chunk)
+			_ = f.Close()
+			if err != nil {
+				return fmt.Errorf("encoding search docs %d: %w", i, err)
+			}
 		}
 
 		manifestPath := filepath.Join(dataDir, "manifest.json")
