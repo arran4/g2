@@ -14,7 +14,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -3090,7 +3089,6 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, 
 	var allSitesMu sync.Mutex
 
 	g, _ := errgroup.WithContext(context.Background())
-	g.SetLimit(runtime.GOMAXPROCS(0))
 
 	for _, repo := range repos.Repositories {
 		repo := repo // loop variable capture

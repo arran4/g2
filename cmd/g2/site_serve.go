@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"runtime"
 	"sort"
 	"strings"
 	"sync"
@@ -66,7 +65,6 @@ func (cfg *MainArgConfig) cmdSiteServe(args []string) error {
 
 		var sitesMu sync.Mutex
 		g, _ := errgroup.WithContext(context.Background())
-		g.SetLimit(runtime.GOMAXPROCS(0))
 
 		for _, entry := range entries {
 			if !entry.IsDir() {
@@ -341,7 +339,6 @@ func newSiteServer(sites []*SiteData, genInfo GenerationInfo) (*SiteServer, erro
 
 	return server, nil
 }
-
 
 func (s *SiteServer) renderPageHTTP(w http.ResponseWriter, name string, data map[string]interface{}) {
 	log.Printf("Serving page using template %s", name)
