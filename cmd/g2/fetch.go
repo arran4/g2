@@ -5,12 +5,14 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 type ZipUrlConverter func(gitUrl string) (string, error)
@@ -68,7 +70,24 @@ func giteaUrlConverter(gitUrl string) (string, error) {
 	return fmt.Sprintf("https://%s%s/archive/HEAD.zip", u.Host, path), nil
 }
 
-func FetchRepo(ctx context.Context, gitUrl string, destDir string, useZip bool) error {
+func FetchRepo(ctx context.Context, gitUrl string, destDir string, useZip bool, retries int) error {
+	var err error
+	for i := 0; i <= retries; i++ {
+		if i > 0 {
+			log.Printf("Retrying fetch for %s (attempt %d/%d)...", gitUrl, i, retries)
+			_ = os.RemoveAll(destDir)
+			time.Sleep(1 * time.Second)
+		}
+		err = fetchRepoAttempt(ctx, gitUrl, destDir, useZip)
+		if err == nil {
+			return nil
+		}
+		log.Printf("Fetch attempt %d failed for %s: %v", i+1, gitUrl, err)
+	}
+	return err
+}
+
+func fetchRepoAttempt(ctx context.Context, gitUrl string, destDir string, useZip bool) error {
 	if useZip {
 		u, err := url.Parse(gitUrl)
 		if err == nil {

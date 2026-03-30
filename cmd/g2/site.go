@@ -260,7 +260,7 @@ func (cfg *MainArgConfig) cmdOverlay(args []string) error {
 		defer cancel()
 
 		t0 := time.Now()
-		if err := FetchRepo(ctx, location, tmpDir, *useZip); err != nil {
+		if err := FetchRepo(ctx, location, tmpDir, *useZip, 0); err != nil {
 			cleanup()
 			return fmt.Errorf("cloning repository: %w", err)
 		}
@@ -341,6 +341,8 @@ func (cfg *MainArgConfig) cmdOverlays(args []string) error {
 	fastGit := fs.Bool("fast-git-modtime", false, "Use fast (O(1)) but potentially less reliable go-git file log lookup")
 	useZip := fs.Bool("use-zip", false, "Download zip archives instead of git clone when supported")
 	concurrency := fs.Int("concurrency", 4, "Maximum number of concurrent repository fetches/parses")
+	retries := fs.Int("retries", 3, "Number of times to retry fetching a repository")
+	continueOnError := fs.Bool("continue-on-error", true, "Continue parsing other repositories even if fetching one fails")
 
 	if err := fs.Parse(args[2:]); err != nil {
 		return fmt.Errorf("parsing flags: %w", err)
@@ -362,7 +364,7 @@ func (cfg *MainArgConfig) cmdOverlays(args []string) error {
 	}
 
 	log.Printf("Generating site from remote repositories: %s into %s", location, *outDir)
-	return cfg.cmdSiteRemote(location, *outDir, recentDuration, recentDurationStr, *fastGit, *useZip, *concurrency)
+	return cfg.cmdSiteRemote(location, *outDir, recentDuration, recentDurationStr, *fastGit, *useZip, *concurrency, *retries, *continueOnError)
 }
 
 func parseLayoutConfFromFS(sysFS fs.FS, path string) (*g2.LayoutConf, error) {
@@ -3043,7 +3045,7 @@ func renderPage(path string, tmpl *template.Template, name string, data interfac
 	return nil
 }
 
-func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, recentDuration time.Duration, recentDurationStr string, fastGit bool, useZip bool, concurrency int) error {
+func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, recentDuration time.Duration, recentDurationStr string, fastGit bool, useZip bool, concurrency int, retries int, continueOnError bool) error {
 	var data []byte
 	var err error
 
@@ -3120,8 +3122,11 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, 
 			defer cancel()
 
 			t0 := time.Now()
-			if err := FetchRepo(ctx, gitUrl, repoPath, useZip); err != nil {
+			if err := FetchRepo(ctx, gitUrl, repoPath, useZip, retries); err != nil {
 				log.Printf("Failed to fetch %s: %v", repo.Name, err)
+				if !continueOnError {
+					return fmt.Errorf("fetching %s: %w", repo.Name, err)
+				}
 				return nil
 			}
 			checkoutTime := time.Since(t0)
@@ -3151,14 +3156,15 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, 
 			allSitesMu.Lock()
 			allSites = append(allSites, siteData)
 			allSitesMu.Unlock()
-
 			return nil
 		})
 	}
 	if err := g.Wait(); err != nil {
+		if !continueOnError {
+			return fmt.Errorf("parallel repository fetching: %w", err)
+		}
 		log.Printf("Warning: error during parallel repository fetching: %v", err)
 	}
-
 	// Sort the resulting sites alphabetically by RepoName for deterministic ordering
 	sort.Slice(allSites, func(i, j int) bool {
 		return allSites[i].RepoName < allSites[j].RepoName
