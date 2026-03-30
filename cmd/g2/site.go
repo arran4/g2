@@ -3089,6 +3089,7 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, 
 	var allSitesMu sync.Mutex
 
 	g, _ := errgroup.WithContext(context.Background())
+	g.SetLimit(10)
 
 	for _, repo := range repos.Repositories {
 		repo := repo // loop variable capture

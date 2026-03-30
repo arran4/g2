@@ -65,6 +65,7 @@ func (cfg *MainArgConfig) cmdSiteServe(args []string) error {
 
 		var sitesMu sync.Mutex
 		g, _ := errgroup.WithContext(context.Background())
+		g.SetLimit(10)
 
 		for _, entry := range entries {
 			if !entry.IsDir() {
