@@ -75,7 +75,7 @@ func FetchRepo(ctx context.Context, gitUrl string, destDir string, useZip bool, 
 	for i := 0; i <= retries; i++ {
 		if i > 0 {
 			log.Printf("Retrying fetch for %s (attempt %d/%d)...", gitUrl, i, retries)
-			os.RemoveAll(destDir)
+			_ = os.RemoveAll(destDir)
 			time.Sleep(1 * time.Second)
 		}
 		err = fetchRepoAttempt(ctx, gitUrl, destDir, useZip)
