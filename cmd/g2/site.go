@@ -584,12 +584,41 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool, r
 		}
 	}
 
-	// Get Git Info if not injected
-	if remoteURL == "" {
-		var err error
-		remoteURL, err = getGitOriginURL(repoDir)
-		if err != nil {
-			log.Printf("Warning: failed to get git origin url: %v", err)
+	isUselessURL := func(u string) bool {
+		u = strings.TrimSpace(u)
+		return u == "" || u == "." || u == ".." || u == "./" || u == "../"
+	}
+
+	originalRemoteURL := remoteURL
+
+	// Implement fallback layers for remoteURL
+	if isUselessURL(remoteURL) {
+		remoteURL = ""
+
+		// 1. Git origin URL
+		gitURL, err := getGitOriginURL(repoDir)
+		if err == nil && !isUselessURL(gitURL) {
+			remoteURL = gitURL
+		}
+
+		// 2. RepoInfo Sources
+		if remoteURL == "" && repoInfo != nil && len(repoInfo.Sources) > 0 {
+			for _, src := range repoInfo.Sources {
+				if !isUselessURL(src.Text) {
+					remoteURL = src.Text
+					break
+				}
+			}
+		}
+
+		// 3. RepoInfo Homepage
+		if remoteURL == "" && repoInfo != nil && !isUselessURL(repoInfo.Homepage) {
+			remoteURL = repoInfo.Homepage
+		}
+
+		// 4. Fallback to original
+		if remoteURL == "" {
+			remoteURL = originalRemoteURL
 		}
 	}
 
