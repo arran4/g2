@@ -261,7 +261,7 @@ func (cfg *CmdEbuildArgConfig) cmdEbuildShParseToJson(args []string) error {
 
 	ebuild, err := g2.ParseEbuild(os.DirFS(filepath.Dir(filename)), filepath.Base(filename), g2.ParseVariables)
 	if err != nil {
-		return fmt.Errorf("parsing ebuild: %w", err)
+		return fmt.Errorf("parsing ebuild %s: %w", filename, err)
 	}
 
 	jsonBytes, err := json.MarshalIndent(ebuild.Vars, "", "\t")
