@@ -3,7 +3,7 @@
     {{range .UseFlags}}
     <li>
         <a href="{{.Name}}/">{{.Name}}</a> - {{.Count}} package(s)
-        {{if .GlobalDesc}}<br><small>{{.GlobalDesc}}</small>{{end}}
+        {{if .Desc}}<br><small>{{.Desc}}</small>{{end}}
     </li>
     {{end}}
 </ul>
