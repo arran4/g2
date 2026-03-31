@@ -404,18 +404,18 @@ func (cfg *CmdEbuildArgConfig) cmdEbuildExplain(args []string, opts ...any) erro
 	}
 	_, _ = fmt.Fprintln(out)
 
-	fmt.Fprintf(out, "=== Keywords / License / Slot ===\n")
+	_, _ = fmt.Fprintf(out, "=== Keywords / License / Slot ===\n")
 	if kw, ok := ebuild.Vars["KEYWORDS"]; ok && kw != "" {
-		fmt.Fprintf(out, "KEYWORDS : %s\n", kw)
+		_, _ = fmt.Fprintf(out, "KEYWORDS : %s\n", kw)
 	}
 	if lic, ok := ebuild.Vars["LICENSE"]; ok && lic != "" {
-		fmt.Fprintf(out, "LICENSE  : %s\n", lic)
+		_, _ = fmt.Fprintf(out, "LICENSE  : %s\n", lic)
 	}
 	if slot, ok := ebuild.Vars["SLOT"]; ok && slot != "" {
-		fmt.Fprintf(out, "SLOT     : %s\n", slot)
+		_, _ = fmt.Fprintf(out, "SLOT     : %s\n", slot)
 	}
 	if iuse, ok := ebuild.Vars["IUSE"]; ok && iuse != "" {
-		fmt.Fprintf(out, "IUSE     : %s\n", iuse)
+		_, _ = fmt.Fprintf(out, "IUSE     : %s\n", iuse)
 	}
 
 	return nil
