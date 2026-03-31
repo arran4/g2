@@ -1,0 +1,73 @@
+test: ebuild explain command on a basic ebuild
+
+-- testpkg-1.0.ebuild --
+EAPI=8
+
+DESCRIPTION="Test Package 1.0"
+HOMEPAGE="https://example.com/testpkg"
+SRC_URI="https://example.com/testpkg-1.0.tar.gz"
+
+LICENSE="GPL-2"
+SLOT="0"
+KEYWORDS="~amd64 ~x86"
+IUSE="test doc"
+
+DEPEND="dev-libs/libfoo
+    test? ( dev-util/testframework )"
+RDEPEND="${DEPEND}
+    sys-apps/sed"
+BDEPEND="virtual/pkgconfig"
+
+inherit git-r3
+
+pkg_setup() {
+    echo "setup"
+}
+
+src_unpack() {
+    git-r3_src_unpack
+}
+
+src_compile() {
+    emake
+}
+
+src_install() {
+    emake DESTDIR="${D}" install
+}
+-- expected.txt --
+=== Package Metadata ===
+Name        : testpkg
+Version     : 1.0
+Description : Test Package 1.0
+Homepage    : https://example.com/testpkg
+EAPI        : 8
+
+=== Dependencies ===
+DEPEND:
+  dev-libs/libfoo
+  test? ( dev-util/testframework )
+RDEPEND:
+  dev-libs/libfoo
+  test? ( dev-util/testframework )
+  sys-apps/sed
+BDEPEND:
+  virtual/pkgconfig
+
+=== Eclasses ===
+git-r3
+
+=== Phases Overridden ===
+pkg_setup
+src_compile
+src_install
+src_unpack
+
+=== Fetch Sources ===
+https://example.com/testpkg-1.0.tar.gz
+
+=== Keywords / License / Slot ===
+KEYWORDS : ~amd64 ~x86
+LICENSE  : GPL-2
+SLOT     : 0
+IUSE     : test doc
