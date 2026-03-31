@@ -2,30 +2,15 @@ package g2
 
 import (
 	"bytes"
+	_ "embed"
 	"reflect"
 	"testing"
 )
 
+//go:embed testdata/package.mask
+var packageMaskTestInput string
+
 func TestParsePackageMaskedReader(t *testing.T) {
-	input := `# Copyright 1999-2026 Gentoo Authors
-# Distributed under the terms of the GNU General Public License v2
-
-# This file specifies packages that are considered mask (but not
-# masked yet).
-
-# Jane Doe <jane.doe@example.com> (2026-03-25)
-# Backwards compatibility package for pkg_resources that have been
-# removed from >=dev-python/setuptools-82.  Please migrate to
-# importlib.{metadata,resources} and/or dev-python/packaging.
-dev-python/pkg-resources
-
-# John Smith <john.smith@example.com> (2025-11-25)
-# The package has turned into complete AI slop.  Every subsequent
-# release introduces serious quality issues, and potential security
-# concerns.  Please ask upstreams to move away from it.
-dev-python/autobahn
-`
-
 	expected := []PackageMasked{
 		{
 			Reason:      "Backwards compatibility package for pkg_resources that have been removed from >=dev-python/setuptools-82. Please migrate to importlib.{metadata,resources} and/or dev-python/packaging.",
@@ -47,7 +32,7 @@ dev-python/autobahn
 		},
 	}
 
-	res, err := parsePackageMaskedReader(bytes.NewBufferString(input))
+	res, err := parsePackageMaskedReader(bytes.NewBufferString(packageMaskTestInput))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
