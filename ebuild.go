@@ -223,7 +223,7 @@ func ParseEbuild(fsys fs.FS, path string, mode ParsingMode) (*Ebuild, error) {
 			return nil, fmt.Errorf("parsing ebuild %s variables: %w", path, err)
 		}
 
-		e.ParseWarnings = parser.Warnings
+		e.ParseWarnings = append(parser.Warnings, parsedEbuild.Warnings...)
 
 		// Since variables might depend on each other, we need to iterate
 		// or at least resolve using the whole parsedVars map.
