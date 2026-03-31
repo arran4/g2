@@ -308,7 +308,7 @@ jobs:
           go-version-file: go.mod
           cache: true
       - name: Build g2
-        run: go build -o g2 cmd/g2/*.go
+        run: go build -o g2 ./cmd/g2
       - name: Test site generation
         run: go run ./cmd/g2 overlay site generate https://github.com/arran4/arrans_overlay
 

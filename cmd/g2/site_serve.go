@@ -68,6 +68,9 @@ func (cfg *MainArgConfig) cmdSiteServe(args []string) error {
 		g, _ := errgroup.WithContext(context.Background())
 		if *concurrency > 0 {
 			g.SetLimit(*concurrency)
+			log.Printf("Starting concurrent repository processing with %d concurrency limit", *concurrency)
+		} else {
+			log.Printf("Starting concurrent repository processing with unbounded concurrency")
 		}
 
 		for _, entry := range entries {
@@ -79,11 +82,18 @@ func (cfg *MainArgConfig) cmdSiteServe(args []string) error {
 
 			if isOverlayDir(repoPath) {
 				g.Go(func() error {
-					log.Printf("Parsing repository %s", entry.Name())
+					log.Printf("[START] Parsing repository %s", entry.Name())
 					siteData, err := parseRepo(os.DirFS(repoPath), ".", entry.Name(), false, nil)
 					if err != nil {
 						log.Printf("Warning: failed to parse repo %s: %v", entry.Name(), err)
 						return nil // Don't fail entire group
+					}
+
+					freeSpace, err := getFreeSpace(repoPath)
+					if err == nil {
+						log.Printf("[DONE] Finished parsing repository %s. Free space: %.2f MB", entry.Name(), float64(freeSpace)/(1024*1024))
+					} else {
+						log.Printf("[DONE] Finished parsing repository %s", entry.Name())
 					}
 
 					sitesMu.Lock()
