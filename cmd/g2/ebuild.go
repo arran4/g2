@@ -26,6 +26,7 @@ func (cfg *MainArgConfig) cmdEbuild(args []string) error {
 		fmt.Printf("\t\t %s \t\t %s\n", "templates", "Manage ebuild templates")
 		fmt.Printf("\t\t %s \t\t %s\n", "sh-parse-to-json", "Parse ebuild using shell parser and output JSON")
 		fmt.Printf("\t\t %s \t\t %s\n", "as-json", "Parse ebuild using native parser and output JSON")
+		fmt.Printf("\t\t %s \t\t %s\n", "diff-json", "Compare output of native and shell parsers")
 	}
 
 	config := &CmdEbuildArgConfig{
@@ -52,6 +53,10 @@ func (cfg *MainArgConfig) cmdEbuild(args []string) error {
 	case "as-json":
 		if err := config.cmdEbuildAsJson(fs.Args()[1:]); err != nil {
 			return fmt.Errorf("ebuild as-json: %w", err)
+		}
+	case "diff-json":
+		if err := config.cmdEbuildDiffJson(fs.Args()[1:]); err != nil {
+			return fmt.Errorf("ebuild diff-json: %w", err)
 		}
 	case "sh-parse-to-json":
 		if err := config.cmdEbuildShParseToJson(fs.Args()[1:]); err != nil {
