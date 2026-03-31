@@ -1,0 +1,23 @@
+<div class="card shadow-sm mb-4">
+    <div class="card-header bg-dark text-white">
+        <h4 class="mb-0">Architectures</h4>
+    </div>
+    <div class="card-body">
+        <table class="table table-bordered table-striped" id="archesTable">
+            <thead>
+                <tr>
+                    <th>Architecture</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{range .Arches}}
+                <tr>
+                    <td><a href="{{$.BaseURL}}arches/{{.Name}}/">{{.Name}}</a></td>
+                    <td>{{.Status}}</td>
+                </tr>
+                {{end}}
+            </tbody>
+        </table>
+    </div>
+</div>

@@ -26,11 +26,17 @@
 <div class="alert alert-info">
     <strong>Notice:</strong> This package is in a virtual group:
     {{range $index, $virtual := .Package.ReverseVirtuals}}{{if $index}}, {{end}}
-    <a href="{{$.BaseURL}}packages/virtual/{{index (split $virtual "/") 1}}/">{{$virtual}}</a>{{end}}
+    <a href="{{$.BaseURL}}packages/{{index (split $virtual "/") 0}}/{{index (split $virtual "/") 1}}/">{{$virtual}}</a>{{end}}
+    {{if gt (len .Package.Equivalents) 0}}
+    <br/>
+    Equivalents:
+    {{range $index, $eq := .Package.Equivalents}}{{if $index}}, {{end}}
+    <a href="{{$.BaseURL}}packages/{{index (split $eq "/") 0}}/{{index (split $eq "/") 1}}/">{{$eq}}</a>{{end}}
+    {{end}}
 </div>
 {{end}}
 
-{{if and (eq $.Package.Category "virtual") .Package.VirtualDeps}}
+{{if and (or (eq $.Package.Category "virtual") (hasPrefix $.Package.Category "virtual-")) .Package.VirtualDeps}}
 <div class="metadata-section">
     <h3>Virtual Group Dependencies</h3>
     <p>This virtual package provides the following dependencies:</p>
@@ -84,7 +90,7 @@
         <tr>
             <td>{{if .VersionData.Ebuild.Vars.PV}}{{.VersionData.Ebuild.Vars.PV}}{{else}}{{.VersionData.Version}}{{end}}{{if .VersionData.EbuildRawURL}} <a href="{{.VersionData.EbuildRawURL}}" style="font-size: 0.8em; font-weight: normal; color: #888;">(raw)</a>{{end}}</td>
             <td>{{.VersionData.Ebuild.Vars.EAPI}}</td>
-            <td>{{.VersionData.Ebuild.Vars.KEYWORDS}}</td>
+            <td>{{if index .VersionData.Ebuild.Vars "KEYWORDS"}}{{formatKeywords (index .VersionData.Ebuild.Vars "KEYWORDS") .BaseURL}}{{end}}</td>
             <td>{{.VersionData.Ebuild.Vars.SLOT}}</td>
         </tr>
     </table>
@@ -110,6 +116,12 @@
 {{if .VersionData.Ebuild.Vars.IUSE}}
 <div class="metadata-section">
     <h3>USE Flags</h3>
+    <p>
+        Manage flags for this package:
+        <code>euse -i &lt;flag&gt; -p {{.Package.Category}}/{{.Package.Name}}</code> |
+        <code>euse -E &lt;flag&gt; -p {{.Package.Category}}/{{.Package.Name}}</code> |
+        <code>euse -D &lt;flag&gt; -p {{.Package.Category}}/{{.Package.Name}}</code>
+    </p>
     <div>
         {{range parseIUSEFlags .VersionData.Ebuild.Vars.IUSE}}
         <div class="iuse-flag">
