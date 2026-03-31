@@ -155,18 +155,18 @@ func (cfg *CmdPackageArgConfig) cmdMaskedAdd(args []string) error {
 
 	currentDate := time.Now().Format("2006-01-02")
 
+	var entries []g2.PackageMaskedEntry
 	for _, pkg := range fs.Args() {
-		data = append(data, g2.PackageMasked{
-			Entries: []g2.PackageMaskedEntry{
-				{Package: pkg},
-			},
-
-			Reason:      *reasonOpt,
-			Date:        currentDate,
-			Author:      *authorOpt,
-			AuthorEmail: *emailOpt,
-		})
+		entries = append(entries, g2.PackageMaskedEntry{Package: pkg})
 	}
+
+	data = append(data, g2.PackageMasked{
+		Entries:     entries,
+		Reason:      *reasonOpt,
+		Date:        currentDate,
+		Author:      *authorOpt,
+		AuthorEmail: *emailOpt,
+	})
 
 	f, err := os.Create(*fileOpt)
 	if err != nil {

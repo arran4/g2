@@ -1,6 +1,5 @@
 # Jane Doe <jane.doe@example.com> (2023-01-01)
-# Highly unstable package, do not use
-# Also masks another one
+# Highly unstable package, do not use Also masks another one
 app-test/masked-pkg
 app-test/another-pkg
 

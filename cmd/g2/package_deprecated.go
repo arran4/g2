@@ -155,17 +155,18 @@ func (cfg *CmdPackageArgConfig) cmdDeprecatedAdd(args []string) error {
 
 	currentDate := time.Now().Format("2006-01-02")
 
+	var entries []g2.PackageDeprecatedEntry
 	for _, pkg := range fs.Args() {
-		data = append(data, g2.PackageDeprecated{
-			Entries: []g2.PackageDeprecatedEntry{
-				{Package: pkg},
-			},
-			Reason:      *reasonOpt,
-			Date:        currentDate,
-			Author:      *authorOpt,
-			AuthorEmail: *emailOpt,
-		})
+		entries = append(entries, g2.PackageDeprecatedEntry{Package: pkg})
 	}
+
+	data = append(data, g2.PackageDeprecated{
+		Entries:     entries,
+		Reason:      *reasonOpt,
+		Date:        currentDate,
+		Author:      *authorOpt,
+		AuthorEmail: *emailOpt,
+	})
 
 	f, err := os.Create(*fileOpt)
 	if err != nil {
