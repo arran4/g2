@@ -240,7 +240,7 @@ func (cfg *MainArgConfig) cmdOverlay(args []string) error {
 		}
 	}
 
-	log.Printf("Generating site from overlay location %s into %s", location, *outDir)
+	log.Printf("Generating site (v%s) from overlay location %s into %s", version, location, *outDir)
 
 	// if location is a url, clone it temporarily
 	isRemote := strings.HasPrefix(location, "http://") || strings.HasPrefix(location, "https://") || strings.HasPrefix(location, "git://")
@@ -363,7 +363,7 @@ func (cfg *MainArgConfig) cmdOverlays(args []string) error {
 		}
 	}
 
-	log.Printf("Generating site from remote repositories: %s into %s", location, *outDir)
+	log.Printf("Generating site (v%s) from remote repositories: %s into %s", version, location, *outDir)
 	return cfg.cmdSiteRemote(location, *outDir, recentDuration, recentDurationStr, *fastGit, *useZip, *concurrency, *retries, *continueOnError)
 }
 
@@ -2962,6 +2962,7 @@ func generateRepoPages(outDir string, tmpl *template.Template, sites []*SiteData
 }
 
 func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration, recentDurationStr string, genInfo GenerationInfo) error {
+	log.Printf("Starting site generation (v%s) with %d repos to %s", version, len(sites), outDir)
 	if err := os.MkdirAll(outDir, 0755); err != nil {
 		return err
 	}
@@ -3170,7 +3171,7 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, 
 		return allSites[i].RepoName < allSites[j].RepoName
 	})
 
-	log.Printf("Generating integrated site for %d repos", len(allSites))
+	log.Printf("Generating integrated site (v%s) for %d repos", version, len(allSites))
 	if err := generateSite(outDir, allSites, recentDuration, recentDurationStr, GenerationInfo{}); err != nil {
 		return fmt.Errorf("generating integrated site: %w", err)
 	}
