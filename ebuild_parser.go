@@ -203,6 +203,7 @@ type ParsedEbuild struct {
 	Functions    map[string]AST
 	Order        []string
 	EbuildHeader string
+	Warnings     []string
 }
 
 // Parse extracts variables and functions from the ebuild using a recursive descent approach
@@ -273,6 +274,8 @@ func (p *EbuildParser) Parse() (ParsedEbuild, error) {
 				} else {
 					if _, exists := result.Variables[ident]; !exists {
 						result.Order = append(result.Order, ident)
+					} else {
+						result.Warnings = append(result.Warnings, fmt.Sprintf("Duplicate assignment for variable '%s'", ident))
 					}
 					result.Variables[ident] = val
 				}
