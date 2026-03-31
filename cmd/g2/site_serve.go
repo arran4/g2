@@ -107,7 +107,7 @@ func (cfg *MainArgConfig) cmdSiteServe(args []string) error {
 		}
 	}
 
-	log.Printf("Pre-calculating site data for %d repositories", len(sites))
+	log.Printf("Pre-calculating site data (v%s) for %d repositories", version, len(sites))
 	genInfo := GenerationInfo{Args: cfg.Args}
 	handler, err := newSiteServer(sites, genInfo)
 	if err != nil {
@@ -115,7 +115,7 @@ func (cfg *MainArgConfig) cmdSiteServe(args []string) error {
 	}
 
 	addr := fmt.Sprintf(":%d", *port)
-	log.Printf("Starting live site server at http://localhost%s", addr)
+	log.Printf("Starting live site server (v%s) at http://localhost%s", version, addr)
 
 	return http.ListenAndServe(addr, handler)
 }
