@@ -1,0 +1,11 @@
+test: flatten atoms only with conditionals
+
+-- input/test.ebuild --
+EAPI=8
+DEPEND="flag? ( dev-libs/foo ) !flag? ( dev-libs/bar )"
+-- options.json --
+{"args": ["--flatten", "--atoms-only", "--one-per-line"]}
+-- expected/out.txt --
+### test.ebuild - DEPEND
+dev-libs/foo
+dev-libs/bar
