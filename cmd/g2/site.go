@@ -155,6 +155,7 @@ type PackageData struct {
 	IsInfoPkg bool
 
 	ReverseVirtuals []string
+	Equivalents     []string
 	VirtualDeps     []string
 }
 
@@ -878,7 +879,7 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool, r
 			continue
 		}
 
-		if len(supportedCategories) > 0 && !supportedCategories[name] && name != "virtual" {
+		if len(supportedCategories) > 0 && !supportedCategories[name] && name != "virtual" && !strings.HasPrefix(name, "virtual-") {
 			continue
 		}
 
@@ -1245,7 +1246,7 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool, r
 
 func extractVirtualDeps(site *SiteData) {
 	for i := range site.Categories {
-		if site.Categories[i].Name != "virtual" {
+		if site.Categories[i].Name != "virtual" && !strings.HasPrefix(site.Categories[i].Name, "virtual-") {
 			continue
 		}
 		for j := range site.Categories[i].Packages {
@@ -1292,6 +1293,38 @@ func extractVirtualDeps(site *SiteData) {
 				}
 			}
 			sort.Strings(pkg.VirtualDeps)
+
+			// Compute Equivalents for each package in VirtualDeps
+			for _, dep := range pkg.VirtualDeps {
+				depParts := strings.Split(dep, "/")
+				if len(depParts) == 2 {
+					depCat := depParts[0]
+					depName := depParts[1]
+					for k := range site.Categories {
+						if site.Categories[k].Name == depCat {
+							for l := range site.Categories[k].Packages {
+								if site.Categories[k].Packages[l].Name == depName {
+									targetPkg := &site.Categories[k].Packages[l]
+									for _, otherDep := range pkg.VirtualDeps {
+										if otherDep != dep {
+											found := false
+											for _, e := range targetPkg.Equivalents {
+												if e == otherDep {
+													found = true
+													break
+												}
+											}
+											if !found {
+												targetPkg.Equivalents = append(targetPkg.Equivalents, otherDep)
+											}
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+			}
 		}
 	}
 }
