@@ -386,9 +386,9 @@ func (cfg *CmdEbuildArgConfig) cmdEbuildExplain(args []string, opts ...any) erro
 	if len(ebuild.SrcUri) > 0 {
 		for _, u := range ebuild.SrcUri {
 			if u.Filename != "" && u.Filename != filepath.Base(u.URL) {
-				fmt.Fprintf(out, "%s -> %s\n", u.URL, u.Filename)
+				_, _ = fmt.Fprintf(out, "%s -> %s\n", u.URL, u.Filename)
 			} else {
-				fmt.Fprintln(out, u.URL)
+				_, _ = fmt.Fprintln(out, u.URL)
 			}
 		}
 	} else if srcUri, ok := ebuild.Vars["SRC_URI"]; ok && srcUri != "" {
@@ -396,26 +396,26 @@ func (cfg *CmdEbuildArgConfig) cmdEbuildExplain(args []string, opts ...any) erro
 		for _, line := range lines {
 			trimmed := strings.TrimSpace(line)
 			if trimmed != "" {
-				fmt.Fprintln(out, trimmed)
+				_, _ = fmt.Fprintln(out, trimmed)
 			}
 		}
 	} else {
-		fmt.Fprintln(out, "None")
+		_, _ = fmt.Fprintln(out, "None")
 	}
-	fmt.Fprintln(out)
+	_, _ = fmt.Fprintln(out)
 
-	fmt.Fprintf(out, "=== Keywords / License / Slot ===\n")
+	_, _ = fmt.Fprintf(out, "=== Keywords / License / Slot ===\n")
 	if kw, ok := ebuild.Vars["KEYWORDS"]; ok && kw != "" {
-		fmt.Fprintf(out, "KEYWORDS : %s\n", kw)
+		_, _ = fmt.Fprintf(out, "KEYWORDS : %s\n", kw)
 	}
 	if lic, ok := ebuild.Vars["LICENSE"]; ok && lic != "" {
-		fmt.Fprintf(out, "LICENSE  : %s\n", lic)
+		_, _ = fmt.Fprintf(out, "LICENSE  : %s\n", lic)
 	}
 	if slot, ok := ebuild.Vars["SLOT"]; ok && slot != "" {
-		fmt.Fprintf(out, "SLOT     : %s\n", slot)
+		_, _ = fmt.Fprintf(out, "SLOT     : %s\n", slot)
 	}
 	if iuse, ok := ebuild.Vars["IUSE"]; ok && iuse != "" {
-		fmt.Fprintf(out, "IUSE     : %s\n", iuse)
+		_, _ = fmt.Fprintf(out, "IUSE     : %s\n", iuse)
 	}
 
 	return nil
