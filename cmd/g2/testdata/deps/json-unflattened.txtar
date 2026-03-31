@@ -2,7 +2,7 @@ test: output structured JSON
 
 -- input/test.ebuild --
 EAPI=8
-DEPEND="dev-libs/foo || ( dev-libs/bar dev-libs/baz )"
+DEPEND="dev-libs/foo || ( dev-libs/bar dev-libs/baz ) flag? ( dev-libs/qux )"
 -- options.json --
 {"args": ["--json"]}
 -- expected/out.txt --
@@ -25,6 +25,16 @@ DEPEND="dev-libs/foo || ( dev-libs/bar dev-libs/baz )"
 						{
 							"type": "string",
 							"value": "dev-libs/baz"
+						}
+					]
+				},
+				{
+					"type": "use-conditional",
+					"flag": "flag",
+					"children": [
+						{
+							"type": "string",
+							"value": "dev-libs/qux"
 						}
 					]
 				}
