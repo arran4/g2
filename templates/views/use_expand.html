@@ -1,0 +1,42 @@
+<div class="header">
+    <h2>{{.Title}}</h2>
+    <div class="breadcrumbs">
+        {{range $index, $bc := .Breadcrumbs}}
+        {{if $index}} &gt; {{end}}
+        {{if $bc.URL}}<a href="{{$bc.URL}}">{{$bc.Name}}</a>{{else}}{{$bc.Name}}{{end}}
+        {{end}}
+    </div>
+</div>
+
+<div class="content">
+    <div class="metadata-section">
+        <h3>Description for {{.UseExpandDesc.Name}}</h3>
+        {{range .UseExpandDesc.Lines}}
+            {{if eq .Flag ""}}
+                <p>{{.Text}}</p>
+            {{end}}
+        {{end}}
+    </div>
+
+    <h3>Flags in {{.UseExpandDesc.Name}}</h3>
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Flag</th>
+                <th>Description</th>
+                <th>Packages Using This Flag</th>
+            </tr>
+        </thead>
+        <tbody>
+            {{range $flag, $desc := .UseExpandDesc.Flags}}
+            <tr>
+                <td><strong>{{$flag}}</strong></td>
+                <td>{{$desc}}</td>
+                <td>
+                    <a href="{{$.BaseURL}}uses/{{$.UseExpandDesc.Name}}_{{$flag}}/">View specific flag page ({{$.UseExpandDesc.Name}}_{{$flag}})</a>
+                </td>
+            </tr>
+            {{end}}
+        </tbody>
+    </table>
+</div>

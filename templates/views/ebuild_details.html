@@ -123,15 +123,26 @@
         <code>euse -D &lt;flag&gt; -p {{.Package.Category}}/{{.Package.Name}}</code>
     </p>
     <div>
-        {{range parseIUSEFlags .VersionData.Ebuild.Vars.IUSE}}
-        <div class="iuse-flag">
-            <a href="{{$.BaseURL}}uses/{{.Name}}/">{{.Name}}</a>
-            {{if .Conditional}}
-            <div class="iuse-tooltip" title="{{.ConditionStr}}">
-                &#10067;
-                <span class="tooltiptext">{{.ConditionStr}}</span>
-            </div>
+        {{range groupIUSEFlags (parseIUSEFlags .VersionData.Ebuild.Vars.IUSE) $.Repo.ValidUseExpands}}
+        <div class="use-group" style="margin-bottom: 10px;">
+            {{if eq .Name "global"}}
+            <h4>Global/Standard Flags</h4>
+            {{else}}
+            <h4>USE_EXPAND: <a href="{{$.BaseURL}}uses_expand/{{.Name}}/">{{.Name}}</a></h4>
             {{end}}
+            <div>
+                {{range .Flags}}
+                <div class="iuse-flag">
+                    <a href="{{$.BaseURL}}uses/{{.Name}}/">{{.Name}}</a>
+                    {{if .Conditional}}
+                    <div class="iuse-tooltip" title="{{.ConditionStr}}">
+                        &#10067;
+                        <span class="tooltiptext">{{.ConditionStr}}</span>
+                    </div>
+                    {{end}}
+                </div>
+                {{end}}
+            </div>
         </div>
         {{end}}
     </div>

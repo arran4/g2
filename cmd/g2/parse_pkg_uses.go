@@ -227,6 +227,23 @@ func AggregateUseFlags(sites []*SiteData, aggPackages map[string]*AggPackage) ([
 			}
 		}
 
+		if site.UseExpandDescs != nil {
+			for prefix, desc := range site.UseExpandDescs {
+				for suffix, text := range desc.Flags {
+					flagName := prefix + "_" + suffix
+					if aggFlag, ok := globalAggUseFlags[flagName]; ok {
+						if aggFlag.GlobalDesc == "" {
+							aggFlag.GlobalDesc = text
+						}
+					}
+					if aggFlag, ok := repoAggUseFlags[flagName]; ok {
+						if aggFlag.GlobalDesc == "" {
+							aggFlag.GlobalDesc = text
+						}
+					}
+				}
+			}
+		}
 		if site.UseLocalDesc != nil {
 			for pkg, flags := range site.UseLocalDesc.Flags {
 				for flag, desc := range flags {
@@ -303,6 +320,14 @@ func populatePkgUseFlags(site *SiteData) {
 	}
 
 	localDescs := make(map[string]map[string]string)
+	if site.UseExpandDescs != nil {
+		for prefix, desc := range site.UseExpandDescs {
+			for suffix, text := range desc.Flags {
+				flagName := prefix + "_" + suffix
+				globalDescs[flagName] = text
+			}
+		}
+	}
 	if site.UseLocalDesc != nil {
 		localDescs = site.UseLocalDesc.Flags
 	}
