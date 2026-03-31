@@ -33,7 +33,7 @@
         <li><a href="profiles/">Profiles</a></li>
         {{end}}
         {{if and .GlobalNews (gt (len .GlobalNews) 0)}}
-        <li><a href="news/">News</a></li>
+        <li><a href="news/">News ({{len .GlobalNews}})</a></li>
         {{end}}
     </ul>
 </div>
