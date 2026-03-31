@@ -26,11 +26,17 @@
 <div class="alert alert-info">
     <strong>Notice:</strong> This package is in a virtual group:
     {{range $index, $virtual := .Package.ReverseVirtuals}}{{if $index}}, {{end}}
-    <a href="{{$.BaseURL}}packages/virtual/{{index (split $virtual "/") 1}}/">{{$virtual}}</a>{{end}}
+    <a href="{{$.BaseURL}}packages/{{index (split $virtual "/") 0}}/{{index (split $virtual "/") 1}}/">{{$virtual}}</a>{{end}}
+    {{if gt (len .Package.Equivalents) 0}}
+    <br/>
+    Equivalents:
+    {{range $index, $eq := .Package.Equivalents}}{{if $index}}, {{end}}
+    <a href="{{$.BaseURL}}packages/{{index (split $eq "/") 0}}/{{index (split $eq "/") 1}}/">{{$eq}}</a>{{end}}
+    {{end}}
 </div>
 {{end}}
 
-{{if and (eq $.Package.Category "virtual") .Package.VirtualDeps}}
+{{if and (or (eq $.Package.Category "virtual") (hasPrefix $.Package.Category "virtual-")) .Package.VirtualDeps}}
 <div class="metadata-section">
     <h3>Virtual Group Dependencies</h3>
     <p>This virtual package provides the following dependencies:</p>

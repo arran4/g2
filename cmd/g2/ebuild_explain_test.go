@@ -23,7 +23,7 @@ func TestEbuildExplainCommand(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	var ebuildFile string
 	var expectedOutput string
