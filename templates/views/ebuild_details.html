@@ -45,6 +45,16 @@
 {{end}}
 
 <div class="metadata-section">
+    <h3>Install</h3>
+    <p>Install this version:</p>
+    <pre><code>emerge -a ={{.Package.Category}}/{{.Package.Name}}-{{.VersionData.Version}}</code></pre>
+    <p>If this version is masked, you can unmask it using the <code>autounmask</code> tool or standard <code>emerge</code> options:</p>
+    <pre><code>autounmask ={{.Package.Category}}/{{.Package.Name}}-{{.VersionData.Version}}</code></pre>
+    <p>Or alternatively:</p>
+    <pre><code>emerge --autounmask-write -a ={{.Package.Category}}/{{.Package.Name}}-{{.VersionData.Version}}</code></pre>
+</div>
+
+<div class="metadata-section">
     <h3>Package Information</h3>
     <dl>
         {{if .VersionData.Ebuild.Vars.DESCRIPTION}}
@@ -100,6 +110,12 @@
 {{if .VersionData.Ebuild.Vars.IUSE}}
 <div class="metadata-section">
     <h3>USE Flags</h3>
+    <p>
+        Manage flags for this package:
+        <code>euse -i &lt;flag&gt; -p {{.Package.Category}}/{{.Package.Name}}</code> |
+        <code>euse -E &lt;flag&gt; -p {{.Package.Category}}/{{.Package.Name}}</code> |
+        <code>euse -D &lt;flag&gt; -p {{.Package.Category}}/{{.Package.Name}}</code>
+    </p>
     <div>
         {{range parseIUSEFlags .VersionData.Ebuild.Vars.IUSE}}
         <div class="iuse-flag">

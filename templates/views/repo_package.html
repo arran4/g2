@@ -39,6 +39,16 @@
 {{end}}
 
 <div class="metadata-section">
+    <h3>Install</h3>
+    <p>Install this package:</p>
+    <pre><code>emerge -a {{.Package.Category}}/{{.Package.Name}}</code></pre>
+    <p>If the package is masked, you can unmask it using the <code>autounmask</code> tool or standard <code>emerge</code> options:</p>
+    <pre><code>autounmask {{.Package.Category}}/{{.Package.Name}}</code></pre>
+    <p>Or alternatively:</p>
+    <pre><code>emerge --autounmask-write -a {{.Package.Category}}/{{.Package.Name}}</code></pre>
+</div>
+
+<div class="metadata-section">
     <h3>Package Information</h3>
     <dl>
         {{if .Package.DominantDescription}}
@@ -160,6 +170,12 @@
 {{if .Package.PkgUseFlags}}
 <div class="metadata-section">
     <h3>USE Flags</h3>
+    <p>
+        Manage flags for this package:
+        <code>euse -i &lt;flag&gt; -p {{.Package.Category}}/{{.Package.Name}}</code> |
+        <code>euse -E &lt;flag&gt; -p {{.Package.Category}}/{{.Package.Name}}</code> |
+        <code>euse -D &lt;flag&gt; -p {{.Package.Category}}/{{.Package.Name}}</code>
+    </p>
     <table>
         <tr>
             <th>Flag</th>

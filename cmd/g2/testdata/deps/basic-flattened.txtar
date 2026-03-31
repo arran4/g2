@@ -1,0 +1,27 @@
+test: flatten atoms only with simple dependencies
+
+-- input/test.ebuild --
+EAPI=8
+DEPEND="dev-libs/foo dev-libs/bar[use]"
+RDEPEND=">=dev-libs/foo-1.2.3"
+BDEPEND="virtual/pkgconfig"
+PDEPEND="sys-apps/baz"
+IDEPEND="sys-apps/qux"
+-- options.json --
+{"args": ["--flatten", "--atoms-only", "--one-per-line"]}
+-- expected/out.txt --
+### test.ebuild - DEPEND
+dev-libs/foo
+dev-libs/bar
+
+### test.ebuild - RDEPEND
+dev-libs/foo
+
+### test.ebuild - BDEPEND
+virtual/pkgconfig
+
+### test.ebuild - PDEPEND
+sys-apps/baz
+
+### test.ebuild - IDEPEND
+sys-apps/qux
