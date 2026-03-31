@@ -118,7 +118,7 @@ func (cfg *CmdEclassArgConfig) cmdEclassInstall(args []string) error {
 	if err != nil {
 		return fmt.Errorf("downloading eclass: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("failed to download eclass, HTTP status: %s", resp.Status)
@@ -128,7 +128,7 @@ func (cfg *CmdEclassArgConfig) cmdEclassInstall(args []string) error {
 	if err != nil {
 		return fmt.Errorf("creating eclass file: %w", err)
 	}
-	defer out.Close()
+	defer func() { _ = out.Close() }()
 
 	if _, err := io.Copy(out, resp.Body); err != nil {
 		return fmt.Errorf("writing eclass file: %w", err)
