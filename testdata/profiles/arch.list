@@ -1,0 +1,8 @@
+alpha
+amd64
+arm
+arm64
+
+# Prefix keywords
+arm64-macos
+x64-macos

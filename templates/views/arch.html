@@ -1,0 +1,32 @@
+<div class="card shadow-sm mb-4">
+    <div class="card-header bg-dark text-white">
+        <h4 class="mb-0">Architecture: {{.Arch.Name}}</h4>
+    </div>
+    <div class="card-body">
+        <table class="table table-bordered">
+            <tbody>
+                <tr><th>Architecture</th><td>{{.Arch.Name}}</td></tr>
+                <tr><th>Status</th><td>{{.Arch.Status}}</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="card shadow-sm mb-4">
+    <div class="card-header bg-secondary text-white">
+        <h5 class="mb-0">Repositories Overriding or Using This Architecture</h5>
+    </div>
+    <div class="card-body">
+        {{if .Arch.Repos}}
+        <ul class="list-group">
+            {{range .Arch.Repos}}
+            <li class="list-group-item">
+                <a href="{{$.BaseURL}}repos/{{.RepoName}}/">{{.RepoName}}</a>
+            </li>
+            {{end}}
+        </ul>
+        {{else}}
+        <p class="text-muted">No repositories define this architecture explicitly.</p>
+        {{end}}
+    </div>
+</div>

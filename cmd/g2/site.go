@@ -79,6 +79,8 @@ type SiteData struct {
 	QAPolicy          *g2.QAPolicy
 	UseDesc           *g2.UseDesc
 	UseLocalDesc      *g2.UseLocalDesc
+	ArchList          *g2.ArchList
+	ArchesDesc        *g2.ArchesDesc
 	InfoPkgs          []g2.InfoPkg
 	Deprecated        []g2.PackageDeprecated
 	PackageCount      int
@@ -395,7 +397,7 @@ func parseManifestFromFS(sysFS fs.FS, path string) (*g2.Manifest, error) {
 	return g2.ParseManifestFromReader(file)
 }
 
-func getHighestVersionsAndCount(versions []VersionData) (template.HTML, template.HTML, int) {
+func getHighestVersionsAndCount(versions []VersionData, site *SiteData) (template.HTML, template.HTML, int) {
 	// Parse KEYWORDS and group versions
 
 	stableMap := make(map[string]string)
@@ -469,6 +471,7 @@ func getHighestVersionsAndCount(versions []VersionData) (template.HTML, template
 					}
 				}
 			}
+
 			parts = append(parts, "<span title=\""+strings.Join(archs, " ")+"\">"+ver+"</span>")
 		}
 
@@ -694,6 +697,22 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool, r
 			useLocalDesc = uld
 		}
 	}
+	var archList *g2.ArchList
+	if f, err := sysFS.Open(filepath.ToSlash(filepath.Join(repoDir, "profiles", "arch.list"))); err == nil {
+		defer func() { _ = f.Close() }()
+		if al, err := g2.ParseArchList(f); err == nil {
+			archList = al
+		}
+	}
+
+	var archesDesc *g2.ArchesDesc
+	if f, err := sysFS.Open(filepath.ToSlash(filepath.Join(repoDir, "profiles", "arches.desc"))); err == nil {
+		defer func() { _ = f.Close() }()
+		if ad, err := g2.ParseArchesDesc(f); err == nil {
+			archesDesc = ad
+		}
+	}
+
 	packageDeprecatedPath := filepath.Join(repoDir, "profiles", "package.deprecated")
 	var deprecated []g2.PackageDeprecated
 	if parsedDeprecated, err := g2.ParsePackageDeprecatedFS(sysFS, filepath.ToSlash(packageDeprecatedPath)); err == nil {
@@ -735,6 +754,8 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool, r
 		QAPolicy:          qa,
 		UseDesc:           useDesc,
 		UseLocalDesc:      useLocalDesc,
+		ArchList:          archList,
+		ArchesDesc:        archesDesc,
 		ThirdPartyMirrors: thirdPartyMirrors,
 		Deprecated:        deprecated,
 		InfoVars:          infoVars,
@@ -966,7 +987,7 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool, r
 				continue // No ebuilds, skip package
 			}
 
-			pkgData.HighestStableVersion, pkgData.HighestTestingVersion, pkgData.EbuildCount = getHighestVersionsAndCount(pkgData.Versions)
+			pkgData.HighestStableVersion, pkgData.HighestTestingVersion, pkgData.EbuildCount = getHighestVersionsAndCount(pkgData.Versions, site)
 
 			// Sort versions descending
 			// Read metadata.xml
@@ -1754,12 +1775,19 @@ type AggNewsItem struct {
 	RepoName string
 }
 
+type AggArch struct {
+	Name   string
+	Status string
+	Repos  []*SiteData
+}
+
 type AggregatedData struct {
 	Categories    []*AggCategory
 	Packages      []*AggPackage
 	Licenses      []*AggLicense
 	Projects      []*AggProject
 	Profiles      []*AggProfile
+	Arches        []*AggArch
 	Moves         map[string]*AggPackageMove
 	GlobalNews    []AggNewsItem
 	RecentNews    []AggNewsItem
@@ -1774,6 +1802,7 @@ func prepareAggregatedData(sites []*SiteData) *AggregatedData {
 	aggLicenses := make(map[string]*AggLicense)
 	aggProjects := make(map[string]*AggProject)
 	aggProfiles := make(map[string]*AggProfile)
+	aggArches := make(map[string]*AggArch)
 	aggMoves := make(map[string]*AggPackageMove)
 	var globalNews []AggNewsItem
 
@@ -1811,6 +1840,36 @@ func prepareAggregatedData(sites []*SiteData) *AggregatedData {
 				NewsItem: news,
 				RepoName: site.RepoName,
 			})
+		}
+
+		if site.ArchList != nil {
+			for _, arch := range site.ArchList.Arches {
+				if _, ok := aggArches[arch]; !ok {
+					aggArches[arch] = &AggArch{Name: arch}
+				}
+				aggArches[arch].Repos = append(aggArches[arch].Repos, site)
+			}
+		}
+		if site.ArchesDesc != nil {
+			for arch, status := range site.ArchesDesc.Arches {
+				if _, ok := aggArches[arch]; !ok {
+					aggArches[arch] = &AggArch{Name: arch}
+				}
+				if aggArches[arch].Status == "" {
+					aggArches[arch].Status = status
+				}
+
+				found := false
+				for _, r := range aggArches[arch].Repos {
+					if r.RepoName == site.RepoName {
+						found = true
+						break
+					}
+				}
+				if !found {
+					aggArches[arch].Repos = append(aggArches[arch].Repos, site)
+				}
+			}
 		}
 
 		for _, cat := range site.Categories {
@@ -1976,6 +2035,13 @@ func prepareAggregatedData(sites []*SiteData) *AggregatedData {
 		sortedProfiles = append(sortedProfiles, p)
 	}
 	sort.Slice(sortedProfiles, func(i, j int) bool { return sortedProfiles[i].Path < sortedProfiles[j].Path })
+
+	var sortedArches []*AggArch
+	for _, a := range aggArches {
+		sortedArches = append(sortedArches, a)
+	}
+	sort.Slice(sortedArches, func(i, j int) bool { return sortedArches[i].Name < sortedArches[j].Name })
+
 	sort.Slice(globalNews, func(i, j int) bool {
 		return globalNews[i].Posted.After(globalNews[j].Posted)
 	})
@@ -2003,6 +2069,7 @@ func prepareAggregatedData(sites []*SiteData) *AggregatedData {
 		Licenses:      sortedLicenses,
 		Projects:      sortedProjects,
 		Profiles:      sortedProfiles,
+		Arches:        sortedArches,
 		Moves:         aggMoves,
 		GlobalNews:    globalNews,
 		RecentNews:    recentNews,
@@ -2193,7 +2260,7 @@ func generateCategoryPages(outDir string, tmpl *template.Template, data *Aggrega
 					}
 				}
 			}
-			hs, ht, count := getHighestVersionsAndCount(allVersions)
+			hs, ht, count := getHighestVersionsAndCount(allVersions, nil)
 			tmplPkgs = append(tmplPkgs, TmplPkg{Name: p.Name, ReposList: mapToList(p.Repos), EbuildCount: count, HighestStableVersion: hs, HighestTestingVersion: ht, DominantDescription: p.DominantDescription, DominantHomepage: p.DominantHomepage, DominantLicense: p.DominantLicense, ReverseVirtuals: p.ReverseVirtuals})
 		}
 
@@ -2313,6 +2380,41 @@ func generatePackagePages(outDir string, tmpl *template.Template, data *Aggregat
 }
 
 func generateOtherGlobalPages(outDir string, tmpl *template.Template, data *AggregatedData, title, version string, genInfo GenerationInfo) error {
+	// Arches
+	if len(data.Arches) > 0 {
+		if err := os.MkdirAll(filepath.Join(outDir, "arches"), 0755); err != nil {
+			return fmt.Errorf("creating directory: %w", err)
+		}
+		if err := renderPage(filepath.Join(outDir, "arches", "index.html"), tmpl, "arches.html", GenericPageContext{
+			Title:       "Architectures",
+			BaseURL:     "../",
+			Breadcrumbs: []Breadcrumb{{Name: title, URL: "../"}, {Name: "Architectures"}},
+			Arches:      data.Arches,
+			Version:     version,
+			GenInfo:     genInfo,
+		}); err != nil {
+			return fmt.Errorf("rendering page: %w", err)
+		}
+
+		for _, a := range data.Arches {
+			archDir := filepath.Join(outDir, "arches", a.Name)
+			if err := os.MkdirAll(archDir, 0755); err != nil {
+				return fmt.Errorf("creating directory %s: %w", archDir, err)
+			}
+
+			if err := renderPage(filepath.Join(archDir, "index.html"), tmpl, "arch.html", GenericPageContext{
+				Title:       "Architecture: " + a.Name,
+				BaseURL:     "../../",
+				Breadcrumbs: []Breadcrumb{{Name: title, URL: "../../"}, {Name: "Architectures", URL: "../../arches/"}, {Name: a.Name}},
+				Arch:        a,
+				Version:     version,
+				GenInfo:     genInfo,
+			}); err != nil {
+				return fmt.Errorf("rendering page: %w", err)
+			}
+		}
+	}
+
 	// Profiles
 	if len(data.Profiles) > 0 {
 		if err := os.MkdirAll(filepath.Join(outDir, "profiles"), 0755); err != nil {
