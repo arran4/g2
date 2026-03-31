@@ -29,7 +29,7 @@ func ProfileCommand(args []string) error {
 func profileListCommand(args []string) error {
 	fs := flag.NewFlagSet("profile list", flag.ExitOnError)
 	repoDir := fs.String("repo", ".", "Path to repository")
-	fs.Parse(args)
+	_ = fs.Parse(args)
 
 	profilesDescBytes, err := os.ReadFile(filepath.Join(*repoDir, "profiles", "profiles.desc"))
 	var profilesDescEntries []ProfileDescEntry
@@ -43,7 +43,7 @@ func profileListCommand(args []string) error {
 	}
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "PATH\tARCH\tSTATUS")
+	_, _ = fmt.Fprintln(w, "PATH\tARCH\tSTATUS")
 	for _, p := range profilesData {
 		arch := "-"
 		status := "-"
@@ -51,9 +51,9 @@ func profileListCommand(args []string) error {
 			arch = p.DescArch
 			status = p.DescStat
 		}
-		fmt.Fprintf(w, "%s\t%s\t%s\n", p.Path, arch, status)
+		_, _ = fmt.Fprintf(w, "%s\t%s\t%s\n", p.Path, arch, status)
 	}
-	w.Flush()
+	_ = w.Flush()
 
 	return nil
 }
@@ -61,7 +61,7 @@ func profileListCommand(args []string) error {
 func profileDescribeCommand(args []string) error {
 	fs := flag.NewFlagSet("profile describe", flag.ExitOnError)
 	repoDir := fs.String("repo", ".", "Path to repository")
-	fs.Parse(args)
+	_ = fs.Parse(args)
 
 	positionals := fs.Args()
 	if len(positionals) < 1 {
