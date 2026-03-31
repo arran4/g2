@@ -8,6 +8,15 @@
     </form>
 </div>
 
+<div class="metadata-section">
+    <h3>Manage</h3>
+    <ul>
+        <li>Information: <code>euse -i {{.UseFlag.Name}}</code></li>
+        <li>Enable: <code>euse -E {{.UseFlag.Name}}</code></li>
+        <li>Disable: <code>euse -D {{.UseFlag.Name}}</code></li>
+    </ul>
+</div>
+
 {{if .UseFlag.GlobalDesc}}
 <div class="metadata-section">
     <h3>Global Description</h3>
