@@ -10,7 +10,7 @@
 
 {{if .Package.Deprecated}}
 <div class="alert alert-danger" style="border-color: #ff4c4c; background-color: #ffe6e6;">
-    <strong>Deprecated:</strong> This package is deprecated.
+    <strong><a href="../../../deprecated/">Deprecated:</a></strong> This package is deprecated.
     <p><em>Reason:</em> {{.Package.Deprecated.Reason}}</p>
     <p><small>Deprecated by {{.Package.Deprecated.Author}} on {{.Package.Deprecated.Date}}</small></p>
 </div>
@@ -18,7 +18,7 @@
 
 {{if .Package.Masked}}
 <div class="alert alert-danger" style="border-color: #ff4c4c; background-color: #ffe6e6;">
-    <strong>Masked:</strong> This package is masked.
+    <strong><a href="../../../masked/">Masked:</a></strong> This package is masked.
     <p><em>Reason:</em> {{.Package.Masked.Reason}}</p>
     <p><small>Masked by {{.Package.Masked.Author}} on {{.Package.Masked.Date}}</small></p>
 </div>
