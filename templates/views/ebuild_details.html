@@ -88,6 +88,15 @@
             <td>{{.VersionData.Ebuild.Vars.SLOT}}</td>
         </tr>
     </table>
+    {{$funcNames := .VersionData.Ebuild.FuncNames}}
+    {{if $funcNames}}
+    <h4>Defined Functions</h4>
+    <ul>
+        {{range $funcNames}}
+        <li><code>{{.}}</code></li>
+        {{end}}
+    </ul>
+    {{end}}
 </div>
 
 {{if not .VersionData.EbuildRawURL}}

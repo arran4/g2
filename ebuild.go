@@ -62,6 +62,16 @@ type funcEntry struct {
 	Value AST
 }
 
+// FuncNames returns a sorted list of all defined function names in the ebuild.
+func (e *Ebuild) FuncNames() []string {
+	var names []string
+	for k := range e.Functions {
+		names = append(names, k)
+	}
+	sort.Strings(names)
+	return names
+}
+
 func (e *Ebuild) String() string {
 	// Reconstruct a valid-ish ebuild
 	// Since we don't preserve the whole file, we reconstruct what we know.
