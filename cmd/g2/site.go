@@ -81,6 +81,7 @@ type SiteData struct {
 	UseLocalDesc      *g2.UseLocalDesc
 	InfoPkgs          []g2.InfoPkg
 	Deprecated        []g2.PackageDeprecated
+	Eclasses          []*g2.Ebuild
 	PackageCount      int
 	AggUseFlags       []*AggUseFlag
 	ThirdPartyMirrors map[string][]string
@@ -1219,6 +1220,28 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool, r
 	}
 
 	extractVirtualDeps(site)
+
+	// Parse Eclasses
+	eclassDir := filepath.Join(repoDir, "eclass")
+	if info, err := fs.Stat(sysFS, filepath.ToSlash(eclassDir)); err == nil && info.IsDir() {
+		entries, err := fs.ReadDir(sysFS, filepath.ToSlash(eclassDir))
+		if err == nil {
+			for _, e := range entries {
+				if !e.IsDir() && strings.HasSuffix(e.Name(), ".eclass") {
+					ebuild, err := g2.ParseEbuild(sysFS, filepath.ToSlash(filepath.Join(eclassDir, e.Name())), g2.ParseFull)
+					if err == nil {
+						site.Eclasses = append(site.Eclasses, ebuild)
+					} else {
+						log.Printf("Warning: failed to parse eclass %s: %v", e.Name(), err)
+					}
+				}
+			}
+		}
+	}
+	sort.Slice(site.Eclasses, func(i, j int) bool {
+		return site.Eclasses[i].Vars["PN"] < site.Eclasses[j].Vars["PN"]
+	})
+
 	return site, nil
 }
 

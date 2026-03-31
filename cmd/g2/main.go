@@ -36,6 +36,7 @@ func main() {
 		fmt.Printf("\t\t %s \t\t %s\n", "pkg-desc-index", "commands relating to pkg_desc_index")
 		fmt.Printf("\t\t %s \t\t %s\n", "dev", "tools for developers and agents")
 		fmt.Printf("\t\t %s \t\t %s\n", "package", "commands relating to packages and search indexing")
+		fmt.Printf("\t\t %s \t\t %s\n", "eclass", "commands relating to eclasses")
 	}
 	if err := fs.Parse(os.Args); err != nil {
 		log.Printf("Flag parse error: %s", err)
@@ -120,6 +121,12 @@ func main() {
 	case "package":
 		if err := cfg.cmdPackage(fs.Args()[2:]); err != nil {
 			log.Printf("package error: %s", err)
+			os.Exit(-1)
+			return
+		}
+	case "eclass":
+		if err := cfg.cmdEclass(fs.Args()[2:]); err != nil {
+			log.Printf("eclass error: %s", err)
 			os.Exit(-1)
 			return
 		}
