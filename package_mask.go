@@ -10,27 +10,27 @@ import (
 	"strings"
 )
 
-// PackageDeprecatedEntry represents a single deprecation entry from profiles/package.deprecated.
-type PackageDeprecatedEntry struct {
+// PackageMaskedEntry represents a single deprecation entry from profiles/package.mask.
+type PackageMaskedEntry struct {
 	Package string
 }
 
-// PackageDeprecated represents a block of deprecation entries grouped by author and reason.
-type PackageDeprecated struct {
+// PackageMasked represents a block of deprecation entries grouped by author and reason.
+type PackageMasked struct {
 	Reason      string
 	Date        string
 	Author      string
 	AuthorEmail string
-	Entries     []PackageDeprecatedEntry
+	Entries     []PackageMaskedEntry
 }
 
-func parsePackageDeprecatedReader(r io.Reader) ([]PackageDeprecated, error) {
-	var results []PackageDeprecated
+func parsePackageMaskedReader(r io.Reader) ([]PackageMasked, error) {
+	var results []PackageMasked
 	scanner := bufio.NewScanner(r)
 
 	var currentReason []string
 	var currentAuthor, currentEmail, currentDate string
-	var currentEntries []PackageDeprecatedEntry
+	var currentEntries []PackageMaskedEntry
 
 	// Match: # Michał Górny <mgorny@gentoo.org> (2025-11-25)
 	authorLineRegex := regexp.MustCompile(`^#\s*(.*?)\s*<(.*?)>\s*\((.*?)\)$`)
@@ -41,7 +41,7 @@ func parsePackageDeprecatedReader(r io.Reader) ([]PackageDeprecated, error) {
 			if len(currentEntries) > 0 {
 				reasonStr := strings.Join(currentReason, " ")
 				reasonStr = strings.Join(strings.Fields(reasonStr), " ")
-				results = append(results, PackageDeprecated{
+				results = append(results, PackageMasked{
 					Reason:      reasonStr,
 					Date:        currentDate,
 					Author:      currentAuthor,
@@ -63,7 +63,7 @@ func parsePackageDeprecatedReader(r io.Reader) ([]PackageDeprecated, error) {
 				if len(currentEntries) > 0 {
 					reasonStr := strings.Join(currentReason, " ")
 					reasonStr = strings.Join(strings.Fields(reasonStr), " ")
-					results = append(results, PackageDeprecated{
+					results = append(results, PackageMasked{
 						Reason:      reasonStr,
 						Date:        currentDate,
 						Author:      currentAuthor,
@@ -86,7 +86,7 @@ func parsePackageDeprecatedReader(r io.Reader) ([]PackageDeprecated, error) {
 		} else {
 			// Not a comment, assume package name
 			if currentAuthor != "" && currentEmail != "" {
-				currentEntries = append(currentEntries, PackageDeprecatedEntry{
+				currentEntries = append(currentEntries, PackageMaskedEntry{
 					Package: line,
 				})
 			}
@@ -96,7 +96,7 @@ func parsePackageDeprecatedReader(r io.Reader) ([]PackageDeprecated, error) {
 	if len(currentEntries) > 0 {
 		reasonStr := strings.Join(currentReason, " ")
 		reasonStr = strings.Join(strings.Fields(reasonStr), " ")
-		results = append(results, PackageDeprecated{
+		results = append(results, PackageMasked{
 			Reason:      reasonStr,
 			Date:        currentDate,
 			Author:      currentAuthor,
@@ -106,13 +106,13 @@ func parsePackageDeprecatedReader(r io.Reader) ([]PackageDeprecated, error) {
 	}
 
 	if err := scanner.Err(); err != nil {
-		return nil, fmt.Errorf("reading package.deprecated: %w", err)
+		return nil, fmt.Errorf("reading package.mask: %w", err)
 	}
 
 	return results, nil
 }
 
-func ParsePackageDeprecatedFS(sysFS fs.FS, path string) ([]PackageDeprecated, error) {
+func ParsePackageMaskedFS(sysFS fs.FS, path string) ([]PackageMasked, error) {
 	f, err := sysFS.Open(path)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -121,10 +121,10 @@ func ParsePackageDeprecatedFS(sysFS fs.FS, path string) ([]PackageDeprecated, er
 		return nil, err
 	}
 	defer func() { _ = f.Close() }()
-	return parsePackageDeprecatedReader(f)
+	return parsePackageMaskedReader(f)
 }
 
-func ParsePackageDeprecated(path string) ([]PackageDeprecated, error) {
+func ParsePackageMasked(path string) ([]PackageMasked, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -133,11 +133,11 @@ func ParsePackageDeprecated(path string) ([]PackageDeprecated, error) {
 		return nil, err
 	}
 	defer func() { _ = f.Close() }()
-	return parsePackageDeprecatedReader(f)
+	return parsePackageMaskedReader(f)
 }
 
-func SerializePackageDeprecated(w io.Writer, deprecated []PackageDeprecated) error {
-	for i, d := range deprecated {
+func SerializePackageMasked(w io.Writer, mask []PackageMasked) error {
+	for i, d := range mask {
 		if i > 0 {
 			if _, err := fmt.Fprintln(w); err != nil {
 				return err
@@ -149,7 +149,7 @@ func SerializePackageDeprecated(w io.Writer, deprecated []PackageDeprecated) err
 		// Split reason by roughly 70 chars to keep typical width, or just print lines
 		// We'll write a simple word wrap
 		if d.Reason != "" {
-			wrappedReason := wrapText(d.Reason, 70)
+			wrappedReason := wrapTextMasked(d.Reason, 70)
 			for _, line := range wrappedReason {
 				if _, err := fmt.Fprintf(w, "# %s\n", line); err != nil {
 					return err
@@ -165,7 +165,7 @@ func SerializePackageDeprecated(w io.Writer, deprecated []PackageDeprecated) err
 	return nil
 }
 
-func wrapText(text string, width int) []string {
+func wrapTextMasked(text string, width int) []string {
 	var lines []string
 	words := strings.Fields(text)
 	if len(words) == 0 {

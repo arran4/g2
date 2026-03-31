@@ -1,11 +1,11 @@
 {{define "content"}}
-<h2>Deprecated Packages in {{.Repo.RepoName}}</h2>
+<h2>Masked Packages in {{.Repo.RepoName}}</h2>
 
-{{if .Repo.Deprecated}}
-{{range .Repo.Deprecated}}
+{{if .Repo.Masked}}
+{{range .Repo.Masked}}
 <div class="card mb-3">
     <div class="card-header bg-light">
-        <strong>Deprecated Reason:</strong> {{.Reason}}
+        <strong>Masked Reason:</strong> {{.Reason}}
         <div class="text-muted small">By {{.Author}} on {{.Date}}</div>
     </div>
     <ul class="list-group list-group-flush">
@@ -18,6 +18,6 @@
 </div>
 {{end}}
 {{else}}
-<p>No deprecated packages found in this repository.</p>
+<p>No masked packages found in this repository.</p>
 {{end}}
 {{end}}

@@ -16,6 +16,14 @@
 </div>
 {{end}}
 
+{{if .Package.Masked}}
+<div class="alert alert-danger" style="border-color: #ff4c4c; background-color: #ffe6e6;">
+    <strong>Masked:</strong> This package is masked.
+    <p><em>Reason:</em> {{.Package.Masked.Reason}}</p>
+    <p><small>Masked by {{.Package.Masked.Author}} on {{.Package.Masked.Date}}</small></p>
+</div>
+{{end}}
+
 {{if .Package.IsInfoPkg}}
 <div class="alert alert-info" style="border-color: #17a2b8; background-color: #d1ecf1;">
     <strong>Notice:</strong> This package has been listed as an informative package.
