@@ -367,7 +367,7 @@ func (cfg *CmdEbuildArgConfig) cmdEbuildExplain(args []string, opts ...any) erro
 	}
 	_, _ = fmt.Fprintln(out)
 
-	fmt.Fprintf(out, "=== Phases Overridden ===\n")
+	_, _ = fmt.Fprintf(out, "=== Phases Overridden ===\n")
 	if len(ebuild.Functions) > 0 {
 		var funcs []string
 		for f := range ebuild.Functions {
@@ -375,20 +375,20 @@ func (cfg *CmdEbuildArgConfig) cmdEbuildExplain(args []string, opts ...any) erro
 		}
 		sort.Strings(funcs)
 		for _, f := range funcs {
-			fmt.Fprintln(out, f)
+			_, _ = fmt.Fprintln(out, f)
 		}
 	} else {
 		_, _ = fmt.Fprintln(out, "None")
 	}
 	_, _ = fmt.Fprintln(out)
 
-	fmt.Fprintf(out, "=== Fetch Sources ===\n")
+	_, _ = fmt.Fprintf(out, "=== Fetch Sources ===\n")
 	if len(ebuild.SrcUri) > 0 {
 		for _, u := range ebuild.SrcUri {
 			if u.Filename != "" && u.Filename != filepath.Base(u.URL) {
-				fmt.Fprintf(out, "%s -> %s\n", u.URL, u.Filename)
+				_, _ = fmt.Fprintf(out, "%s -> %s\n", u.URL, u.Filename)
 			} else {
-				fmt.Fprintln(out, u.URL)
+				_, _ = fmt.Fprintln(out, u.URL)
 			}
 		}
 	} else if srcUri, ok := ebuild.Vars["SRC_URI"]; ok && srcUri != "" {
@@ -396,7 +396,7 @@ func (cfg *CmdEbuildArgConfig) cmdEbuildExplain(args []string, opts ...any) erro
 		for _, line := range lines {
 			trimmed := strings.TrimSpace(line)
 			if trimmed != "" {
-				fmt.Fprintln(out, trimmed)
+				_, _ = fmt.Fprintln(out, trimmed)
 			}
 		}
 	} else {
