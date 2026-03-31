@@ -2,7 +2,6 @@ package main
 
 import (
 	"bytes"
-	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -52,22 +51,13 @@ func TestEbuildExplainCommand(t *testing.T) {
 		MainArgConfig: cfg,
 	}
 
-	// Capture stdout
-	oldStdout := os.Stdout
-	r, w, _ := os.Pipe()
-	os.Stdout = w
-
-	err = cmdCfg.cmdEbuildExplain([]string{ebuildFile})
-
-	w.Close()
-	os.Stdout = oldStdout
+	var buf bytes.Buffer
+	err = cmdCfg.cmdEbuildExplain([]string{ebuildFile}, &buf)
 
 	if err != nil {
 		t.Fatalf("cmdEbuildExplain failed: %v", err)
 	}
 
-	var buf bytes.Buffer
-	io.Copy(&buf, r)
 	gotOutput := buf.String()
 
 	if strings.TrimSpace(gotOutput) != strings.TrimSpace(expectedOutput) {

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"path/filepath"
@@ -279,7 +280,15 @@ func (cfg *CmdEbuildArgConfig) cmdEbuildShParseToJson(args []string) error {
 	return nil
 }
 
-func (cfg *CmdEbuildArgConfig) cmdEbuildExplain(args []string) error {
+func (cfg *CmdEbuildArgConfig) cmdEbuildExplain(args []string, opts ...any) error {
+	var out io.Writer = os.Stdout
+	for _, opt := range opts {
+		switch o := opt.(type) {
+		case io.Writer:
+			out = o
+		}
+	}
+
 	fs := flag.NewFlagSet("explain", flag.ExitOnError)
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -297,50 +306,50 @@ func (cfg *CmdEbuildArgConfig) cmdEbuildExplain(args []string) error {
 		return fmt.Errorf("parsing ebuild %s: %w", filename, err)
 	}
 
-	fmt.Printf("=== Package Metadata ===\n")
-	fmt.Printf("Name        : %s\n", ebuild.Vars["PN"])
-	fmt.Printf("Version     : %s\n", ebuild.Vars["PV"])
+	fmt.Fprintf(out, "=== Package Metadata ===\n")
+	fmt.Fprintf(out, "Name        : %s\n", ebuild.Vars["PN"])
+	fmt.Fprintf(out, "Version     : %s\n", ebuild.Vars["PV"])
 	if desc, ok := ebuild.Vars["DESCRIPTION"]; ok && desc != "" {
-		fmt.Printf("Description : %s\n", desc)
+		fmt.Fprintf(out, "Description : %s\n", desc)
 	}
 	if home, ok := ebuild.Vars["HOMEPAGE"]; ok && home != "" {
-		fmt.Printf("Homepage    : %s\n", home)
+		fmt.Fprintf(out, "Homepage    : %s\n", home)
 	}
 	if eapi, ok := ebuild.Vars["EAPI"]; ok && eapi != "" {
-		fmt.Printf("EAPI        : %s\n", eapi)
+		fmt.Fprintf(out, "EAPI        : %s\n", eapi)
 	}
-	fmt.Println()
+	fmt.Fprintln(out)
 
-	fmt.Printf("=== Dependencies ===\n")
+	fmt.Fprintf(out, "=== Dependencies ===\n")
 	hasDeps := false
 	for _, depVar := range []string{"DEPEND", "RDEPEND", "BDEPEND", "PDEPEND"} {
 		if val, ok := ebuild.Vars[depVar]; ok && val != "" {
-			fmt.Printf("%s:\n", depVar)
+			fmt.Fprintf(out, "%s:\n", depVar)
 			// Indent slightly to read better
 			lines := strings.Split(val, "\n")
 			for _, line := range lines {
 				trimmed := strings.TrimSpace(line)
 				if trimmed != "" {
-					fmt.Printf("  %s\n", trimmed)
+					fmt.Fprintf(out, "  %s\n", trimmed)
 				}
 			}
 			hasDeps = true
 		}
 	}
 	if !hasDeps {
-		fmt.Println("None")
+		fmt.Fprintln(out, "None")
 	}
-	fmt.Println()
+	fmt.Fprintln(out)
 
-	fmt.Printf("=== Eclasses ===\n")
+	fmt.Fprintf(out, "=== Eclasses ===\n")
 	if inherited, ok := ebuild.Vars["INHERITED"]; ok && inherited != "" {
-		fmt.Println(inherited)
+		fmt.Fprintln(out, inherited)
 	} else {
-		fmt.Println("None")
+		fmt.Fprintln(out, "None")
 	}
-	fmt.Println()
+	fmt.Fprintln(out)
 
-	fmt.Printf("=== Phases Overridden ===\n")
+	fmt.Fprintf(out, "=== Phases Overridden ===\n")
 	if len(ebuild.Functions) > 0 {
 		var funcs []string
 		for f := range ebuild.Functions {
@@ -348,20 +357,20 @@ func (cfg *CmdEbuildArgConfig) cmdEbuildExplain(args []string) error {
 		}
 		sort.Strings(funcs)
 		for _, f := range funcs {
-			fmt.Println(f)
+			fmt.Fprintln(out, f)
 		}
 	} else {
-		fmt.Println("None")
+		fmt.Fprintln(out, "None")
 	}
-	fmt.Println()
+	fmt.Fprintln(out)
 
-	fmt.Printf("=== Fetch Sources ===\n")
+	fmt.Fprintf(out, "=== Fetch Sources ===\n")
 	if len(ebuild.SrcUri) > 0 {
 		for _, u := range ebuild.SrcUri {
 			if u.Filename != "" && u.Filename != filepath.Base(u.URL) {
-				fmt.Printf("%s -> %s\n", u.URL, u.Filename)
+				fmt.Fprintf(out, "%s -> %s\n", u.URL, u.Filename)
 			} else {
-				fmt.Println(u.URL)
+				fmt.Fprintln(out, u.URL)
 			}
 		}
 	} else if srcUri, ok := ebuild.Vars["SRC_URI"]; ok && srcUri != "" {
@@ -369,26 +378,26 @@ func (cfg *CmdEbuildArgConfig) cmdEbuildExplain(args []string) error {
 		for _, line := range lines {
 			trimmed := strings.TrimSpace(line)
 			if trimmed != "" {
-				fmt.Println(trimmed)
+				fmt.Fprintln(out, trimmed)
 			}
 		}
 	} else {
-		fmt.Println("None")
+		fmt.Fprintln(out, "None")
 	}
-	fmt.Println()
+	fmt.Fprintln(out)
 
-	fmt.Printf("=== Keywords / License / Slot ===\n")
+	fmt.Fprintf(out, "=== Keywords / License / Slot ===\n")
 	if kw, ok := ebuild.Vars["KEYWORDS"]; ok && kw != "" {
-		fmt.Printf("KEYWORDS : %s\n", kw)
+		fmt.Fprintf(out, "KEYWORDS : %s\n", kw)
 	}
 	if lic, ok := ebuild.Vars["LICENSE"]; ok && lic != "" {
-		fmt.Printf("LICENSE  : %s\n", lic)
+		fmt.Fprintf(out, "LICENSE  : %s\n", lic)
 	}
 	if slot, ok := ebuild.Vars["SLOT"]; ok && slot != "" {
-		fmt.Printf("SLOT     : %s\n", slot)
+		fmt.Fprintf(out, "SLOT     : %s\n", slot)
 	}
 	if iuse, ok := ebuild.Vars["IUSE"]; ok && iuse != "" {
-		fmt.Printf("IUSE     : %s\n", iuse)
+		fmt.Fprintf(out, "IUSE     : %s\n", iuse)
 	}
 
 	return nil
