@@ -1,0 +1,34 @@
+test: output structured JSON
+
+-- input/test.ebuild --
+EAPI=8
+DEPEND="dev-libs/foo || ( dev-libs/bar dev-libs/baz )"
+-- options.json --
+{"args": ["--json"]}
+-- expected/out.txt --
+[
+	{
+		"file": "test.ebuild",
+		"deps": {
+			"DEPEND": [
+				{
+					"type": "string",
+					"value": "dev-libs/foo"
+				},
+				{
+					"type": "any-of",
+					"children": [
+						{
+							"type": "string",
+							"value": "dev-libs/bar"
+						},
+						{
+							"type": "string",
+							"value": "dev-libs/baz"
+						}
+					]
+				}
+			]
+		}
+	}
+]
