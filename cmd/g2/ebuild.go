@@ -359,15 +359,15 @@ func (cfg *CmdEbuildArgConfig) cmdEbuildExplain(args []string, opts ...any) erro
 	}
 	_, _ = fmt.Fprintln(out)
 
-	fmt.Fprintf(out, "=== Eclasses ===\n")
+	_, _ = fmt.Fprintf(out, "=== Eclasses ===\n")
 	if inherited, ok := ebuild.Vars["INHERITED"]; ok && inherited != "" {
-		fmt.Fprintln(out, inherited)
+		_, _ = fmt.Fprintln(out, inherited)
 	} else {
-		fmt.Fprintln(out, "None")
+		_, _ = fmt.Fprintln(out, "None")
 	}
-	fmt.Fprintln(out)
+	_, _ = fmt.Fprintln(out)
 
-	fmt.Fprintf(out, "=== Phases Overridden ===\n")
+	_, _ = fmt.Fprintf(out, "=== Phases Overridden ===\n")
 	if len(ebuild.Functions) > 0 {
 		var funcs []string
 		for f := range ebuild.Functions {
@@ -375,14 +375,14 @@ func (cfg *CmdEbuildArgConfig) cmdEbuildExplain(args []string, opts ...any) erro
 		}
 		sort.Strings(funcs)
 		for _, f := range funcs {
-			fmt.Fprintln(out, f)
+			_, _ = fmt.Fprintln(out, f)
 		}
 	} else {
-		fmt.Fprintln(out, "None")
+		_, _ = fmt.Fprintln(out, "None")
 	}
-	fmt.Fprintln(out)
+	_, _ = fmt.Fprintln(out)
 
-	fmt.Fprintf(out, "=== Fetch Sources ===\n")
+	_, _ = fmt.Fprintf(out, "=== Fetch Sources ===\n")
 	if len(ebuild.SrcUri) > 0 {
 		for _, u := range ebuild.SrcUri {
 			if u.Filename != "" && u.Filename != filepath.Base(u.URL) {

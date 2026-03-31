@@ -87,9 +87,9 @@ func (cfg *MainArgConfig) cmdArchListAdd(args []string) error {
 		if err != nil {
 			return err
 		}
-		defer f.Close()
+		defer func() { _ = f.Close() }()
 		for _, a := range al.Arches {
-			fmt.Fprintln(f, a)
+			_, _ = fmt.Fprintln(f, a)
 		}
 
 		log.Printf("Successfully added architecture '%s' to %s", *archName, *file)
@@ -133,9 +133,9 @@ func (cfg *MainArgConfig) cmdArchListRemove(args []string) error {
 		if err != nil {
 			return err
 		}
-		defer f.Close()
+		defer func() { _ = f.Close() }()
 		for _, a := range al.Arches {
-			fmt.Fprintln(f, a)
+			_, _ = fmt.Fprintln(f, a)
 		}
 		log.Printf("Successfully removed architecture '%s' from %s", *archName, *file)
 	} else {
