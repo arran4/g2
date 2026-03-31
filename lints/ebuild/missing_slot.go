@@ -14,6 +14,7 @@ var ruleMissingSlot = lints.RuleMetadata{
 	ID:          "MissingSlot",
 	Title:       "Missing SLOT",
 	Description: "Detects ebuilds that do not define a SLOT variable. While not strictly required by PMS for all EAPIs, it is highly recommended.",
+	URL:         "https://devmanual.gentoo.org/ebuild-writing/variables/#ebuild-defined-variables",
 	Severity:    lints.SeverityWarning,
 	Source:      lints.SourceG2,
 	Tags:        []string{"ebuild", "gentoo-policy", "metadata"},
