@@ -150,7 +150,7 @@ func (cfg *MainArgConfig) cmdOverlayEbuildInstall(args []string) error {
 
 	ebuild, err := g2.ParseEbuild(os.DirFS(filepath.Dir(absEbuildPath)), filepath.Base(absEbuildPath), g2.ParseFull)
 	if err != nil {
-		return fmt.Errorf("parsing ebuild: %w", err)
+		return fmt.Errorf("parsing ebuild %s: %w", absEbuildPath, err)
 	}
 
 	vars := g2.ParseEbuildVariables(filepath.Base(absEbuildPath))

@@ -220,7 +220,7 @@ func ParseEbuild(fsys fs.FS, path string, mode ParsingMode) (*Ebuild, error) {
 		parser := NewEbuildParser(context.Background(), strings.NewReader(content))
 		parsedEbuild, err := parser.Parse()
 		if err != nil {
-			return nil, fmt.Errorf("parsing ebuild variables: %w", err)
+			return nil, fmt.Errorf("parsing ebuild %s variables: %w", path, err)
 		}
 
 		e.ParseWarnings = parser.Warnings
@@ -508,7 +508,7 @@ func ResolveVariables(text string, variables map[string]string) string {
 	// Simple resolution: multiple passes until no change or limit reached
 	// To prevent memory exhaustion from self-referential or heavily nested variables,
 	// cap the maximum expanded length.
-	maxLen := 1024 * 1024    // 1MB limit for expanded strings
+	maxLen := 1024 * 1024 // 1MB limit for expanded strings
 
 	// 1. Sort keys by length descending to prevent $P from matching before $PN
 	var keys []string
@@ -545,12 +545,16 @@ func ResolveVariables(text string, variables map[string]string) string {
 			v, ok := variables[k]
 
 			if op == "" {
-				if ok { return v }
+				if ok {
+					return v
+				}
 				return ""
 			}
 			if strings.HasPrefix(op, ":-") || strings.HasPrefix(op, "-") {
 				defVal := strings.TrimPrefix(strings.TrimPrefix(op, ":-"), "-")
-				if v != "" { return v }
+				if v != "" {
+					return v
+				}
 				return defVal
 			}
 			if strings.HasPrefix(op, "//") {
@@ -569,22 +573,30 @@ func ResolveVariables(text string, variables map[string]string) string {
 			}
 			if strings.HasPrefix(op, "##") {
 				prefix := op[2:]
-				if strings.HasPrefix(v, prefix) { return v[len(prefix):] }
+				if strings.HasPrefix(v, prefix) {
+					return v[len(prefix):]
+				}
 				return v
 			}
 			if strings.HasPrefix(op, "#") {
 				prefix := op[1:]
-				if strings.HasPrefix(v, prefix) { return v[len(prefix):] }
+				if strings.HasPrefix(v, prefix) {
+					return v[len(prefix):]
+				}
 				return v
 			}
 			if strings.HasPrefix(op, "%%") {
 				suffix := op[2:]
-				if strings.HasSuffix(v, suffix) { return v[:len(v)-len(suffix)] }
+				if strings.HasSuffix(v, suffix) {
+					return v[:len(v)-len(suffix)]
+				}
 				return v
 			}
 			if strings.HasPrefix(op, "%") {
 				suffix := op[1:]
-				if strings.HasSuffix(v, suffix) { return v[:len(v)-len(suffix)] }
+				if strings.HasSuffix(v, suffix) {
+					return v[:len(v)-len(suffix)]
+				}
 				return v
 			}
 
@@ -664,7 +676,6 @@ func ExtractURIs(content string, variables map[string]string) ([]URIEntry, error
 
 	return uris, nil
 }
-
 
 var versionRegex = regexp.MustCompile(`^(\d+(?:\.\d+)*)(?:([a-z]))?(?:_(alpha|beta|pre|rc|p)(\d*))?(?:-r(\d+))?$`)
 
