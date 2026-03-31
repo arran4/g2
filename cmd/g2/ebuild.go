@@ -26,6 +26,7 @@ func (cfg *MainArgConfig) cmdEbuild(args []string) error {
 		fmt.Printf("\t\t %s \t\t %s\n", "templates", "Manage ebuild templates")
 		fmt.Printf("\t\t %s \t\t %s\n", "sh-parse-to-json", "Parse ebuild using shell parser and output JSON")
 		fmt.Printf("\t\t %s \t\t %s\n", "as-json", "Parse ebuild using native parser and output JSON")
+		fmt.Printf("\t\t %s \t\t %s\n", "query", "Query specific fields from parsed output")
 	}
 
 	config := &CmdEbuildArgConfig{
@@ -60,6 +61,10 @@ func (cfg *MainArgConfig) cmdEbuild(args []string) error {
 	case "templates":
 		if err := config.cmdEbuildTemplates(fs.Args()[1:]); err != nil {
 			return fmt.Errorf("ebuild templates: %w", err)
+		}
+	case "query":
+		if err := config.cmdEbuildQuery(fs.Args()[1:]); err != nil {
+			return fmt.Errorf("ebuild query: %w", err)
 		}
 	case "help", "-help", "--help":
 		fs.Usage()
@@ -308,5 +313,67 @@ func (cfg *CmdEbuildArgConfig) cmdEbuildAsJson(args []string) error {
 	}
 
 	fmt.Println(string(jsonBytes))
+	return nil
+}
+
+func (cfg *CmdEbuildArgConfig) cmdEbuildQuery(args []string) error {
+	fs := flag.NewFlagSet("query", flag.ExitOnError)
+	key := fs.String("key", "", "Key to query (e.g. EAPI, DESCRIPTION, IUSE, SRC_URI)")
+	format := fs.String("format", "", "Output format (e.g. lines)")
+
+	// Custom flag parsing to allow `<ebuild file>` before flags like `--key`
+	// Go's flag.Parse() stops at the first non-flag argument.
+	var flagArgs []string
+	var positionalArgs []string
+
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		if strings.HasPrefix(arg, "-") {
+			flagArgs = append(flagArgs, arg)
+			// Handle flag values that don't use '=' (e.g., --key EAPI instead of --key=EAPI)
+			if !strings.Contains(arg, "=") && i+1 < len(args) && !strings.HasPrefix(args[i+1], "-") {
+				flagArgs = append(flagArgs, args[i+1])
+				i++ // Skip the value in the next iteration
+			}
+		} else {
+			positionalArgs = append(positionalArgs, arg)
+		}
+	}
+
+	if err := fs.Parse(flagArgs); err != nil {
+		return err
+	}
+
+	if len(positionalArgs) != 1 {
+		return fmt.Errorf("usage: g2 ebuild query <ebuild file> --key <key> [--format lines]")
+	}
+
+	if *key == "" {
+		return fmt.Errorf("missing --key argument")
+	}
+
+	filename := positionalArgs[0]
+	dir := filepath.Dir(filename)
+	base := filepath.Base(filename)
+
+	ebuild, err := g2.ParseEbuild(os.DirFS(dir), base, g2.ParseFull)
+	if err != nil {
+		return fmt.Errorf("parsing ebuild %s: %w", filename, err)
+	}
+
+	val, ok := ebuild.Vars[*key]
+	if !ok {
+		return nil
+	}
+
+	if *format == "lines" {
+		fields := strings.Fields(val)
+		for _, field := range fields {
+			fmt.Println(field)
+		}
+	} else {
+		fmt.Println(val)
+	}
+
 	return nil
 }
