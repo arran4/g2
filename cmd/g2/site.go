@@ -3094,6 +3094,9 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, 
 	g, _ := errgroup.WithContext(context.Background())
 	if concurrency > 0 {
 		g.SetLimit(concurrency)
+		log.Printf("Starting concurrent remote repository processing with %d concurrency limit", concurrency)
+	} else {
+		log.Printf("Starting concurrent remote repository processing with unbounded concurrency")
 	}
 
 	for _, repo := range repos.Repositories {
@@ -3115,7 +3118,7 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, 
 		}
 
 		g.Go(func() error {
-			log.Printf("Fetching remote repository: %s (%s)", repo.Name, gitUrl)
+			log.Printf("[START] Fetching remote repository: %s (%s)", repo.Name, gitUrl)
 
 			repoPath := filepath.Join(tmpDir, repo.Name)
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
@@ -3130,8 +3133,14 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, 
 				return nil
 			}
 			checkoutTime := time.Since(t0)
+			freeSpace, err := getFreeSpace(repoPath)
+			if err == nil {
+				log.Printf("[DONE] Finished fetching repository %s in %s. Free space: %.2f MB", repo.Name, checkoutTime, float64(freeSpace)/(1024*1024))
+			} else {
+				log.Printf("[DONE] Finished fetching repository %s in %s", repo.Name, checkoutTime)
+			}
 
-			log.Printf("Parsing repository: %s", repo.Name)
+			log.Printf("[START] Parsing repository: %s", repo.Name)
 
 			size, err := getDirSize(repoPath)
 			var gitSize string
@@ -3148,6 +3157,12 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, 
 				return nil
 			}
 			processTime := time.Since(t1)
+			freeSpaceAfter, err := getFreeSpace(repoPath)
+			if err == nil {
+				log.Printf("[DONE] Finished parsing repository %s in %s. Free space: %.2f MB", repo.Name, processTime, float64(freeSpaceAfter)/(1024*1024))
+			} else {
+				log.Printf("[DONE] Finished parsing repository %s in %s", repo.Name, processTime)
+			}
 
 			siteData.CheckoutTime = checkoutTime.String()
 			siteData.ProcessTime = processTime.String()
