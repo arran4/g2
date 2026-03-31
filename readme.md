@@ -151,6 +151,7 @@ g2 ebuild <subcommand>
 * `templates`: Manage ebuild templates.
 * `sh-parse-to-json <ebuild_file>`: Parse an ebuild using the shell parser and output JSON.
 * `as-json <ebuild_file>`: Parse an ebuild using the native parser and output JSON.
+* `explain <ebuild_file>`: Output a human-readable summary of an ebuild.
 
 **Example Usage:**
 
