@@ -22,6 +22,7 @@ type GenericPageContext struct {
 	UseFlags             []*AggUseFlag
 	Projects             []*AggProject
 	Profiles             interface{} // Can be []*AggProfile or []ProfileData
+	Arches               []*AggArch
 	RecentDurationString string
 	RecentNews           interface{} // Can be []AggNewsItem or []g2.NewsItem
 	GlobalNews           []AggNewsItem
@@ -37,6 +38,7 @@ type GenericPageContext struct {
 	ProfilePath          string
 	ProfileList          interface{} // Can be []AggProfileRepo
 	Profile              interface{}
+	Arch                 *AggArch
 	UseFlag              interface{}
 	License              map[string]interface{}
 	Project              *AggProject

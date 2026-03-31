@@ -36,6 +36,7 @@ func main() {
 		fmt.Printf("\t\t %s \t\t %s\n", "pkg-desc-index", "commands relating to pkg_desc_index")
 		fmt.Printf("\t\t %s \t\t %s\n", "dev", "tools for developers and agents")
 		fmt.Printf("\t\t %s \t\t %s\n", "package", "commands relating to packages and search indexing")
+		fmt.Printf("\t\t %s \t\t %s\n", "arch", "commands relating to architectures")
 	}
 	if err := fs.Parse(os.Args); err != nil {
 		log.Printf("Flag parse error: %s", err)
@@ -51,6 +52,12 @@ func main() {
 	cmd := fs.Arg(1)
 	cfg.Args = append(cfg.Args, cmd)
 	switch cmd {
+	case "arch":
+		if err := cfg.cmdArch(fs.Args()[2:]); err != nil {
+			log.Printf("arch error: %s", err)
+			os.Exit(-1)
+			return
+		}
 	case "manifest":
 		if err := cfg.cmdManifest(fs.Args()[2:]); err != nil {
 			log.Printf("generate error: %s", err)

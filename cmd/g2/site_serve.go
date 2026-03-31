@@ -468,7 +468,7 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 						}
 					}
 				}
-				hs, ht, count := getHighestVersionsAndCount(allVersions)
+				hs, ht, count := getHighestVersionsAndCount(allVersions, nil)
 				tmplPkgs = append(tmplPkgs, TmplPkg{Name: p.Name, ReposList: mapToList(p.Repos), EbuildCount: count, HighestStableVersion: hs, HighestTestingVersion: ht, DominantDescription: p.DominantDescription, DominantHomepage: p.DominantHomepage, DominantLicense: p.DominantLicense, ReverseVirtuals: p.ReverseVirtuals})
 			}
 
