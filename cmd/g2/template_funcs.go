@@ -15,6 +15,7 @@ func getTemplateFuncMap() template.FuncMap {
 		"now":                 time.Now,
 		"slugify":             sanitizeFilename,
 		"split":               strings.Split,
+		"hasPrefix":           strings.HasPrefix,
 	}
 }
 
