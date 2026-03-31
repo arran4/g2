@@ -10,7 +10,7 @@
 
 - `doc/g2.1.md` is the canonical maintained man-page source. The generated `md2man` output is build/test output and should not be committed to the repository.
 - Man page updates should aim for actual man-page conventions (e.g., concise, declarative, no marketing bloat, using standard sections like NAME, SYNOPSIS, DESCRIPTION), not README-style feature dumping.
-- When adding or changing commands/features, agents must update:
+- When adding or changing commands/features (like touching subcommands), agents must update:
   - `doc/g2.1.md` to reflect the new functionality.
   - `readme.md` where appropriate.
 - Agents should inspect the real command tree using `go run ./cmd/g2 ...` to document commands accurately, rather than relying on stale markdown docs.
@@ -20,3 +20,6 @@
 - When adding new commands or features to the `g2` application, ensure that you update the `readme.md` file to reflect these additions. The `readme.md` should be considered the central reference for available commands, usage instructions, and examples.
 
 - There is a `g2 dev` subcommand tree specifically for ephemeral tools used by developers and agents (e.g. `g2 dev update-txtar-tests`). These commands do not need to be documented in `readme.md` and are for local utility purposes.
+
+## Adding or Changing Commands
+When adding or changing g2 commands, agents must inspect the actual command tree via the CLI (e.g., `go run ./cmd/g2 ...`) instead of relying on stale docs, and update both `readme.md` and the canonical man page source `doc/g2.1.md` using conventional man-page sections.
