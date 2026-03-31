@@ -26,6 +26,7 @@ func (cfg *MainArgConfig) cmdEbuild(args []string) error {
 		fmt.Printf("\t\t %s \t\t %s\n", "templates", "Manage ebuild templates")
 		fmt.Printf("\t\t %s \t\t %s\n", "sh-parse-to-json", "Parse ebuild using shell parser and output JSON")
 		fmt.Printf("\t\t %s \t\t %s\n", "as-json", "Parse ebuild using native parser and output JSON")
+		fmt.Printf("\t\t %s \t\t %s\n", "deps", "Extract and format dependency fields")
 	}
 
 	config := &CmdEbuildArgConfig{
@@ -60,6 +61,10 @@ func (cfg *MainArgConfig) cmdEbuild(args []string) error {
 	case "templates":
 		if err := config.cmdEbuildTemplates(fs.Args()[1:]); err != nil {
 			return fmt.Errorf("ebuild templates: %w", err)
+		}
+	case "deps":
+		if err := config.cmdEbuildDeps(fs.Args()[1:]); err != nil {
+			return fmt.Errorf("ebuild deps: %w", err)
 		}
 	case "help", "-help", "--help":
 		fs.Usage()
@@ -270,6 +275,152 @@ func (cfg *CmdEbuildArgConfig) cmdEbuildShParseToJson(args []string) error {
 	}
 
 	fmt.Println(string(jsonBytes))
+	return nil
+}
+
+type DepNodeJSON struct {
+	Type      string         `json:"type"`
+	Value     string         `json:"value,omitempty"`
+	Flag      string         `json:"flag,omitempty"`
+	IsNegated bool           `json:"is_negated,omitempty"`
+	Children  []*DepNodeJSON `json:"children,omitempty"`
+}
+
+func convertDepNodeToJSON(node g2.DepNode) *DepNodeJSON {
+	switch n := node.(type) {
+	case g2.DepString:
+		return &DepNodeJSON{Type: "string", Value: string(n)}
+	case g2.DepAnyOf:
+		var children []*DepNodeJSON
+		for _, c := range n.Children {
+			children = append(children, convertDepNodeToJSON(c))
+		}
+		return &DepNodeJSON{Type: "any-of", Children: children}
+	case g2.DepAllOf:
+		var children []*DepNodeJSON
+		for _, c := range n.Children {
+			children = append(children, convertDepNodeToJSON(c))
+		}
+		return &DepNodeJSON{Type: "all-of", Children: children}
+	case g2.DepUseConditional:
+		var children []*DepNodeJSON
+		for _, c := range n.Children {
+			children = append(children, convertDepNodeToJSON(c))
+		}
+		return &DepNodeJSON{Type: "use-conditional", Flag: n.Flag, IsNegated: n.IsNegated, Children: children}
+	}
+	return nil
+}
+
+func (cfg *CmdEbuildArgConfig) cmdEbuildDeps(args []string) error {
+	fs := flag.NewFlagSet("deps", flag.ExitOnError)
+	flatten := fs.Bool("flatten", false, "Flatten dependency trees into a list")
+	atomsOnly := fs.Bool("atoms-only", false, "Extract only package atoms without operators (e.g. dev-libs/foo instead of >=dev-libs/foo-1.2.3)")
+	jsonOutput := fs.Bool("json", false, "Output results in JSON format")
+	onePerLine := fs.Bool("one-per-line", false, "Output each dependency on a new line (only applies to text output)")
+
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if fs.NArg() == 0 {
+		return fmt.Errorf("usage: g2 ebuild deps [flags] <ebuild files...>")
+	}
+
+	depFields := []string{"DEPEND", "RDEPEND", "BDEPEND", "PDEPEND", "IDEPEND"}
+
+	// To structure JSON across files
+	type FileDeps struct {
+		File string         `json:"file"`
+		Deps map[string]any `json:"deps"`
+	}
+	var allFilesDeps []FileDeps
+
+	for _, filename := range fs.Args() {
+		dir := filepath.Dir(filename)
+		base := filepath.Base(filename)
+
+		ebuild, err := g2.ParseEbuild(os.DirFS(dir), base, g2.ParseVariables)
+		if err != nil {
+			log.Printf("failed to parse %s: %v", filename, err)
+			continue
+		}
+
+		fileDeps := FileDeps{
+			File: filename,
+			Deps: make(map[string]any),
+		}
+
+		for _, field := range depFields {
+			val := ebuild.Vars[field]
+			if val == "" {
+				continue
+			}
+
+			if *flatten {
+				tree := g2.ParseDepTree(val)
+				flatDeps, err := tree.Evaluate(g2.IgnoreUseFlags(true))
+				if err != nil {
+					log.Printf("error evaluating %s in %s: %v", field, filename, err)
+					continue
+				}
+
+				if *atomsOnly {
+					for i, d := range flatDeps {
+						flatDeps[i] = g2.ExtractPackageNameFromDep(d)
+					}
+				}
+
+				if *jsonOutput {
+					fileDeps.Deps[field] = flatDeps
+				} else {
+					if *onePerLine {
+						fmt.Printf("### %s - %s\n", filename, field)
+						for _, d := range flatDeps {
+							fmt.Println(d)
+						}
+						fmt.Println()
+					} else {
+						fmt.Printf("### %s - %s\n%s\n\n", filename, field, strings.Join(flatDeps, " "))
+					}
+				}
+			} else {
+				if *jsonOutput {
+					tree := g2.ParseDepTree(val)
+					var children []*DepNodeJSON
+					for _, n := range tree.Nodes {
+						children = append(children, convertDepNodeToJSON(n))
+					}
+					fileDeps.Deps[field] = children
+				} else {
+					if *onePerLine {
+						// For raw string output, splitting by space is a naive approach,
+						// but since users requested one-per-line for standard format,
+						// printing evaluated/flattened is better, or splitting the raw string.
+						fmt.Printf("### %s - %s\n", filename, field)
+						for _, token := range strings.Fields(val) {
+							fmt.Println(token)
+						}
+						fmt.Println()
+					} else {
+						fmt.Printf("### %s - %s\n%s\n\n", filename, field, val)
+					}
+				}
+			}
+		}
+
+		if *jsonOutput {
+			allFilesDeps = append(allFilesDeps, fileDeps)
+		}
+	}
+
+	if *jsonOutput {
+		out, err := json.MarshalIndent(allFilesDeps, "", "\t")
+		if err != nil {
+			return fmt.Errorf("failed to marshal JSON: %w", err)
+		}
+		fmt.Println(string(out))
+	}
+
 	return nil
 }
 func (cfg *CmdEbuildArgConfig) cmdEbuildAsJson(args []string) error {
