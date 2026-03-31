@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"text/tabwriter"
 
@@ -24,6 +25,7 @@ func (cfg *MainArgConfig) cmdEbuild(args []string) error {
 		fmt.Printf("\t%s\n", strings.Join(cfg.Args, " "))
 		fmt.Printf("\t\t %s \t\t %s\n", "init", "Initialize an ebuild from a template")
 		fmt.Printf("\t\t %s \t\t %s\n", "templates", "Manage ebuild templates")
+		fmt.Printf("\t\t %s \t\t %s\n", "diff-json", "Compare as-json vs sh-parse-to-json and output semantic differences")
 		fmt.Printf("\t\t %s \t\t %s\n", "sh-parse-to-json", "Parse ebuild using shell parser and output JSON")
 		fmt.Printf("\t\t %s \t\t %s\n", "as-json", "Parse ebuild using native parser and output JSON")
 	}
@@ -56,6 +58,10 @@ func (cfg *MainArgConfig) cmdEbuild(args []string) error {
 	case "sh-parse-to-json":
 		if err := config.cmdEbuildShParseToJson(fs.Args()[1:]); err != nil {
 			return fmt.Errorf("ebuild sh-parse-to-json: %w", err)
+		}
+	case "diff-json":
+		if err := config.cmdEbuildDiffJson(fs.Args()[1:]); err != nil {
+			return fmt.Errorf("ebuild diff-json: %w", err)
 		}
 	case "templates":
 		if err := config.cmdEbuildTemplates(fs.Args()[1:]); err != nil {
@@ -303,6 +309,93 @@ func (cfg *CmdEbuildArgConfig) cmdEbuildAsJson(args []string) error {
 		jsonBytes, err = json.MarshalIndent(ebuilds, "", "\t")
 	}
 
+	if err != nil {
+		return fmt.Errorf("serializing to json: %w", err)
+	}
+
+	fmt.Println(string(jsonBytes))
+	return nil
+}
+
+func (cfg *CmdEbuildArgConfig) cmdEbuildDiffJson(args []string) error {
+	fs := flag.NewFlagSet("diff-json", flag.ExitOnError)
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if fs.NArg() != 1 {
+		return fmt.Errorf("usage: g2 ebuild diff-json <ebuild file>")
+	}
+	filename := fs.Arg(0)
+
+	dir := filepath.Dir(filename)
+	base := filepath.Base(filename)
+
+	ebuildSh, err := g2.ParseEbuild(os.DirFS(dir), base, g2.ParseVariables)
+	if err != nil {
+		return fmt.Errorf("parsing ebuild using shell parser %s: %w", filename, err)
+	}
+
+	ebuildAs, err := g2.ParseEbuild(os.DirFS(dir), base, g2.ParseFull)
+	if err != nil {
+		return fmt.Errorf("parsing ebuild using native parser %s: %w", filename, err)
+	}
+
+	type DiffResult struct {
+		Key       string      `json:"key"`
+		ShValue   interface{} `json:"sh_value"`
+		AsValue   interface{} `json:"as_value"`
+		Difference string     `json:"difference"`
+	}
+
+	diffs := make([]DiffResult, 0)
+
+	// Compare Vars
+	allKeys := make(map[string]bool)
+	for k := range ebuildSh.Vars {
+		allKeys[k] = true
+	}
+	for k := range ebuildAs.Vars {
+		allKeys[k] = true
+	}
+
+	// Sort keys for deterministic output
+	var sortedKeys []string
+	for k := range allKeys {
+		sortedKeys = append(sortedKeys, k)
+	}
+	sort.Strings(sortedKeys)
+
+	for _, k := range sortedKeys {
+		vSh, okSh := ebuildSh.Vars[k]
+		vAs, okAs := ebuildAs.Vars[k]
+
+		if okSh && okAs {
+			if vSh != vAs {
+				diffs = append(diffs, DiffResult{
+					Key:        k,
+					ShValue:    vSh,
+					AsValue:    vAs,
+					Difference: "value_mismatch",
+				})
+			}
+		} else if okSh {
+			diffs = append(diffs, DiffResult{
+				Key:        k,
+				ShValue:    vSh,
+				AsValue:    nil,
+				Difference: "missing_in_as",
+			})
+		} else if okAs {
+			diffs = append(diffs, DiffResult{
+				Key:        k,
+				ShValue:    nil,
+				AsValue:    vAs,
+				Difference: "missing_in_sh",
+			})
+		}
+	}
+
+	jsonBytes, err := json.MarshalIndent(diffs, "", "\t")
 	if err != nil {
 		return fmt.Errorf("serializing to json: %w", err)
 	}

@@ -149,6 +149,7 @@ g2 ebuild <subcommand>
 
 * `init <template_name>`: Initialize an ebuild from a template.
 * `templates`: Manage ebuild templates.
+* `diff-json <ebuild_file>`: Compare as-json vs sh-parse-to-json and output semantic differences.
 * `sh-parse-to-json <ebuild_file>`: Parse an ebuild using the shell parser and output JSON.
 * `as-json <ebuild_file>`: Parse an ebuild using the native parser and output JSON.
 
