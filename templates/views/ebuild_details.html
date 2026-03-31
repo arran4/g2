@@ -84,7 +84,7 @@
         <tr>
             <td>{{if .VersionData.Ebuild.Vars.PV}}{{.VersionData.Ebuild.Vars.PV}}{{else}}{{.VersionData.Version}}{{end}}{{if .VersionData.EbuildRawURL}} <a href="{{.VersionData.EbuildRawURL}}" style="font-size: 0.8em; font-weight: normal; color: #888;">(raw)</a>{{end}}</td>
             <td>{{.VersionData.Ebuild.Vars.EAPI}}</td>
-            <td>{{formatKeywords .VersionData.Ebuild.Vars.KEYWORDS .BaseURL}}</td>
+            <td>{{if index .VersionData.Ebuild.Vars "KEYWORDS"}}{{formatKeywords (index .VersionData.Ebuild.Vars "KEYWORDS") .BaseURL}}{{end}}</td>
             <td>{{.VersionData.Ebuild.Vars.SLOT}}</td>
         </tr>
     </table>

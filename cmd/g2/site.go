@@ -471,21 +471,6 @@ func getHighestVersionsAndCount(versions []VersionData, site *SiteData) (templat
 				}
 			}
 
-			// Format with links if arches are known
-			var formattedArchs []string
-			for _, arch := range archs {
-			    formattedArch := arch
-			    if site != nil && site.ArchList != nil {
-			        for _, knownArch := range site.ArchList.Arches {
-			            if arch == knownArch {
-			                formattedArch = fmt.Sprintf("&#13;<a href=\"../../../../../../arches/%s/\" class=\"text-decoration-none text-white\">%s</a>", arch, arch)
-			                break
-			            }
-			        }
-			    }
-			    formattedArchs = append(formattedArchs, formattedArch)
-			}
-			// Revert the tooltip link changes, we'll put links in templates/funcs.go
 			parts = append(parts, "<span title=\""+strings.Join(archs, " ")+"\">"+ver+"</span>")
 		}
 

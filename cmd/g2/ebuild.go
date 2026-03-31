@@ -324,19 +324,19 @@ func (cfg *CmdEbuildArgConfig) cmdEbuildExplain(args []string, opts ...any) erro
 		return fmt.Errorf("parsing ebuild %s: %w", filename, err)
 	}
 
-	fmt.Fprintf(out, "=== Package Metadata ===\n")
-	fmt.Fprintf(out, "Name        : %s\n", ebuild.Vars["PN"])
-	fmt.Fprintf(out, "Version     : %s\n", ebuild.Vars["PV"])
+	_, _ = fmt.Fprintf(out, "=== Package Metadata ===\n")
+	_, _ = fmt.Fprintf(out, "Name        : %s\n", ebuild.Vars["PN"])
+	_, _ = fmt.Fprintf(out, "Version     : %s\n", ebuild.Vars["PV"])
 	if desc, ok := ebuild.Vars["DESCRIPTION"]; ok && desc != "" {
-		fmt.Fprintf(out, "Description : %s\n", desc)
+		_, _ = fmt.Fprintf(out, "Description : %s\n", desc)
 	}
 	if home, ok := ebuild.Vars["HOMEPAGE"]; ok && home != "" {
-		fmt.Fprintf(out, "Homepage    : %s\n", home)
+		_, _ = fmt.Fprintf(out, "Homepage    : %s\n", home)
 	}
 	if eapi, ok := ebuild.Vars["EAPI"]; ok && eapi != "" {
-		fmt.Fprintf(out, "EAPI        : %s\n", eapi)
+		_, _ = fmt.Fprintf(out, "EAPI        : %s\n", eapi)
 	}
-	fmt.Fprintln(out)
+	_, _ = fmt.Fprintln(out)
 
 	fmt.Fprintf(out, "=== Dependencies ===\n")
 	hasDeps := false
