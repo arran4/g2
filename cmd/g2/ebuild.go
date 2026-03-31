@@ -26,6 +26,7 @@ func (cfg *MainArgConfig) cmdEbuild(args []string) error {
 		fmt.Printf("\t\t %s \t\t %s\n", "templates", "Manage ebuild templates")
 		fmt.Printf("\t\t %s \t\t %s\n", "sh-parse-to-json", "Parse ebuild using shell parser and output JSON")
 		fmt.Printf("\t\t %s \t\t %s\n", "as-json", "Parse ebuild using native parser and output JSON")
+		fmt.Printf("\t\t %s \t\t %s\n", "inherit", "Show inherited eclasses for ebuild")
 	}
 
 	config := &CmdEbuildArgConfig{
@@ -60,6 +61,10 @@ func (cfg *MainArgConfig) cmdEbuild(args []string) error {
 	case "templates":
 		if err := config.cmdEbuildTemplates(fs.Args()[1:]); err != nil {
 			return fmt.Errorf("ebuild templates: %w", err)
+		}
+	case "inherit":
+		if err := config.cmdEbuildInherit(fs.Args()[1:]); err != nil {
+			return fmt.Errorf("ebuild inherit: %w", err)
 		}
 	case "help", "-help", "--help":
 		fs.Usage()
@@ -272,6 +277,47 @@ func (cfg *CmdEbuildArgConfig) cmdEbuildShParseToJson(args []string) error {
 	fmt.Println(string(jsonBytes))
 	return nil
 }
+func (cfg *CmdEbuildArgConfig) cmdEbuildInherit(args []string) error {
+	fs := flag.NewFlagSet("inherit", flag.ExitOnError)
+	jsonOutput := fs.Bool("json", false, "Output as JSON")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if fs.NArg() != 1 {
+		return fmt.Errorf("usage: g2 ebuild inherit [--json] <ebuild file>")
+	}
+	filename := fs.Arg(0)
+
+	ebuild, err := g2.ParseEbuild(os.DirFS(filepath.Dir(filename)), filepath.Base(filename), g2.ParseVariables)
+	if err != nil {
+		return fmt.Errorf("parsing ebuild %s: %w", filename, err)
+	}
+
+	inheritedRaw, ok := ebuild.Vars["INHERITED"]
+	var inherited []string
+	if ok && strings.TrimSpace(inheritedRaw) != "" {
+		inherited = strings.Fields(inheritedRaw)
+	}
+
+	if *jsonOutput {
+		if inherited == nil {
+			inherited = []string{} // Output [] instead of null
+		}
+		jsonBytes, err := json.MarshalIndent(inherited, "", "\t")
+		if err != nil {
+			return fmt.Errorf("serializing to json: %w", err)
+		}
+		fmt.Println(string(jsonBytes))
+		return nil
+	}
+
+	for _, eclass := range inherited {
+		fmt.Println(eclass)
+	}
+
+	return nil
+}
+
 func (cfg *CmdEbuildArgConfig) cmdEbuildAsJson(args []string) error {
 	fs := flag.NewFlagSet("as-json", flag.ExitOnError)
 	if err := fs.Parse(args); err != nil {
