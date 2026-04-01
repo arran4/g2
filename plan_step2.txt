@@ -1,0 +1,14 @@
+	location := "."
+	if fs.NArg() > 0 {
+		location = fs.Arg(0)
+	}
+
+	if *clear {
+		if err := os.RemoveAll(*outDir); err != nil {
+			return fmt.Errorf("clearing output directory: %w", err)
+		}
+	}
+
+	log.Printf("Generating site (v%s) from overlay location %s into %s", version, location, *outDir)
+
+    // ... Need to build an errgroup loop
