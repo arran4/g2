@@ -60,6 +60,10 @@ type ProfileData struct {
 	Children []string
 }
 
+type EclassData struct {
+	Name string
+}
+
 type SiteData struct {
 	Title             string
 	RepoName          string
@@ -69,6 +73,8 @@ type SiteData struct {
 	Projects          *g2.Projects
 	Categories        []CategoryData
 	Profiles          []ProfileData
+	DefinedEclasses   []EclassData
+	AggEclasses       []*AggEclass
 	Authors           []g2.Author
 	AuthorsURL        string
 	Moves             []g2.PackageMove
@@ -85,6 +91,7 @@ type SiteData struct {
 	ArchesDesc        *g2.ArchesDesc
 	InfoPkgs          []g2.InfoPkg
 	Deprecated        []g2.PackageDeprecated
+	ParsedEclasses    []*g2.Ebuild
 	Eclasses          []*g2.Ebuild
 	PackageCount      int
 	AggUseFlags       []*AggUseFlag
@@ -844,6 +851,22 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool, r
 		log.Printf("Warning: failed to parse profiles dir: %v", err)
 	}
 	site.Profiles = profilesData
+
+	eclassDir := filepath.Join(repoDir, "eclass")
+	eclassEntries, err := fs.ReadDir(sysFS, filepath.ToSlash(eclassDir))
+	if err == nil {
+		for _, eclassEntry := range eclassEntries {
+			if !eclassEntry.IsDir() && strings.HasSuffix(eclassEntry.Name(), ".eclass") {
+				eclassName := strings.TrimSuffix(eclassEntry.Name(), ".eclass")
+				site.DefinedEclasses = append(site.DefinedEclasses, EclassData{
+					Name: eclassName,
+				})
+			}
+		}
+		sort.Slice(site.DefinedEclasses, func(i, j int) bool {
+			return site.DefinedEclasses[i].Name < site.DefinedEclasses[j].Name
+		})
+	}
 
 	supportedCategories := make(map[string]bool)
 	categoriesBytes, err := fs.ReadFile(sysFS, filepath.ToSlash(filepath.Join(repoDir, "profiles", "categories")))
@@ -1609,6 +1632,66 @@ type AggUseFlag struct {
 	Warnings      []string
 }
 
+func getRepoEclasses(site *SiteData, aggPackages map[string]*AggPackage) []*AggEclass {
+	eclassMap := make(map[string]*AggEclass)
+	seenPackages := make(map[string]map[string]bool)
+
+	for _, eclass := range site.DefinedEclasses {
+		if _, ok := eclassMap[eclass.Name]; !ok {
+			eclassMap[eclass.Name] = &AggEclass{
+				Name:  eclass.Name,
+				Repos: make(map[string]*SiteData),
+			}
+			seenPackages[eclass.Name] = make(map[string]bool)
+		}
+		eclassMap[eclass.Name].Repos[site.RepoName] = site
+	}
+
+	for _, cat := range site.Categories {
+		for _, pkg := range cat.Packages {
+			pkgKey := cat.Name + "/" + pkg.Name
+
+			for _, ver := range pkg.Versions {
+				if ver.Ebuild != nil && ver.Ebuild.Vars != nil {
+					inherited := ver.Ebuild.Vars["INHERITED"]
+					if inherited != "" {
+						eclasses := strings.Fields(inherited)
+						for _, ec := range eclasses {
+							if _, ok := eclassMap[ec]; !ok {
+								eclassMap[ec] = &AggEclass{
+									Name:  ec,
+									Repos: make(map[string]*SiteData),
+								}
+								eclassMap[ec].Repos[site.RepoName] = site
+								seenPackages[ec] = make(map[string]bool)
+							}
+
+							if !seenPackages[ec][pkgKey] {
+								eclassMap[ec].Packages = append(eclassMap[ec].Packages, aggPackages[pkgKey])
+								seenPackages[ec][pkgKey] = true
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	var sortedEclasses []*AggEclass
+	for _, ec := range eclassMap {
+		sort.Slice(ec.Packages, func(i, j int) bool {
+			if ec.Packages[i].Category == ec.Packages[j].Category {
+				return ec.Packages[i].Name < ec.Packages[j].Name
+			}
+			return ec.Packages[i].Category < ec.Packages[j].Category
+		})
+		sortedEclasses = append(sortedEclasses, ec)
+	}
+	sort.Slice(sortedEclasses, func(i, j int) bool { return sortedEclasses[i].Name < sortedEclasses[j].Name })
+
+	return sortedEclasses
+}
+
 func getRepoUseFlags(site *SiteData, aggPackages map[string]*AggPackage) []*AggUseFlag {
 	aggUseFlags := make(map[string]*AggUseFlag)
 
@@ -1817,6 +1900,12 @@ type AggProfile struct {
 	Repos    []AggProfileRepo
 }
 
+type AggEclass struct {
+	Name     string
+	Repos    map[string]*SiteData
+	Packages []*AggPackage
+}
+
 type AggPackageMove struct {
 	Old string
 	New string
@@ -1839,6 +1928,7 @@ type AggregatedData struct {
 	Licenses      []*AggLicense
 	Projects      []*AggProject
 	Profiles      []*AggProfile
+	Eclasses      []*AggEclass
 	Arches        []*AggArch
 	Moves         map[string]*AggPackageMove
 	GlobalNews    []AggNewsItem
@@ -1858,6 +1948,7 @@ func prepareAggregatedData(sites []*SiteData) *AggregatedData {
 	aggProfiles := make(map[string]*AggProfile)
 	aggArches := make(map[string]*AggArch)
 	aggMoves := make(map[string]*AggPackageMove)
+	aggEclasses := make(map[string]*AggEclass)
 	var globalNews []AggNewsItem
 	aggUseExpandDescs := make(map[string]*g2.UseExpandDesc)
 
@@ -2055,6 +2146,43 @@ func prepareAggregatedData(sites []*SiteData) *AggregatedData {
 				aggMoves[move.Old] = &AggPackageMove{Old: move.Old, New: move.New}
 			}
 		}
+		for _, eclass := range site.AggEclasses {
+			if _, ok := aggEclasses[eclass.Name]; !ok {
+				aggEclasses[eclass.Name] = &AggEclass{
+					Name:  eclass.Name,
+					Repos: make(map[string]*SiteData),
+				}
+			}
+			for rName, rData := range eclass.Repos {
+				aggEclasses[eclass.Name].Repos[rName] = rData
+			}
+			for _, pkg := range eclass.Packages {
+				foundPkg := false
+				for _, existingPkg := range aggEclasses[eclass.Name].Packages {
+					if existingPkg.Name == pkg.Name && existingPkg.Category == pkg.Category {
+						newRepos := make(map[string]*SiteData)
+						for k, v := range existingPkg.Repos {
+							newRepos[k] = v
+						}
+						for rName, rData := range pkg.Repos {
+							newRepos[rName] = rData
+						}
+						existingPkg.Repos = newRepos
+						foundPkg = true
+						break
+					}
+				}
+				if !foundPkg {
+					newPkg := *pkg
+					newRepos := make(map[string]*SiteData)
+					for k, v := range pkg.Repos {
+						newRepos[k] = v
+					}
+					newPkg.Repos = newRepos
+					aggEclasses[eclass.Name].Packages = append(aggEclasses[eclass.Name].Packages, &newPkg)
+				}
+			}
+		}
 	}
 
 	// Sort structures for templates
@@ -2110,6 +2238,18 @@ func prepareAggregatedData(sites []*SiteData) *AggregatedData {
 	}
 	sort.Slice(sortedArches, func(i, j int) bool { return sortedArches[i].Name < sortedArches[j].Name })
 
+	var sortedEclasses []*AggEclass
+	for _, ec := range aggEclasses {
+		sort.Slice(ec.Packages, func(i, j int) bool {
+			if ec.Packages[i].Category == ec.Packages[j].Category {
+				return ec.Packages[i].Name < ec.Packages[j].Name
+			}
+			return ec.Packages[i].Category < ec.Packages[j].Category
+		})
+		sortedEclasses = append(sortedEclasses, ec)
+	}
+	sort.Slice(sortedEclasses, func(i, j int) bool { return sortedEclasses[i].Name < sortedEclasses[j].Name })
+
 	sort.Slice(globalNews, func(i, j int) bool {
 		return globalNews[i].Posted.After(globalNews[j].Posted)
 	})
@@ -2137,6 +2277,7 @@ func prepareAggregatedData(sites []*SiteData) *AggregatedData {
 		Licenses:      sortedLicenses,
 		Projects:      sortedProjects,
 		Profiles:      sortedProfiles,
+		Eclasses:      sortedEclasses,
 		Arches:        sortedArches,
 		Moves:         aggMoves,
 		GlobalNews:    globalNews,
@@ -3096,6 +3237,46 @@ func generateRepoPages(outDir string, tmpl *template.Template, sites []*SiteData
 		}
 		repoUseFlags := getRepoUseFlags(site, aggPackagesMap)
 
+		if len(site.AggEclasses) > 0 {
+			if err := os.MkdirAll(filepath.Join(repoDir, "eclasses"), 0755); err != nil {
+				return fmt.Errorf("creating directory: %w", err)
+			}
+			if err := renderPage(filepath.Join(repoDir, "eclasses", "index.html"), tmpl, "repo_eclasses.html", GenericPageContext{
+				Title:       site.RepoName + " - Eclasses",
+				BaseURL:     "../../../",
+				Breadcrumbs: []Breadcrumb{{Name: title, URL: "../../../"}, {Name: site.RepoName, URL: "../"}, {Name: "Eclasses"}},
+				Eclasses:    site.AggEclasses,
+				Repo:        site,
+				Version:     version,
+				GenInfo:     genInfo,
+			}); err != nil {
+				return err
+			}
+
+			for _, ec := range site.AggEclasses {
+				safeName := sanitizeFilename(ec.Name)
+				if safeName == "" {
+					continue
+				}
+				ecDir := filepath.Join(repoDir, "eclasses", safeName)
+				if err := os.MkdirAll(ecDir, 0755); err != nil {
+					return fmt.Errorf("creating directory %s: %w", ecDir, err)
+				}
+
+				if err := renderPage(filepath.Join(ecDir, "index.html"), tmpl, "repo_eclass.html", GenericPageContext{
+					Title:       site.RepoName + " - Eclass: " + ec.Name,
+					BaseURL:     "../../../../",
+					Breadcrumbs: []Breadcrumb{{Name: title, URL: "../../../../"}, {Name: site.RepoName, URL: "../../"}, {Name: "Eclasses", URL: "../"}, {Name: ec.Name}},
+					Eclass:      ec,
+					Repo:        site,
+					Version:     version,
+					GenInfo:     genInfo,
+				}); err != nil {
+					return err
+				}
+			}
+		}
+
 		if err := os.MkdirAll(filepath.Join(repoDir, "uses"), 0755); err != nil {
 			return fmt.Errorf("creating directory: %w", err)
 		}
@@ -3247,6 +3428,26 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 	tmpl, err := GetSiteTemplates()
 	if err != nil {
 		return fmt.Errorf("loading templates: %w", err)
+	}
+
+	for _, site := range sites {
+		aggPackagesMap := make(map[string]*AggPackage)
+		for _, cat := range site.Categories {
+			for _, pkg := range cat.Packages {
+				pkgKey := cat.Name + "/" + pkg.Name
+				aggPackagesMap[pkgKey] = &AggPackage{
+					Name:                pkg.Name,
+					Category:            cat.Name,
+					Repos:               map[string]*SiteData{site.RepoName: site},
+					DominantDescription: pkg.DominantDescription,
+					DominantHomepage:    pkg.DominantHomepage,
+					DominantLicense:     pkg.DominantLicense,
+					ReverseVirtuals:     pkg.ReverseVirtuals,
+					VirtualDeps:         pkg.VirtualDeps,
+				}
+			}
+		}
+		site.AggEclasses = getRepoEclasses(site, aggPackagesMap)
 	}
 
 	// Prepare Immutable Render Context

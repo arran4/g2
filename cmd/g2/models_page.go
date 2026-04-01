@@ -23,6 +23,8 @@ type GenericPageContext struct {
 	UseExpandDescs        map[string]*g2.UseExpandDesc
 	UseExpandDesc         *g2.UseExpandDesc
 	Projects             []*AggProject
+	Eclass               *AggEclass
+	Eclasses             []*AggEclass
 	Profiles             interface{} // Can be []*AggProfile or []ProfileData
 	Arches               []*AggArch
 	RecentDurationString string

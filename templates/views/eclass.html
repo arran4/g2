@@ -1,0 +1,73 @@
+{{define "eclass.html"}}
+<div class="row mb-3 align-items-center">
+    <div class="col-12 col-md-8">
+        <h1 class="h3 d-flex align-items-center gap-2">
+            <i class="fas fa-file-code text-muted"></i>
+            {{.Eclass.Name}}
+        </h1>
+        <p class="text-muted">Packages inheriting this eclass across all overlays.</p>
+    </div>
+</div>
+
+<div class="row row-cols-1 row-cols-md-2 g-4 mb-4">
+    <div class="col">
+        <div class="card h-100 shadow-sm border-0">
+            <div class="card-body">
+                <h6 class="card-subtitle mb-2 text-muted text-uppercase fw-bold" style="font-size: 0.8rem; letter-spacing: 0.5px;">Summary</h6>
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <span class="text-muted">Total Packages</span>
+                    <span class="badge bg-primary rounded-pill">{{len .Eclass.Packages}}</span>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col">
+        <div class="card h-100 shadow-sm border-0">
+            <div class="card-body">
+                <h6 class="card-subtitle mb-2 text-muted text-uppercase fw-bold" style="font-size: 0.8rem; letter-spacing: 0.5px;">Overlays</h6>
+                <div class="d-flex flex-wrap gap-1">
+                    {{range $repoName, $repoData := .Eclass.Repos}}
+                        <a href="{{$.BaseURL}}repos/{{$repoName}}/" class="badge bg-secondary text-decoration-none">
+                            {{$repoName}}
+                        </a>
+                    {{end}}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<h4 class="mb-3">Packages inheriting {{.Eclass.Name}}</h4>
+<div class="card shadow-sm border-0">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0 datatable">
+                <thead class="table-light">
+                    <tr>
+                        <th class="border-top-0 ps-3">Package</th>
+                        <th class="border-top-0">Overlays</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {{range .Eclass.Packages}}
+                    <tr>
+                        <td class="ps-3">
+                            <a href="{{$.BaseURL}}packages/{{.Category}}/{{.Name}}/" class="fw-bold text-decoration-none">
+                                {{.Category}}/{{.Name}}
+                            </a>
+                        </td>
+                        <td>
+                            <div class="d-flex flex-wrap gap-1">
+                                {{range $repoName, $repoData := .Repos}}
+                                    <span class="badge bg-light text-dark border">{{$repoName}}</span>
+                                {{end}}
+                            </div>
+                        </td>
+                    </tr>
+                {{end}}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{{end}}
