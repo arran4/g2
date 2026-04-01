@@ -20,6 +20,8 @@ type GenericPageContext struct {
 	Packages             interface{} // Can be []*AggPackage or []PackageData
 	Licenses             []*AggLicense
 	UseFlags             []*AggUseFlag
+	UseExpandDescs        map[string]*g2.UseExpandDesc
+	UseExpandDesc         *g2.UseExpandDesc
 	Projects             []*AggProject
 	Eclass               *AggEclass
 	Eclasses             []*AggEclass

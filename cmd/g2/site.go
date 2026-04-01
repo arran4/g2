@@ -73,7 +73,7 @@ type SiteData struct {
 	Projects          *g2.Projects
 	Categories        []CategoryData
 	Profiles          []ProfileData
-	Eclasses          []EclassData
+	DefinedEclasses   []EclassData
 	AggEclasses       []*AggEclass
 	Authors           []g2.Author
 	AuthorsURL        string
@@ -85,10 +85,13 @@ type SiteData struct {
 	QAPolicy          *g2.QAPolicy
 	UseDesc           *g2.UseDesc
 	UseLocalDesc      *g2.UseLocalDesc
+	UseExpandDescs    map[string]*g2.UseExpandDesc
+	ValidUseExpands   map[string]bool
 	ArchList          *g2.ArchList
 	ArchesDesc        *g2.ArchesDesc
 	InfoPkgs          []g2.InfoPkg
 	Deprecated        []g2.PackageDeprecated
+	ParsedEclasses    []*g2.Ebuild
 	PackageCount      int
 	AggUseFlags       []*AggUseFlag
 	ThirdPartyMirrors map[string][]string
@@ -696,6 +699,12 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool, r
 		}
 	}
 
+	var useExpandDescs map[string]*g2.UseExpandDesc
+	if descs, err := g2.ParseUseExpandDescFS(sysFS, filepath.ToSlash(filepath.Join(repoDir, "profiles", "desc"))); err == nil {
+		useExpandDescs = descs
+	} else if !os.IsNotExist(err) {
+		log.Printf("Warning: failed to parse use expand desc: %v", err)
+	}
 	var useLocalDesc *g2.UseLocalDesc
 	if f, err := sysFS.Open(filepath.ToSlash(filepath.Join(repoDir, "profiles", "use.local.desc"))); err == nil {
 		defer func() { _ = f.Close() }()
@@ -760,6 +769,8 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool, r
 		QAPolicy:          qa,
 		UseDesc:           useDesc,
 		UseLocalDesc:      useLocalDesc,
+		UseExpandDescs:    useExpandDescs,
+		ValidUseExpands:   make(map[string]bool),
 		ArchList:          archList,
 		ArchesDesc:        archesDesc,
 		ThirdPartyMirrors: thirdPartyMirrors,
@@ -767,6 +778,12 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool, r
 		InfoVars:          infoVars,
 		InfoPkgs:          infoPkgs,
 		PackageCount:      0,
+	}
+
+	if site.UseExpandDescs != nil {
+		for prefix := range site.UseExpandDescs {
+			site.ValidUseExpands[prefix] = true
+		}
 	}
 
 	// Calculate PackageCount correctly after parsing all categories
@@ -833,6 +850,22 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool, r
 		log.Printf("Warning: failed to parse profiles dir: %v", err)
 	}
 	site.Profiles = profilesData
+
+	eclassDir := filepath.Join(repoDir, "eclass")
+	eclassEntries, err := fs.ReadDir(sysFS, filepath.ToSlash(eclassDir))
+	if err == nil {
+		for _, eclassEntry := range eclassEntries {
+			if !eclassEntry.IsDir() && strings.HasSuffix(eclassEntry.Name(), ".eclass") {
+				eclassName := strings.TrimSuffix(eclassEntry.Name(), ".eclass")
+				site.DefinedEclasses = append(site.DefinedEclasses, EclassData{
+					Name: eclassName,
+				})
+			}
+		}
+		sort.Slice(site.DefinedEclasses, func(i, j int) bool {
+			return site.DefinedEclasses[i].Name < site.DefinedEclasses[j].Name
+		})
+	}
 
 	supportedCategories := make(map[string]bool)
 	categoriesBytes, err := fs.ReadFile(sysFS, filepath.ToSlash(filepath.Join(repoDir, "profiles", "categories")))
@@ -1247,6 +1280,7 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool, r
 	}
 
 	extractVirtualDeps(site)
+
 	return site, nil
 }
 
@@ -1580,7 +1614,7 @@ func getRepoEclasses(site *SiteData, aggPackages map[string]*AggPackage) []*AggE
 	eclassMap := make(map[string]*AggEclass)
 	seenPackages := make(map[string]map[string]bool)
 
-	for _, eclass := range site.Eclasses {
+	for _, eclass := range site.DefinedEclasses {
 		if _, ok := eclassMap[eclass.Name]; !ok {
 			eclassMap[eclass.Name] = &AggEclass{
 				Name:  eclass.Name,
@@ -1751,6 +1785,19 @@ func getRepoUseFlags(site *SiteData, aggPackages map[string]*AggPackage) []*AggU
 		}
 	}
 
+	// Integrate USE_EXPAND descriptions
+	if site.UseExpandDescs != nil {
+		for prefix, desc := range site.UseExpandDescs {
+			for suffix, text := range desc.Flags {
+				flagName := prefix + "_" + suffix
+				if aggFlag, ok := aggUseFlags[flagName]; ok {
+					if aggFlag.GlobalDesc == "" {
+						aggFlag.GlobalDesc = text
+					}
+				}
+			}
+		}
+	}
 	if site.UseLocalDesc != nil {
 		for pkg, flags := range site.UseLocalDesc.Flags {
 			for flag, desc := range flags {
@@ -1866,7 +1913,9 @@ type AggregatedData struct {
 	RecentNews    []AggNewsItem
 	TotalPackages int
 	UseFlags      []*AggUseFlag
+	UseExpandDescs map[string]*g2.UseExpandDesc
 	ValidLicenses map[string]bool
+	ValidUseExpands map[string]bool
 }
 
 func prepareAggregatedData(sites []*SiteData) *AggregatedData {
@@ -1879,8 +1928,16 @@ func prepareAggregatedData(sites []*SiteData) *AggregatedData {
 	aggMoves := make(map[string]*AggPackageMove)
 	aggEclasses := make(map[string]*AggEclass)
 	var globalNews []AggNewsItem
+	aggUseExpandDescs := make(map[string]*g2.UseExpandDesc)
 
 	for _, site := range sites {
+		if site.UseExpandDescs != nil {
+			for prefix, desc := range site.UseExpandDescs {
+				if _, ok := aggUseExpandDescs[prefix]; !ok {
+					aggUseExpandDescs[prefix] = desc
+				}
+			}
+		}
 		if site.Projects != nil {
 			for i := range site.Projects.Projects {
 				proj := &site.Projects.Projects[i]
@@ -2081,8 +2138,6 @@ func prepareAggregatedData(sites []*SiteData) *AggregatedData {
 				foundPkg := false
 				for _, existingPkg := range aggEclasses[eclass.Name].Packages {
 					if existingPkg.Name == pkg.Name && existingPkg.Category == pkg.Category {
-						// Create a new map to avoid modifying the original package's map
-						// which might be shared across multiple eclasses
 						newRepos := make(map[string]*SiteData)
 						for k, v := range existingPkg.Repos {
 							newRepos[k] = v
@@ -2096,7 +2151,6 @@ func prepareAggregatedData(sites []*SiteData) *AggregatedData {
 					}
 				}
 				if !foundPkg {
-					// Add a copy of the package with its own Repos map to avoid aliasing
 					newPkg := *pkg
 					newRepos := make(map[string]*SiteData)
 					for k, v := range pkg.Repos {
@@ -2129,6 +2183,12 @@ func prepareAggregatedData(sites []*SiteData) *AggregatedData {
 
 	sortedUseFlags, _ := AggregateUseFlags(sites, aggPackages)
 
+	validUseExpands := make(map[string]bool)
+	for _, site := range sites {
+		for prefix := range site.ValidUseExpands {
+			validUseExpands[prefix] = true
+		}
+	}
 	validLicenses := make(map[string]bool)
 	var sortedLicenses []*AggLicense
 	for _, l := range aggLicenses {
@@ -2203,6 +2263,8 @@ func prepareAggregatedData(sites []*SiteData) *AggregatedData {
 		TotalPackages: totalPackages,
 		UseFlags:      sortedUseFlags,
 		ValidLicenses: validLicenses,
+		UseExpandDescs: aggUseExpandDescs,
+		ValidUseExpands: validUseExpands,
 	}
 }
 
@@ -2620,6 +2682,37 @@ func generateOtherGlobalPages(outDir string, tmpl *template.Template, data *Aggr
 		}
 	}
 
+	if len(data.UseExpandDescs) > 0 {
+		if err := os.MkdirAll(filepath.Join(outDir, "uses_expand"), 0755); err != nil {
+			return fmt.Errorf("creating directory: %w", err)
+		}
+		if err := renderPage(filepath.Join(outDir, "uses_expand", "index.html"), tmpl, "use_expands.html", GenericPageContext{
+			Title:       "USE_EXPAND Flags",
+			BaseURL:     "../",
+			Breadcrumbs: []Breadcrumb{{Name: title, URL: "../"}, {Name: "USE_EXPAND Flags"}},
+			UseExpandDescs: data.UseExpandDescs,
+			Version:     version,
+			GenInfo:     genInfo,
+		}); err != nil {
+			return fmt.Errorf("rendering page: %w", err)
+		}
+		for prefix, desc := range data.UseExpandDescs {
+			useExpandDir := filepath.Join(outDir, "uses_expand", prefix)
+			if err := os.MkdirAll(useExpandDir, 0755); err != nil {
+				return fmt.Errorf("creating directory %s: %w", useExpandDir, err)
+			}
+			if err := renderPage(filepath.Join(useExpandDir, "index.html"), tmpl, "use_expand.html", GenericPageContext{
+				Title:       "USE_EXPAND: " + prefix,
+				BaseURL:     "../../",
+				Breadcrumbs: []Breadcrumb{{Name: title, URL: "../../"}, {Name: "USE_EXPAND Flags", URL: "../"}, {Name: prefix}},
+				UseExpandDesc: desc,
+				Version:     version,
+				GenInfo:     genInfo,
+			}); err != nil {
+				return fmt.Errorf("rendering page: %w", err)
+			}
+		}
+	}
 	if err := renderPage(filepath.Join(outDir, "licenses", "index.html"), tmpl, "licenses.html", GenericPageContext{
 		Title:       "Licenses",
 		BaseURL:     "../",
@@ -2663,46 +2756,7 @@ func generateOtherGlobalPages(outDir string, tmpl *template.Template, data *Aggr
 		}
 	}
 
-	// 5b. Global Eclasses
-	if len(data.Eclasses) > 0 {
-		if err := os.MkdirAll(filepath.Join(outDir, "eclasses"), 0755); err != nil {
-			return fmt.Errorf("creating directory: %w", err)
-		}
-		if err := renderPage(filepath.Join(outDir, "eclasses", "index.html"), tmpl, "eclasses.html", GenericPageContext{
-			Title:       "Eclasses",
-			BaseURL:     "../",
-			Breadcrumbs: []Breadcrumb{{Name: title, URL: "../"}, {Name: "Eclasses"}},
-			Eclasses:    data.Eclasses,
-			Version:     version,
-			GenInfo:     genInfo,
-		}); err != nil {
-			return fmt.Errorf("rendering page: %w", err)
-		}
-
-		for _, ec := range data.Eclasses {
-			ecDirName := sanitizeFilename(ec.Name)
-			if ecDirName == "" {
-				continue
-			}
-			ecDir := filepath.Join(outDir, "eclasses", ecDirName)
-			if err := os.MkdirAll(ecDir, 0755); err != nil {
-				return fmt.Errorf("creating directory %s: %w", ecDir, err)
-			}
-
-			if err := renderPage(filepath.Join(ecDir, "index.html"), tmpl, "eclass.html", GenericPageContext{
-				Title:       "Eclass: " + ec.Name,
-				BaseURL:     "../../",
-				Breadcrumbs: []Breadcrumb{{Name: title, URL: "../../"}, {Name: "Eclasses", URL: "../"}, {Name: ec.Name}},
-				Eclass:      ec,
-				Version:     version,
-				GenInfo:     genInfo,
-			}); err != nil {
-				return fmt.Errorf("rendering page: %w", err)
-			}
-		}
-	}
-
-	// 5c. Global Projects
+	// 5b. Global Projects
 	if len(data.Projects) > 0 {
 		if err := os.MkdirAll(filepath.Join(outDir, "projects"), 0755); err != nil {
 			return fmt.Errorf("creating directory: %w", err)
@@ -2798,6 +2852,38 @@ func generateRepoPages(outDir string, tmpl *template.Template, sites []*SiteData
 			}
 		}
 
+		if len(site.UseExpandDescs) > 0 {
+			if err := os.MkdirAll(filepath.Join(repoDir, "uses_expand"), 0755); err != nil {
+				return fmt.Errorf("creating directory: %w", err)
+			}
+			if err := renderPage(filepath.Join(repoDir, "uses_expand", "index.html"), tmpl, "repo_use_expands.html", GenericPageContext{
+				Title:       site.RepoName + " - USE_EXPAND Flags",
+				BaseURL:     "../../../",
+				Breadcrumbs: []Breadcrumb{{Name: title, URL: "../../../"}, {Name: site.RepoName, URL: "../"}, {Name: "USE_EXPAND Flags"}},
+				Repo:        site,
+				Version:     version,
+				GenInfo:     genInfo,
+			}); err != nil {
+				return fmt.Errorf("rendering page: %w", err)
+			}
+			for prefix, desc := range site.UseExpandDescs {
+				useExpandDir := filepath.Join(repoDir, "uses_expand", prefix)
+				if err := os.MkdirAll(useExpandDir, 0755); err != nil {
+					return fmt.Errorf("creating directory %s: %w", useExpandDir, err)
+				}
+				if err := renderPage(filepath.Join(useExpandDir, "index.html"), tmpl, "repo_use_expand.html", GenericPageContext{
+					Title:       site.RepoName + " - USE_EXPAND: " + prefix,
+					BaseURL:     "../../../../",
+					Breadcrumbs: []Breadcrumb{{Name: title, URL: "../../../../"}, {Name: site.RepoName, URL: "../../"}, {Name: "USE_EXPAND Flags", URL: "../"}, {Name: prefix}},
+					Repo:        site,
+					UseExpandDesc: desc,
+					Version:     version,
+					GenInfo:     genInfo,
+				}); err != nil {
+					return fmt.Errorf("rendering page: %w", err)
+				}
+			}
+		}
 		if len(site.Deprecated) > 0 {
 			if err := os.MkdirAll(filepath.Join(repoDir, "deprecated"), 0755); err != nil {
 				return fmt.Errorf("creating directory: %w", err)
@@ -3322,7 +3408,6 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 		return fmt.Errorf("loading templates: %w", err)
 	}
 
-	// Pre-compute AggPackages for each site to resolve AggEclasses properly
 	for _, site := range sites {
 		aggPackagesMap := make(map[string]*AggPackage)
 		for _, cat := range site.Categories {

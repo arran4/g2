@@ -20,7 +20,7 @@
                 {{range .Eclasses}}
                     <tr>
                         <td>
-                            <a href="{{.Name}}/" class="fw-bold">{{.Name}}</a>
+                            <a href="{{$.BaseURL}}repos/{{$.Repo.RepoName}}/eclasses/{{.Name}}/" class="fw-bold">{{.Name}}</a>
                         </td>
                         <td>
                             <span class="badge bg-secondary">{{len .Packages}}</span>

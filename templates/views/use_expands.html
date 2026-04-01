@@ -1,0 +1,28 @@
+<div class="header">
+    <h2>{{.Title}}</h2>
+    <div class="breadcrumbs">
+        {{range $index, $bc := .Breadcrumbs}}
+        {{if $index}} &gt; {{end}}
+        {{if $bc.URL}}<a href="{{$bc.URL}}">{{$bc.Name}}</a>{{else}}{{$bc.Name}}{{end}}
+        {{end}}
+    </div>
+</div>
+
+<div class="content">
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>USE_EXPAND Prefix</th>
+                <th>Flags Count</th>
+            </tr>
+        </thead>
+        <tbody>
+            {{range $prefix, $desc := .UseExpandDescs}}
+            <tr>
+                <td><a href="{{$.BaseURL}}uses_expand/{{$prefix}}/">{{$prefix}}</a></td>
+                <td>{{len $desc.Flags}}</td>
+            </tr>
+            {{end}}
+        </tbody>
+    </table>
+</div>
