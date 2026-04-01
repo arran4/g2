@@ -42,6 +42,8 @@ type GenericPageContext struct {
 	ProfilePath          string
 	ProfileList          interface{} // Can be []AggProfileRepo
 	Profile              interface{}
+	FileName             string
+	FileContent          string
 	Arch                 *AggArch
 	UseFlag              interface{}
 	License              map[string]interface{}

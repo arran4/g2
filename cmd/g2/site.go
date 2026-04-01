@@ -13,6 +13,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	path2 "path"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -58,6 +59,7 @@ type ProfileData struct {
 	DescStat string
 	Parents  []string
 	Children []string
+	Files    map[string]string // Maps filename to its content
 }
 
 type EclassData struct {
@@ -854,12 +856,12 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool, r
 	}
 
 	var profilesDescEntries []ProfileDescEntry
-	profilesDescBytes, err := os.ReadFile(filepath.Join(repoDir, "profiles", "profiles.desc"))
+	profilesDescBytes, err := fs.ReadFile(sysFS, filepath.ToSlash(filepath.Join(repoDir, "profiles", "profiles.desc")))
 	if err == nil {
 		profilesDescEntries = parseProfilesDesc(string(profilesDescBytes))
 	}
 
-	profilesData, err := parseProfilesDir(repoDir, profilesDescEntries)
+	profilesData, err := parseProfilesDirFS(sysFS, repoDir, profilesDescEntries)
 	if err != nil {
 		log.Printf("Warning: failed to parse profiles dir: %v", err)
 	}
@@ -1494,9 +1496,13 @@ func buildManifestData(manifest *g2.Manifest, versions []VersionData, thirdParty
 }
 
 func parseProfilesDir(repoDir string, entries []ProfileDescEntry) ([]ProfileData, error) {
-	profilesDir := filepath.Join(repoDir, "profiles")
+	return parseProfilesDirFS(os.DirFS(repoDir), ".", entries)
+}
 
-	if info, err := os.Stat(profilesDir); err != nil || !info.IsDir() {
+func parseProfilesDirFS(sysFS fs.FS, repoDir string, entries []ProfileDescEntry) ([]ProfileData, error) {
+	profilesDir := path2.Join(repoDir, "profiles")
+
+	if info, err := fs.Stat(sysFS, profilesDir); err != nil || !info.IsDir() {
 		return nil, nil
 	}
 
@@ -1507,21 +1513,23 @@ func parseProfilesDir(repoDir string, entries []ProfileDescEntry) ([]ProfileData
 
 	profilesMap := make(map[string]*ProfileData)
 
-	err := filepath.Walk(profilesDir, func(path string, info os.FileInfo, err error) error {
+	err := fs.WalkDir(sysFS, profilesDir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return nil
 		}
-		if !info.IsDir() {
+		if !d.IsDir() {
 			return nil
 		}
 
-		relPath, err := filepath.Rel(profilesDir, path)
-		if err != nil || relPath == "." {
+		relPath := strings.TrimPrefix(path, profilesDir)
+		relPath = strings.TrimPrefix(relPath, "/")
+		if relPath == "" || relPath == "." {
 			return nil
 		}
 
 		pData := &ProfileData{
-			Path: relPath,
+			Path:  relPath,
+			Files: make(map[string]string),
 		}
 
 		if desc, ok := descMap[relPath]; ok {
@@ -1530,18 +1538,30 @@ func parseProfilesDir(repoDir string, entries []ProfileDescEntry) ([]ProfileData
 			pData.DescStat = desc.Status
 		}
 
-		parentBytes, err := os.ReadFile(filepath.Join(path, "parent"))
-		if err == nil {
-			lines := strings.Split(string(parentBytes), "\n")
-			for _, line := range lines {
-				line = strings.TrimSpace(line)
-				if line == "" || strings.HasPrefix(line, "#") {
-					continue
-				}
+		// Read commonly known files
+		fileNames := []string{
+			"parent", "eapi", "make.defaults", "package.mask", "package.use",
+			"package.use.force", "package.use.mask", "package.use.stable.force",
+			"package.use.stable.mask", "packages", "use.force", "use.mask",
+			"use.stable.force", "use.stable.mask",
+		}
 
-				parentRelPath := filepath.Clean(filepath.Join(relPath, line))
-				if !strings.HasPrefix(parentRelPath, "..") {
-					pData.Parents = append(pData.Parents, parentRelPath)
+		for _, fname := range fileNames {
+			b, err := fs.ReadFile(sysFS, path2.Join(path, fname))
+			if err == nil {
+				pData.Files[fname] = string(b)
+				if fname == "parent" {
+					lines := strings.Split(string(b), "\n")
+					for _, line := range lines {
+						line = strings.TrimSpace(line)
+						if line == "" || strings.HasPrefix(line, "#") {
+							continue
+						}
+						parentRelPath := path2.Clean(path2.Join(relPath, line))
+						if !strings.HasPrefix(parentRelPath, "..") {
+							pData.Parents = append(pData.Parents, parentRelPath)
+						}
+					}
 				}
 			}
 		}
@@ -1911,6 +1931,7 @@ type AggProfile struct {
 	DescArch string
 	DescStat string
 	Repos    []AggProfileRepo
+	Files    map[string]string // Maps filename to its content
 }
 
 type AggEclass struct {
@@ -3096,6 +3117,23 @@ func generateRepoPages(outDir string, tmpl *template.Template, sites []*SiteData
 					GenInfo:     genInfo,
 				}); err != nil {
 					return fmt.Errorf("rendering page: %w", err)
+				}
+
+				for fName, fContent := range p.Files {
+					if err := renderPage(filepath.Join(profDir, fName+".html"), tmpl, "repo_profile_file.html", GenericPageContext{
+						Title:       site.RepoName + " - Profile File: " + fName,
+						BaseURL:     relToRoot,
+						Breadcrumbs: []Breadcrumb{{Name: title, URL: relToRoot}, {Name: site.RepoName, URL: relToRoot + "repos/" + site.RepoName + "/"}, {Name: "Profiles", URL: relToRoot + "repos/" + site.RepoName + "/profiles/"}, {Name: p.Path, URL: "index.html"}, {Name: fName}},
+						RepoName:    site.RepoName,
+						ProfilePath: p.Path,
+						Profile:     p,
+						FileName:    fName,
+						FileContent: fContent,
+						Version:     version,
+						GenInfo:     genInfo,
+					}); err != nil {
+						return fmt.Errorf("rendering page: %w", err)
+					}
 				}
 			}
 		}
