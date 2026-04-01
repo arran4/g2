@@ -25,6 +25,9 @@ func (cfg *MainArgConfig) cmdUse(args []string) error {
 		fmt.Printf("\t\t %s \t\t %s\n", "local-desc-remove", "Remove a USE local flag description from use.local.desc")
 		fmt.Printf("\t\t %s \t\t %s\n", "local-desc-edit", "Edit a USE local flag description in use.local.desc")
 		fmt.Printf("\t\t %s \t\t %s\n", "local-desc-list", "List all USE local flag descriptions from use.local.desc")
+		fmt.Printf("\t\t %s \t\t %s\n", "expand-desc-add", "Add a USE_EXPAND flag description")
+		fmt.Printf("\t\t %s \t\t %s\n", "expand-desc-remove", "Remove a USE_EXPAND flag description")
+		fmt.Printf("\t\t %s \t\t %s\n", "expand-desc-list", "List all USE_EXPAND flag descriptions")
 	}
 
 	if err := fs.Parse(args); err != nil {
@@ -52,6 +55,12 @@ func (cfg *MainArgConfig) cmdUse(args []string) error {
 		return cfg.cmdUseLocalDescRemove(fs.Args()[1:])
 	case "local-desc-list":
 		return cfg.cmdUseLocalDescList(fs.Args()[1:])
+	case "expand-desc-add", "expand-desc-edit":
+		return cfg.cmdUseExpandDescAdd(fs.Args()[1:])
+	case "expand-desc-remove":
+		return cfg.cmdUseExpandDescRemove(fs.Args()[1:])
+	case "expand-desc-list":
+		return cfg.cmdUseExpandDescList(fs.Args()[1:])
 	case "discover":
 		return cfg.cmdUseDiscover(fs.Args()[1:])
 	default:
@@ -463,6 +472,99 @@ func (cfg *MainArgConfig) cmdUseLocalDescList(args []string) error {
 		for k, v := range flags {
 			fmt.Printf("%s:%s - %s\n", pkg, k, v)
 		}
+	}
+
+	return nil
+}
+
+func (cfg *MainArgConfig) cmdUseExpandDescAdd(args []string) error {
+	fs := flag.NewFlagSet("expand-desc-add/edit", flag.ExitOnError)
+	file := fs.String("file", "", "Path to desc file (e.g. profiles/desc/abi_mips.desc)")
+	flagName := fs.String("flag", "", "USE_EXPAND flag name")
+	desc := fs.String("desc", "", "USE_EXPAND flag description")
+
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+
+	if *file == "" || *flagName == "" || *desc == "" {
+		return fmt.Errorf("all -file, -flag, and -desc must be provided")
+	}
+
+	name := strings.TrimSuffix(filepath.Base(*file), ".desc")
+
+	ud, err := g2.ParseUseExpandDescFile(*file, name)
+	if err != nil {
+		return fmt.Errorf("parsing %s: %w", *file, err)
+	}
+
+	if ud.Flags == nil {
+		ud.Flags = make(map[string]string)
+	}
+	ud.Flags[*flagName] = *desc
+
+	if err := ud.WriteFile(*file); err != nil {
+		return fmt.Errorf("writing %s: %w", *file, err)
+	}
+
+	log.Printf("Successfully added/edited USE_EXPAND flag '%s' in %s", *flagName, *file)
+	return nil
+}
+
+func (cfg *MainArgConfig) cmdUseExpandDescRemove(args []string) error {
+	fs := flag.NewFlagSet("expand-desc-remove", flag.ExitOnError)
+	file := fs.String("file", "", "Path to desc file (e.g. profiles/desc/abi_mips.desc)")
+	flagName := fs.String("flag", "", "USE_EXPAND flag name to remove")
+
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+
+	if *file == "" || *flagName == "" {
+		return fmt.Errorf("both -file and -flag must be provided")
+	}
+
+	name := strings.TrimSuffix(filepath.Base(*file), ".desc")
+
+	ud, err := g2.ParseUseExpandDescFile(*file, name)
+	if err != nil {
+		return fmt.Errorf("parsing %s: %w", *file, err)
+	}
+
+	if _, ok := ud.Flags[*flagName]; ok {
+		delete(ud.Flags, *flagName)
+		if err := ud.WriteFile(*file); err != nil {
+			return fmt.Errorf("writing %s: %w", *file, err)
+		}
+		log.Printf("Successfully removed USE_EXPAND flag '%s' from %s", *flagName, *file)
+	} else {
+		log.Printf("USE_EXPAND flag '%s' not found in %s", *flagName, *file)
+	}
+
+	return nil
+}
+
+func (cfg *MainArgConfig) cmdUseExpandDescList(args []string) error {
+	fs := flag.NewFlagSet("expand-desc-list", flag.ExitOnError)
+	file := fs.String("file", "", "Path to desc file (e.g. profiles/desc/abi_mips.desc)")
+
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+
+	if *file == "" {
+		return fmt.Errorf("-file must be provided")
+	}
+
+	name := strings.TrimSuffix(filepath.Base(*file), ".desc")
+
+	ud, err := g2.ParseUseExpandDescFile(*file, name)
+	if err != nil {
+		return fmt.Errorf("parsing %s: %w", *file, err)
+	}
+
+	for k, v := range ud.Flags {
+		fmt.Printf("%s - %s\n", k, v)
 	}
 
 	return nil

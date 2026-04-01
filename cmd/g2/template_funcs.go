@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"html/template"
 	"net/url"
+	"sort"
 	"strings"
 	"time"
 )
@@ -18,6 +19,7 @@ func getTemplateFuncMap() template.FuncMap {
 		"split":               strings.Split,
 		"formatKeywords":      formatKeywordsFunc,
 		"hasPrefix":           strings.HasPrefix,
+		"groupIUSEFlags":      groupIUSEFlagsFunc,
 	}
 }
 
@@ -52,4 +54,45 @@ func buildOwnerEmailLinkFunc(remoteURL, email string) string {
 		return remoteURL
 	}
 	return ""
+}
+
+type UseFlagGroup struct {
+	Name  string
+	Flags []ParsedIUSEFlag
+}
+
+func groupIUSEFlagsFunc(flags []ParsedIUSEFlag, useExpandPrefixes map[string]bool) []UseFlagGroup {
+	groups := make(map[string][]ParsedIUSEFlag)
+	var globalFlags []ParsedIUSEFlag
+
+	for _, f := range flags {
+		var matchedPrefix string
+		for prefix := range useExpandPrefixes {
+			if strings.HasPrefix(f.Name, prefix+"_") {
+				if len(prefix) > len(matchedPrefix) {
+					matchedPrefix = prefix
+				}
+			}
+		}
+
+		if matchedPrefix != "" {
+			groups[matchedPrefix] = append(groups[matchedPrefix], f)
+		} else {
+			globalFlags = append(globalFlags, f)
+		}
+	}
+
+	var result []UseFlagGroup
+	if len(globalFlags) > 0 {
+		result = append(result, UseFlagGroup{Name: "global", Flags: globalFlags})
+	}
+	var groupNames []string
+	for name := range groups {
+		groupNames = append(groupNames, name)
+	}
+	sort.Strings(groupNames)
+	for _, name := range groupNames {
+		result = append(result, UseFlagGroup{Name: name, Flags: groups[name]})
+	}
+	return result
 }
