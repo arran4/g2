@@ -23,6 +23,7 @@ import (
 	"github.com/arran4/g2"
 	"github.com/arran4/g2/lints"
 	"github.com/arran4/g2/lints/ebuild"
+	"github.com/go-git/go-git/v5"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -226,6 +227,7 @@ func (cfg *MainArgConfig) cmdOverlay(args []string) error {
 	recentDurOpt := fs.String("recent-duration", "3mo", "Duration to consider an update 'recent' (e.g. 3mo, 14d, 72h)")
 	fastGit := fs.Bool("fast-git-modtime", false, "Use fast (O(1)) but potentially less reliable go-git file log lookup")
 	useZip := fs.Bool("use-zip", false, "Download zip archives instead of git clone when supported")
+	useMemory := fs.Bool("use-memory", false, "Use pure memory based git checkout for speed")
 
 	if err := fs.Parse(args[2:]); err != nil {
 		return fmt.Errorf("parsing flags: %w", err)
@@ -255,42 +257,68 @@ func (cfg *MainArgConfig) cmdOverlay(args []string) error {
 	var siteData *SiteData
 
 	if isRemote {
-		tmpDir, err := os.MkdirTemp("", "g2-overlay-*")
-		if err != nil {
-			return fmt.Errorf("creating temp dir: %w", err)
+		if *useMemory {
+			cleanup = func() {}
+			log.Printf("Cloning remote repository into memory: %s", location)
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+			defer cancel()
+
+			t0 := time.Now()
+			repo, bfs, err := FetchRepoMemory(ctx, location, 0)
+			if err != nil {
+				return fmt.Errorf("cloning repository into memory: %w", err)
+			}
+			checkoutTime := time.Since(t0)
+
+			sysFS := NewBillyFS(bfs)
+
+			t1 := time.Now()
+			siteData, err = parseRepo(sysFS, ".", "Gentoo Packages", *fastGit, nil, SourceURL(location), repo)
+			if err != nil {
+				return fmt.Errorf("parsing repo from memory: %w", err)
+			}
+			processTime := time.Since(t1)
+
+			siteData.CheckoutTime = checkoutTime.String()
+			siteData.ProcessTime = processTime.String()
+			siteData.GitSize = "Memory"
+		} else {
+			tmpDir, err := os.MkdirTemp("", "g2-overlay-*")
+			if err != nil {
+				return fmt.Errorf("creating temp dir: %w", err)
+			}
+			cleanup = func() { _ = os.RemoveAll(tmpDir) }
+
+			log.Printf("Cloning remote repository: %s", location)
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+			defer cancel()
+
+			t0 := time.Now()
+			if err := FetchRepo(ctx, location, tmpDir, *useZip, 0); err != nil {
+				cleanup()
+				return fmt.Errorf("cloning repository: %w", err)
+			}
+			checkoutTime := time.Since(t0)
+
+			parseLocation = tmpDir
+
+			size, err := getDirSize(parseLocation)
+			var gitSize string
+			if err == nil {
+				gitSize = fmt.Sprintf("%.2f MB", float64(size)/(1024*1024))
+			}
+
+			t1 := time.Now()
+			siteData, err = parseRepo(os.DirFS(parseLocation), ".", "Gentoo Packages", *fastGit, nil, SourceURL(location))
+			if err != nil {
+				return fmt.Errorf("parsing repo: %w", err)
+			}
+			processTime := time.Since(t1)
+
+			siteData.CheckoutTime = checkoutTime.String()
+			siteData.ProcessTime = processTime.String()
+			siteData.GitSize = gitSize
 		}
-		cleanup = func() { _ = os.RemoveAll(tmpDir) }
-
-		log.Printf("Cloning remote repository: %s", location)
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
-		defer cancel()
-
-		t0 := time.Now()
-		if err := FetchRepo(ctx, location, tmpDir, *useZip, 0); err != nil {
-			cleanup()
-			return fmt.Errorf("cloning repository: %w", err)
-		}
-		checkoutTime := time.Since(t0)
-
-		parseLocation = tmpDir
-
-		size, err := getDirSize(parseLocation)
-		var gitSize string
-		if err == nil {
-			gitSize = fmt.Sprintf("%.2f MB", float64(size)/(1024*1024))
-		}
-
-		t1 := time.Now()
-		siteData, err = parseRepo(os.DirFS(parseLocation), ".", "Gentoo Packages", *fastGit, nil, SourceURL(location))
-		if err != nil {
-			return fmt.Errorf("parsing repo: %w", err)
-		}
-		processTime := time.Since(t1)
-
-		siteData.CheckoutTime = checkoutTime.String()
-		siteData.ProcessTime = processTime.String()
-		siteData.GitSize = gitSize
-
 	} else {
 		parseLocation = location
 		cleanup = func() {}
@@ -346,6 +374,7 @@ func (cfg *MainArgConfig) cmdOverlays(args []string) error {
 	recentDurOpt := fs.String("recent-duration", "3mo", "Duration to consider an update 'recent' (e.g. 3mo, 14d, 72h)")
 	fastGit := fs.Bool("fast-git-modtime", false, "Use fast (O(1)) but potentially less reliable go-git file log lookup")
 	useZip := fs.Bool("use-zip", false, "Download zip archives instead of git clone when supported")
+	useMemory := fs.Bool("use-memory", false, "Use pure memory based git checkout for speed")
 	concurrency := fs.Int("concurrency", 4, "Maximum number of concurrent repository fetches/parses")
 	retries := fs.Int("retries", 3, "Number of times to retry fetching a repository")
 	continueOnError := fs.Bool("continue-on-error", true, "Continue parsing other repositories even if fetching one fails")
@@ -370,7 +399,7 @@ func (cfg *MainArgConfig) cmdOverlays(args []string) error {
 	}
 
 	log.Printf("Generating site (v%s) from remote repositories: %s into %s", version, location, *outDir)
-	return cfg.cmdSiteRemote(location, *outDir, recentDuration, recentDurationStr, *fastGit, *useZip, *concurrency, *retries, *continueOnError)
+	return cfg.cmdSiteRemote(location, *outDir, recentDuration, recentDurationStr, *fastGit, *useZip, *useMemory, *concurrency, *retries, *continueOnError)
 }
 
 func parseLayoutConfFromFS(sysFS fs.FS, path string) (*g2.LayoutConf, error) {
@@ -586,10 +615,13 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool, r
 	var repoName string
 	var remoteURL string
 
+	var gitRepo *git.Repository
 	for _, opt := range opts {
 		switch o := opt.(type) {
 		case SourceURL:
 			remoteURL = string(o)
+		case *git.Repository:
+			gitRepo = o
 		}
 	}
 
@@ -605,7 +637,7 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool, r
 		remoteURL = ""
 
 		// 1. Git origin URL
-		gitURL, err := getGitOriginURL(repoDir)
+		gitURL, err := getGitOriginURL(repoDir, gitRepo)
 		if err == nil && !isUselessURL(gitURL) {
 			remoteURL = gitURL
 		}
@@ -822,7 +854,7 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool, r
 		if authors, err := g2.ParseAuthors(authorsFile); err == nil {
 			site.Authors = authors
 			if remoteURL != "" {
-				commitHash, err := getFileCommit(repoDir, "metadata/AUTHORS")
+				commitHash, err := getFileCommit(repoDir, "metadata/AUTHORS", gitRepo)
 				if err == nil && commitHash != "" {
 					site.AuthorsURL = generateGitHubRawURL(remoteURL, commitHash, "metadata/AUTHORS")
 				}
@@ -967,13 +999,13 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool, r
 				var ebuildRawURL string
 				relPath, _ := filepath.Rel(repoDir, ebuildPath)
 				if remoteURL != "" {
-					commitHash, _ := getFileCommit(repoDir, relPath)
+					commitHash, _ := getFileCommit(repoDir, relPath, gitRepo)
 					if commitHash != "" {
 						ebuildRawURL = generateGitHubRawURL(remoteURL, commitHash, relPath)
 					}
 				}
 
-				modTime := getFileModTime(repoDir, relPath, fastGit)
+				modTime := getFileModTime(repoDir, relPath, fastGit, gitRepo)
 				if modTime.After(pkgData.ModTime) {
 					pkgData.ModTime = modTime
 				}
@@ -1078,7 +1110,7 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool, r
 
 			if remoteURL != "" {
 				relPath, _ := filepath.Rel(repoDir, metaPath)
-				commitHash, _ := getFileCommit(repoDir, relPath)
+				commitHash, _ := getFileCommit(repoDir, relPath, gitRepo)
 				if commitHash != "" {
 					pkgData.MetadataRawURL = generateGitHubRawURL(remoteURL, commitHash, relPath)
 				}
@@ -1126,7 +1158,7 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool, r
 							}
 							if remoteURL != "" {
 								relPath, _ := filepath.Rel(repoDir, fd.Path)
-								commitHash, _ := getFileCommit(repoDir, relPath)
+								commitHash, _ := getFileCommit(repoDir, relPath, gitRepo)
 								if commitHash != "" {
 									fd.RawURL = generateGitHubRawURL(remoteURL, commitHash, relPath)
 								}
@@ -3314,7 +3346,7 @@ func renderPage(path string, tmpl *template.Template, name string, data interfac
 	return nil
 }
 
-func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, recentDuration time.Duration, recentDurationStr string, fastGit bool, useZip bool, concurrency int, retries int, continueOnError bool) error {
+func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, recentDuration time.Duration, recentDurationStr string, fastGit bool, useZip bool, useMemory bool, concurrency int, retries int, continueOnError bool) error {
 	var data []byte
 	var err error
 
@@ -3387,62 +3419,101 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, 
 		}
 
 		g.Go(func() error {
-			log.Printf("[START] Fetching remote repository: %s (%s)", repo.Name, gitUrl)
-
-			repoPath := filepath.Join(tmpDir, repo.Name)
-			defer func() { _ = os.RemoveAll(repoPath) }()
-
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 			defer cancel()
 
-			t0 := time.Now()
-			if err := FetchRepo(ctx, gitUrl, repoPath, useZip, retries); err != nil {
-				log.Printf("Failed to fetch %s: %v", repo.Name, err)
-				if !continueOnError {
-					return fmt.Errorf("fetching %s: %w", repo.Name, err)
+			if useMemory {
+				log.Printf("[START] Fetching remote repository into memory: %s (%s)", repo.Name, gitUrl)
+
+				t0 := time.Now()
+				gitRepo, bfs, err := FetchRepoMemory(ctx, gitUrl, retries)
+				if err != nil {
+					log.Printf("Failed to fetch %s in memory: %v", repo.Name, err)
+					if !continueOnError {
+						return fmt.Errorf("fetching %s in memory: %w", repo.Name, err)
+					}
+					return nil
 				}
+				checkoutTime := time.Since(t0)
+				log.Printf("[DONE] Finished fetching repository %s in memory in %s", repo.Name, checkoutTime)
+
+				log.Printf("[START] Parsing repository from memory: %s", repo.Name)
+
+				repoCopy := repo
+				sysFS := NewBillyFS(bfs)
+
+				t1 := time.Now()
+				siteData, err := parseRepo(sysFS, ".", repo.Name, fastGit, &repoCopy, SourceURL(gitUrl), gitRepo)
+				if err != nil {
+					log.Printf("Failed to parse repo %s from memory: %v", repo.Name, err)
+					return nil
+				}
+				processTime := time.Since(t1)
+				log.Printf("[DONE] Finished parsing repository %s from memory in %s", repo.Name, processTime)
+
+				siteData.CheckoutTime = checkoutTime.String()
+				siteData.ProcessTime = processTime.String()
+				siteData.GitSize = "Memory"
+
+				allSitesMu.Lock()
+				allSites = append(allSites, siteData)
+				allSitesMu.Unlock()
+				return nil
+			} else {
+				log.Printf("[START] Fetching remote repository: %s (%s)", repo.Name, gitUrl)
+
+				repoPath := filepath.Join(tmpDir, repo.Name)
+				defer func() { _ = os.RemoveAll(repoPath) }()
+
+				t0 := time.Now()
+				if err := FetchRepo(ctx, gitUrl, repoPath, useZip, retries); err != nil {
+					log.Printf("Failed to fetch %s: %v", repo.Name, err)
+					if !continueOnError {
+						return fmt.Errorf("fetching %s: %w", repo.Name, err)
+					}
+					return nil
+				}
+				checkoutTime := time.Since(t0)
+				freeSpace, err := getFreeSpace(repoPath)
+				if err == nil {
+					log.Printf("[DONE] Finished fetching repository %s in %s. Free space: %.2f MB", repo.Name, checkoutTime, float64(freeSpace)/(1024*1024))
+				} else {
+					log.Printf("[DONE] Finished fetching repository %s in %s", repo.Name, checkoutTime)
+				}
+
+				log.Printf("[START] Parsing repository: %s", repo.Name)
+
+				size, err := getDirSize(repoPath)
+				var gitSize string
+				if err == nil {
+					gitSize = fmt.Sprintf("%.2f MB", float64(size)/(1024*1024))
+				}
+
+				repoCopy := repo
+
+				t1 := time.Now()
+				siteData, err := parseRepo(os.DirFS(repoPath), ".", repo.Name, fastGit, &repoCopy, SourceURL(gitUrl))
+				if err != nil {
+					log.Printf("Failed to parse repo %s: %v", repo.Name, err)
+					return nil
+				}
+				processTime := time.Since(t1)
+				freeSpaceAfter, err := getFreeSpace(repoPath)
+				if err == nil {
+					log.Printf("[DONE] Finished parsing repository %s in %s. Free space: %.2f MB", repo.Name, processTime, float64(freeSpaceAfter)/(1024*1024))
+				} else {
+					log.Printf("[DONE] Finished parsing repository %s in %s", repo.Name, processTime)
+				}
+
+				siteData.CheckoutTime = checkoutTime.String()
+				siteData.ProcessTime = processTime.String()
+				siteData.GitSize = gitSize
+
+				allSitesMu.Lock()
+				allSites = append(allSites, siteData)
+				allSitesMu.Unlock()
 				return nil
 			}
-			checkoutTime := time.Since(t0)
-			freeSpace, err := getFreeSpace(repoPath)
-			if err == nil {
-				log.Printf("[DONE] Finished fetching repository %s in %s. Free space: %.2f MB", repo.Name, checkoutTime, float64(freeSpace)/(1024*1024))
-			} else {
-				log.Printf("[DONE] Finished fetching repository %s in %s", repo.Name, checkoutTime)
-			}
-
-			log.Printf("[START] Parsing repository: %s", repo.Name)
-
-			size, err := getDirSize(repoPath)
-			var gitSize string
-			if err == nil {
-				gitSize = fmt.Sprintf("%.2f MB", float64(size)/(1024*1024))
-			}
-
-			repoCopy := repo
-
-			t1 := time.Now()
-			siteData, err := parseRepo(os.DirFS(repoPath), ".", repo.Name, fastGit, &repoCopy, SourceURL(gitUrl))
-			if err != nil {
-				log.Printf("Failed to parse repo %s: %v", repo.Name, err)
-				return nil
-			}
-			processTime := time.Since(t1)
-			freeSpaceAfter, err := getFreeSpace(repoPath)
-			if err == nil {
-				log.Printf("[DONE] Finished parsing repository %s in %s. Free space: %.2f MB", repo.Name, processTime, float64(freeSpaceAfter)/(1024*1024))
-			} else {
-				log.Printf("[DONE] Finished parsing repository %s in %s", repo.Name, processTime)
-			}
-
-			siteData.CheckoutTime = checkoutTime.String()
-			siteData.ProcessTime = processTime.String()
-			siteData.GitSize = gitSize
-
-			allSitesMu.Lock()
-			allSites = append(allSites, siteData)
-			allSitesMu.Unlock()
-			return nil
 		})
 	}
 	if err := g.Wait(); err != nil {

@@ -12,9 +12,15 @@ import (
 	"github.com/go-git/go-git/v5/plumbing/object"
 )
 
-func getFileModTime(repoDir string, relPath string, fast bool) time.Time {
-	repo, err := git.PlainOpen(repoDir)
-	if err == nil {
+func getFileModTime(repoDir string, relPath string, fast bool, preOpenedRepo *git.Repository) time.Time {
+	var repo *git.Repository
+	var err error
+	if preOpenedRepo != nil {
+		repo = preOpenedRepo
+	} else {
+		repo, err = git.PlainOpen(repoDir)
+	}
+	if err == nil && repo != nil {
 		head, err := repo.Head()
 		if err == nil {
 			if fast {
@@ -85,7 +91,17 @@ func getFileModTime(repoDir string, relPath string, fast bool) time.Time {
 	return time.Now()
 }
 
-func getGitOriginURL(repoDir string) (string, error) {
+func getGitOriginURL(repoDir string, preOpenedRepo *git.Repository) (string, error) {
+	if preOpenedRepo != nil {
+		remote, err := preOpenedRepo.Remote("origin")
+		if err == nil && remote != nil {
+			if len(remote.Config().URLs) > 0 {
+				return remote.Config().URLs[0], nil
+			}
+		}
+		return "", fmt.Errorf("remote.origin.url not found in pre-opened repository")
+	}
+
 	cmd := exec.Command("git", "config", "--get", "remote.origin.url")
 	cmd.Dir = repoDir
 	out, err := cmd.Output()
@@ -99,7 +115,24 @@ func getGitOriginURL(repoDir string) (string, error) {
 	return url, nil
 }
 
-func getFileCommit(repoDir string, filepath string) (string, error) {
+func getFileCommit(repoDir string, filepath string, preOpenedRepo *git.Repository) (string, error) {
+	if preOpenedRepo != nil {
+		head, err := preOpenedRepo.Head()
+		if err == nil {
+			commitIter, err := preOpenedRepo.Log(&git.LogOptions{
+				From:     head.Hash(),
+				FileName: &filepath,
+			})
+			if err == nil {
+				commit, err := commitIter.Next()
+				if err == nil && commit != nil {
+					return commit.Hash.String(), nil
+				}
+			}
+		}
+		return "", fmt.Errorf("file commit not found in pre-opened repository")
+	}
+
 	cmd := exec.Command("git", "log", "-n", "1", "--pretty=format:%H", "--", filepath)
 	cmd.Dir = repoDir
 	out, err := cmd.Output()

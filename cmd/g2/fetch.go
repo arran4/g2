@@ -13,6 +13,11 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/go-git/go-billy/v5"
+	"github.com/go-git/go-billy/v5/memfs"
+	"github.com/go-git/go-git/v5"
+	"github.com/go-git/go-git/v5/storage/memory"
 )
 
 type ZipUrlConverter func(gitUrl string) (string, error)
@@ -68,6 +73,35 @@ func giteaUrlConverter(gitUrl string) (string, error) {
 	}
 	path := strings.TrimSuffix(u.Path, ".git")
 	return fmt.Sprintf("https://%s%s/archive/HEAD.zip", u.Host, path), nil
+}
+
+func FetchRepoMemory(ctx context.Context, gitUrl string, retries int) (*git.Repository, billy.Filesystem, error) {
+	var err error
+	var repo *git.Repository
+	var fs billy.Filesystem
+
+	for i := 0; i <= retries; i++ {
+		if i > 0 {
+			log.Printf("Retrying fetch for %s in memory (attempt %d/%d)...", gitUrl, i, retries)
+			time.Sleep(1 * time.Second)
+		}
+
+		storer := memory.NewStorage()
+		fs = memfs.New()
+
+		repo, err = git.CloneContext(ctx, storer, fs, &git.CloneOptions{
+			URL:          gitUrl,
+			Depth:        1,
+			SingleBranch: true,
+			Progress:     os.Stdout,
+		})
+
+		if err == nil {
+			return repo, fs, nil
+		}
+		log.Printf("Fetch attempt %d failed for %s in memory: %v", i+1, gitUrl, err)
+	}
+	return nil, nil, err
 }
 
 func FetchRepo(ctx context.Context, gitUrl string, destDir string, useZip bool, retries int) error {
