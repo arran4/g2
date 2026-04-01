@@ -16,6 +16,7 @@ type GenericPageContext struct {
 
 	// Additional data fields used by various templates
 	Repos                []*SiteData
+	GroupedRepos         []RepoGroup
 	Categories           interface{} // Can be []*AggCategory or []CategoryData
 	Packages             interface{} // Can be []*AggPackage or []PackageData
 	Licenses             []*AggLicense
@@ -57,6 +58,7 @@ type GenericPageContext struct {
 	Authors              []g2.Author
 	ValidLicenses        map[string]bool
 	RepoName             string
+	Group                interface{}
 	VersionData          interface{}
 	FilteredManifest     []ManifestEntryData
 	Manifest             interface{}

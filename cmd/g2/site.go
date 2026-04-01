@@ -2031,22 +2031,29 @@ type AggArch struct {
 	Repos  []*SiteData
 }
 
+type RepoGroup struct {
+	Quality string
+	Status  string
+	Repos   []*SiteData
+}
+
 type AggregatedData struct {
-	Categories    []*AggCategory
-	Packages      []*AggPackage
-	Licenses      []*AggLicense
-	Projects      []*AggProject
-	Profiles      []*AggProfile
-	Eclasses      []*AggEclass
-	Arches        []*AggArch
-	Moves         map[string]*AggPackageMove
-	GlobalNews    []AggNewsItem
-	RecentNews    []AggNewsItem
-	TotalPackages int
-	UseFlags      []*AggUseFlag
+	Categories     []*AggCategory
+	Packages       []*AggPackage
+	Licenses       []*AggLicense
+	Projects       []*AggProject
+	Profiles       []*AggProfile
+	Arches         []*AggArch
+	Moves          map[string]*AggPackageMove
+	GlobalNews     []AggNewsItem
+	RecentNews     []AggNewsItem
+	TotalPackages  int
+	UseFlags       []*AggUseFlag
+	Eclasses       []*AggEclass
 	UseExpandDescs map[string]*g2.UseExpandDesc
-	ValidLicenses map[string]bool
+	ValidLicenses  map[string]bool
 	ValidUseExpands map[string]bool
+	GroupedRepos   []RepoGroup
 }
 
 func prepareAggregatedData(sites []*SiteData) *AggregatedData {
@@ -2060,8 +2067,29 @@ func prepareAggregatedData(sites []*SiteData) *AggregatedData {
 	aggEclasses := make(map[string]*AggEclass)
 	var globalNews []AggNewsItem
 	aggUseExpandDescs := make(map[string]*g2.UseExpandDesc)
+	groupedReposMap := make(map[string]*RepoGroup)
 
 	for _, site := range sites {
+		quality := "experimental"
+		status := "unofficial"
+		if site.Repository != nil {
+			if site.Repository.Quality != "" {
+				quality = site.Repository.Quality
+			}
+			if site.Repository.Status != "" {
+				status = site.Repository.Status
+			}
+		}
+
+		groupKey := quality + "|" + status
+		if _, ok := groupedReposMap[groupKey]; !ok {
+			groupedReposMap[groupKey] = &RepoGroup{
+				Quality: quality,
+				Status:  status,
+			}
+		}
+		groupedReposMap[groupKey].Repos = append(groupedReposMap[groupKey].Repos, site)
+
 		if site.UseExpandDescs != nil {
 			for prefix, desc := range site.UseExpandDescs {
 				if _, ok := aggUseExpandDescs[prefix]; !ok {
@@ -2380,22 +2408,34 @@ func prepareAggregatedData(sites []*SiteData) *AggregatedData {
 		}
 	}
 
+	var sortedGroupedRepos []RepoGroup
+	for _, group := range groupedReposMap {
+		sortedGroupedRepos = append(sortedGroupedRepos, *group)
+	}
+	sort.Slice(sortedGroupedRepos, func(i, j int) bool {
+		if sortedGroupedRepos[i].Quality == sortedGroupedRepos[j].Quality {
+			return sortedGroupedRepos[i].Status < sortedGroupedRepos[j].Status
+		}
+		return sortedGroupedRepos[i].Quality < sortedGroupedRepos[j].Quality
+	})
+
 	return &AggregatedData{
-		Categories:    sortedCategories,
-		Packages:      sortedPackages,
-		Licenses:      sortedLicenses,
-		Projects:      sortedProjects,
-		Profiles:      sortedProfiles,
-		Eclasses:      sortedEclasses,
-		Arches:        sortedArches,
-		Moves:         aggMoves,
-		GlobalNews:    globalNews,
-		RecentNews:    recentNews,
-		TotalPackages: totalPackages,
-		UseFlags:      sortedUseFlags,
-		ValidLicenses: validLicenses,
+		Categories:     sortedCategories,
+		Packages:       sortedPackages,
+		Licenses:       sortedLicenses,
+		Projects:       sortedProjects,
+		Profiles:       sortedProfiles,
+		Arches:         sortedArches,
+		Moves:          aggMoves,
+		GlobalNews:     globalNews,
+		RecentNews:     recentNews,
+		TotalPackages:  totalPackages,
+		UseFlags:       sortedUseFlags,
+		ValidLicenses:  validLicenses,
+		Eclasses:       sortedEclasses,
 		UseExpandDescs: aggUseExpandDescs,
 		ValidUseExpands: validUseExpands,
+		GroupedRepos:   sortedGroupedRepos,
 	}
 }
 
@@ -2437,6 +2477,7 @@ func generateGlobalPages(outDir string, tmpl *template.Template, sites []*SiteDa
 		Title:                title,
 		BaseURL:              "",
 		Repos:                sites,
+		GroupedRepos:         data.GroupedRepos,
 		Categories:           data.Categories,
 		Packages:             data.Packages,
 		Licenses:             data.Licenses,
@@ -2945,6 +2986,43 @@ func generateOtherGlobalPages(outDir string, tmpl *template.Template, data *Aggr
 
 func generateRepoPages(outDir string, tmpl *template.Template, sites []*SiteData, data *AggregatedData, title, version, recentDurationStr string, genInfo GenerationInfo) error {
 	// 6. Repo-Specific Pages
+
+	if err := os.MkdirAll(filepath.Join(outDir, "repos"), 0755); err != nil {
+		return fmt.Errorf("creating directory repos/: %w", err)
+	}
+
+	if err := os.MkdirAll(filepath.Join(outDir, "repos", "all"), 0755); err != nil {
+		return fmt.Errorf("creating directory repos/all: %w", err)
+	}
+	if err := renderPage(filepath.Join(outDir, "repos", "all", "index.html"), tmpl, "overlays.html", GenericPageContext{
+		Title:       "All Overlays",
+		BaseURL:     "../../",
+		Breadcrumbs: []Breadcrumb{{Name: title, URL: "../../"}, {Name: "All Overlays"}},
+		Repos:       sites,
+		Version:     version,
+		GenInfo:     genInfo,
+	}); err != nil {
+		return fmt.Errorf("rendering page: %w", err)
+	}
+
+	for _, group := range data.GroupedRepos {
+		groupDirName := group.Quality + "-" + group.Status
+		groupDir := filepath.Join(outDir, "repos", groupDirName)
+		if err := os.MkdirAll(groupDir, 0755); err != nil {
+			return fmt.Errorf("creating directory %s: %w", groupDir, err)
+		}
+		if err := renderPage(filepath.Join(groupDir, "index.html"), tmpl, "repo_group.html", GenericPageContext{
+			Title:       "Overlays: " + group.Quality + " - " + group.Status,
+			BaseURL:     "../../",
+			Breadcrumbs: []Breadcrumb{{Name: title, URL: "../../"}, {Name: "Overlays: " + group.Quality + " - " + group.Status}},
+			Group:       group,
+			Version:     version,
+			GenInfo:     genInfo,
+		}); err != nil {
+			return fmt.Errorf("rendering page: %w", err)
+		}
+	}
+
 	for _, site := range sites {
 		repoDir := filepath.Join(outDir, "repos", site.RepoName)
 		if err := os.MkdirAll(repoDir, 0755); err != nil {
