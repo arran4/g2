@@ -3390,6 +3390,8 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, 
 			log.Printf("[START] Fetching remote repository: %s (%s)", repo.Name, gitUrl)
 
 			repoPath := filepath.Join(tmpDir, repo.Name)
+			defer func() { _ = os.RemoveAll(repoPath) }()
+
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 			defer cancel()
 
