@@ -1298,7 +1298,7 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool, r
 	extractVirtualDeps(site)
 
 	// Parse Eclasses
-	eclassDir := filepath.Join(repoDir, "eclass")
+	eclassDir = filepath.Join(repoDir, "eclass")
 	if info, err := fs.Stat(sysFS, filepath.ToSlash(eclassDir)); err == nil && info.IsDir() {
 		entries, err := fs.ReadDir(sysFS, filepath.ToSlash(eclassDir))
 		if err == nil {
