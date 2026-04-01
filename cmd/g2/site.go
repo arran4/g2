@@ -1833,21 +1833,28 @@ type AggArch struct {
 	Repos  []*SiteData
 }
 
+type RepoGroup struct {
+	Quality string
+	Status  string
+	Repos   []*SiteData
+}
+
 type AggregatedData struct {
-	Categories    []*AggCategory
-	Packages      []*AggPackage
-	Licenses      []*AggLicense
-	Projects      []*AggProject
-	Profiles      []*AggProfile
-	Arches        []*AggArch
-	Moves         map[string]*AggPackageMove
-	GlobalNews    []AggNewsItem
-	RecentNews    []AggNewsItem
-	TotalPackages int
-	UseFlags      []*AggUseFlag
+	Categories     []*AggCategory
+	Packages       []*AggPackage
+	Licenses       []*AggLicense
+	Projects       []*AggProject
+	Profiles       []*AggProfile
+	Arches         []*AggArch
+	Moves          map[string]*AggPackageMove
+	GlobalNews     []AggNewsItem
+	RecentNews     []AggNewsItem
+	TotalPackages  int
+	UseFlags       []*AggUseFlag
 	UseExpandDescs map[string]*g2.UseExpandDesc
-	ValidLicenses map[string]bool
+	ValidLicenses  map[string]bool
 	ValidUseExpands map[string]bool
+	GroupedRepos   []RepoGroup
 }
 
 func prepareAggregatedData(sites []*SiteData) *AggregatedData {
@@ -1860,8 +1867,29 @@ func prepareAggregatedData(sites []*SiteData) *AggregatedData {
 	aggMoves := make(map[string]*AggPackageMove)
 	var globalNews []AggNewsItem
 	aggUseExpandDescs := make(map[string]*g2.UseExpandDesc)
+	groupedReposMap := make(map[string]*RepoGroup)
 
 	for _, site := range sites {
+		quality := "experimental"
+		status := "unofficial"
+		if site.Repository != nil {
+			if site.Repository.Quality != "" {
+				quality = site.Repository.Quality
+			}
+			if site.Repository.Status != "" {
+				status = site.Repository.Status
+			}
+		}
+
+		groupKey := quality + "|" + status
+		if _, ok := groupedReposMap[groupKey]; !ok {
+			groupedReposMap[groupKey] = &RepoGroup{
+				Quality: quality,
+				Status:  status,
+			}
+		}
+		groupedReposMap[groupKey].Repos = append(groupedReposMap[groupKey].Repos, site)
+
 		if site.UseExpandDescs != nil {
 			for prefix, desc := range site.UseExpandDescs {
 				if _, ok := aggUseExpandDescs[prefix]; !ok {
@@ -2131,21 +2159,33 @@ func prepareAggregatedData(sites []*SiteData) *AggregatedData {
 		}
 	}
 
+	var sortedGroupedRepos []RepoGroup
+	for _, group := range groupedReposMap {
+		sortedGroupedRepos = append(sortedGroupedRepos, *group)
+	}
+	sort.Slice(sortedGroupedRepos, func(i, j int) bool {
+		if sortedGroupedRepos[i].Quality == sortedGroupedRepos[j].Quality {
+			return sortedGroupedRepos[i].Status < sortedGroupedRepos[j].Status
+		}
+		return sortedGroupedRepos[i].Quality < sortedGroupedRepos[j].Quality
+	})
+
 	return &AggregatedData{
-		Categories:    sortedCategories,
-		Packages:      sortedPackages,
-		Licenses:      sortedLicenses,
-		Projects:      sortedProjects,
-		Profiles:      sortedProfiles,
-		Arches:        sortedArches,
-		Moves:         aggMoves,
-		GlobalNews:    globalNews,
-		RecentNews:    recentNews,
-		TotalPackages: totalPackages,
-		UseFlags:      sortedUseFlags,
-		ValidLicenses: validLicenses,
+		Categories:     sortedCategories,
+		Packages:       sortedPackages,
+		Licenses:       sortedLicenses,
+		Projects:       sortedProjects,
+		Profiles:       sortedProfiles,
+		Arches:         sortedArches,
+		Moves:          aggMoves,
+		GlobalNews:     globalNews,
+		RecentNews:     recentNews,
+		TotalPackages:  totalPackages,
+		UseFlags:       sortedUseFlags,
+		ValidLicenses:  validLicenses,
 		UseExpandDescs: aggUseExpandDescs,
 		ValidUseExpands: validUseExpands,
+		GroupedRepos:   sortedGroupedRepos,
 	}
 }
 
@@ -2187,6 +2227,7 @@ func generateGlobalPages(outDir string, tmpl *template.Template, sites []*SiteDa
 		Title:                title,
 		BaseURL:              "",
 		Repos:                sites,
+		GroupedRepos:         data.GroupedRepos,
 		Categories:           data.Categories,
 		Packages:             data.Packages,
 		Licenses:             data.Licenses,

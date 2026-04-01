@@ -49,8 +49,19 @@
 {{end}}
 
 <h2>Overlays</h2>
+{{if gt (len .Repos) 10}}
+<ul>
+    {{range .GroupedRepos}}
+    <li>
+        <strong>Quality: {{.Quality}} | Status: {{.Status}}</strong>: {{len .Repos}} overlays
+    </li>
+    {{end}}
+</ul>
+<p><a href="overlays/">View all overlays</a></p>
+{{else}}
 <ul>
     {{range .Repos}}
     <li><a href="repos/{{.RepoName}}/">{{.RepoName}}</a></li>
     {{end}}
 </ul>
+{{end}}
