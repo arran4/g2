@@ -226,6 +226,8 @@ func (cfg *MainArgConfig) cmdOverlay(args []string) error {
 	recentDurOpt := fs.String("recent-duration", "3mo", "Duration to consider an update 'recent' (e.g. 3mo, 14d, 72h)")
 	fastGit := fs.Bool("fast-git-modtime", false, "Use fast (O(1)) but potentially less reliable go-git file log lookup")
 	useZip := fs.Bool("use-zip", false, "Download zip archives instead of git clone when supported")
+	includeGentoo := fs.Bool("include-gentoo", false, "Include the main gentoo repository")
+	includeGuru := fs.Bool("include-guru", false, "Include the guru repository")
 
 	if err := fs.Parse(args[2:]); err != nil {
 		return fmt.Errorf("parsing flags: %w", err)
@@ -248,73 +250,120 @@ func (cfg *MainArgConfig) cmdOverlay(args []string) error {
 
 	log.Printf("Generating site (v%s) from overlay location %s into %s", version, location, *outDir)
 
-	// if location is a url, clone it temporarily
-	isRemote := strings.HasPrefix(location, "http://") || strings.HasPrefix(location, "https://") || strings.HasPrefix(location, "git://")
-	var parseLocation string
-	var cleanup func()
-	var siteData *SiteData
+	var allSites []*SiteData
+	var allSitesMu sync.Mutex
+	var cleanups []func()
+	var cleanupsMu sync.Mutex
 
-	if isRemote {
-		tmpDir, err := os.MkdirTemp("", "g2-overlay-*")
-		if err != nil {
-			return fmt.Errorf("creating temp dir: %w", err)
-		}
-		cleanup = func() { _ = os.RemoveAll(tmpDir) }
-
-		log.Printf("Cloning remote repository: %s", location)
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
-		defer cancel()
-
-		t0 := time.Now()
-		if err := FetchRepo(ctx, location, tmpDir, *useZip, 0); err != nil {
+	defer func() {
+		for _, cleanup := range cleanups {
 			cleanup()
-			return fmt.Errorf("cloning repository: %w", err)
 		}
-		checkoutTime := time.Since(t0)
+	}()
 
-		parseLocation = tmpDir
+	g, _ := errgroup.WithContext(context.Background())
 
-		size, err := getDirSize(parseLocation)
-		var gitSize string
-		if err == nil {
-			gitSize = fmt.Sprintf("%.2f MB", float64(size)/(1024*1024))
+	helper := func(loc string, defaultTitle string) error {
+		isRemote := strings.HasPrefix(loc, "http://") || strings.HasPrefix(loc, "https://") || strings.HasPrefix(loc, "git://")
+		var parseLocation string
+		var cleanup func()
+		var siteData *SiteData
+
+		if isRemote {
+			tmpDir, err := os.MkdirTemp("", "g2-overlay-*")
+			if err != nil {
+				return fmt.Errorf("creating temp dir: %w", err)
+			}
+			cleanup = func() { _ = os.RemoveAll(tmpDir) }
+
+			log.Printf("Cloning remote repository: %s", loc)
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+			defer cancel()
+
+			t0 := time.Now()
+			if err := FetchRepo(ctx, loc, tmpDir, *useZip, 0); err != nil {
+				cleanup()
+				return fmt.Errorf("cloning repository: %w", err)
+			}
+			checkoutTime := time.Since(t0)
+
+			parseLocation = tmpDir
+
+			size, err := getDirSize(parseLocation)
+			var gitSize string
+			if err == nil {
+				gitSize = fmt.Sprintf("%.2f MB", float64(size)/(1024*1024))
+			}
+
+			t1 := time.Now()
+			siteData, err = parseRepo(os.DirFS(parseLocation), ".", defaultTitle, *fastGit, nil, SourceURL(loc))
+			if err != nil {
+				cleanup()
+				return fmt.Errorf("parsing repo: %w", err)
+			}
+			processTime := time.Since(t1)
+
+			siteData.CheckoutTime = checkoutTime.String()
+			siteData.ProcessTime = processTime.String()
+			siteData.GitSize = gitSize
+
+		} else {
+			parseLocation = loc
+			cleanup = func() {}
+
+			size, err := getDirSize(parseLocation)
+			var gitSize string
+			if err == nil {
+				gitSize = fmt.Sprintf("%.2f MB", float64(size)/(1024*1024))
+			}
+
+			t1 := time.Now()
+			siteData, err = parseRepo(os.DirFS(parseLocation), ".", defaultTitle, *fastGit, nil, SourceURL(loc))
+			if err != nil {
+				return fmt.Errorf("parsing repo: %w", err)
+			}
+			processTime := time.Since(t1)
+
+			siteData.ProcessTime = processTime.String()
+			siteData.GitSize = gitSize
 		}
 
-		t1 := time.Now()
-		siteData, err = parseRepo(os.DirFS(parseLocation), ".", "Gentoo Packages", *fastGit, nil, SourceURL(location))
-		if err != nil {
-			return fmt.Errorf("parsing repo: %w", err)
-		}
-		processTime := time.Since(t1)
+		allSitesMu.Lock()
+		allSites = append(allSites, siteData)
+		allSitesMu.Unlock()
 
-		siteData.CheckoutTime = checkoutTime.String()
-		siteData.ProcessTime = processTime.String()
-		siteData.GitSize = gitSize
-
-	} else {
-		parseLocation = location
-		cleanup = func() {}
-
-		size, err := getDirSize(parseLocation)
-		var gitSize string
-		if err == nil {
-			gitSize = fmt.Sprintf("%.2f MB", float64(size)/(1024*1024))
-		}
-
-		t1 := time.Now()
-		siteData, err = parseRepo(os.DirFS(parseLocation), ".", "Gentoo Packages", *fastGit, nil, SourceURL(location))
-		if err != nil {
-			return fmt.Errorf("parsing repo: %w", err)
-		}
-		processTime := time.Since(t1)
-
-		siteData.ProcessTime = processTime.String()
-		siteData.GitSize = gitSize
+		cleanupsMu.Lock()
+		cleanups = append(cleanups, cleanup)
+		cleanupsMu.Unlock()
+		return nil
 	}
-	defer cleanup()
+
+	g.Go(func() error {
+		return helper(location, "Gentoo Packages")
+	})
+
+	if *includeGentoo {
+		g.Go(func() error {
+			return helper("https://github.com/gentoo-mirror/gentoo.git", "gentoo")
+		})
+	}
+
+	if *includeGuru {
+		g.Go(func() error {
+			return helper("https://github.com/gentoo-mirror/guru.git", "guru")
+		})
+	}
+
+	if err := g.Wait(); err != nil {
+		return fmt.Errorf("fetching/parsing repositories: %w", err)
+	}
+
+	sort.Slice(allSites, func(i, j int) bool {
+		return allSites[i].RepoName < allSites[j].RepoName
+	})
 
 	genInfo := GenerationInfo{Args: cfg.Args, FastGit: *fastGit, RecentDuration: recentDurationStr}
-	if err := generateSite(*outDir, []*SiteData{siteData}, recentDuration, recentDurationStr, genInfo); err != nil {
+	if err := generateSite(*outDir, allSites, recentDuration, recentDurationStr, genInfo); err != nil {
 		return fmt.Errorf("generating site: %w", err)
 	}
 
