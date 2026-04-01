@@ -32,6 +32,8 @@ func (cfg *MainArgConfig) cmdPackage(args []string) error {
 		fmt.Printf("\t\t %s \t\t %s\n", "index-repositories", "index multiple repositories from an xml file")
 		fmt.Printf("\t\t %s \t\t %s\n", "index", "index local repositories")
 		fmt.Printf("\t\t %s \t\t %s\n", "update", "update the local index from a remote zip file")
+		fmt.Printf("\t\t %s \t\t %s\n", "deprecated", "commands relating to deprecated packages")
+		fmt.Printf("\t\t %s \t\t %s\n", "masked", "commands relating to masked packages")
 	}
 
 	if err := fs.Parse(args); err != nil {
@@ -69,6 +71,14 @@ func (cfg *MainArgConfig) cmdPackage(args []string) error {
 		}
 	case "update":
 		if err := config.cmdUpdate(fs.Args()[1:]); err != nil {
+			return err
+		}
+	case "deprecated":
+		if err := config.cmdDeprecated(fs.Args()[1:]); err != nil {
+			return err
+		}
+	case "masked":
+		if err := config.cmdMasked(fs.Args()[1:]); err != nil {
 			return err
 		}
 	case "help", "-help", "--help":

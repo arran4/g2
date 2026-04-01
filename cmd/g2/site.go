@@ -13,6 +13,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	path2 "path"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -58,6 +59,11 @@ type ProfileData struct {
 	DescStat string
 	Parents  []string
 	Children []string
+	Files    map[string]string // Maps filename to its content
+}
+
+type EclassData struct {
+	Name string
 }
 
 type SiteData struct {
@@ -69,6 +75,8 @@ type SiteData struct {
 	Projects          *g2.Projects
 	Categories        []CategoryData
 	Profiles          []ProfileData
+	DefinedEclasses   []EclassData
+	AggEclasses       []*AggEclass
 	Authors           []g2.Author
 	AuthorsURL        string
 	Moves             []g2.PackageMove
@@ -84,7 +92,9 @@ type SiteData struct {
 	ArchList          *g2.ArchList
 	ArchesDesc        *g2.ArchesDesc
 	InfoPkgs          []g2.InfoPkg
+	Masked            []g2.PackageMasked
 	Deprecated        []g2.PackageDeprecated
+	ParsedEclasses    []*g2.Ebuild
 	Eclasses          []*g2.Ebuild
 	PackageCount      int
 	AggUseFlags       []*AggUseFlag
@@ -152,6 +162,7 @@ type PackageData struct {
 	LintWarnings []string
 
 	// Deprecation
+	Masked *g2.PackageMasked
 	Deprecated *g2.PackageDeprecated
 
 	// InfoPkg matching
@@ -179,6 +190,7 @@ type VersionData struct {
 
 	// Deprecation
 	Deprecated *g2.PackageDeprecated
+	Masked *g2.PackageMasked
 
 	// Moves
 	MovedToSlot string
@@ -226,6 +238,9 @@ func (cfg *MainArgConfig) cmdOverlay(args []string) error {
 	recentDurOpt := fs.String("recent-duration", "3mo", "Duration to consider an update 'recent' (e.g. 3mo, 14d, 72h)")
 	fastGit := fs.Bool("fast-git-modtime", false, "Use fast (O(1)) but potentially less reliable go-git file log lookup")
 	useZip := fs.Bool("use-zip", false, "Download zip archives instead of git clone when supported")
+	persistentDir := fs.String("persistent-dir", "", "Directory to persistently store checked out repositories instead of a temporary directory")
+	includeGentoo := fs.Bool("include-gentoo", false, "Include the base Gentoo repository")
+	includeGuru := fs.Bool("include-guru", false, "Include the Guru repository")
 
 	if err := fs.Parse(args[2:]); err != nil {
 		return fmt.Errorf("parsing flags: %w", err)
@@ -248,73 +263,122 @@ func (cfg *MainArgConfig) cmdOverlay(args []string) error {
 
 	log.Printf("Generating site (v%s) from overlay location %s into %s", version, location, *outDir)
 
-	// if location is a url, clone it temporarily
-	isRemote := strings.HasPrefix(location, "http://") || strings.HasPrefix(location, "https://") || strings.HasPrefix(location, "git://")
-	var parseLocation string
-	var cleanup func()
-	var siteData *SiteData
-
-	if isRemote {
-		tmpDir, err := os.MkdirTemp("", "g2-overlay-*")
-		if err != nil {
-			return fmt.Errorf("creating temp dir: %w", err)
-		}
-		cleanup = func() { _ = os.RemoveAll(tmpDir) }
-
-		log.Printf("Cloning remote repository: %s", location)
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
-		defer cancel()
-
-		t0 := time.Now()
-		if err := FetchRepo(ctx, location, tmpDir, *useZip, 0); err != nil {
-			cleanup()
-			return fmt.Errorf("cloning repository: %w", err)
-		}
-		checkoutTime := time.Since(t0)
-
-		parseLocation = tmpDir
-
-		size, err := getDirSize(parseLocation)
-		var gitSize string
-		if err == nil {
-			gitSize = fmt.Sprintf("%.2f MB", float64(size)/(1024*1024))
-		}
-
-		t1 := time.Now()
-		siteData, err = parseRepo(os.DirFS(parseLocation), ".", "Gentoo Packages", *fastGit, nil, SourceURL(location))
-		if err != nil {
-			return fmt.Errorf("parsing repo: %w", err)
-		}
-		processTime := time.Since(t1)
-
-		siteData.CheckoutTime = checkoutTime.String()
-		siteData.ProcessTime = processTime.String()
-		siteData.GitSize = gitSize
-
-	} else {
-		parseLocation = location
-		cleanup = func() {}
-
-		size, err := getDirSize(parseLocation)
-		var gitSize string
-		if err == nil {
-			gitSize = fmt.Sprintf("%.2f MB", float64(size)/(1024*1024))
-		}
-
-		t1 := time.Now()
-		siteData, err = parseRepo(os.DirFS(parseLocation), ".", "Gentoo Packages", *fastGit, nil, SourceURL(location))
-		if err != nil {
-			return fmt.Errorf("parsing repo: %w", err)
-		}
-		processTime := time.Since(t1)
-
-		siteData.ProcessTime = processTime.String()
-		siteData.GitSize = gitSize
+	type repoTask struct {
+		Name     string
+		Location string
 	}
-	defer cleanup()
+
+	tasks := []repoTask{
+		{Name: "Gentoo Packages", Location: location},
+	}
+
+	if *includeGentoo {
+		tasks = append(tasks, repoTask{Name: "gentoo", Location: "https://github.com/gentoo-mirror/gentoo.git"})
+	}
+	if *includeGuru {
+		tasks = append(tasks, repoTask{Name: "guru", Location: "https://github.com/gentoo-mirror/guru.git"})
+	}
+
+	var allSites []*SiteData
+	var allSitesMu sync.Mutex
+
+	g, _ := errgroup.WithContext(context.Background())
+
+	for _, task := range tasks {
+		task := task
+		g.Go(func() error {
+			isRemote := strings.HasPrefix(task.Location, "http://") || strings.HasPrefix(task.Location, "https://") || strings.HasPrefix(task.Location, "git://")
+			var parseLocation string
+			var cleanup func()
+			var siteData *SiteData
+
+			if isRemote {
+				var tmpDir string
+				var err error
+
+				if *persistentDir != "" {
+					tmpDir = filepath.Join(*persistentDir, task.Name)
+					if err := os.MkdirAll(tmpDir, 0755); err != nil {
+						return fmt.Errorf("creating persistent dir for %s: %w", task.Name, err)
+					}
+					cleanup = func() {}
+				} else {
+					tmpDir, err = os.MkdirTemp("", "g2-overlay-"+task.Name+"-*")
+					if err != nil {
+						return fmt.Errorf("creating temp dir for %s: %w", task.Name, err)
+					}
+					cleanup = func() { _ = os.RemoveAll(tmpDir) }
+				}
+				defer cleanup()
+
+				log.Printf("Cloning remote repository: %s", task.Location)
+				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+				defer cancel()
+
+				t0 := time.Now()
+				if err := FetchRepo(ctx, task.Location, tmpDir, *useZip, *persistentDir != "", 0); err != nil {
+					return fmt.Errorf("cloning repository %s: %w", task.Name, err)
+				}
+				checkoutTime := time.Since(t0)
+
+				parseLocation = tmpDir
+
+				size, err := getDirSize(parseLocation)
+				var gitSize string
+				if err == nil {
+					gitSize = fmt.Sprintf("%.2f MB", float64(size)/(1024*1024))
+				}
+
+				t1 := time.Now()
+				siteData, err = parseRepo(os.DirFS(parseLocation), ".", task.Name, *fastGit, nil, SourceURL(task.Location))
+				if err != nil {
+					return fmt.Errorf("parsing repo %s: %w", task.Name, err)
+				}
+				processTime := time.Since(t1)
+
+				siteData.CheckoutTime = checkoutTime.String()
+				siteData.ProcessTime = processTime.String()
+				siteData.GitSize = gitSize
+
+			} else {
+				parseLocation = task.Location
+				cleanup = func() {}
+				defer cleanup()
+
+				size, err := getDirSize(parseLocation)
+				var gitSize string
+				if err == nil {
+					gitSize = fmt.Sprintf("%.2f MB", float64(size)/(1024*1024))
+				}
+
+				t1 := time.Now()
+				siteData, err = parseRepo(os.DirFS(parseLocation), ".", task.Name, *fastGit, nil, SourceURL(task.Location))
+				if err != nil {
+					return fmt.Errorf("parsing repo %s: %w", task.Name, err)
+				}
+				processTime := time.Since(t1)
+
+				siteData.ProcessTime = processTime.String()
+				siteData.GitSize = gitSize
+			}
+
+			allSitesMu.Lock()
+			allSites = append(allSites, siteData)
+			allSitesMu.Unlock()
+			return nil
+		})
+	}
+
+	if err := g.Wait(); err != nil {
+		return fmt.Errorf("fetching and parsing repos: %w", err)
+	}
+
+	sort.Slice(allSites, func(i, j int) bool {
+		return allSites[i].RepoName < allSites[j].RepoName
+	})
 
 	genInfo := GenerationInfo{Args: cfg.Args, FastGit: *fastGit, RecentDuration: recentDurationStr}
-	if err := generateSite(*outDir, []*SiteData{siteData}, recentDuration, recentDurationStr, genInfo); err != nil {
+	if err := generateSite(*outDir, allSites, recentDuration, recentDurationStr, genInfo); err != nil {
 		return fmt.Errorf("generating site: %w", err)
 	}
 
@@ -349,6 +413,7 @@ func (cfg *MainArgConfig) cmdOverlays(args []string) error {
 	concurrency := fs.Int("concurrency", 4, "Maximum number of concurrent repository fetches/parses")
 	retries := fs.Int("retries", 3, "Number of times to retry fetching a repository")
 	continueOnError := fs.Bool("continue-on-error", true, "Continue parsing other repositories even if fetching one fails")
+	persistentDir := fs.String("persistent-dir", "", "Directory to persistently store checked out repositories instead of a temporary directory")
 
 	if err := fs.Parse(args[2:]); err != nil {
 		return fmt.Errorf("parsing flags: %w", err)
@@ -370,7 +435,7 @@ func (cfg *MainArgConfig) cmdOverlays(args []string) error {
 	}
 
 	log.Printf("Generating site (v%s) from remote repositories: %s into %s", version, location, *outDir)
-	return cfg.cmdSiteRemote(location, *outDir, recentDuration, recentDurationStr, *fastGit, *useZip, *concurrency, *retries, *continueOnError)
+	return cfg.cmdSiteRemote(location, *outDir, recentDuration, recentDurationStr, *fastGit, *useZip, *concurrency, *retries, *continueOnError, *persistentDir)
 }
 
 func parseLayoutConfFromFS(sysFS fs.FS, path string) (*g2.LayoutConf, error) {
@@ -730,6 +795,14 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool, r
 		log.Printf("Warning: failed to parse package.deprecated: %v", err)
 	}
 
+	packageMaskPath := filepath.Join(repoDir, "profiles", "package.mask")
+	var masked []g2.PackageMasked
+	if parsedMasked, err := g2.ParsePackageMaskedFS(sysFS, filepath.ToSlash(packageMaskPath)); err == nil {
+		masked = parsedMasked
+	} else if !os.IsNotExist(err) {
+		log.Printf("Warning: failed to parse package.mask: %v", err)
+	}
+
 	var thirdPartyMirrors map[string][]string
 	if tm, err := g2.ParseThirdPartyMirrorsFS(sysFS, filepath.ToSlash(filepath.Join(repoDir, "profiles", "thirdpartymirrors"))); err == nil {
 		thirdPartyMirrors = tm
@@ -769,6 +842,7 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool, r
 		ArchesDesc:        archesDesc,
 		ThirdPartyMirrors: thirdPartyMirrors,
 		Deprecated:        deprecated,
+		Masked:            masked,
 		InfoVars:          infoVars,
 		InfoPkgs:          infoPkgs,
 		PackageCount:      0,
@@ -834,16 +908,32 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool, r
 	}
 
 	var profilesDescEntries []ProfileDescEntry
-	profilesDescBytes, err := os.ReadFile(filepath.Join(repoDir, "profiles", "profiles.desc"))
+	profilesDescBytes, err := fs.ReadFile(sysFS, filepath.ToSlash(filepath.Join(repoDir, "profiles", "profiles.desc")))
 	if err == nil {
 		profilesDescEntries = parseProfilesDesc(string(profilesDescBytes))
 	}
 
-	profilesData, err := parseProfilesDir(repoDir, profilesDescEntries)
+	profilesData, err := parseProfilesDirFS(sysFS, repoDir, profilesDescEntries)
 	if err != nil {
 		log.Printf("Warning: failed to parse profiles dir: %v", err)
 	}
 	site.Profiles = profilesData
+
+	eclassDir := filepath.Join(repoDir, "eclass")
+	eclassEntries, err := fs.ReadDir(sysFS, filepath.ToSlash(eclassDir))
+	if err == nil {
+		for _, eclassEntry := range eclassEntries {
+			if !eclassEntry.IsDir() && strings.HasSuffix(eclassEntry.Name(), ".eclass") {
+				eclassName := strings.TrimSuffix(eclassEntry.Name(), ".eclass")
+				site.DefinedEclasses = append(site.DefinedEclasses, EclassData{
+					Name: eclassName,
+				})
+			}
+		}
+		sort.Slice(site.DefinedEclasses, func(i, j int) bool {
+			return site.DefinedEclasses[i].Name < site.DefinedEclasses[j].Name
+		})
+	}
 
 	supportedCategories := make(map[string]bool)
 	categoriesBytes, err := fs.ReadFile(sysFS, filepath.ToSlash(filepath.Join(repoDir, "profiles", "categories")))
@@ -1148,12 +1238,24 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool, r
 			// Assign deprecation data
 			pkgStr := pkgData.Category + "/" + pkgData.Name
 			for i := range site.Deprecated {
-				depPkg := site.Deprecated[i].Package
-				// Handle versions and operators in deprecation package strings (e.g. >=dev-python/autobahn-21)
-				// A simple check is if it contains the category/name
-				if strings.Contains(depPkg, pkgStr) {
-					pkgData.Deprecated = &site.Deprecated[i]
-					break
+				for _, entry := range site.Deprecated[i].Entries {
+					depPkg := entry.Package
+					// Handle versions and operators in deprecation package strings (e.g. >=dev-python/autobahn-21)
+					// A simple check is if it contains the category/name
+					if strings.Contains(depPkg, pkgStr) {
+						pkgData.Deprecated = &site.Deprecated[i]
+						break
+					}
+				}
+			}
+
+			for i := range site.Masked {
+				for _, entry := range site.Masked[i].Entries {
+					maskPkg := entry.Package
+					if strings.Contains(maskPkg, pkgStr) {
+						pkgData.Masked = &site.Masked[i]
+						break
+					}
 				}
 			}
 
@@ -1161,9 +1263,19 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool, r
 				for j := range site.Deprecated {
 					// Add deprecation note if the package string matches.
 					// We match if it contains "category/name" which works for versioned atoms too.
-					if strings.Contains(site.Deprecated[j].Package, pkgStr) {
-						pkgData.Versions[i].Deprecated = &site.Deprecated[j]
-						break
+					for _, entry := range site.Deprecated[j].Entries {
+						if strings.Contains(entry.Package, pkgStr) {
+							pkgData.Versions[i].Deprecated = &site.Deprecated[j]
+							break
+						}
+					}
+				}
+				for j := range site.Masked {
+					for _, entry := range site.Masked[j].Entries {
+						if strings.Contains(entry.Package, pkgStr) {
+							pkgData.Versions[i].Masked = &site.Masked[j]
+							break
+						}
 					}
 				}
 
@@ -1172,6 +1284,7 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool, r
 					Ebuild:       v.Ebuild,
 					EbuildRawURL: v.EbuildRawURL,
 					Deprecated:   pkgData.Versions[i].Deprecated,
+					Masked:       pkgData.Versions[i].Masked,
 				})
 			}
 
@@ -1260,7 +1373,7 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool, r
 	extractVirtualDeps(site)
 
 	// Parse Eclasses
-	eclassDir := filepath.Join(repoDir, "eclass")
+	eclassDir = filepath.Join(repoDir, "eclass")
 	if info, err := fs.Stat(sysFS, filepath.ToSlash(eclassDir)); err == nil && info.IsDir() {
 		entries, err := fs.ReadDir(sysFS, filepath.ToSlash(eclassDir))
 		if err == nil {
@@ -1458,9 +1571,13 @@ func buildManifestData(manifest *g2.Manifest, versions []VersionData, thirdParty
 }
 
 func parseProfilesDir(repoDir string, entries []ProfileDescEntry) ([]ProfileData, error) {
-	profilesDir := filepath.Join(repoDir, "profiles")
+	return parseProfilesDirFS(os.DirFS(repoDir), ".", entries)
+}
 
-	if info, err := os.Stat(profilesDir); err != nil || !info.IsDir() {
+func parseProfilesDirFS(sysFS fs.FS, repoDir string, entries []ProfileDescEntry) ([]ProfileData, error) {
+	profilesDir := path2.Join(repoDir, "profiles")
+
+	if info, err := fs.Stat(sysFS, profilesDir); err != nil || !info.IsDir() {
 		return nil, nil
 	}
 
@@ -1471,21 +1588,23 @@ func parseProfilesDir(repoDir string, entries []ProfileDescEntry) ([]ProfileData
 
 	profilesMap := make(map[string]*ProfileData)
 
-	err := filepath.Walk(profilesDir, func(path string, info os.FileInfo, err error) error {
+	err := fs.WalkDir(sysFS, profilesDir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return nil
 		}
-		if !info.IsDir() {
+		if !d.IsDir() {
 			return nil
 		}
 
-		relPath, err := filepath.Rel(profilesDir, path)
-		if err != nil || relPath == "." {
+		relPath := strings.TrimPrefix(path, profilesDir)
+		relPath = strings.TrimPrefix(relPath, "/")
+		if relPath == "" || relPath == "." {
 			return nil
 		}
 
 		pData := &ProfileData{
-			Path: relPath,
+			Path:  relPath,
+			Files: make(map[string]string),
 		}
 
 		if desc, ok := descMap[relPath]; ok {
@@ -1494,18 +1613,30 @@ func parseProfilesDir(repoDir string, entries []ProfileDescEntry) ([]ProfileData
 			pData.DescStat = desc.Status
 		}
 
-		parentBytes, err := os.ReadFile(filepath.Join(path, "parent"))
-		if err == nil {
-			lines := strings.Split(string(parentBytes), "\n")
-			for _, line := range lines {
-				line = strings.TrimSpace(line)
-				if line == "" || strings.HasPrefix(line, "#") {
-					continue
-				}
+		// Read commonly known files
+		fileNames := []string{
+			"parent", "eapi", "make.defaults", "package.mask", "package.use",
+			"package.use.force", "package.use.mask", "package.use.stable.force",
+			"package.use.stable.mask", "packages", "use.force", "use.mask",
+			"use.stable.force", "use.stable.mask",
+		}
 
-				parentRelPath := filepath.Clean(filepath.Join(relPath, line))
-				if !strings.HasPrefix(parentRelPath, "..") {
-					pData.Parents = append(pData.Parents, parentRelPath)
+		for _, fname := range fileNames {
+			b, err := fs.ReadFile(sysFS, path2.Join(path, fname))
+			if err == nil {
+				pData.Files[fname] = string(b)
+				if fname == "parent" {
+					lines := strings.Split(string(b), "\n")
+					for _, line := range lines {
+						line = strings.TrimSpace(line)
+						if line == "" || strings.HasPrefix(line, "#") {
+							continue
+						}
+						parentRelPath := path2.Clean(path2.Join(relPath, line))
+						if !strings.HasPrefix(parentRelPath, "..") {
+							pData.Parents = append(pData.Parents, parentRelPath)
+						}
+					}
 				}
 			}
 		}
@@ -1607,6 +1738,66 @@ type AggUseFlag struct {
 	MetadataDescs map[string]string
 	Packages      []*AggPackage
 	Warnings      []string
+}
+
+func getRepoEclasses(site *SiteData, aggPackages map[string]*AggPackage) []*AggEclass {
+	eclassMap := make(map[string]*AggEclass)
+	seenPackages := make(map[string]map[string]bool)
+
+	for _, eclass := range site.DefinedEclasses {
+		if _, ok := eclassMap[eclass.Name]; !ok {
+			eclassMap[eclass.Name] = &AggEclass{
+				Name:  eclass.Name,
+				Repos: make(map[string]*SiteData),
+			}
+			seenPackages[eclass.Name] = make(map[string]bool)
+		}
+		eclassMap[eclass.Name].Repos[site.RepoName] = site
+	}
+
+	for _, cat := range site.Categories {
+		for _, pkg := range cat.Packages {
+			pkgKey := cat.Name + "/" + pkg.Name
+
+			for _, ver := range pkg.Versions {
+				if ver.Ebuild != nil && ver.Ebuild.Vars != nil {
+					inherited := ver.Ebuild.Vars["INHERITED"]
+					if inherited != "" {
+						eclasses := strings.Fields(inherited)
+						for _, ec := range eclasses {
+							if _, ok := eclassMap[ec]; !ok {
+								eclassMap[ec] = &AggEclass{
+									Name:  ec,
+									Repos: make(map[string]*SiteData),
+								}
+								eclassMap[ec].Repos[site.RepoName] = site
+								seenPackages[ec] = make(map[string]bool)
+							}
+
+							if !seenPackages[ec][pkgKey] {
+								eclassMap[ec].Packages = append(eclassMap[ec].Packages, aggPackages[pkgKey])
+								seenPackages[ec][pkgKey] = true
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	var sortedEclasses []*AggEclass
+	for _, ec := range eclassMap {
+		sort.Slice(ec.Packages, func(i, j int) bool {
+			if ec.Packages[i].Category == ec.Packages[j].Category {
+				return ec.Packages[i].Name < ec.Packages[j].Name
+			}
+			return ec.Packages[i].Category < ec.Packages[j].Category
+		})
+		sortedEclasses = append(sortedEclasses, ec)
+	}
+	sort.Slice(sortedEclasses, func(i, j int) bool { return sortedEclasses[i].Name < sortedEclasses[j].Name })
+
+	return sortedEclasses
 }
 
 func getRepoUseFlags(site *SiteData, aggPackages map[string]*AggPackage) []*AggUseFlag {
@@ -1815,6 +2006,13 @@ type AggProfile struct {
 	DescArch string
 	DescStat string
 	Repos    []AggProfileRepo
+	Files    map[string]string // Maps filename to its content
+}
+
+type AggEclass struct {
+	Name     string
+	Repos    map[string]*SiteData
+	Packages []*AggPackage
 }
 
 type AggPackageMove struct {
@@ -1851,6 +2049,7 @@ type AggregatedData struct {
 	RecentNews     []AggNewsItem
 	TotalPackages  int
 	UseFlags       []*AggUseFlag
+	Eclasses       []*AggEclass
 	UseExpandDescs map[string]*g2.UseExpandDesc
 	ValidLicenses  map[string]bool
 	ValidUseExpands map[string]bool
@@ -1865,6 +2064,7 @@ func prepareAggregatedData(sites []*SiteData) *AggregatedData {
 	aggProfiles := make(map[string]*AggProfile)
 	aggArches := make(map[string]*AggArch)
 	aggMoves := make(map[string]*AggPackageMove)
+	aggEclasses := make(map[string]*AggEclass)
 	var globalNews []AggNewsItem
 	aggUseExpandDescs := make(map[string]*g2.UseExpandDesc)
 	groupedReposMap := make(map[string]*RepoGroup)
@@ -2083,6 +2283,43 @@ func prepareAggregatedData(sites []*SiteData) *AggregatedData {
 				aggMoves[move.Old] = &AggPackageMove{Old: move.Old, New: move.New}
 			}
 		}
+		for _, eclass := range site.AggEclasses {
+			if _, ok := aggEclasses[eclass.Name]; !ok {
+				aggEclasses[eclass.Name] = &AggEclass{
+					Name:  eclass.Name,
+					Repos: make(map[string]*SiteData),
+				}
+			}
+			for rName, rData := range eclass.Repos {
+				aggEclasses[eclass.Name].Repos[rName] = rData
+			}
+			for _, pkg := range eclass.Packages {
+				foundPkg := false
+				for _, existingPkg := range aggEclasses[eclass.Name].Packages {
+					if existingPkg.Name == pkg.Name && existingPkg.Category == pkg.Category {
+						newRepos := make(map[string]*SiteData)
+						for k, v := range existingPkg.Repos {
+							newRepos[k] = v
+						}
+						for rName, rData := range pkg.Repos {
+							newRepos[rName] = rData
+						}
+						existingPkg.Repos = newRepos
+						foundPkg = true
+						break
+					}
+				}
+				if !foundPkg {
+					newPkg := *pkg
+					newRepos := make(map[string]*SiteData)
+					for k, v := range pkg.Repos {
+						newRepos[k] = v
+					}
+					newPkg.Repos = newRepos
+					aggEclasses[eclass.Name].Packages = append(aggEclasses[eclass.Name].Packages, &newPkg)
+				}
+			}
+		}
 	}
 
 	// Sort structures for templates
@@ -2138,6 +2375,18 @@ func prepareAggregatedData(sites []*SiteData) *AggregatedData {
 	}
 	sort.Slice(sortedArches, func(i, j int) bool { return sortedArches[i].Name < sortedArches[j].Name })
 
+	var sortedEclasses []*AggEclass
+	for _, ec := range aggEclasses {
+		sort.Slice(ec.Packages, func(i, j int) bool {
+			if ec.Packages[i].Category == ec.Packages[j].Category {
+				return ec.Packages[i].Name < ec.Packages[j].Name
+			}
+			return ec.Packages[i].Category < ec.Packages[j].Category
+		})
+		sortedEclasses = append(sortedEclasses, ec)
+	}
+	sort.Slice(sortedEclasses, func(i, j int) bool { return sortedEclasses[i].Name < sortedEclasses[j].Name })
+
 	sort.Slice(globalNews, func(i, j int) bool {
 		return globalNews[i].Posted.After(globalNews[j].Posted)
 	})
@@ -2183,6 +2432,7 @@ func prepareAggregatedData(sites []*SiteData) *AggregatedData {
 		TotalPackages:  totalPackages,
 		UseFlags:       sortedUseFlags,
 		ValidLicenses:  validLicenses,
+		Eclasses:       sortedEclasses,
 		UseExpandDescs: aggUseExpandDescs,
 		ValidUseExpands: validUseExpands,
 		GroupedRepos:   sortedGroupedRepos,
@@ -2565,6 +2815,8 @@ func generateOtherGlobalPages(outDir string, tmpl *template.Template, data *Aggr
 				return fmt.Errorf("rendering page: %w", err)
 			}
 		}
+
+
 	}
 
 	// 5. Global Licenses
@@ -2726,6 +2978,7 @@ func generateOtherGlobalPages(outDir string, tmpl *template.Template, data *Aggr
 				return fmt.Errorf("rendering page: %w", err)
 			}
 		}
+
 	}
 
 	return nil
@@ -2851,6 +3104,20 @@ func generateRepoPages(outDir string, tmpl *template.Template, sites []*SiteData
 				Title:       site.RepoName + " - Deprecated",
 				BaseURL:     "../../../",
 				Breadcrumbs: []Breadcrumb{{Name: title, URL: "../../../"}, {Name: site.RepoName, URL: "../"}, {Name: "Deprecated Packages"}},
+				Repo:        site,
+			}); err != nil {
+				return fmt.Errorf("rendering page: %w", err)
+			}
+		}
+
+		if len(site.Masked) > 0 {
+			if err := os.MkdirAll(filepath.Join(repoDir, "masked"), 0755); err != nil {
+				return fmt.Errorf("creating directory: %w", err)
+			}
+			if err := renderPage(filepath.Join(repoDir, "masked", "index.html"), tmpl, "repo_masked.html", GenericPageContext{
+				Title:       site.RepoName + " - Masked",
+				BaseURL:     "../../../",
+				Breadcrumbs: []Breadcrumb{{Name: title, URL: "../../../"}, {Name: site.RepoName, URL: "../"}, {Name: "Masked Packages"}},
 				Repo:        site,
 			}); err != nil {
 				return fmt.Errorf("rendering page: %w", err)
@@ -3021,6 +3288,23 @@ func generateRepoPages(outDir string, tmpl *template.Template, sites []*SiteData
 				}); err != nil {
 					return fmt.Errorf("rendering page: %w", err)
 				}
+
+				for fName, fContent := range p.Files {
+					if err := renderPage(filepath.Join(profDir, fName+".html"), tmpl, "repo_profile_file.html", GenericPageContext{
+						Title:       site.RepoName + " - Profile File: " + fName,
+						BaseURL:     relToRoot,
+						Breadcrumbs: []Breadcrumb{{Name: title, URL: relToRoot}, {Name: site.RepoName, URL: relToRoot + "repos/" + site.RepoName + "/"}, {Name: "Profiles", URL: relToRoot + "repos/" + site.RepoName + "/profiles/"}, {Name: p.Path, URL: "index.html"}, {Name: fName}},
+						RepoName:    site.RepoName,
+						ProfilePath: p.Path,
+						Profile:     p,
+						FileName:    fName,
+						FileContent: fContent,
+						Version:     version,
+						GenInfo:     genInfo,
+					}); err != nil {
+						return fmt.Errorf("rendering page: %w", err)
+					}
+				}
 			}
 		}
 
@@ -3173,6 +3457,46 @@ func generateRepoPages(outDir string, tmpl *template.Template, sites []*SiteData
 			aggPackagesMap[p.Category+"/"+p.Name] = p
 		}
 		repoUseFlags := getRepoUseFlags(site, aggPackagesMap)
+
+		if len(site.AggEclasses) > 0 {
+			if err := os.MkdirAll(filepath.Join(repoDir, "eclasses"), 0755); err != nil {
+				return fmt.Errorf("creating directory: %w", err)
+			}
+			if err := renderPage(filepath.Join(repoDir, "eclasses", "index.html"), tmpl, "repo_eclasses.html", GenericPageContext{
+				Title:       site.RepoName + " - Eclasses",
+				BaseURL:     "../../../",
+				Breadcrumbs: []Breadcrumb{{Name: title, URL: "../../../"}, {Name: site.RepoName, URL: "../"}, {Name: "Eclasses"}},
+				Eclasses:    site.AggEclasses,
+				Repo:        site,
+				Version:     version,
+				GenInfo:     genInfo,
+			}); err != nil {
+				return err
+			}
+
+			for _, ec := range site.AggEclasses {
+				safeName := sanitizeFilename(ec.Name)
+				if safeName == "" {
+					continue
+				}
+				ecDir := filepath.Join(repoDir, "eclasses", safeName)
+				if err := os.MkdirAll(ecDir, 0755); err != nil {
+					return fmt.Errorf("creating directory %s: %w", ecDir, err)
+				}
+
+				if err := renderPage(filepath.Join(ecDir, "index.html"), tmpl, "repo_eclass.html", GenericPageContext{
+					Title:       site.RepoName + " - Eclass: " + ec.Name,
+					BaseURL:     "../../../../",
+					Breadcrumbs: []Breadcrumb{{Name: title, URL: "../../../../"}, {Name: site.RepoName, URL: "../../"}, {Name: "Eclasses", URL: "../"}, {Name: ec.Name}},
+					Eclass:      ec,
+					Repo:        site,
+					Version:     version,
+					GenInfo:     genInfo,
+				}); err != nil {
+					return err
+				}
+			}
+		}
 
 		if err := os.MkdirAll(filepath.Join(repoDir, "uses"), 0755); err != nil {
 			return fmt.Errorf("creating directory: %w", err)
@@ -3327,6 +3651,26 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 		return fmt.Errorf("loading templates: %w", err)
 	}
 
+	for _, site := range sites {
+		aggPackagesMap := make(map[string]*AggPackage)
+		for _, cat := range site.Categories {
+			for _, pkg := range cat.Packages {
+				pkgKey := cat.Name + "/" + pkg.Name
+				aggPackagesMap[pkgKey] = &AggPackage{
+					Name:                pkg.Name,
+					Category:            cat.Name,
+					Repos:               map[string]*SiteData{site.RepoName: site},
+					DominantDescription: pkg.DominantDescription,
+					DominantHomepage:    pkg.DominantHomepage,
+					DominantLicense:     pkg.DominantLicense,
+					ReverseVirtuals:     pkg.ReverseVirtuals,
+					VirtualDeps:         pkg.VirtualDeps,
+				}
+			}
+		}
+		site.AggEclasses = getRepoEclasses(site, aggPackagesMap)
+	}
+
 	// Prepare Immutable Render Context
 	data := prepareAggregatedData(sites)
 
@@ -3392,7 +3736,7 @@ func renderPage(path string, tmpl *template.Template, name string, data interfac
 	return nil
 }
 
-func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, recentDuration time.Duration, recentDurationStr string, fastGit bool, useZip bool, concurrency int, retries int, continueOnError bool) error {
+func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, recentDuration time.Duration, recentDurationStr string, fastGit bool, useZip bool, concurrency int, retries int, continueOnError bool, persistentDir string) error {
 	var data []byte
 	var err error
 
@@ -3428,12 +3772,24 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, 
 		return fmt.Errorf("parsing repositories.xml: %w", err)
 	}
 
-	// Create a temporary directory to clone repos into
-	tmpDir, err := os.MkdirTemp("", "g2-sitegen-*")
-	if err != nil {
-		return fmt.Errorf("creating temp dir: %w", err)
+	// Create a temporary or persistent directory to clone repos into
+	var tmpDir string
+	var cleanup func()
+
+	if persistentDir != "" {
+		tmpDir = persistentDir
+		if err := os.MkdirAll(tmpDir, 0755); err != nil {
+			return fmt.Errorf("creating persistent dir: %w", err)
+		}
+		cleanup = func() {}
+	} else {
+		tmpDir, err = os.MkdirTemp("", "g2-sitegen-*")
+		if err != nil {
+			return fmt.Errorf("creating temp dir: %w", err)
+		}
+		cleanup = func() { _ = os.RemoveAll(tmpDir) }
 	}
-	defer func() { _ = os.RemoveAll(tmpDir) }()
+	defer cleanup()
 
 	var allSites []*SiteData
 	var allSitesMu sync.Mutex
@@ -3468,11 +3824,13 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, 
 			log.Printf("[START] Fetching remote repository: %s (%s)", repo.Name, gitUrl)
 
 			repoPath := filepath.Join(tmpDir, repo.Name)
+			defer func() { _ = os.RemoveAll(repoPath) }()
+
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 			defer cancel()
 
 			t0 := time.Now()
-			if err := FetchRepo(ctx, gitUrl, repoPath, useZip, retries); err != nil {
+			if err := FetchRepo(ctx, gitUrl, repoPath, useZip, persistentDir != "", retries); err != nil {
 				log.Printf("Failed to fetch %s: %v", repo.Name, err)
 				if !continueOnError {
 					return fmt.Errorf("fetching %s: %w", repo.Name, err)

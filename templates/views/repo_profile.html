@@ -24,4 +24,13 @@
         {{end}}
     </ul>
     {{end}}
+
+    {{if .Profile.Files}}
+    <h4>Files:</h4>
+    <ul>
+        {{range $name, $content := .Profile.Files}}
+        <li><a href="{{$.BaseURL}}repos/{{$.RepoName}}/profiles/{{$.Profile.Path}}/{{$name}}.html">{{$name}}</a></li>
+        {{end}}
+    </ul>
+    {{end}}
 </div>

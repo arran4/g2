@@ -149,6 +149,19 @@
 </div>
 {{end}}
 
+{{if .VersionData.Ebuild.Vars.INHERITED}}
+<div class="metadata-section">
+    <h3>Inherited Eclasses</h3>
+    <div>
+        {{range split .VersionData.Ebuild.Vars.INHERITED " "}}
+        <div class="iuse-flag">
+            <a href="{{$.BaseURL}}repos/{{$.Repo.RepoName}}/eclasses/{{.}}/">{{.}}</a>
+        </div>
+        {{end}}
+    </div>
+</div>
+{{end}}
+
 {{if or .VersionData.Ebuild.Vars.DEPEND .VersionData.Ebuild.Vars.RDEPEND .VersionData.Ebuild.Vars.BDEPEND}}
 {{if .VersionData.ApplicableMirrors}}
 <div class="metadata-section">

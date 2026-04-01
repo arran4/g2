@@ -70,7 +70,7 @@ func giteaUrlConverter(gitUrl string) (string, error) {
 	return fmt.Sprintf("https://%s%s/archive/HEAD.zip", u.Host, path), nil
 }
 
-func FetchRepo(ctx context.Context, gitUrl string, destDir string, useZip bool, retries int) error {
+func FetchRepo(ctx context.Context, gitUrl string, destDir string, useZip bool, persistent bool, retries int) error {
 	var err error
 	for i := 0; i <= retries; i++ {
 		if i > 0 {
@@ -78,7 +78,7 @@ func FetchRepo(ctx context.Context, gitUrl string, destDir string, useZip bool, 
 			_ = os.RemoveAll(destDir)
 			time.Sleep(1 * time.Second)
 		}
-		err = fetchRepoAttempt(ctx, gitUrl, destDir, useZip)
+		err = fetchRepoAttempt(ctx, gitUrl, destDir, useZip, persistent)
 		if err == nil {
 			return nil
 		}
@@ -87,7 +87,48 @@ func FetchRepo(ctx context.Context, gitUrl string, destDir string, useZip bool, 
 	return err
 }
 
-func fetchRepoAttempt(ctx context.Context, gitUrl string, destDir string, useZip bool) error {
+func updatePersistentRepo(ctx context.Context, destDir string) error {
+	log.Printf("Persistent repo exists, attempting to fetch and reset: %s", destDir)
+	cmdFetch := exec.CommandContext(ctx, "git", "fetch", "--force", "--depth", "1", "origin", "HEAD")
+	cmdFetch.Dir = destDir
+	cmdFetch.Stdout = os.Stdout
+	cmdFetch.Stderr = os.Stderr
+	if err := cmdFetch.Run(); err != nil {
+		return fmt.Errorf("git fetch failed: %w", err)
+	}
+
+	cmdReset := exec.CommandContext(ctx, "git", "reset", "--hard", "FETCH_HEAD")
+	cmdReset.Dir = destDir
+	cmdReset.Stdout = os.Stdout
+	cmdReset.Stderr = os.Stderr
+	if err := cmdReset.Run(); err != nil {
+		return fmt.Errorf("git reset failed: %w", err)
+	}
+
+	cmdClean := exec.CommandContext(ctx, "git", "clean", "-fdx")
+	cmdClean.Dir = destDir
+	cmdClean.Stdout = os.Stdout
+	cmdClean.Stderr = os.Stderr
+	if err := cmdClean.Run(); err != nil {
+		return fmt.Errorf("git clean failed: %w", err)
+	}
+
+	return nil
+}
+
+func fetchRepoAttempt(ctx context.Context, gitUrl string, destDir string, useZip bool, persistent bool) error {
+	if persistent {
+		gitDir := filepath.Join(destDir, ".git")
+		if info, err := os.Stat(gitDir); err == nil && info.IsDir() {
+			err := updatePersistentRepo(ctx, destDir)
+			if err == nil {
+				return nil
+			}
+			log.Printf("Persistent update failed: %v, wiping directory %s and doing a fresh clone", err, destDir)
+			_ = os.RemoveAll(destDir)
+		}
+	}
+
 	if useZip {
 		u, err := url.Parse(gitUrl)
 		if err == nil {

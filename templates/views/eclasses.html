@@ -1,0 +1,43 @@
+{{define "eclasses.html"}}
+<div class="row mb-3">
+    <div class="col-12">
+        <h1 class="h3">Eclasses</h1>
+        <p class="text-muted">Aggregated list of all eclasses across all overlays.</p>
+    </div>
+</div>
+
+<div class="card shadow-sm">
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover table-striped align-middle mb-0 datatable">
+                <thead>
+                    <tr>
+                        <th>Eclass Name</th>
+                        <th>Packages Using It</th>
+                        <th>Overlays Defining It</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {{range .Eclasses}}
+                    <tr>
+                        <td>
+                            <a href="{{$.BaseURL}}eclasses/{{.Name}}/" class="fw-bold">{{.Name}}</a>
+                        </td>
+                        <td>
+                            <span class="badge bg-secondary">{{len .Packages}}</span>
+                        </td>
+                        <td>
+                            <ul class="list-unstyled mb-0" style="font-size: 0.9em;">
+                                {{range $repoName, $repoData := .Repos}}
+                                    <li><a href="{{$.BaseURL}}repos/{{$repoName}}/">{{$repoName}}</a></li>
+                                {{end}}
+                            </ul>
+                        </td>
+                    </tr>
+                {{end}}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{{end}}
