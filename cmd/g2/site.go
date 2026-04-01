@@ -92,6 +92,7 @@ type SiteData struct {
 	InfoPkgs          []g2.InfoPkg
 	Deprecated        []g2.PackageDeprecated
 	ParsedEclasses    []*g2.Ebuild
+	Eclasses          []*g2.Ebuild
 	PackageCount      int
 	AggUseFlags       []*AggUseFlag
 	ThirdPartyMirrors map[string][]string
@@ -1280,6 +1281,27 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool, r
 	}
 
 	extractVirtualDeps(site)
+
+	// Parse Eclasses
+	eclassDir := filepath.Join(repoDir, "eclass")
+	if info, err := fs.Stat(sysFS, filepath.ToSlash(eclassDir)); err == nil && info.IsDir() {
+		entries, err := fs.ReadDir(sysFS, filepath.ToSlash(eclassDir))
+		if err == nil {
+			for _, e := range entries {
+				if !e.IsDir() && strings.HasSuffix(e.Name(), ".eclass") {
+					ebuild, err := g2.ParseEbuild(sysFS, filepath.ToSlash(filepath.Join(eclassDir, e.Name())), g2.ParseFull)
+					if err == nil {
+						site.Eclasses = append(site.Eclasses, ebuild)
+					} else {
+						log.Printf("Warning: failed to parse eclass %s: %v", e.Name(), err)
+					}
+				}
+			}
+		}
+	}
+	sort.Slice(site.Eclasses, func(i, j int) bool {
+		return site.Eclasses[i].Vars["PN"] < site.Eclasses[j].Vars["PN"]
+	})
 
 	return site, nil
 }
@@ -3569,6 +3591,8 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, 
 			log.Printf("[START] Fetching remote repository: %s (%s)", repo.Name, gitUrl)
 
 			repoPath := filepath.Join(tmpDir, repo.Name)
+			defer func() { _ = os.RemoveAll(repoPath) }()
+
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 			defer cancel()
 
