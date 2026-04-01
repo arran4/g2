@@ -2733,6 +2733,43 @@ func generateOtherGlobalPages(outDir string, tmpl *template.Template, data *Aggr
 
 func generateRepoPages(outDir string, tmpl *template.Template, sites []*SiteData, data *AggregatedData, title, version, recentDurationStr string, genInfo GenerationInfo) error {
 	// 6. Repo-Specific Pages
+
+	if err := os.MkdirAll(filepath.Join(outDir, "repos"), 0755); err != nil {
+		return fmt.Errorf("creating directory repos/: %w", err)
+	}
+
+	if err := os.MkdirAll(filepath.Join(outDir, "repos", "all"), 0755); err != nil {
+		return fmt.Errorf("creating directory repos/all: %w", err)
+	}
+	if err := renderPage(filepath.Join(outDir, "repos", "all", "index.html"), tmpl, "overlays.html", GenericPageContext{
+		Title:       "All Overlays",
+		BaseURL:     "../../",
+		Breadcrumbs: []Breadcrumb{{Name: title, URL: "../../"}, {Name: "All Overlays"}},
+		Repos:       sites,
+		Version:     version,
+		GenInfo:     genInfo,
+	}); err != nil {
+		return fmt.Errorf("rendering page: %w", err)
+	}
+
+	for _, group := range data.GroupedRepos {
+		groupDirName := group.Quality + "-" + group.Status
+		groupDir := filepath.Join(outDir, "repos", groupDirName)
+		if err := os.MkdirAll(groupDir, 0755); err != nil {
+			return fmt.Errorf("creating directory %s: %w", groupDir, err)
+		}
+		if err := renderPage(filepath.Join(groupDir, "index.html"), tmpl, "repo_group.html", GenericPageContext{
+			Title:       "Overlays: " + group.Quality + " - " + group.Status,
+			BaseURL:     "../../",
+			Breadcrumbs: []Breadcrumb{{Name: title, URL: "../../"}, {Name: "Overlays: " + group.Quality + " - " + group.Status}},
+			Group:       group,
+			Version:     version,
+			GenInfo:     genInfo,
+		}); err != nil {
+			return fmt.Errorf("rendering page: %w", err)
+		}
+	}
+
 	for _, site := range sites {
 		repoDir := filepath.Join(outDir, "repos", site.RepoName)
 		if err := os.MkdirAll(repoDir, 0755); err != nil {

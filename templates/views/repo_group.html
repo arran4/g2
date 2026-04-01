@@ -1,0 +1,7 @@
+<h2>Overlays: {{.Group.Quality}} | {{.Group.Status}}</h2>
+<ul>
+    {{range .Group.Repos}}
+    <li><a href="../../repos/{{.RepoName}}/">{{.RepoName}}</a></li>
+    {{end}}
+</ul>
+<p><a href="../../">Back to Dashboard</a></p>
