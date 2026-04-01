@@ -54,8 +54,21 @@
     {{range .GroupedRepos}}
     <li>
         <strong>Quality: {{.Quality}} | Status: {{.Status}}</strong>: {{len .Repos}} overlays
+        <ul>
+            {{range .Repos}}
+            <li><a href="repos/{{.RepoName}}/">{{.RepoName}}</a></li>
+            {{end}}
+        </ul>
     </li>
     {{end}}
+    <li>
+        <strong>All Overlays</strong>: {{len .Repos}} overlays
+        <ul>
+            {{range .Repos}}
+            <li><a href="repos/{{.RepoName}}/">{{.RepoName}}</a></li>
+            {{end}}
+        </ul>
+    </li>
 </ul>
 <p><a href="overlays/">View all overlays</a></p>
 {{else}}
