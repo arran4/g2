@@ -937,6 +937,92 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 						return
 					}
 
+				case "profiles":
+					if len(parts) == 3 {
+						s.renderPageHTTP(w, "repo_profiles.html", map[string]interface{}{
+							"Title":       site.RepoName + " - Profiles",
+							"BaseURL":     baseURL,
+							"Breadcrumbs": []Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: site.RepoName, URL: "../"}, {Name: "Profiles"}},
+							"Repo":        site,
+							"Version":     version,
+							"GenInfo":     s.GenInfo,
+						})
+						return
+					} else if len(parts) >= 4 {
+						// Extract profile path which might have multiple slashes
+						// URL: repos/overlay1/profiles/default/linux/amd64/17.0
+						// Or URL: repos/overlay1/profiles/default/linux/amd64/17.0/make.defaults.html
+
+						// Reconstruct the remaining parts
+						remaining := strings.Join(parts[3:], "/")
+
+						// Check if it's a file request ending in .html
+						var requestedFile string
+						var profilePath string
+
+						if strings.HasSuffix(remaining, ".html") {
+							// E.g., default/linux/amd64/17.0/make.defaults.html
+							// Split at the last slash
+							lastSlash := strings.LastIndex(remaining, "/")
+							if lastSlash != -1 {
+								profilePath = remaining[:lastSlash]
+								requestedFile = strings.TrimSuffix(remaining[lastSlash+1:], ".html")
+							} else {
+								profilePath = ""
+								requestedFile = strings.TrimSuffix(remaining, ".html")
+							}
+						} else {
+							profilePath = remaining
+						}
+
+						var targetProfile *ProfileData
+						for _, p := range site.Profiles {
+							if p.Path == profilePath {
+								targetProfile = &p
+								break
+							}
+						}
+
+						if targetProfile == nil {
+							http.NotFound(w, r)
+							return
+						}
+
+						if requestedFile != "" {
+							fileContent, exists := targetProfile.Files[requestedFile]
+							if !exists {
+								http.NotFound(w, r)
+								return
+							}
+
+							s.renderPageHTTP(w, "repo_profile_file.html", map[string]interface{}{
+								"Title":       site.RepoName + " - Profile File: " + requestedFile,
+								"BaseURL":     baseURL,
+								"Breadcrumbs": []Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: site.RepoName, URL: baseURL + "repos/" + site.RepoName + "/"}, {Name: "Profiles", URL: baseURL + "repos/" + site.RepoName + "/profiles/"}, {Name: targetProfile.Path, URL: "index.html"}, {Name: requestedFile}},
+								"RepoName":    site.RepoName,
+								"ProfilePath": targetProfile.Path,
+								"Profile":     targetProfile,
+								"FileName":    requestedFile,
+								"FileContent": fileContent,
+								"Version":     version,
+								"GenInfo":     s.GenInfo,
+							})
+							return
+						} else {
+							s.renderPageHTTP(w, "repo_profile.html", map[string]interface{}{
+								"Title":       site.RepoName + " - Profile: " + targetProfile.Path,
+								"BaseURL":     baseURL,
+								"Breadcrumbs": []Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: site.RepoName, URL: baseURL + "repos/" + site.RepoName + "/"}, {Name: "Profiles", URL: baseURL + "repos/" + site.RepoName + "/profiles/"}, {Name: targetProfile.Path}},
+								"RepoName":    site.RepoName,
+								"ProfilePath": targetProfile.Path,
+								"Profile":     targetProfile,
+								"Version":     version,
+								"GenInfo":     s.GenInfo,
+							})
+							return
+						}
+					}
+
 				case "uses":
 					repoUseFlags := getRepoUseFlags(site, s.PkgMap)
 
