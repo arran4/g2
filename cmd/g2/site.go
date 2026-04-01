@@ -3422,6 +3422,8 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, 
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 			defer cancel()
 
+			var siteData *SiteData
+
 			if useMemory {
 				log.Printf("[START] Fetching remote repository into memory: %s (%s)", repo.Name, gitUrl)
 
@@ -3443,7 +3445,7 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, 
 				sysFS := NewBillyFS(bfs)
 
 				t1 := time.Now()
-				siteData, err := parseRepo(sysFS, ".", repo.Name, fastGit, &repoCopy, SourceURL(gitUrl), gitRepo)
+				siteData, err = parseRepo(sysFS, ".", repo.Name, fastGit, &repoCopy, SourceURL(gitUrl), gitRepo)
 				if err != nil {
 					log.Printf("Failed to parse repo %s from memory: %v", repo.Name, err)
 					return nil
@@ -3454,11 +3456,6 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, 
 				siteData.CheckoutTime = checkoutTime.String()
 				siteData.ProcessTime = processTime.String()
 				siteData.GitSize = "Memory"
-
-				allSitesMu.Lock()
-				allSites = append(allSites, siteData)
-				allSitesMu.Unlock()
-				return nil
 			} else {
 				log.Printf("[START] Fetching remote repository: %s (%s)", repo.Name, gitUrl)
 
@@ -3492,7 +3489,7 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, 
 				repoCopy := repo
 
 				t1 := time.Now()
-				siteData, err := parseRepo(os.DirFS(repoPath), ".", repo.Name, fastGit, &repoCopy, SourceURL(gitUrl))
+				siteData, err = parseRepo(os.DirFS(repoPath), ".", repo.Name, fastGit, &repoCopy, SourceURL(gitUrl))
 				if err != nil {
 					log.Printf("Failed to parse repo %s: %v", repo.Name, err)
 					return nil
@@ -3508,12 +3505,12 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, 
 				siteData.CheckoutTime = checkoutTime.String()
 				siteData.ProcessTime = processTime.String()
 				siteData.GitSize = gitSize
-
-				allSitesMu.Lock()
-				allSites = append(allSites, siteData)
-				allSitesMu.Unlock()
-				return nil
 			}
+
+			allSitesMu.Lock()
+			allSites = append(allSites, siteData)
+			allSitesMu.Unlock()
+			return nil
 		})
 	}
 	if err := g.Wait(); err != nil {
