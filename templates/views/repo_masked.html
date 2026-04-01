@@ -1,7 +1,9 @@
 {{define "content"}}
 <h2>Masked Packages in {{.Repo.RepoName}}</h2>
 
-<p><a href="https://github.com/gentoo-mirror/gentoo/blob/stable/profiles/package.mask" target="_blank">View raw package.mask</a></p>
+{{if .Repo.SourceURL}}
+<p><a href="{{.Repo.SourceURL}}/tree/master/profiles/package.mask" target="_blank">View raw package.mask</a></p>
+{{end}}
 
 {{if .Repo.Masked}}
 {{range .Repo.Masked}}
