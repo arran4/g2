@@ -709,6 +709,18 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 						})
 						return
 					}
+				case "masked":
+					if len(parts) == 3 {
+						s.renderPageHTTP(w, "repo_masked.html", map[string]interface{}{
+							"Title":       site.RepoName + " - Masked",
+							"BaseURL":     baseURL,
+							"Breadcrumbs": []Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: site.RepoName, URL: "../"}, {Name: "Masked Packages"}},
+							"Repo":        site,
+							"Version":     version,
+							"GenInfo":     s.GenInfo,
+						})
+						return
+					}
 				case "deprecated":
 					if len(parts) == 3 {
 						s.renderPageHTTP(w, "repo_deprecated.html", map[string]interface{}{

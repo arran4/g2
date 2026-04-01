@@ -92,6 +92,7 @@ type SiteData struct {
 	ArchList          *g2.ArchList
 	ArchesDesc        *g2.ArchesDesc
 	InfoPkgs          []g2.InfoPkg
+	Masked            []g2.PackageMasked
 	Deprecated        []g2.PackageDeprecated
 	ParsedEclasses    []*g2.Ebuild
 	Eclasses          []*g2.Ebuild
@@ -161,6 +162,7 @@ type PackageData struct {
 	LintWarnings []string
 
 	// Deprecation
+	Masked *g2.PackageMasked
 	Deprecated *g2.PackageDeprecated
 
 	// InfoPkg matching
@@ -188,6 +190,7 @@ type VersionData struct {
 
 	// Deprecation
 	Deprecated *g2.PackageDeprecated
+	Masked *g2.PackageMasked
 
 	// Moves
 	MovedToSlot string
@@ -792,6 +795,14 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool, r
 		log.Printf("Warning: failed to parse package.deprecated: %v", err)
 	}
 
+	packageMaskPath := filepath.Join(repoDir, "profiles", "package.mask")
+	var masked []g2.PackageMasked
+	if parsedMasked, err := g2.ParsePackageMaskedFS(sysFS, filepath.ToSlash(packageMaskPath)); err == nil {
+		masked = parsedMasked
+	} else if !os.IsNotExist(err) {
+		log.Printf("Warning: failed to parse package.mask: %v", err)
+	}
+
 	var thirdPartyMirrors map[string][]string
 	if tm, err := g2.ParseThirdPartyMirrorsFS(sysFS, filepath.ToSlash(filepath.Join(repoDir, "profiles", "thirdpartymirrors"))); err == nil {
 		thirdPartyMirrors = tm
@@ -831,6 +842,7 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool, r
 		ArchesDesc:        archesDesc,
 		ThirdPartyMirrors: thirdPartyMirrors,
 		Deprecated:        deprecated,
+		Masked:            masked,
 		InfoVars:          infoVars,
 		InfoPkgs:          infoPkgs,
 		PackageCount:      0,
@@ -1226,12 +1238,24 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool, r
 			// Assign deprecation data
 			pkgStr := pkgData.Category + "/" + pkgData.Name
 			for i := range site.Deprecated {
-				depPkg := site.Deprecated[i].Package
-				// Handle versions and operators in deprecation package strings (e.g. >=dev-python/autobahn-21)
-				// A simple check is if it contains the category/name
-				if strings.Contains(depPkg, pkgStr) {
-					pkgData.Deprecated = &site.Deprecated[i]
-					break
+				for _, entry := range site.Deprecated[i].Entries {
+					depPkg := entry.Package
+					// Handle versions and operators in deprecation package strings (e.g. >=dev-python/autobahn-21)
+					// A simple check is if it contains the category/name
+					if strings.Contains(depPkg, pkgStr) {
+						pkgData.Deprecated = &site.Deprecated[i]
+						break
+					}
+				}
+			}
+
+			for i := range site.Masked {
+				for _, entry := range site.Masked[i].Entries {
+					maskPkg := entry.Package
+					if strings.Contains(maskPkg, pkgStr) {
+						pkgData.Masked = &site.Masked[i]
+						break
+					}
 				}
 			}
 
@@ -1239,9 +1263,19 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool, r
 				for j := range site.Deprecated {
 					// Add deprecation note if the package string matches.
 					// We match if it contains "category/name" which works for versioned atoms too.
-					if strings.Contains(site.Deprecated[j].Package, pkgStr) {
-						pkgData.Versions[i].Deprecated = &site.Deprecated[j]
-						break
+					for _, entry := range site.Deprecated[j].Entries {
+						if strings.Contains(entry.Package, pkgStr) {
+							pkgData.Versions[i].Deprecated = &site.Deprecated[j]
+							break
+						}
+					}
+				}
+				for j := range site.Masked {
+					for _, entry := range site.Masked[j].Entries {
+						if strings.Contains(entry.Package, pkgStr) {
+							pkgData.Versions[i].Masked = &site.Masked[j]
+							break
+						}
 					}
 				}
 
@@ -1250,6 +1284,7 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool, r
 					Ebuild:       v.Ebuild,
 					EbuildRawURL: v.EbuildRawURL,
 					Deprecated:   pkgData.Versions[i].Deprecated,
+					Masked:       pkgData.Versions[i].Masked,
 				})
 			}
 
@@ -2739,6 +2774,8 @@ func generateOtherGlobalPages(outDir string, tmpl *template.Template, data *Aggr
 				return fmt.Errorf("rendering page: %w", err)
 			}
 		}
+
+
 	}
 
 	// 5. Global Licenses
@@ -2900,6 +2937,7 @@ func generateOtherGlobalPages(outDir string, tmpl *template.Template, data *Aggr
 				return fmt.Errorf("rendering page: %w", err)
 			}
 		}
+
 	}
 
 	return nil
@@ -2988,6 +3026,20 @@ func generateRepoPages(outDir string, tmpl *template.Template, sites []*SiteData
 				Title:       site.RepoName + " - Deprecated",
 				BaseURL:     "../../../",
 				Breadcrumbs: []Breadcrumb{{Name: title, URL: "../../../"}, {Name: site.RepoName, URL: "../"}, {Name: "Deprecated Packages"}},
+				Repo:        site,
+			}); err != nil {
+				return fmt.Errorf("rendering page: %w", err)
+			}
+		}
+
+		if len(site.Masked) > 0 {
+			if err := os.MkdirAll(filepath.Join(repoDir, "masked"), 0755); err != nil {
+				return fmt.Errorf("creating directory: %w", err)
+			}
+			if err := renderPage(filepath.Join(repoDir, "masked", "index.html"), tmpl, "repo_masked.html", GenericPageContext{
+				Title:       site.RepoName + " - Masked",
+				BaseURL:     "../../../",
+				Breadcrumbs: []Breadcrumb{{Name: title, URL: "../../../"}, {Name: site.RepoName, URL: "../"}, {Name: "Masked Packages"}},
 				Repo:        site,
 			}); err != nil {
 				return fmt.Errorf("rendering page: %w", err)

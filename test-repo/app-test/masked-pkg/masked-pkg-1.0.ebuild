@@ -1,0 +1,4 @@
+EAPI=8
+DESCRIPTION="A test package"
+SLOT="0"
+KEYWORDS="~amd64"
