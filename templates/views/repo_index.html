@@ -161,6 +161,9 @@
     {{if gt (len .Repo.Deprecated) 0}}
     <li><a href="deprecated/">Deprecated Packages ({{len .Repo.Deprecated}})</a></li>
     {{end}}
+    {{if gt (len .Repo.Masked) 0}}
+    <li><a href="masked/">Masked Packages ({{len .Repo.Masked}})</a></li>
+    {{end}}
     {{if .RecentNews}}
     <li><a href="news/">News ({{len .Repo.News}})</a></li>
     {{end}}

@@ -7,17 +7,17 @@ import (
 	"testing"
 )
 
-//go:embed testdata/package.deprecated
-var packageDeprecatedTestInput string
+//go:embed testdata/package.mask
+var packageMaskTestInput string
 
-func TestParsePackageDeprecatedReader(t *testing.T) {
-	expected := []PackageDeprecated{
+func TestParsePackageMaskedReader(t *testing.T) {
+	expected := []PackageMasked{
 		{
 			Reason:      "Backwards compatibility package for pkg_resources that have been removed from >=dev-python/setuptools-82. Please migrate to importlib.{metadata,resources} and/or dev-python/packaging.",
 			Date:        "2026-03-25",
 			Author:      "Jane Doe",
 			AuthorEmail: "jane.doe@example.com",
-			Entries: []PackageDeprecatedEntry{
+			Entries: []PackageMaskedEntry{
 				{Package: "dev-python/pkg-resources"},
 			},
 		},
@@ -26,13 +26,13 @@ func TestParsePackageDeprecatedReader(t *testing.T) {
 			Date:        "2025-11-25",
 			Author:      "John Smith",
 			AuthorEmail: "john.smith@example.com",
-			Entries: []PackageDeprecatedEntry{
+			Entries: []PackageMaskedEntry{
 				{Package: "dev-python/autobahn"},
 			},
 		},
 	}
 
-	res, err := parsePackageDeprecatedReader(bytes.NewBufferString(packageDeprecatedTestInput))
+	res, err := parsePackageMaskedReader(bytes.NewBufferString(packageMaskTestInput))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -48,14 +48,14 @@ func TestParsePackageDeprecatedReader(t *testing.T) {
 	}
 }
 
-func TestSerializePackageDeprecated(t *testing.T) {
-	data := []PackageDeprecated{
+func TestSerializePackageMasked(t *testing.T) {
+	data := []PackageMasked{
 		{
 			Reason:      "Backwards compatibility package for pkg_resources that have been removed from >=dev-python/setuptools-82. Please migrate to importlib.{metadata,resources} and/or dev-python/packaging.",
 			Date:        "2026-03-25",
 			Author:      "Jane Doe",
 			AuthorEmail: "jane.doe@example.com",
-			Entries: []PackageDeprecatedEntry{
+			Entries: []PackageMaskedEntry{
 				{Package: "dev-python/pkg-resources"},
 			},
 		},
@@ -64,20 +64,20 @@ func TestSerializePackageDeprecated(t *testing.T) {
 			Date:        "2025-11-25",
 			Author:      "John Smith",
 			AuthorEmail: "john.smith@example.com",
-			Entries: []PackageDeprecatedEntry{
+			Entries: []PackageMaskedEntry{
 				{Package: "dev-python/autobahn"},
 			},
 		},
 	}
 
 	var buf bytes.Buffer
-	err := SerializePackageDeprecated(&buf, data)
+	err := SerializePackageMasked(&buf, data)
 	if err != nil {
 		t.Fatalf("unexpected error during serialization: %v", err)
 	}
 
 	// Now parse it back
-	parsed, err := parsePackageDeprecatedReader(&buf)
+	parsed, err := parsePackageMaskedReader(&buf)
 	if err != nil {
 		t.Fatalf("unexpected error during re-parsing: %v", err)
 	}

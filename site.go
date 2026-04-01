@@ -44,6 +44,9 @@ type PackageData struct {
 
 	// Lint Info
 	LintWarnings []string
+
+	Masked *PackageMasked
+	Deprecated *PackageDeprecated
 }
 
 type VersionData struct {
@@ -55,4 +58,7 @@ type VersionData struct {
 
 	// Deprecation
 	Deprecated *PackageDeprecated
+
+	// Masked
+	Masked *PackageMasked
 }
