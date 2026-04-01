@@ -29,6 +29,9 @@
         {{if and .Projects (gt (len .Projects) 0)}}
         <li><a href="projects/">Projects ({{len .Projects}})</a></li>
         {{end}}
+    {{if gt (len .Eclasses) 0}}
+        <li><a href="eclasses/">Eclasses ({{len .Eclasses}})</a></li>
+    {{end}}
         {{if and .Profiles (gt (len .Profiles) 0)}}
         <li><a href="profiles/">Profiles</a></li>
         {{end}}

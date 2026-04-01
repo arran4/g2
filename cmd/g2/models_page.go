@@ -21,6 +21,8 @@ type GenericPageContext struct {
 	Licenses             []*AggLicense
 	UseFlags             []*AggUseFlag
 	Projects             []*AggProject
+	Eclass               *AggEclass
+	Eclasses             []*AggEclass
 	Profiles             interface{} // Can be []*AggProfile or []ProfileData
 	Arches               []*AggArch
 	RecentDurationString string

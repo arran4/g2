@@ -1,0 +1,35 @@
+{{define "repo_eclasses.html"}}
+<div class="row mb-3">
+    <div class="col-12">
+        <h1 class="h3">{{.Repo.RepoName}} - Eclasses</h1>
+        <p class="text-muted">Eclasses inherited by packages in this overlay.</p>
+    </div>
+</div>
+
+<div class="card shadow-sm">
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover table-striped align-middle mb-0 datatable">
+                <thead>
+                    <tr>
+                        <th>Eclass Name</th>
+                        <th>Packages Inheriting It</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {{range .Eclasses}}
+                    <tr>
+                        <td>
+                            <a href="{{.Name}}/" class="fw-bold">{{.Name}}</a>
+                        </td>
+                        <td>
+                            <span class="badge bg-secondary">{{len .Packages}}</span>
+                        </td>
+                    </tr>
+                {{end}}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{{end}}

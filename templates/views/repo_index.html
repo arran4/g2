@@ -155,6 +155,9 @@
     {{if gt (len .Repo.AggUseFlags) 0}}
     <li><a href="uses/">USE Flags ({{len .Repo.AggUseFlags}})</a></li>
     {{end}}
+    {{if gt (len .Repo.AggEclasses) 0}}
+    <li><a href="eclasses/">Eclasses ({{len .Repo.AggEclasses}})</a></li>
+    {{end}}
     {{if gt (len .Repo.InfoPkgs) 0}}
     <li><a href="info_pkgs/">Info Packages ({{len .Repo.InfoPkgs}})</a></li>
     {{end}}
