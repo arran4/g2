@@ -376,7 +376,9 @@ func (s *SiteServer) renderPageHTTP(w http.ResponseWriter, name string, data map
 		return
 	}
 
-	w.Write(buf.Bytes())
+	if _, err := w.Write(buf.Bytes()); err != nil {
+		log.Printf("Error writing response for %s: %v", name, err)
+	}
 }
 
 func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
