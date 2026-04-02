@@ -62,3 +62,27 @@ type VersionData struct {
 	// Masked
 	Masked *PackageMasked
 }
+
+type ProfileData struct {
+	Path     string
+	IsDesc   bool
+	DescArch string
+	DescStat string
+	Parents  []string
+	Children []string
+	Files    map[string]string // Maps filename to its content
+}
+
+type AggProfileRepo struct {
+	RepoName string
+	Profile  ProfileData
+}
+
+type AggProfile struct {
+	Path     string
+	IsDesc   bool
+	DescArch string
+	DescStat string
+	Repos    []AggProfileRepo
+	Files    map[string]string // Maps filename to its content
+}

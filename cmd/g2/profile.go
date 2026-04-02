@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"text/tabwriter"
+
+	"github.com/arran4/g2"
 )
 
 func ProfileCommand(args []string) error {
@@ -81,7 +83,7 @@ func profileDescribeCommand(args []string) error {
 		return fmt.Errorf("failed to parse profiles: %w", err)
 	}
 
-	var targetProfile *ProfileData
+	var targetProfile *g2.ProfileData
 	for i, p := range profilesData {
 		if p.Path == profilePath {
 			targetProfile = &profilesData[i]

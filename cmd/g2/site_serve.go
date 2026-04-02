@@ -14,6 +14,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/arran4/g2"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -987,7 +988,7 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 							profilePath = remaining
 						}
 
-						var targetProfile *ProfileData
+						var targetProfile *g2.ProfileData
 						for _, p := range site.Profiles {
 							if p.Path == profilePath {
 								targetProfile = &p
