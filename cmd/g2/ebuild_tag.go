@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"sort"
@@ -11,7 +12,15 @@ import (
 	"github.com/arran4/g2"
 )
 
-func (cfg *CmdEbuildArgConfig) cmdEbuildTag(args []string) error {
+func (cfg *CmdEbuildArgConfig) cmdEbuildTag(args []string, opts ...any) error {
+	var out io.Writer = os.Stdout
+	for _, opt := range opts {
+		switch o := opt.(type) {
+		case io.Writer:
+			out = o
+		}
+	}
+
 	fs := flag.NewFlagSet("tag", flag.ExitOnError)
 	dir := fs.String("dir", ".", "Directory to search for ebuilds")
 	compare := fs.String("compare", "", "Compare a version to the highest tag (outputs -, =, or +)")
@@ -67,14 +76,14 @@ func (cfg *CmdEbuildArgConfig) cmdEbuildTag(args []string) error {
 		comp := g2.CompareVersions(*compare, highestVersion)
 		if comp < 0 {
 			if *downgrades {
-				fmt.Println("-")
+				_, _ = fmt.Fprintln(out, "-")
 			} else {
 				log.Printf("Version %s is a downgrade from %s. Ignoring.", *compare, highestVersion)
 			}
 		} else if comp == 0 {
-			fmt.Println("=")
+			_, _ = fmt.Fprintln(out, "=")
 		} else {
-			fmt.Println("+")
+			_, _ = fmt.Fprintln(out, "+")
 		}
 		return nil
 	}
@@ -96,10 +105,10 @@ func (cfg *CmdEbuildArgConfig) cmdEbuildTag(args []string) error {
 			gv.IncrementPart("patch")
 		}
 
-		fmt.Println(gv.String())
+		_, _ = fmt.Fprintln(out, gv.String())
 		return nil
 	}
 
-	fmt.Println(highestVersion)
+	_, _ = fmt.Fprintln(out, highestVersion)
 	return nil
 }
