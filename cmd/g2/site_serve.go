@@ -512,13 +512,18 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				http.Redirect(w, r, targetURL, http.StatusFound)
 				return
 			} else {
+					validLicenses := make(map[string]bool)
+					for _, lic := range s.AggLicenses {
+						validLicenses[lic.Name] = true
+					}
 				s.renderPageHTTP(w, "package/picker.html", map[string]interface{}{
-					"Title":       "Package: " + pkg.Category + "/" + pkg.Name,
-					"BaseURL":     baseURL,
-					"Breadcrumbs": []Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: "Packages", URL: "../../"}, {Name: pkg.Category, URL: "../../../categories/" + pkg.Category + "/"}, {Name: pkg.Name}},
-					"Package":     map[string]interface{}{"Category": pkg.Category, "Name": pkg.Name, "ReposList": reposList},
-					"Version":     version,
-					"GenInfo":     s.GenInfo,
+					"Title":         "Package: " + pkg.Category + "/" + pkg.Name,
+					"BaseURL":       baseURL,
+					"Breadcrumbs":   []Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: "Packages", URL: "../../"}, {Name: pkg.Category, URL: "../../../categories/" + pkg.Category + "/"}, {Name: pkg.Name}},
+					"Package":       pkg,
+					"ValidLicenses": validLicenses,
+					"Version":       version,
+					"GenInfo":       s.GenInfo,
 				})
 				return
 			}

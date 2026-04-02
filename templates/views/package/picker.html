@@ -5,9 +5,15 @@
     <strong>Notice:</strong> Older versions of this package were moved to <a href="{{.MovedToURL}}">{{.MovedToName}}</a>.
 </div>
 {{end}}
-<p>This package is available in multiple overlays. Please select one:</p>
-<ul>
-    {{range .Package.ReposList}}
-    <li><a href="{{$.BaseURL}}repos/{{.RepoName}}/categories/{{$.Package.Category}}/packages/{{$.Package.Name}}/">{{.RepoName}}</a></li>
-    {{end}}
-</ul>
+
+{{template "package_info.html" .}}
+
+<div class="metadata-section">
+    <h3>Repositories</h3>
+    <p>This package is available in multiple overlays. Please select one:</p>
+    <ul>
+        {{range $repoName, $siteData := .Package.Repos}}
+        <li><a href="{{$.BaseURL}}repos/{{$repoName}}/categories/{{$.Package.Category}}/packages/{{$.Package.Name}}/">{{$repoName}}</a></li>
+        {{end}}
+    </ul>
+</div>

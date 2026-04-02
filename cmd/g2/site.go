@@ -2723,14 +2723,15 @@ func generatePackagePages(outDir string, tmpl *template.Template, data *Aggregat
 			}
 
 			if err := renderPage(filepath.Join(pkgDir, "index.html"), tmpl, "package/picker.html", GenericPageContext{
-				Title:       "Package: " + pkg.Category + "/" + pkg.Name,
-				BaseURL:     "../../../",
-				Breadcrumbs: []Breadcrumb{{Name: title, URL: "../../../"}, {Name: "Packages", URL: "../../"}, {Name: pkg.Category, URL: "../../../categories/" + pkg.Category + "/"}, {Name: pkg.Name}},
-				Package:     map[string]interface{}{"Category": pkg.Category, "Name": pkg.Name, "ReposList": reposList},
-				MovedToName: movedToName,
-				MovedToURL:  movedToURL,
-				Version:     version,
-				GenInfo:     genInfo,
+				Title:         "Package: " + pkg.Category + "/" + pkg.Name,
+				BaseURL:       "../../../",
+				Breadcrumbs:   []Breadcrumb{{Name: title, URL: "../../../"}, {Name: "Packages", URL: "../../"}, {Name: pkg.Category, URL: "../../../categories/" + pkg.Category + "/"}, {Name: pkg.Name}},
+				Package:       pkg,
+				ValidLicenses: data.ValidLicenses,
+				MovedToName:   movedToName,
+				MovedToURL:    movedToURL,
+				Version:       version,
+				GenInfo:       genInfo,
 			}); err != nil {
 				return fmt.Errorf("rendering page: %w", err)
 			}

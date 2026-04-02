@@ -1,0 +1,31 @@
+<div class="metadata-section">
+    <h3>Package Information</h3>
+    <dl>
+        {{if .Package.DominantDescription}}
+        <dt><strong>Description:</strong></dt>
+        <dd>{{.Package.DominantDescription}}</dd>
+        {{end}}
+        {{if .Package.DominantHomepage}}
+        <dt><strong>Homepage:</strong></dt>
+        <dd><a href="{{.Package.DominantHomepage}}">{{.Package.DominantHomepage}}</a></dd>
+        {{end}}
+        {{if .Package.DominantLicense}}
+        <dt><strong>License:</strong></dt>
+        <dd>{{if and .Package.DominantLicense (index $.ValidLicenses .Package.DominantLicense)}}<a href="{{.BaseURL}}licenses/{{slugify .Package.DominantLicense}}/">{{.Package.DominantLicense}}</a>{{else}}{{.Package.DominantLicense}}{{end}}</dd>
+        {{end}}
+    </dl>
+</div>
+
+{{if and (or (eq .Package.Category "virtual") (hasPrefix .Package.Category "virtual-")) .Package.VirtualDeps}}
+<div class="metadata-section">
+    <h3>Virtual Group Dependencies</h3>
+    <p>This virtual package provides the following dependencies:</p>
+    <ul>
+        {{range .Package.VirtualDeps}}
+        <li>
+            <a href="{{$.BaseURL}}packages/{{.}}/">{{.}}</a>
+        </li>
+        {{end}}
+    </ul>
+</div>
+{{end}}
