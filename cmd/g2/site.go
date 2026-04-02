@@ -2798,10 +2798,7 @@ func generateOtherGlobalPages(outDir string, tmpl *template.Template, data *Aggr
 				return fmt.Errorf("creating directory %s: %w", profDir, err)
 			}
 
-			relToRoot := "../../"
-			for i := 0; i < strings.Count(p.Path, "/"); i++ {
-				relToRoot += "../"
-			}
+			relToRoot := "../../" + strings.Repeat("../", strings.Count(p.Path, "/"))
 
 			if err := renderPage(filepath.Join(profDir, "index.html"), tmpl, "profile.html", GenericPageContext{
 				Title:       "Profile: " + p.Path,
@@ -3271,10 +3268,7 @@ func generateRepoPages(outDir string, tmpl *template.Template, sites []*SiteData
 					return fmt.Errorf("creating directory %s: %w", profDir, err)
 				}
 
-				relToRoot := "../../../../"
-				for i := 0; i < strings.Count(p.Path, "/"); i++ {
-					relToRoot += "../"
-				}
+				relToRoot := "../../../../" + strings.Repeat("../", strings.Count(p.Path, "/"))
 
 				if err := renderPage(filepath.Join(profDir, "index.html"), tmpl, "repo_profile.html", GenericPageContext{
 					Title:       site.RepoName + " - Profile: " + p.Path,
