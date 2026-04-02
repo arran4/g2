@@ -215,6 +215,8 @@ func newSiteServer(sites []*SiteData, genInfo GenerationInfo) (*SiteServer, erro
 	aggLicenses := make(map[string]*AggLicense)
 	aggProjects := make(map[string]*AggProject)
 
+	catPkgMap := make(map[string]map[string]*AggPackage)
+
 	for _, site := range sites {
 		if site.Projects != nil {
 			for i := range site.Projects.Projects {
@@ -227,7 +229,8 @@ func newSiteServer(sites []*SiteData, genInfo GenerationInfo) (*SiteServer, erro
 		server.RepoMap[site.RepoName] = site
 		for _, cat := range site.Categories {
 			if _, ok := aggCategories[cat.Name]; !ok {
-				aggCategories[cat.Name] = &AggCategory{Name: cat.Name, Packages: make(map[string]*AggPackage)}
+				aggCategories[cat.Name] = &AggCategory{Name: cat.Name}
+				catPkgMap[cat.Name] = make(map[string]*AggPackage)
 			}
 			for _, pkg := range cat.Packages {
 				pkgKey := cat.Name + "/" + pkg.Name
@@ -244,7 +247,7 @@ func newSiteServer(sites []*SiteData, genInfo GenerationInfo) (*SiteServer, erro
 				if aggPackages[pkgKey].DominantLicense == "" {
 					aggPackages[pkgKey].DominantLicense = pkg.DominantLicense
 				}
-				aggCategories[cat.Name].Packages[pkg.Name] = aggPackages[pkgKey]
+				catPkgMap[cat.Name][pkg.Name] = aggPackages[pkgKey]
 
 				if pkg.Metadata != nil {
 					for _, maint := range pkg.Metadata.Maintainers {
@@ -309,6 +312,15 @@ func newSiteServer(sites []*SiteData, genInfo GenerationInfo) (*SiteServer, erro
 				}
 			}
 		}
+	}
+
+	for catName, pkgs := range catPkgMap {
+		var sortedPkgs []*AggPackage
+		for _, p := range pkgs {
+			sortedPkgs = append(sortedPkgs, p)
+		}
+		sort.Slice(sortedPkgs, func(i, j int) bool { return sortedPkgs[i].Name < sortedPkgs[j].Name })
+		aggCategories[catName].Packages = sortedPkgs
 	}
 
 	for _, c := range aggCategories {
@@ -437,12 +449,6 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 
-			var catPkgs []*AggPackage
-			for _, p := range cat.Packages {
-				catPkgs = append(catPkgs, p)
-			}
-			sort.Slice(catPkgs, func(i, j int) bool { return catPkgs[i].Name < catPkgs[j].Name })
-
 			type TmplPkg struct {
 				Name                  string
 				ReposList             []*SiteData
@@ -455,7 +461,7 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				ReverseVirtuals       []string
 			}
 			var tmplPkgs []TmplPkg
-			for _, p := range catPkgs {
+			for _, p := range cat.Packages {
 				var allVersions []VersionData
 				for _, r := range p.Repos {
 					for _, c := range r.Categories {
