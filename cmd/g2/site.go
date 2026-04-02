@@ -20,6 +20,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"weak"
 
 	"github.com/arran4/g2"
 	"github.com/arran4/g2/lints"
@@ -52,6 +53,35 @@ type ProfileDescEntry struct {
 
 type SourceURL string
 
+type FileContent struct {
+	weakPtr weak.Pointer[[]byte]
+	loader  func() (io.ReadCloser, error)
+	mu      sync.Mutex
+}
+
+func (f *FileContent) Get() ([]byte, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	if p := f.weakPtr.Value(); p != nil {
+		return *p, nil
+	}
+
+	rc, err := f.loader()
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rc.Close() }()
+
+	b, err := io.ReadAll(rc)
+	if err != nil {
+		return nil, err
+	}
+
+	f.weakPtr = weak.Make(&b)
+	return b, nil
+}
+
 type ProfileData struct {
 	Path     string
 	IsDesc   bool
@@ -59,7 +89,7 @@ type ProfileData struct {
 	DescStat string
 	Parents  []string
 	Children []string
-	Files    map[string]string // Maps filename to its content
+	Files    map[string]*FileContent // Maps filename to its content
 }
 
 type EclassData struct {
@@ -162,7 +192,7 @@ type PackageData struct {
 	LintWarnings []string
 
 	// Deprecation
-	Masked *g2.PackageMasked
+	Masked     *g2.PackageMasked
 	Deprecated *g2.PackageDeprecated
 
 	// InfoPkg matching
@@ -190,7 +220,7 @@ type VersionData struct {
 
 	// Deprecation
 	Deprecated *g2.PackageDeprecated
-	Masked *g2.PackageMasked
+	Masked     *g2.PackageMasked
 
 	// Moves
 	MovedToSlot string
@@ -1604,7 +1634,7 @@ func parseProfilesDirFS(sysFS fs.FS, repoDir string, entries []ProfileDescEntry)
 
 		pData := &ProfileData{
 			Path:  relPath,
-			Files: make(map[string]string),
+			Files: make(map[string]*FileContent),
 		}
 
 		if desc, ok := descMap[relPath]; ok {
@@ -1622,19 +1652,32 @@ func parseProfilesDirFS(sysFS fs.FS, repoDir string, entries []ProfileDescEntry)
 		}
 
 		for _, fname := range fileNames {
-			b, err := fs.ReadFile(sysFS, path2.Join(path, fname))
-			if err == nil {
-				pData.Files[fname] = string(b)
+			filePath := path2.Join(path, fname)
+			info, err := fs.Stat(sysFS, filePath)
+			if err == nil && !info.IsDir() {
+				fc := &FileContent{
+					loader: func() (io.ReadCloser, error) {
+						return sysFS.Open(filePath)
+					},
+				}
+				if pData.Files == nil {
+					pData.Files = make(map[string]*FileContent)
+				}
+				pData.Files[fname] = fc
+
 				if fname == "parent" {
-					lines := strings.Split(string(b), "\n")
-					for _, line := range lines {
-						line = strings.TrimSpace(line)
-						if line == "" || strings.HasPrefix(line, "#") {
-							continue
-						}
-						parentRelPath := path2.Clean(path2.Join(relPath, line))
-						if !strings.HasPrefix(parentRelPath, "..") {
-							pData.Parents = append(pData.Parents, parentRelPath)
+					b, err := fc.Get()
+					if err == nil {
+						lines := strings.Split(string(b), "\n")
+						for _, line := range lines {
+							line = strings.TrimSpace(line)
+							if line == "" || strings.HasPrefix(line, "#") {
+								continue
+							}
+							parentRelPath := path2.Clean(path2.Join(relPath, line))
+							if !strings.HasPrefix(parentRelPath, "..") {
+								pData.Parents = append(pData.Parents, parentRelPath)
+							}
 						}
 					}
 				}
@@ -2006,7 +2049,7 @@ type AggProfile struct {
 	DescArch string
 	DescStat string
 	Repos    []AggProfileRepo
-	Files    map[string]string // Maps filename to its content
+	Files    map[string]*FileContent // Maps filename to its content
 }
 
 type AggEclass struct {
@@ -2038,22 +2081,22 @@ type RepoGroup struct {
 }
 
 type AggregatedData struct {
-	Categories     []*AggCategory
-	Packages       []*AggPackage
-	Licenses       []*AggLicense
-	Projects       []*AggProject
-	Profiles       []*AggProfile
-	Arches         []*AggArch
-	Moves          map[string]*AggPackageMove
-	GlobalNews     []AggNewsItem
-	RecentNews     []AggNewsItem
-	TotalPackages  int
-	UseFlags       []*AggUseFlag
-	Eclasses       []*AggEclass
-	UseExpandDescs map[string]*g2.UseExpandDesc
-	ValidLicenses  map[string]bool
+	Categories      []*AggCategory
+	Packages        []*AggPackage
+	Licenses        []*AggLicense
+	Projects        []*AggProject
+	Profiles        []*AggProfile
+	Arches          []*AggArch
+	Moves           map[string]*AggPackageMove
+	GlobalNews      []AggNewsItem
+	RecentNews      []AggNewsItem
+	TotalPackages   int
+	UseFlags        []*AggUseFlag
+	Eclasses        []*AggEclass
+	UseExpandDescs  map[string]*g2.UseExpandDesc
+	ValidLicenses   map[string]bool
 	ValidUseExpands map[string]bool
-	GroupedRepos   []RepoGroup
+	GroupedRepos    []RepoGroup
 }
 
 func prepareAggregatedData(sites []*SiteData) *AggregatedData {
@@ -2420,22 +2463,22 @@ func prepareAggregatedData(sites []*SiteData) *AggregatedData {
 	})
 
 	return &AggregatedData{
-		Categories:     sortedCategories,
-		Packages:       sortedPackages,
-		Licenses:       sortedLicenses,
-		Projects:       sortedProjects,
-		Profiles:       sortedProfiles,
-		Arches:         sortedArches,
-		Moves:          aggMoves,
-		GlobalNews:     globalNews,
-		RecentNews:     recentNews,
-		TotalPackages:  totalPackages,
-		UseFlags:       sortedUseFlags,
-		ValidLicenses:  validLicenses,
-		Eclasses:       sortedEclasses,
-		UseExpandDescs: aggUseExpandDescs,
+		Categories:      sortedCategories,
+		Packages:        sortedPackages,
+		Licenses:        sortedLicenses,
+		Projects:        sortedProjects,
+		Profiles:        sortedProfiles,
+		Arches:          sortedArches,
+		Moves:           aggMoves,
+		GlobalNews:      globalNews,
+		RecentNews:      recentNews,
+		TotalPackages:   totalPackages,
+		UseFlags:        sortedUseFlags,
+		ValidLicenses:   validLicenses,
+		Eclasses:        sortedEclasses,
+		UseExpandDescs:  aggUseExpandDescs,
 		ValidUseExpands: validUseExpands,
-		GroupedRepos:   sortedGroupedRepos,
+		GroupedRepos:    sortedGroupedRepos,
 	}
 }
 
@@ -2816,7 +2859,6 @@ func generateOtherGlobalPages(outDir string, tmpl *template.Template, data *Aggr
 			}
 		}
 
-
 	}
 
 	// 5. Global Licenses
@@ -2861,12 +2903,12 @@ func generateOtherGlobalPages(outDir string, tmpl *template.Template, data *Aggr
 			return fmt.Errorf("creating directory: %w", err)
 		}
 		if err := renderPage(filepath.Join(outDir, "uses_expand", "index.html"), tmpl, "use_expands.html", GenericPageContext{
-			Title:       "USE_EXPAND Flags",
-			BaseURL:     "../",
-			Breadcrumbs: []Breadcrumb{{Name: title, URL: "../"}, {Name: "USE_EXPAND Flags"}},
+			Title:          "USE_EXPAND Flags",
+			BaseURL:        "../",
+			Breadcrumbs:    []Breadcrumb{{Name: title, URL: "../"}, {Name: "USE_EXPAND Flags"}},
 			UseExpandDescs: data.UseExpandDescs,
-			Version:     version,
-			GenInfo:     genInfo,
+			Version:        version,
+			GenInfo:        genInfo,
 		}); err != nil {
 			return fmt.Errorf("rendering page: %w", err)
 		}
@@ -2876,12 +2918,12 @@ func generateOtherGlobalPages(outDir string, tmpl *template.Template, data *Aggr
 				return fmt.Errorf("creating directory %s: %w", useExpandDir, err)
 			}
 			if err := renderPage(filepath.Join(useExpandDir, "index.html"), tmpl, "use_expand.html", GenericPageContext{
-				Title:       "USE_EXPAND: " + prefix,
-				BaseURL:     "../../",
-				Breadcrumbs: []Breadcrumb{{Name: title, URL: "../../"}, {Name: "USE_EXPAND Flags", URL: "../"}, {Name: prefix}},
+				Title:         "USE_EXPAND: " + prefix,
+				BaseURL:       "../../",
+				Breadcrumbs:   []Breadcrumb{{Name: title, URL: "../../"}, {Name: "USE_EXPAND Flags", URL: "../"}, {Name: prefix}},
 				UseExpandDesc: desc,
-				Version:     version,
-				GenInfo:     genInfo,
+				Version:       version,
+				GenInfo:       genInfo,
 			}); err != nil {
 				return fmt.Errorf("rendering page: %w", err)
 			}
@@ -3084,13 +3126,13 @@ func generateRepoPages(outDir string, tmpl *template.Template, sites []*SiteData
 					return fmt.Errorf("creating directory %s: %w", useExpandDir, err)
 				}
 				if err := renderPage(filepath.Join(useExpandDir, "index.html"), tmpl, "repo_use_expand.html", GenericPageContext{
-					Title:       site.RepoName + " - USE_EXPAND: " + prefix,
-					BaseURL:     "../../../../",
-					Breadcrumbs: []Breadcrumb{{Name: title, URL: "../../../../"}, {Name: site.RepoName, URL: "../../"}, {Name: "USE_EXPAND Flags", URL: "../"}, {Name: prefix}},
-					Repo:        site,
+					Title:         site.RepoName + " - USE_EXPAND: " + prefix,
+					BaseURL:       "../../../../",
+					Breadcrumbs:   []Breadcrumb{{Name: title, URL: "../../../../"}, {Name: site.RepoName, URL: "../../"}, {Name: "USE_EXPAND Flags", URL: "../"}, {Name: prefix}},
+					Repo:          site,
 					UseExpandDesc: desc,
-					Version:     version,
-					GenInfo:     genInfo,
+					Version:       version,
+					GenInfo:       genInfo,
 				}); err != nil {
 					return fmt.Errorf("rendering page: %w", err)
 				}
@@ -3289,7 +3331,12 @@ func generateRepoPages(outDir string, tmpl *template.Template, sites []*SiteData
 					return fmt.Errorf("rendering page: %w", err)
 				}
 
-				for fName, fContent := range p.Files {
+				for fName, fc := range p.Files {
+					b, err := fc.Get()
+					var fContent string
+					if err == nil {
+						fContent = string(b)
+					}
 					if err := renderPage(filepath.Join(profDir, fName+".html"), tmpl, "repo_profile_file.html", GenericPageContext{
 						Title:       site.RepoName + " - Profile File: " + fName,
 						BaseURL:     relToRoot,

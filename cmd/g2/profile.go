@@ -159,7 +159,8 @@ func profileDescribeCommand(args []string) error {
 		for _, p := range profilesData {
 			if p.Path == parentPath {
 				if md, ok := p.Files["make.defaults"]; ok {
-					makeDefaults[parentPath] = md
+					b, _ := md.Get()
+					makeDefaults[parentPath] = string(b)
 				}
 				break
 			}
