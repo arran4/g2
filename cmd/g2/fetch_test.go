@@ -93,24 +93,28 @@ package main
 }
 
 func TestDownloadAndExtractZip_ZipSlip(t *testing.T) {
+	fixture := `
+-- normal.txt --
+normal
+-- ../../etc/passwd --
+malicious
+`
+	ar := txtar.Parse([]byte(fixture))
+
 	buf := new(bytes.Buffer)
 	zw := zip.NewWriter(buf)
 
-	// Add a normal file
-	w, err := zw.Create("normal.txt")
-	if err != nil {
-		t.Fatal(err)
+	for _, f := range ar.Files {
+		w, err := zw.Create(f.Name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := w.Write(f.Data); err != nil {
+			t.Fatal(err)
+		}
 	}
-	_, _ = w.Write([]byte("normal"))
 
-	// Add a malicious file
-	wMalicious, err := zw.Create("../../etc/passwd")
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, _ = wMalicious.Write([]byte("malicious"))
-
-	err = zw.Close()
+	err := zw.Close()
 	if err != nil {
 		t.Fatal(err)
 	}
