@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"embed"
 	"encoding/json"
-	"io"
 	"io/fs"
 	"os"
 	"path"
@@ -64,11 +63,7 @@ func TestEbuildDeps(t *testing.T) {
 				}
 			}
 
-			// run the command logic intercepting stdout
-			oldStdout := os.Stdout
-			r, w, _ := os.Pipe()
-			os.Stdout = w
-
+			// run the command logic capturing output via io.Writer
 			// Because cmdEbuildDeps is a method on CmdEbuildArgConfig
 			// We can initialize it
 			cfg := &CmdEbuildArgConfig{
@@ -78,14 +73,9 @@ func TestEbuildDeps(t *testing.T) {
 			// append ebuilds to arguments
 			args := append(opts.Args, ebuildFiles...)
 
-			err = cfg.cmdEbuildDeps(args)
-
-			// restore stdout and read result
-			_ = w.Close()
-			os.Stdout = oldStdout
-
 			var outBuf bytes.Buffer
-			_, _ = io.Copy(&outBuf, r)
+			err = cfg.cmdEbuildDeps(args, &outBuf)
+
 			got := outBuf.String()
 
 			if err != nil {
