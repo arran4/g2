@@ -1668,11 +1668,9 @@ func isIgnoredDir(name string) bool {
 	return ignored[name]
 }
 
-// TODO check model's should be redundant OR migrated to /
-
 type AggCategory struct {
 	Name     string
-	Packages map[string]*AggPackage
+	Packages []*AggPackage
 }
 type AggPackage struct {
 	Name                string
@@ -2196,10 +2194,13 @@ func aggregatePackagesAndCategories(sites []*SiteData, aggProjects map[string]*A
 	aggLicenses := make(map[string]*AggLicense)
 	totalPackages := 0
 
+	catPkgMap := make(map[string]map[string]*AggPackage)
+
 	for _, site := range sites {
 		for _, cat := range site.Categories {
 			if _, ok := aggCategories[cat.Name]; !ok {
-				aggCategories[cat.Name] = &AggCategory{Name: cat.Name, Packages: make(map[string]*AggPackage)}
+				aggCategories[cat.Name] = &AggCategory{Name: cat.Name}
+				catPkgMap[cat.Name] = make(map[string]*AggPackage)
 			}
 			for _, pkg := range cat.Packages {
 				pkgKey := cat.Name + "/" + pkg.Name
@@ -2217,7 +2218,7 @@ func aggregatePackagesAndCategories(sites []*SiteData, aggProjects map[string]*A
 				if aggPackages[pkgKey].DominantLicense == "" {
 					aggPackages[pkgKey].DominantLicense = pkg.DominantLicense
 				}
-				aggCategories[cat.Name].Packages[pkg.Name] = aggPackages[pkgKey]
+				catPkgMap[cat.Name][pkg.Name] = aggPackages[pkgKey]
 				for _, rev := range pkg.ReverseVirtuals {
 					found := false
 					for _, existingRev := range aggPackages[pkgKey].ReverseVirtuals {
@@ -2314,6 +2315,16 @@ func aggregatePackagesAndCategories(sites []*SiteData, aggProjects map[string]*A
 			}
 		}
 	}
+
+	for catName, pkgs := range catPkgMap {
+		var sortedPkgs []*AggPackage
+		for _, p := range pkgs {
+			sortedPkgs = append(sortedPkgs, p)
+		}
+		sort.Slice(sortedPkgs, func(i, j int) bool { return sortedPkgs[i].Name < sortedPkgs[j].Name })
+		aggCategories[catName].Packages = sortedPkgs
+	}
+
 	return aggCategories, aggPackages, aggLicenses, totalPackages
 }
 
@@ -2637,12 +2648,6 @@ func generateCategoryPages(outDir string, tmpl *template.Template, data *Aggrega
 			return fmt.Errorf("creating directory %s: %w", catDir, err)
 		}
 
-		var catPkgs []*AggPackage
-		for _, p := range cat.Packages {
-			catPkgs = append(catPkgs, p)
-		}
-		sort.Slice(catPkgs, func(i, j int) bool { return catPkgs[i].Name < catPkgs[j].Name })
-
 		type TmplPkg struct {
 			Name                  string
 			ReposList             []*SiteData
@@ -2655,7 +2660,7 @@ func generateCategoryPages(outDir string, tmpl *template.Template, data *Aggrega
 			ReverseVirtuals       []string
 		}
 		var tmplPkgs []TmplPkg
-		for _, p := range catPkgs {
+		for _, p := range cat.Packages {
 			var allVersions []VersionData
 			for _, r := range p.Repos {
 				for _, c := range r.Categories {
