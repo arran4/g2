@@ -6,9 +6,9 @@ import (
 	"encoding/xml"
 	"io/fs"
 	"path"
+	"reflect"
 	"strings"
 	"testing"
-	"reflect"
 
 	"golang.org/x/tools/txtar"
 )

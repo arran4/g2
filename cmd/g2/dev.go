@@ -52,7 +52,6 @@ func cmdDevUpdateTxtarTests() {
 		}
 	}
 
-
 	// Update the files list by re-processing via ParseEbuild
 	// Actually we should write a temporary fs or just use the same logic as test
 

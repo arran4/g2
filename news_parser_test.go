@@ -87,8 +87,8 @@ that should be preserved.
 
 func TestStripEmail(t *testing.T) {
 	tests := []struct {
-		in   string
-		out  string
+		in  string
+		out string
 	}{
 		{"John Doe <john@example.com>", "John Doe"},
 		{"<only@email.com>", ""},

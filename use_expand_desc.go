@@ -12,9 +12,9 @@ import (
 )
 
 type UseExpandDesc struct {
-	Name        string
-	Flags       map[string]string
-	Lines       []DescLine // ordered list of lines
+	Name  string
+	Flags map[string]string
+	Lines []DescLine // ordered list of lines
 }
 
 type DescLine struct {

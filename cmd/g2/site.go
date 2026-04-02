@@ -29,177 +29,6 @@ import (
 
 // TODO evaluate the following they should be redundant OR moved to `/`
 
-type RemoteRepositories struct {
-	XMLName xml.Name     `xml:"repositories"`
-	Repos   []RemoteRepo `xml:"repo"`
-}
-
-type RemoteRepo struct {
-	Name    string       `xml:"name"`
-	Sources []RepoSource `xml:"source"`
-}
-
-type RepoSource struct {
-	Type string `xml:"type,attr"`
-	URL  string `xml:",chardata"`
-}
-
-type ProfileDescEntry struct {
-	Arch   string
-	Path   string
-	Status string
-}
-
-type SourceURL string
-
-type ProfileData struct {
-	Path     string
-	IsDesc   bool
-	DescArch string
-	DescStat string
-	Parents  []string
-	Children []string
-	Files    map[string]string // Maps filename to its content
-}
-
-type EclassData struct {
-	Name string
-}
-
-type SiteData struct {
-	Title             string
-	RepoName          string
-	RemoteURL         string
-	Repository        *g2.Repository
-	EAPI              string
-	Projects          *g2.Projects
-	Categories        []CategoryData
-	Profiles          []ProfileData
-	DefinedEclasses   []EclassData
-	AggEclasses       []*AggEclass
-	Authors           []g2.Author
-	AuthorsURL        string
-	Moves             []g2.PackageMove
-	SlotMoves         []g2.PackageSlotMove
-	News              []g2.NewsItem
-	LayoutConf        *g2.LayoutConf
-	LicenseMapping    map[string][]string
-	QAPolicy          *g2.QAPolicy
-	UseDesc           *g2.UseDesc
-	UseLocalDesc      *g2.UseLocalDesc
-	UseExpandDescs    map[string]*g2.UseExpandDesc
-	ValidUseExpands   map[string]bool
-	ArchList          *g2.ArchList
-	ArchesDesc        *g2.ArchesDesc
-	InfoPkgs          []g2.InfoPkg
-	Masked            []g2.PackageMasked
-	Deprecated        []g2.PackageDeprecated
-	ParsedEclasses    []*g2.Ebuild
-	Eclasses          []*g2.Ebuild
-	PackageCount      int
-	AggUseFlags       []*AggUseFlag
-	ThirdPartyMirrors map[string][]string
-	InfoVars          []string
-	GitSize           string
-	CheckoutTime      string
-	ProcessTime       string
-	SourceURL         string
-}
-
-type LicenseData struct {
-	Name     string
-	Count    int
-	Packages []PackageData
-}
-
-type Breadcrumb struct {
-	Name string
-	URL  string
-}
-
-type CategoryData struct {
-	Name     string
-	Packages []PackageData
-}
-
-type FileData struct {
-	Name   string
-	Path   string
-	RawURL string
-}
-
-type ManifestEntryData struct {
-	Entry        *g2.ManifestEntry
-	Versions     []string
-	URLs         []string
-	ResolvedURLs []string
-}
-
-type PackageData struct {
-	Name                  string
-	Category              string
-	Versions              []VersionData
-	Metadata              *g2.PkgMetadata
-	MetadataError         error
-	Manifest              *g2.Manifest
-	ManifestData          []ManifestEntryData
-	Files                 []FileData
-	HighestStableVersion  template.HTML
-	HighestTestingVersion template.HTML
-	EbuildCount           int
-	DominantDescription   string
-	DominantHomepage      string
-	DominantLicense       string
-
-	// Git info
-	MetadataRawURL string
-	ModTime        time.Time
-
-	// Processed Uses (per package)
-	PkgUseFlags []PkgUseFlag
-
-	// Lint Info
-	LintWarnings []string
-
-	// Deprecation
-	Masked *g2.PackageMasked
-	Deprecated *g2.PackageDeprecated
-
-	// InfoPkg matching
-	IsInfoPkg bool
-
-	ReverseVirtuals []string
-	Equivalents     []string
-	VirtualDeps     []string
-}
-
-type PkgUseFlag struct {
-	Name     string
-	Desc     string
-	Source   string
-	Versions map[string]string // Version -> Unicode symbol representing state
-}
-
-type VersionData struct {
-	Version string
-	Ebuild  *g2.Ebuild
-
-	// Git info
-	EbuildRawURL string
-	ModTime      time.Time
-
-	// Deprecation
-	Deprecated *g2.PackageDeprecated
-	Masked *g2.PackageMasked
-
-	// Moves
-	MovedToSlot string
-
-	ResolvedDepsJSON string
-	// Mirrors
-	ApplicableMirrors map[string][]string
-}
-
 // End model TODO check
 
 func (cfg *MainArgConfig) cmdOverlay(args []string) error {
@@ -279,7 +108,7 @@ func (cfg *MainArgConfig) cmdOverlay(args []string) error {
 		tasks = append(tasks, repoTask{Name: "guru", Location: "https://github.com/gentoo-mirror/guru.git"})
 	}
 
-	var allSites []*SiteData
+	var allSites []*g2.SiteData
 	var allSitesMu sync.Mutex
 
 	g, _ := errgroup.WithContext(context.Background())
@@ -290,7 +119,7 @@ func (cfg *MainArgConfig) cmdOverlay(args []string) error {
 			isRemote := strings.HasPrefix(task.Location, "http://") || strings.HasPrefix(task.Location, "https://") || strings.HasPrefix(task.Location, "git://")
 			var parseLocation string
 			var cleanup func()
-			var siteData *SiteData
+			var siteData *g2.SiteData
 
 			if isRemote {
 				var tmpDir string
@@ -330,7 +159,7 @@ func (cfg *MainArgConfig) cmdOverlay(args []string) error {
 				}
 
 				t1 := time.Now()
-				siteData, err = parseRepo(os.DirFS(parseLocation), ".", task.Name, *fastGit, nil, SourceURL(task.Location))
+				siteData, err = parseRepo(os.DirFS(parseLocation), ".", task.Name, *fastGit, nil, g2.SourceURL(task.Location))
 				if err != nil {
 					return fmt.Errorf("parsing repo %s: %w", task.Name, err)
 				}
@@ -352,7 +181,7 @@ func (cfg *MainArgConfig) cmdOverlay(args []string) error {
 				}
 
 				t1 := time.Now()
-				siteData, err = parseRepo(os.DirFS(parseLocation), ".", task.Name, *fastGit, nil, SourceURL(task.Location))
+				siteData, err = parseRepo(os.DirFS(parseLocation), ".", task.Name, *fastGit, nil, g2.SourceURL(task.Location))
 				if err != nil {
 					return fmt.Errorf("parsing repo %s: %w", task.Name, err)
 				}
@@ -465,7 +294,7 @@ func parseManifestFromFS(sysFS fs.FS, path string) (*g2.Manifest, error) {
 	return g2.ParseManifestFromReader(file)
 }
 
-func getHighestVersionsAndCount(versions []VersionData, site *SiteData) (template.HTML, template.HTML, int) {
+func getHighestVersionsAndCount(versions []g2.VersionData, site *g2.SiteData) (template.HTML, template.HTML, int) {
 	// Parse KEYWORDS and group versions
 
 	stableMap := make(map[string]string)
@@ -558,7 +387,7 @@ type ResolvedDepNode struct {
 	Children  []ResolvedDepNode `json:"children,omitempty"`
 }
 
-func resolveDependencies(node g2.DepNode, site *SiteData) ResolvedDepNode {
+func resolveDependencies(node g2.DepNode, site *g2.SiteData) ResolvedDepNode {
 	switch n := node.(type) {
 	case g2.DepString:
 		raw := string(n)
@@ -646,14 +475,14 @@ func sanitizeFilename(s string) string {
 	return res
 }
 
-func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool, repoInfo *g2.Repository, opts ...any) (*SiteData, error) {
+func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool, repoInfo *g2.Repository, opts ...any) (*g2.SiteData, error) {
 	title := defaultTitle
 	var repoName string
 	var remoteURL string
 
 	for _, opt := range opts {
 		switch o := opt.(type) {
-		case SourceURL:
+		case g2.SourceURL:
 			remoteURL = string(o)
 		}
 	}
@@ -824,11 +653,11 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool, r
 		log.Printf("Warning: failed to parse info_pkgs: %v", err)
 	}
 
-	site := &SiteData{
+	site := &g2.SiteData{
 		Title:             title,
 		RepoName:          repoName,
 		RemoteURL:         remoteURL,
-		SourceURL:         remoteURL,
+			SourceURL:         remoteURL,
 		Repository:        repoInfo,
 		EAPI:              eapi,
 		LayoutConf:        lc,
@@ -907,7 +736,7 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool, r
 		_ = authorsFile.Close()
 	}
 
-	var profilesDescEntries []ProfileDescEntry
+	var profilesDescEntries []g2.ProfileDescEntry
 	profilesDescBytes, err := fs.ReadFile(sysFS, filepath.ToSlash(filepath.Join(repoDir, "profiles", "profiles.desc")))
 	if err == nil {
 		profilesDescEntries = parseProfilesDesc(string(profilesDescBytes))
@@ -925,7 +754,7 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool, r
 		for _, eclassEntry := range eclassEntries {
 			if !eclassEntry.IsDir() && strings.HasSuffix(eclassEntry.Name(), ".eclass") {
 				eclassName := strings.TrimSuffix(eclassEntry.Name(), ".eclass")
-				site.DefinedEclasses = append(site.DefinedEclasses, EclassData{
+				site.DefinedEclasses = append(site.DefinedEclasses, g2.EclassData{
 					Name: eclassName,
 				})
 			}
@@ -990,7 +819,7 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool, r
 			continue
 		}
 
-		catData := CategoryData{Name: name}
+		catData := g2.CategoryData{Name: name}
 		catPath := filepath.Join(repoDir, name)
 
 		inRepo := len(supportedCategories) == 0 || supportedCategories[name]
@@ -1013,7 +842,7 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool, r
 			}
 
 			pkgPath := filepath.Join(catPath, pkgName)
-			pkgData := PackageData{
+			pkgData := g2.PackageData{
 				Name:     pkgName,
 				Category: name,
 			}
@@ -1068,7 +897,7 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool, r
 					pkgData.ModTime = modTime
 				}
 
-				vd := VersionData{
+				vd := g2.VersionData{
 					Version:      version,
 					Ebuild:       ebuild,
 					EbuildRawURL: ebuildRawURL,
@@ -1210,7 +1039,7 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool, r
 				if err == nil {
 					for _, fe := range fileEntries {
 						if !fe.IsDir() {
-							fd := FileData{
+							fd := g2.FileData{
 								Name: fe.Name(),
 								Path: filepath.Join(filesDirPath, fe.Name()),
 							}
@@ -1396,7 +1225,7 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool, r
 	return site, nil
 }
 
-func extractVirtualDeps(site *SiteData) {
+func extractVirtualDeps(site *g2.SiteData) {
 	for i := range site.Categories {
 		if site.Categories[i].Name != "virtual" && !strings.HasPrefix(site.Categories[i].Name, "virtual-") {
 			continue
@@ -1499,10 +1328,10 @@ func extractDepNodes(nodes []g2.DepNode, depsMap map[string]bool) {
 	}
 }
 
-func buildManifestData(manifest *g2.Manifest, versions []VersionData, thirdPartyMirrors map[string][]string) []ManifestEntryData {
-	var manifestData []ManifestEntryData
+func buildManifestData(manifest *g2.Manifest, versions []g2.VersionData, thirdPartyMirrors map[string][]string) []g2.ManifestEntryData {
+	var manifestData []g2.ManifestEntryData
 	for _, entry := range manifest.Entries {
-		md := ManifestEntryData{
+		md := g2.ManifestEntryData{
 			Entry: entry,
 		}
 
@@ -1570,23 +1399,23 @@ func buildManifestData(manifest *g2.Manifest, versions []VersionData, thirdParty
 	return manifestData
 }
 
-func parseProfilesDir(repoDir string, entries []ProfileDescEntry) ([]ProfileData, error) {
+func parseProfilesDir(repoDir string, entries []g2.ProfileDescEntry) ([]g2.ProfileData, error) {
 	return parseProfilesDirFS(os.DirFS(repoDir), ".", entries)
 }
 
-func parseProfilesDirFS(sysFS fs.FS, repoDir string, entries []ProfileDescEntry) ([]ProfileData, error) {
+func parseProfilesDirFS(sysFS fs.FS, repoDir string, entries []g2.ProfileDescEntry) ([]g2.ProfileData, error) {
 	profilesDir := path2.Join(repoDir, "profiles")
 
 	if info, err := fs.Stat(sysFS, profilesDir); err != nil || !info.IsDir() {
 		return nil, nil
 	}
 
-	descMap := make(map[string]ProfileDescEntry)
+	descMap := make(map[string]g2.ProfileDescEntry)
 	for _, e := range entries {
 		descMap[e.Path] = e
 	}
 
-	profilesMap := make(map[string]*ProfileData)
+	profilesMap := make(map[string]*g2.ProfileData)
 
 	err := fs.WalkDir(sysFS, profilesDir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -1602,7 +1431,7 @@ func parseProfilesDirFS(sysFS fs.FS, repoDir string, entries []ProfileDescEntry)
 			return nil
 		}
 
-		pData := &ProfileData{
+		pData := &g2.ProfileData{
 			Path:  relPath,
 			Files: make(map[string]string),
 		}
@@ -1657,7 +1486,7 @@ func parseProfilesDirFS(sysFS fs.FS, repoDir string, entries []ProfileDescEntry)
 		}
 	}
 
-	var result []ProfileData
+	var result []g2.ProfileData
 	for _, pData := range profilesMap {
 		result = append(result, *pData)
 	}
@@ -1665,8 +1494,8 @@ func parseProfilesDirFS(sysFS fs.FS, repoDir string, entries []ProfileDescEntry)
 	return result, nil
 }
 
-func parseProfilesDesc(content string) []ProfileDescEntry {
-	var entries []ProfileDescEntry
+func parseProfilesDesc(content string) []g2.ProfileDescEntry {
+	var entries []g2.ProfileDescEntry
 	lines := strings.Split(content, "\n")
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
@@ -1675,7 +1504,7 @@ func parseProfilesDesc(content string) []ProfileDescEntry {
 		}
 		parts := strings.Fields(line)
 		if len(parts) >= 3 {
-			entries = append(entries, ProfileDescEntry{
+			entries = append(entries, g2.ProfileDescEntry{
 				Arch:   parts[0],
 				Path:   parts[1],
 				Status: parts[2],
@@ -1703,52 +1532,15 @@ func isIgnoredDir(name string) bool {
 
 // TODO check model's should be redundant OR migrated to /
 
-type AggCategory struct {
-	Name     string
-	Packages map[string]*AggPackage
-}
-type AggPackage struct {
-	Name                string
-	Category            string
-	Repos               map[string]*SiteData
-	DominantDescription string
-	DominantHomepage    string
-	DominantLicense     string
-	ReverseVirtuals     []string
-	VirtualDeps         []string
-}
-type AggProject struct {
-	Project  *g2.Project
-	Packages []*AggPackage
-}
-
-type AggLicense struct {
-	Name     string
-	Count    int
-	Packages []*AggPackage
-	Text     string
-	Aliases  []string
-}
-
-type AggUseFlag struct {
-	Name          string
-	Count         int
-	GlobalDesc    string
-	LocalDescs    map[string]string
-	MetadataDescs map[string]string
-	Packages      []*AggPackage
-	Warnings      []string
-}
-
-func getRepoEclasses(site *SiteData, aggPackages map[string]*AggPackage) []*AggEclass {
-	eclassMap := make(map[string]*AggEclass)
+func getRepoEclasses(site *g2.SiteData, aggPackages map[string]*g2.AggPackage) []*g2.AggEclass {
+	eclassMap := make(map[string]*g2.AggEclass)
 	seenPackages := make(map[string]map[string]bool)
 
 	for _, eclass := range site.DefinedEclasses {
 		if _, ok := eclassMap[eclass.Name]; !ok {
-			eclassMap[eclass.Name] = &AggEclass{
+			eclassMap[eclass.Name] = &g2.AggEclass{
 				Name:  eclass.Name,
-				Repos: make(map[string]*SiteData),
+				Repos: make(map[string]*g2.SiteData),
 			}
 			seenPackages[eclass.Name] = make(map[string]bool)
 		}
@@ -1766,9 +1558,9 @@ func getRepoEclasses(site *SiteData, aggPackages map[string]*AggPackage) []*AggE
 						eclasses := strings.Fields(inherited)
 						for _, ec := range eclasses {
 							if _, ok := eclassMap[ec]; !ok {
-								eclassMap[ec] = &AggEclass{
+								eclassMap[ec] = &g2.AggEclass{
 									Name:  ec,
-									Repos: make(map[string]*SiteData),
+									Repos: make(map[string]*g2.SiteData),
 								}
 								eclassMap[ec].Repos[site.RepoName] = site
 								seenPackages[ec] = make(map[string]bool)
@@ -1785,7 +1577,7 @@ func getRepoEclasses(site *SiteData, aggPackages map[string]*AggPackage) []*AggE
 		}
 	}
 
-	var sortedEclasses []*AggEclass
+	var sortedEclasses []*g2.AggEclass
 	for _, ec := range eclassMap {
 		sort.Slice(ec.Packages, func(i, j int) bool {
 			if ec.Packages[i].Category == ec.Packages[j].Category {
@@ -1800,8 +1592,8 @@ func getRepoEclasses(site *SiteData, aggPackages map[string]*AggPackage) []*AggE
 	return sortedEclasses
 }
 
-func getRepoUseFlags(site *SiteData, aggPackages map[string]*AggPackage) []*AggUseFlag {
-	aggUseFlags := make(map[string]*AggUseFlag)
+func getRepoUseFlags(site *g2.SiteData, aggPackages map[string]*g2.AggPackage) []*g2.AggUseFlag {
+	aggUseFlags := make(map[string]*g2.AggUseFlag)
 
 	for _, cat := range site.Categories {
 		for _, pkg := range cat.Packages {
@@ -1815,7 +1607,7 @@ func getRepoUseFlags(site *SiteData, aggPackages map[string]*AggPackage) []*AggU
 						for _, flagObj := range parsedFlags {
 							flag := flagObj.Name
 							if _, ok := aggUseFlags[flag]; !ok {
-								aggUseFlags[flag] = &AggUseFlag{
+								aggUseFlags[flag] = &g2.AggUseFlag{
 									Name:          flag,
 									LocalDescs:    make(map[string]string),
 									MetadataDescs: make(map[string]string),
@@ -1847,7 +1639,7 @@ func getRepoUseFlags(site *SiteData, aggPackages map[string]*AggPackage) []*AggU
 							flag = strings.TrimPrefix(flag, "!") // remove negations
 
 							if _, ok := aggUseFlags[flag]; !ok {
-								aggUseFlags[flag] = &AggUseFlag{
+								aggUseFlags[flag] = &g2.AggUseFlag{
 									Name:          flag,
 									LocalDescs:    make(map[string]string),
 									MetadataDescs: make(map[string]string),
@@ -1874,7 +1666,7 @@ func getRepoUseFlags(site *SiteData, aggPackages map[string]*AggPackage) []*AggU
 				for _, useBlock := range pkg.Metadata.Use {
 					for _, flag := range useBlock.Flags {
 						if _, ok := aggUseFlags[flag.Name]; !ok {
-							aggUseFlags[flag.Name] = &AggUseFlag{
+							aggUseFlags[flag.Name] = &g2.AggUseFlag{
 								Name:          flag.Name,
 								LocalDescs:    make(map[string]string),
 								MetadataDescs: make(map[string]string),
@@ -1905,7 +1697,7 @@ func getRepoUseFlags(site *SiteData, aggPackages map[string]*AggPackage) []*AggU
 	if site.UseDesc != nil {
 		for flag, desc := range site.UseDesc.Flags {
 			if _, ok := aggUseFlags[flag]; !ok {
-				aggUseFlags[flag] = &AggUseFlag{
+				aggUseFlags[flag] = &g2.AggUseFlag{
 					Name:          flag,
 					LocalDescs:    make(map[string]string),
 					MetadataDescs: make(map[string]string),
@@ -1938,7 +1730,7 @@ func getRepoUseFlags(site *SiteData, aggPackages map[string]*AggPackage) []*AggU
 		}
 	}
 
-	var sortedUseFlags []*AggUseFlag
+	var sortedUseFlags []*g2.AggUseFlag
 	for _, flag := range aggUseFlags {
 		for _, pkg := range flag.Packages {
 			if pkg == nil {
@@ -1995,79 +1787,18 @@ func parseDuration(s string) (time.Duration, string, error) {
 
 // TODO migrate to / if it hasn't been done already check for differences
 
-type AggProfileRepo struct {
-	RepoName string
-	Profile  ProfileData
-}
-
-type AggProfile struct {
-	Path     string
-	IsDesc   bool
-	DescArch string
-	DescStat string
-	Repos    []AggProfileRepo
-	Files    map[string]string // Maps filename to its content
-}
-
-type AggEclass struct {
-	Name     string
-	Repos    map[string]*SiteData
-	Packages []*AggPackage
-}
-
-type AggPackageMove struct {
-	Old string
-	New string
-}
-
-type AggNewsItem struct {
-	g2.NewsItem
-	RepoName string
-}
-
-type AggArch struct {
-	Name   string
-	Status string
-	Repos  []*SiteData
-}
-
-type RepoGroup struct {
-	Quality string
-	Status  string
-	Repos   []*SiteData
-}
-
-type AggregatedData struct {
-	Categories     []*AggCategory
-	Packages       []*AggPackage
-	Licenses       []*AggLicense
-	Projects       []*AggProject
-	Profiles       []*AggProfile
-	Arches         []*AggArch
-	Moves          map[string]*AggPackageMove
-	GlobalNews     []AggNewsItem
-	RecentNews     []AggNewsItem
-	TotalPackages  int
-	UseFlags       []*AggUseFlag
-	Eclasses       []*AggEclass
-	UseExpandDescs map[string]*g2.UseExpandDesc
-	ValidLicenses  map[string]bool
-	ValidUseExpands map[string]bool
-	GroupedRepos   []RepoGroup
-}
-
-func prepareAggregatedData(sites []*SiteData) *AggregatedData {
-	aggCategories := make(map[string]*AggCategory)
-	aggPackages := make(map[string]*AggPackage)
-	aggLicenses := make(map[string]*AggLicense)
-	aggProjects := make(map[string]*AggProject)
-	aggProfiles := make(map[string]*AggProfile)
-	aggArches := make(map[string]*AggArch)
-	aggMoves := make(map[string]*AggPackageMove)
-	aggEclasses := make(map[string]*AggEclass)
-	var globalNews []AggNewsItem
+func prepareAggregatedData(sites []*g2.SiteData) *g2.AggregatedData {
+	aggCategories := make(map[string]*g2.AggCategory)
+	aggPackages := make(map[string]*g2.AggPackage)
+	aggLicenses := make(map[string]*g2.AggLicense)
+	aggProjects := make(map[string]*g2.AggProject)
+	aggProfiles := make(map[string]*g2.AggProfile)
+	aggArches := make(map[string]*g2.AggArch)
+	aggMoves := make(map[string]*g2.AggPackageMove)
+	aggEclasses := make(map[string]*g2.AggEclass)
+	var globalNews []g2.AggNewsItem
 	aggUseExpandDescs := make(map[string]*g2.UseExpandDesc)
-	groupedReposMap := make(map[string]*RepoGroup)
+	groupedReposMap := make(map[string]*g2.RepoGroup)
 
 	for _, site := range sites {
 		quality := "experimental"
@@ -2083,7 +1814,7 @@ func prepareAggregatedData(sites []*SiteData) *AggregatedData {
 
 		groupKey := quality + "|" + status
 		if _, ok := groupedReposMap[groupKey]; !ok {
-			groupedReposMap[groupKey] = &RepoGroup{
+			groupedReposMap[groupKey] = &g2.RepoGroup{
 				Quality: quality,
 				Status:  status,
 			}
@@ -2101,7 +1832,7 @@ func prepareAggregatedData(sites []*SiteData) *AggregatedData {
 			for i := range site.Projects.Projects {
 				proj := &site.Projects.Projects[i]
 				if _, ok := aggProjects[proj.Email]; !ok {
-					aggProjects[proj.Email] = &AggProject{Project: proj}
+					aggProjects[proj.Email] = &g2.AggProject{Project: proj}
 				}
 			}
 		}
@@ -2111,11 +1842,11 @@ func prepareAggregatedData(sites []*SiteData) *AggregatedData {
 	for _, site := range sites {
 		for _, p := range site.Profiles {
 			if _, ok := aggProfiles[p.Path]; !ok {
-				aggProfiles[p.Path] = &AggProfile{
+				aggProfiles[p.Path] = &g2.AggProfile{
 					Path: p.Path,
 				}
 			}
-			aggProfiles[p.Path].Repos = append(aggProfiles[p.Path].Repos, AggProfileRepo{
+			aggProfiles[p.Path].Repos = append(aggProfiles[p.Path].Repos, g2.AggProfileRepo{
 				RepoName: site.RepoName,
 				Profile:  p,
 			})
@@ -2126,7 +1857,7 @@ func prepareAggregatedData(sites []*SiteData) *AggregatedData {
 			}
 		}
 		for _, news := range site.News {
-			globalNews = append(globalNews, AggNewsItem{
+			globalNews = append(globalNews, g2.AggNewsItem{
 				NewsItem: news,
 				RepoName: site.RepoName,
 			})
@@ -2135,7 +1866,7 @@ func prepareAggregatedData(sites []*SiteData) *AggregatedData {
 		if site.ArchList != nil {
 			for _, arch := range site.ArchList.Arches {
 				if _, ok := aggArches[arch]; !ok {
-					aggArches[arch] = &AggArch{Name: arch}
+					aggArches[arch] = &g2.AggArch{Name: arch}
 				}
 				aggArches[arch].Repos = append(aggArches[arch].Repos, site)
 			}
@@ -2143,7 +1874,7 @@ func prepareAggregatedData(sites []*SiteData) *AggregatedData {
 		if site.ArchesDesc != nil {
 			for arch, status := range site.ArchesDesc.Arches {
 				if _, ok := aggArches[arch]; !ok {
-					aggArches[arch] = &AggArch{Name: arch}
+					aggArches[arch] = &g2.AggArch{Name: arch}
 				}
 				if aggArches[arch].Status == "" {
 					aggArches[arch].Status = status
@@ -2164,12 +1895,12 @@ func prepareAggregatedData(sites []*SiteData) *AggregatedData {
 
 		for _, cat := range site.Categories {
 			if _, ok := aggCategories[cat.Name]; !ok {
-				aggCategories[cat.Name] = &AggCategory{Name: cat.Name, Packages: make(map[string]*AggPackage)}
+				aggCategories[cat.Name] = &g2.AggCategory{Name: cat.Name, Packages: make(map[string]*g2.AggPackage)}
 			}
 			for _, pkg := range cat.Packages {
 				pkgKey := cat.Name + "/" + pkg.Name
 				if _, ok := aggPackages[pkgKey]; !ok {
-					aggPackages[pkgKey] = &AggPackage{Name: pkg.Name, Category: cat.Name, Repos: make(map[string]*SiteData)}
+					aggPackages[pkgKey] = &g2.AggPackage{Name: pkg.Name, Category: cat.Name, Repos: make(map[string]*g2.SiteData)}
 					totalPackages++
 				}
 				aggPackages[pkgKey].Repos[site.RepoName] = site
@@ -2240,7 +1971,7 @@ func prepareAggregatedData(sites []*SiteData) *AggregatedData {
 									continue
 								}
 								if _, ok := aggLicenses[lic]; !ok {
-									aggLicenses[lic] = &AggLicense{Name: lic}
+									aggLicenses[lic] = &g2.AggLicense{Name: lic}
 								}
 
 								found := false
@@ -2280,14 +2011,14 @@ func prepareAggregatedData(sites []*SiteData) *AggregatedData {
 		}
 		for _, move := range site.Moves {
 			if _, ok := aggMoves[move.Old]; !ok {
-				aggMoves[move.Old] = &AggPackageMove{Old: move.Old, New: move.New}
+				aggMoves[move.Old] = &g2.AggPackageMove{Old: move.Old, New: move.New}
 			}
 		}
 		for _, eclass := range site.AggEclasses {
 			if _, ok := aggEclasses[eclass.Name]; !ok {
-				aggEclasses[eclass.Name] = &AggEclass{
+				aggEclasses[eclass.Name] = &g2.AggEclass{
 					Name:  eclass.Name,
-					Repos: make(map[string]*SiteData),
+					Repos: make(map[string]*g2.SiteData),
 				}
 			}
 			for rName, rData := range eclass.Repos {
@@ -2297,7 +2028,7 @@ func prepareAggregatedData(sites []*SiteData) *AggregatedData {
 				foundPkg := false
 				for _, existingPkg := range aggEclasses[eclass.Name].Packages {
 					if existingPkg.Name == pkg.Name && existingPkg.Category == pkg.Category {
-						newRepos := make(map[string]*SiteData)
+						newRepos := make(map[string]*g2.SiteData)
 						for k, v := range existingPkg.Repos {
 							newRepos[k] = v
 						}
@@ -2311,7 +2042,7 @@ func prepareAggregatedData(sites []*SiteData) *AggregatedData {
 				}
 				if !foundPkg {
 					newPkg := *pkg
-					newRepos := make(map[string]*SiteData)
+					newRepos := make(map[string]*g2.SiteData)
 					for k, v := range pkg.Repos {
 						newRepos[k] = v
 					}
@@ -2323,13 +2054,13 @@ func prepareAggregatedData(sites []*SiteData) *AggregatedData {
 	}
 
 	// Sort structures for templates
-	var sortedCategories []*AggCategory
+	var sortedCategories []*g2.AggCategory
 	for _, c := range aggCategories {
 		sortedCategories = append(sortedCategories, c)
 	}
 	sort.Slice(sortedCategories, func(i, j int) bool { return sortedCategories[i].Name < sortedCategories[j].Name })
 
-	var sortedPackages []*AggPackage
+	var sortedPackages []*g2.AggPackage
 	for _, p := range aggPackages {
 		sortedPackages = append(sortedPackages, p)
 	}
@@ -2349,7 +2080,7 @@ func prepareAggregatedData(sites []*SiteData) *AggregatedData {
 		}
 	}
 	validLicenses := make(map[string]bool)
-	var sortedLicenses []*AggLicense
+	var sortedLicenses []*g2.AggLicense
 	for _, l := range aggLicenses {
 		sort.Strings(l.Aliases)
 		sortedLicenses = append(sortedLicenses, l)
@@ -2357,25 +2088,25 @@ func prepareAggregatedData(sites []*SiteData) *AggregatedData {
 	}
 	sort.Slice(sortedLicenses, func(i, j int) bool { return sortedLicenses[i].Name < sortedLicenses[j].Name })
 
-	var sortedProjects []*AggProject
+	var sortedProjects []*g2.AggProject
 	for _, p := range aggProjects {
 		sortedProjects = append(sortedProjects, p)
 	}
 	sort.Slice(sortedProjects, func(i, j int) bool { return sortedProjects[i].Project.Name < sortedProjects[j].Project.Name })
 
-	var sortedProfiles []*AggProfile
+	var sortedProfiles []*g2.AggProfile
 	for _, p := range aggProfiles {
 		sortedProfiles = append(sortedProfiles, p)
 	}
 	sort.Slice(sortedProfiles, func(i, j int) bool { return sortedProfiles[i].Path < sortedProfiles[j].Path })
 
-	var sortedArches []*AggArch
+	var sortedArches []*g2.AggArch
 	for _, a := range aggArches {
 		sortedArches = append(sortedArches, a)
 	}
 	sort.Slice(sortedArches, func(i, j int) bool { return sortedArches[i].Name < sortedArches[j].Name })
 
-	var sortedEclasses []*AggEclass
+	var sortedEclasses []*g2.AggEclass
 	for _, ec := range aggEclasses {
 		sort.Slice(ec.Packages, func(i, j int) bool {
 			if ec.Packages[i].Category == ec.Packages[j].Category {
@@ -2392,7 +2123,7 @@ func prepareAggregatedData(sites []*SiteData) *AggregatedData {
 	})
 
 	// Generate Feeds for Repo
-	var recentNews []AggNewsItem
+	var recentNews []g2.AggNewsItem
 	cutoffDate := time.Now().AddDate(0, -3, 0)
 	for _, n := range globalNews {
 		if n.Posted.After(cutoffDate) {
@@ -2408,7 +2139,7 @@ func prepareAggregatedData(sites []*SiteData) *AggregatedData {
 		}
 	}
 
-	var sortedGroupedRepos []RepoGroup
+	var sortedGroupedRepos []g2.RepoGroup
 	for _, group := range groupedReposMap {
 		sortedGroupedRepos = append(sortedGroupedRepos, *group)
 	}
@@ -2419,27 +2150,27 @@ func prepareAggregatedData(sites []*SiteData) *AggregatedData {
 		return sortedGroupedRepos[i].Quality < sortedGroupedRepos[j].Quality
 	})
 
-	return &AggregatedData{
-		Categories:     sortedCategories,
-		Packages:       sortedPackages,
-		Licenses:       sortedLicenses,
-		Projects:       sortedProjects,
-		Profiles:       sortedProfiles,
-		Arches:         sortedArches,
-		Moves:          aggMoves,
-		GlobalNews:     globalNews,
-		RecentNews:     recentNews,
-		TotalPackages:  totalPackages,
-		UseFlags:       sortedUseFlags,
-		ValidLicenses:  validLicenses,
-		Eclasses:       sortedEclasses,
-		UseExpandDescs: aggUseExpandDescs,
+	return &g2.AggregatedData{
+		Categories:      sortedCategories,
+		Packages:        sortedPackages,
+		Licenses:        sortedLicenses,
+		Projects:        sortedProjects,
+		Profiles:        sortedProfiles,
+		Arches:          sortedArches,
+		Moves:           aggMoves,
+		GlobalNews:      globalNews,
+		RecentNews:      recentNews,
+		TotalPackages:   totalPackages,
+		UseFlags:        sortedUseFlags,
+		ValidLicenses:   validLicenses,
+		Eclasses:        sortedEclasses,
+		UseExpandDescs:  aggUseExpandDescs,
 		ValidUseExpands: validUseExpands,
-		GroupedRepos:   sortedGroupedRepos,
+		GroupedRepos:    sortedGroupedRepos,
 	}
 }
 
-func generateGlobalPages(outDir string, tmpl *template.Template, sites []*SiteData, data *AggregatedData, title, version, recentDurationStr string, genInfo GenerationInfo) error {
+func generateGlobalPages(outDir string, tmpl *template.Template, sites []*g2.SiteData, data *g2.AggregatedData, title, version, recentDurationStr string, genInfo GenerationInfo) error {
 	// Generate Help Page
 	if err := os.MkdirAll(filepath.Join(outDir, "help"), 0755); err != nil {
 		return err
@@ -2501,7 +2232,7 @@ func generateGlobalPages(outDir string, tmpl *template.Template, sites []*SiteDa
 		if err := renderPage(filepath.Join(outDir, "news", "index.html"), tmpl, "news_dashboard.html", GenericPageContext{
 			Title:       "News Dashboard",
 			BaseURL:     "../",
-			Breadcrumbs: []Breadcrumb{{Name: title, URL: "../"}, {Name: "News"}},
+			Breadcrumbs: []g2.Breadcrumb{{Name: title, URL: "../"}, {Name: "News"}},
 			RecentNews:  data.RecentNews,
 			Version:     version,
 			GenInfo:     genInfo,
@@ -2516,7 +2247,7 @@ func generateGlobalPages(outDir string, tmpl *template.Template, sites []*SiteDa
 		if err := renderPage(filepath.Join(outDir, "news", "archive", "index.html"), tmpl, "news_archive.html", GenericPageContext{
 			Title:       "News Archive",
 			BaseURL:     "../../",
-			Breadcrumbs: []Breadcrumb{{Name: title, URL: "../../"}, {Name: "News", URL: "../"}, {Name: "Archive"}},
+			Breadcrumbs: []g2.Breadcrumb{{Name: title, URL: "../../"}, {Name: "News", URL: "../"}, {Name: "Archive"}},
 			GlobalNews:  data.GlobalNews,
 			Version:     version,
 			GenInfo:     genInfo,
@@ -2533,7 +2264,7 @@ func generateGlobalPages(outDir string, tmpl *template.Template, sites []*SiteDa
 			if err := renderPage(filepath.Join(newsDir, "index.html"), tmpl, "news_article.html", GenericPageContext{
 				Title:       n.Title,
 				BaseURL:     "../../../",
-				Breadcrumbs: []Breadcrumb{{Name: title, URL: "../../../"}, {Name: "News", URL: "../../"}, {Name: "Archive", URL: "../"}, {Name: n.Title}},
+				Breadcrumbs: []g2.Breadcrumb{{Name: title, URL: "../../../"}, {Name: "News", URL: "../../"}, {Name: "Archive", URL: "../"}, {Name: n.Title}},
 				NewsItem:    n,
 				Version:     version,
 				GenInfo:     genInfo,
@@ -2551,7 +2282,7 @@ func generateGlobalPages(outDir string, tmpl *template.Template, sites []*SiteDa
 	if err := renderPage(filepath.Join(outDir, "overlays", "index.html"), tmpl, "overlays.html", GenericPageContext{
 		Title:       "Overlays",
 		BaseURL:     "../",
-		Breadcrumbs: []Breadcrumb{{Name: title, URL: "../"}, {Name: "Overlays"}},
+		Breadcrumbs: []g2.Breadcrumb{{Name: title, URL: "../"}, {Name: "Overlays"}},
 		Repos:       sites,
 		Version:     version,
 		GenInfo:     genInfo,
@@ -2562,7 +2293,7 @@ func generateGlobalPages(outDir string, tmpl *template.Template, sites []*SiteDa
 	return nil
 }
 
-func generateCategoryPages(outDir string, tmpl *template.Template, data *AggregatedData, title, version string, genInfo GenerationInfo) error {
+func generateCategoryPages(outDir string, tmpl *template.Template, data *g2.AggregatedData, title, version string, genInfo GenerationInfo) error {
 	// 3. Global Categories
 	if err := os.MkdirAll(filepath.Join(outDir, "categories"), 0755); err != nil {
 		return fmt.Errorf("creating directory: %w", err)
@@ -2570,7 +2301,7 @@ func generateCategoryPages(outDir string, tmpl *template.Template, data *Aggrega
 	if err := renderPage(filepath.Join(outDir, "categories", "index.html"), tmpl, "categories.html", GenericPageContext{
 		Title:       "Categories",
 		BaseURL:     "../",
-		Breadcrumbs: []Breadcrumb{{Name: title, URL: "../"}, {Name: "Categories"}},
+		Breadcrumbs: []g2.Breadcrumb{{Name: title, URL: "../"}, {Name: "Categories"}},
 		Categories:  data.Categories,
 		Version:     version,
 		GenInfo:     genInfo,
@@ -2590,7 +2321,7 @@ func generateCategoryPages(outDir string, tmpl *template.Template, data *Aggrega
 			return fmt.Errorf("creating directory %s: %w", catDir, err)
 		}
 
-		var catPkgs []*AggPackage
+		var catPkgs []*g2.AggPackage
 		for _, p := range cat.Packages {
 			catPkgs = append(catPkgs, p)
 		}
@@ -2598,7 +2329,7 @@ func generateCategoryPages(outDir string, tmpl *template.Template, data *Aggrega
 
 		type TmplPkg struct {
 			Name                  string
-			ReposList             []*SiteData
+			ReposList             []*g2.SiteData
 			EbuildCount           int
 			HighestStableVersion  template.HTML
 			HighestTestingVersion template.HTML
@@ -2609,7 +2340,7 @@ func generateCategoryPages(outDir string, tmpl *template.Template, data *Aggrega
 		}
 		var tmplPkgs []TmplPkg
 		for _, p := range catPkgs {
-			var allVersions []VersionData
+			var allVersions []g2.VersionData
 			for _, r := range p.Repos {
 				for _, c := range r.Categories {
 					if c.Name == cat.Name {
@@ -2628,7 +2359,7 @@ func generateCategoryPages(outDir string, tmpl *template.Template, data *Aggrega
 		if err := renderPage(filepath.Join(catDir, "index.html"), tmpl, "category.html", GenericPageContext{
 			Title:       "Category: " + cat.Name,
 			BaseURL:     "../../",
-			Breadcrumbs: []Breadcrumb{{Name: title, URL: "../../"}, {Name: "Categories", URL: "../"}, {Name: cat.Name}},
+			Breadcrumbs: []g2.Breadcrumb{{Name: title, URL: "../../"}, {Name: "Categories", URL: "../"}, {Name: cat.Name}},
 			Category:    map[string]interface{}{"Name": cat.Name, "Packages": tmplPkgs},
 			Version:     version,
 			GenInfo:     genInfo,
@@ -2639,7 +2370,7 @@ func generateCategoryPages(outDir string, tmpl *template.Template, data *Aggrega
 	return nil
 }
 
-func generatePackagePages(outDir string, tmpl *template.Template, data *AggregatedData, title, version string, genInfo GenerationInfo) error {
+func generatePackagePages(outDir string, tmpl *template.Template, data *g2.AggregatedData, title, version string, genInfo GenerationInfo) error {
 	// Global Moved Packages Pages
 	for oldPath, move := range data.Moves {
 		parts := strings.Split(oldPath, "/")
@@ -2672,7 +2403,7 @@ func generatePackagePages(outDir string, tmpl *template.Template, data *Aggregat
 		if err := renderPage(filepath.Join(pkgDir, "index.html"), tmpl, "moved_package.html", GenericPageContext{
 			Title:       "Package Moved: " + oldCat + "/" + oldName,
 			BaseURL:     "../../../",
-			Breadcrumbs: []Breadcrumb{{Name: title, URL: "../../../"}, {Name: "Packages", URL: "../../"}, {Name: oldCat, URL: "../../../categories/" + oldCat + "/"}, {Name: oldName}},
+			Breadcrumbs: []g2.Breadcrumb{{Name: title, URL: "../../../"}, {Name: "Packages", URL: "../../"}, {Name: oldCat, URL: "../../../categories/" + oldCat + "/"}, {Name: oldName}},
 			OldName:     oldCat + "/" + oldName,
 			NewName:     move.New,
 			NewURL:      "../../" + newParts[0] + "/" + newParts[1] + "/",
@@ -2690,7 +2421,7 @@ func generatePackagePages(outDir string, tmpl *template.Template, data *Aggregat
 	if err := renderPage(filepath.Join(outDir, "packages", "index.html"), tmpl, "packages.html", GenericPageContext{
 		Title:       "Packages",
 		BaseURL:     "../",
-		Breadcrumbs: []Breadcrumb{{Name: title, URL: "../"}, {Name: "Packages"}},
+		Breadcrumbs: []g2.Breadcrumb{{Name: title, URL: "../"}, {Name: "Packages"}},
 		Packages:    data.Packages,
 		Version:     version,
 		GenInfo:     genInfo,
@@ -2725,7 +2456,7 @@ func generatePackagePages(outDir string, tmpl *template.Template, data *Aggregat
 			if err := renderPage(filepath.Join(pkgDir, "index.html"), tmpl, "package_picker.html", GenericPageContext{
 				Title:       "Package: " + pkg.Category + "/" + pkg.Name,
 				BaseURL:     "../../../",
-				Breadcrumbs: []Breadcrumb{{Name: title, URL: "../../../"}, {Name: "Packages", URL: "../../"}, {Name: pkg.Category, URL: "../../../categories/" + pkg.Category + "/"}, {Name: pkg.Name}},
+				Breadcrumbs: []g2.Breadcrumb{{Name: title, URL: "../../../"}, {Name: "Packages", URL: "../../"}, {Name: pkg.Category, URL: "../../../categories/" + pkg.Category + "/"}, {Name: pkg.Name}},
 				Package:     map[string]interface{}{"Category": pkg.Category, "Name": pkg.Name, "ReposList": reposList},
 				MovedToName: movedToName,
 				MovedToURL:  movedToURL,
@@ -2740,7 +2471,7 @@ func generatePackagePages(outDir string, tmpl *template.Template, data *Aggregat
 	return nil
 }
 
-func generateOtherGlobalPages(outDir string, tmpl *template.Template, data *AggregatedData, title, version string, genInfo GenerationInfo) error {
+func generateOtherGlobalPages(outDir string, tmpl *template.Template, data *g2.AggregatedData, title, version string, genInfo GenerationInfo) error {
 	// Arches
 	if len(data.Arches) > 0 {
 		if err := os.MkdirAll(filepath.Join(outDir, "arches"), 0755); err != nil {
@@ -2749,7 +2480,7 @@ func generateOtherGlobalPages(outDir string, tmpl *template.Template, data *Aggr
 		if err := renderPage(filepath.Join(outDir, "arches", "index.html"), tmpl, "arches.html", GenericPageContext{
 			Title:       "Architectures",
 			BaseURL:     "../",
-			Breadcrumbs: []Breadcrumb{{Name: title, URL: "../"}, {Name: "Architectures"}},
+			Breadcrumbs: []g2.Breadcrumb{{Name: title, URL: "../"}, {Name: "Architectures"}},
 			Arches:      data.Arches,
 			Version:     version,
 			GenInfo:     genInfo,
@@ -2766,7 +2497,7 @@ func generateOtherGlobalPages(outDir string, tmpl *template.Template, data *Aggr
 			if err := renderPage(filepath.Join(archDir, "index.html"), tmpl, "arch.html", GenericPageContext{
 				Title:       "Architecture: " + a.Name,
 				BaseURL:     "../../",
-				Breadcrumbs: []Breadcrumb{{Name: title, URL: "../../"}, {Name: "Architectures", URL: "../../arches/"}, {Name: a.Name}},
+				Breadcrumbs: []g2.Breadcrumb{{Name: title, URL: "../../"}, {Name: "Architectures", URL: "../../arches/"}, {Name: a.Name}},
 				Arch:        a,
 				Version:     version,
 				GenInfo:     genInfo,
@@ -2784,7 +2515,7 @@ func generateOtherGlobalPages(outDir string, tmpl *template.Template, data *Aggr
 		if err := renderPage(filepath.Join(outDir, "profiles", "index.html"), tmpl, "profiles.html", GenericPageContext{
 			Title:       "Profiles",
 			BaseURL:     "../",
-			Breadcrumbs: []Breadcrumb{{Name: title, URL: "../"}, {Name: "Profiles"}},
+			Breadcrumbs: []g2.Breadcrumb{{Name: title, URL: "../"}, {Name: "Profiles"}},
 			Profiles:    data.Profiles,
 			Version:     version,
 			GenInfo:     genInfo,
@@ -2806,7 +2537,7 @@ func generateOtherGlobalPages(outDir string, tmpl *template.Template, data *Aggr
 			if err := renderPage(filepath.Join(profDir, "index.html"), tmpl, "profile.html", GenericPageContext{
 				Title:       "Profile: " + p.Path,
 				BaseURL:     relToRoot,
-				Breadcrumbs: []Breadcrumb{{Name: title, URL: relToRoot}, {Name: "Profiles", URL: relToRoot + "profiles/"}, {Name: p.Path}},
+				Breadcrumbs: []g2.Breadcrumb{{Name: title, URL: relToRoot}, {Name: "Profiles", URL: relToRoot + "profiles/"}, {Name: p.Path}},
 				ProfilePath: p.Path,
 				ProfileList: p.Repos,
 				Version:     version,
@@ -2815,7 +2546,6 @@ func generateOtherGlobalPages(outDir string, tmpl *template.Template, data *Aggr
 				return fmt.Errorf("rendering page: %w", err)
 			}
 		}
-
 
 	}
 
@@ -2829,7 +2559,7 @@ func generateOtherGlobalPages(outDir string, tmpl *template.Template, data *Aggr
 	if err := renderPage(filepath.Join(outDir, "uses", "index.html"), tmpl, "uses.html", GenericPageContext{
 		Title:       "USE Flags",
 		BaseURL:     "../",
-		Breadcrumbs: []Breadcrumb{{Name: title, URL: "../"}, {Name: "USE Flags"}},
+		Breadcrumbs: []g2.Breadcrumb{{Name: title, URL: "../"}, {Name: "USE Flags"}},
 		UseFlags:    data.UseFlags,
 		Version:     version,
 		GenInfo:     genInfo,
@@ -2847,7 +2577,7 @@ func generateOtherGlobalPages(outDir string, tmpl *template.Template, data *Aggr
 		if err := renderPage(filepath.Join(useDir, "index.html"), tmpl, "use.html", GenericPageContext{
 			Title:       "USE Flag: " + f.Name,
 			BaseURL:     "../../",
-			Breadcrumbs: []Breadcrumb{{Name: title, URL: "../../"}, {Name: "USE Flags", URL: "../"}, {Name: f.Name}},
+			Breadcrumbs: []g2.Breadcrumb{{Name: title, URL: "../../"}, {Name: "USE Flags", URL: "../"}, {Name: f.Name}},
 			UseFlag:     f,
 			Version:     version,
 			GenInfo:     genInfo,
@@ -2861,12 +2591,12 @@ func generateOtherGlobalPages(outDir string, tmpl *template.Template, data *Aggr
 			return fmt.Errorf("creating directory: %w", err)
 		}
 		if err := renderPage(filepath.Join(outDir, "uses_expand", "index.html"), tmpl, "use_expands.html", GenericPageContext{
-			Title:       "USE_EXPAND Flags",
-			BaseURL:     "../",
-			Breadcrumbs: []Breadcrumb{{Name: title, URL: "../"}, {Name: "USE_EXPAND Flags"}},
+			Title:          "USE_EXPAND Flags",
+			BaseURL:        "../",
+			Breadcrumbs:    []g2.Breadcrumb{{Name: title, URL: "../"}, {Name: "USE_EXPAND Flags"}},
 			UseExpandDescs: data.UseExpandDescs,
-			Version:     version,
-			GenInfo:     genInfo,
+			Version:        version,
+			GenInfo:        genInfo,
 		}); err != nil {
 			return fmt.Errorf("rendering page: %w", err)
 		}
@@ -2876,12 +2606,12 @@ func generateOtherGlobalPages(outDir string, tmpl *template.Template, data *Aggr
 				return fmt.Errorf("creating directory %s: %w", useExpandDir, err)
 			}
 			if err := renderPage(filepath.Join(useExpandDir, "index.html"), tmpl, "use_expand.html", GenericPageContext{
-				Title:       "USE_EXPAND: " + prefix,
-				BaseURL:     "../../",
-				Breadcrumbs: []Breadcrumb{{Name: title, URL: "../../"}, {Name: "USE_EXPAND Flags", URL: "../"}, {Name: prefix}},
+				Title:         "USE_EXPAND: " + prefix,
+				BaseURL:       "../../",
+				Breadcrumbs:   []g2.Breadcrumb{{Name: title, URL: "../../"}, {Name: "USE_EXPAND Flags", URL: "../"}, {Name: prefix}},
 				UseExpandDesc: desc,
-				Version:     version,
-				GenInfo:     genInfo,
+				Version:       version,
+				GenInfo:       genInfo,
 			}); err != nil {
 				return fmt.Errorf("rendering page: %w", err)
 			}
@@ -2890,7 +2620,7 @@ func generateOtherGlobalPages(outDir string, tmpl *template.Template, data *Aggr
 	if err := renderPage(filepath.Join(outDir, "licenses", "index.html"), tmpl, "licenses.html", GenericPageContext{
 		Title:       "Licenses",
 		BaseURL:     "../",
-		Breadcrumbs: []Breadcrumb{{Name: title, URL: "../"}, {Name: "Licenses"}},
+		Breadcrumbs: []g2.Breadcrumb{{Name: title, URL: "../"}, {Name: "Licenses"}},
 		Licenses:    data.Licenses,
 		Version:     version,
 		GenInfo:     genInfo,
@@ -2911,7 +2641,7 @@ func generateOtherGlobalPages(outDir string, tmpl *template.Template, data *Aggr
 		type TmplPkg struct {
 			Name      string
 			Category  string
-			ReposList []*SiteData
+			ReposList []*g2.SiteData
 		}
 		var tmplPkgs []TmplPkg
 		for _, p := range lic.Packages {
@@ -2921,7 +2651,7 @@ func generateOtherGlobalPages(outDir string, tmpl *template.Template, data *Aggr
 		if err := renderPage(filepath.Join(licDir, "index.html"), tmpl, "license.html", GenericPageContext{
 			Title:       "License: " + lic.Name,
 			BaseURL:     "../../",
-			Breadcrumbs: []Breadcrumb{{Name: title, URL: "../../"}, {Name: "Licenses", URL: "../"}, {Name: lic.Name}},
+			Breadcrumbs: []g2.Breadcrumb{{Name: title, URL: "../../"}, {Name: "Licenses", URL: "../"}, {Name: lic.Name}},
 			License:     map[string]interface{}{"Name": lic.Name, "Packages": tmplPkgs, "Text": lic.Text, "Aliases": lic.Aliases},
 			Version:     version,
 			GenInfo:     genInfo,
@@ -2938,7 +2668,7 @@ func generateOtherGlobalPages(outDir string, tmpl *template.Template, data *Aggr
 		if err := renderPage(filepath.Join(outDir, "projects", "index.html"), tmpl, "projects.html", GenericPageContext{
 			Title:       "Projects",
 			BaseURL:     "../",
-			Breadcrumbs: []Breadcrumb{{Name: title, URL: "../"}, {Name: "Projects"}},
+			Breadcrumbs: []g2.Breadcrumb{{Name: title, URL: "../"}, {Name: "Projects"}},
 			Projects:    data.Projects,
 			Version:     version,
 			GenInfo:     genInfo,
@@ -2959,7 +2689,7 @@ func generateOtherGlobalPages(outDir string, tmpl *template.Template, data *Aggr
 			type TmplPkg struct {
 				Name      string
 				Category  string
-				ReposList []*SiteData
+				ReposList []*g2.SiteData
 			}
 			var tmplPkgs []TmplPkg
 			for _, p := range proj.Packages {
@@ -2969,7 +2699,7 @@ func generateOtherGlobalPages(outDir string, tmpl *template.Template, data *Aggr
 			if err := renderPage(filepath.Join(projDir, "index.html"), tmpl, "project.html", GenericPageContext{
 				Title:       "Project: " + proj.Project.Name,
 				BaseURL:     "../../",
-				Breadcrumbs: []Breadcrumb{{Name: title, URL: "../../"}, {Name: "Projects", URL: "../"}, {Name: proj.Project.Name}},
+				Breadcrumbs: []g2.Breadcrumb{{Name: title, URL: "../../"}, {Name: "Projects", URL: "../"}, {Name: proj.Project.Name}},
 				Project:     proj,
 				Packages:    tmplPkgs,
 				Version:     version,
@@ -2984,7 +2714,7 @@ func generateOtherGlobalPages(outDir string, tmpl *template.Template, data *Aggr
 	return nil
 }
 
-func generateRepoPages(outDir string, tmpl *template.Template, sites []*SiteData, data *AggregatedData, title, version, recentDurationStr string, genInfo GenerationInfo) error {
+func generateRepoPages(outDir string, tmpl *template.Template, sites []*g2.SiteData, data *g2.AggregatedData, title, version, recentDurationStr string, genInfo GenerationInfo) error {
 	// 6. Repo-Specific Pages
 
 	if err := os.MkdirAll(filepath.Join(outDir, "repos"), 0755); err != nil {
@@ -2997,7 +2727,7 @@ func generateRepoPages(outDir string, tmpl *template.Template, sites []*SiteData
 	if err := renderPage(filepath.Join(outDir, "repos", "all", "index.html"), tmpl, "overlays.html", GenericPageContext{
 		Title:       "All Overlays",
 		BaseURL:     "../../",
-		Breadcrumbs: []Breadcrumb{{Name: title, URL: "../../"}, {Name: "All Overlays"}},
+		Breadcrumbs: []g2.Breadcrumb{{Name: title, URL: "../../"}, {Name: "All Overlays"}},
 		Repos:       sites,
 		Version:     version,
 		GenInfo:     genInfo,
@@ -3014,7 +2744,7 @@ func generateRepoPages(outDir string, tmpl *template.Template, sites []*SiteData
 		if err := renderPage(filepath.Join(groupDir, "index.html"), tmpl, "repo_group.html", GenericPageContext{
 			Title:       "Overlays: " + group.Quality + " - " + group.Status,
 			BaseURL:     "../../",
-			Breadcrumbs: []Breadcrumb{{Name: title, URL: "../../"}, {Name: "Overlays: " + group.Quality + " - " + group.Status}},
+			Breadcrumbs: []g2.Breadcrumb{{Name: title, URL: "../../"}, {Name: "Overlays: " + group.Quality + " - " + group.Status}},
 			Group:       group,
 			Version:     version,
 			GenInfo:     genInfo,
@@ -3036,7 +2766,7 @@ func generateRepoPages(outDir string, tmpl *template.Template, sites []*SiteData
 			if err := renderPage(filepath.Join(repoDir, "uses", "index.html"), tmpl, "uses.html", GenericPageContext{
 				Title:       site.RepoName + " - USE Flags",
 				BaseURL:     "../../../",
-				Breadcrumbs: []Breadcrumb{{Name: title, URL: "../../../"}, {Name: site.RepoName, URL: "../"}, {Name: "USE Flags"}},
+				Breadcrumbs: []g2.Breadcrumb{{Name: title, URL: "../../../"}, {Name: site.RepoName, URL: "../"}, {Name: "USE Flags"}},
 				UseFlags:    site.AggUseFlags,
 				Version:     version,
 				GenInfo:     genInfo,
@@ -3054,7 +2784,7 @@ func generateRepoPages(outDir string, tmpl *template.Template, sites []*SiteData
 				if err := renderPage(filepath.Join(useDir, "index.html"), tmpl, "use.html", GenericPageContext{
 					Title:       "USE Flag: " + f.Name,
 					BaseURL:     "../../../../",
-					Breadcrumbs: []Breadcrumb{{Name: title, URL: "../../../../"}, {Name: site.RepoName, URL: "../../"}, {Name: "USE Flags", URL: "../"}, {Name: f.Name}},
+					Breadcrumbs: []g2.Breadcrumb{{Name: title, URL: "../../../../"}, {Name: site.RepoName, URL: "../../"}, {Name: "USE Flags", URL: "../"}, {Name: f.Name}},
 					UseFlag:     f,
 					Version:     version,
 					GenInfo:     genInfo,
@@ -3071,7 +2801,7 @@ func generateRepoPages(outDir string, tmpl *template.Template, sites []*SiteData
 			if err := renderPage(filepath.Join(repoDir, "uses_expand", "index.html"), tmpl, "repo_use_expands.html", GenericPageContext{
 				Title:       site.RepoName + " - USE_EXPAND Flags",
 				BaseURL:     "../../../",
-				Breadcrumbs: []Breadcrumb{{Name: title, URL: "../../../"}, {Name: site.RepoName, URL: "../"}, {Name: "USE_EXPAND Flags"}},
+				Breadcrumbs: []g2.Breadcrumb{{Name: title, URL: "../../../"}, {Name: site.RepoName, URL: "../"}, {Name: "USE_EXPAND Flags"}},
 				Repo:        site,
 				Version:     version,
 				GenInfo:     genInfo,
@@ -3084,13 +2814,13 @@ func generateRepoPages(outDir string, tmpl *template.Template, sites []*SiteData
 					return fmt.Errorf("creating directory %s: %w", useExpandDir, err)
 				}
 				if err := renderPage(filepath.Join(useExpandDir, "index.html"), tmpl, "repo_use_expand.html", GenericPageContext{
-					Title:       site.RepoName + " - USE_EXPAND: " + prefix,
-					BaseURL:     "../../../../",
-					Breadcrumbs: []Breadcrumb{{Name: title, URL: "../../../../"}, {Name: site.RepoName, URL: "../../"}, {Name: "USE_EXPAND Flags", URL: "../"}, {Name: prefix}},
-					Repo:        site,
+					Title:         site.RepoName + " - USE_EXPAND: " + prefix,
+					BaseURL:       "../../../../",
+					Breadcrumbs:   []g2.Breadcrumb{{Name: title, URL: "../../../../"}, {Name: site.RepoName, URL: "../../"}, {Name: "USE_EXPAND Flags", URL: "../"}, {Name: prefix}},
+					Repo:          site,
 					UseExpandDesc: desc,
-					Version:     version,
-					GenInfo:     genInfo,
+					Version:       version,
+					GenInfo:       genInfo,
 				}); err != nil {
 					return fmt.Errorf("rendering page: %w", err)
 				}
@@ -3103,7 +2833,7 @@ func generateRepoPages(outDir string, tmpl *template.Template, sites []*SiteData
 			if err := renderPage(filepath.Join(repoDir, "deprecated", "index.html"), tmpl, "repo_deprecated.html", GenericPageContext{
 				Title:       site.RepoName + " - Deprecated",
 				BaseURL:     "../../../",
-				Breadcrumbs: []Breadcrumb{{Name: title, URL: "../../../"}, {Name: site.RepoName, URL: "../"}, {Name: "Deprecated Packages"}},
+				Breadcrumbs: []g2.Breadcrumb{{Name: title, URL: "../../../"}, {Name: site.RepoName, URL: "../"}, {Name: "Deprecated Packages"}},
 				Repo:        site,
 			}); err != nil {
 				return fmt.Errorf("rendering page: %w", err)
@@ -3117,7 +2847,7 @@ func generateRepoPages(outDir string, tmpl *template.Template, sites []*SiteData
 			if err := renderPage(filepath.Join(repoDir, "masked", "index.html"), tmpl, "repo_masked.html", GenericPageContext{
 				Title:       site.RepoName + " - Masked",
 				BaseURL:     "../../../",
-				Breadcrumbs: []Breadcrumb{{Name: title, URL: "../../../"}, {Name: site.RepoName, URL: "../"}, {Name: "Masked Packages"}},
+				Breadcrumbs: []g2.Breadcrumb{{Name: title, URL: "../../../"}, {Name: site.RepoName, URL: "../"}, {Name: "Masked Packages"}},
 				Repo:        site,
 			}); err != nil {
 				return fmt.Errorf("rendering page: %w", err)
@@ -3131,7 +2861,7 @@ func generateRepoPages(outDir string, tmpl *template.Template, sites []*SiteData
 			if err := renderPage(filepath.Join(repoDir, "info_vars", "index.html"), tmpl, "repo_info_vars.html", GenericPageContext{
 				Title:       site.RepoName + " - Info Vars",
 				BaseURL:     "../../../",
-				Breadcrumbs: []Breadcrumb{{Name: title, URL: "../../../"}, {Name: site.RepoName, URL: "../"}, {Name: "Info Vars"}},
+				Breadcrumbs: []g2.Breadcrumb{{Name: title, URL: "../../../"}, {Name: site.RepoName, URL: "../"}, {Name: "Info Vars"}},
 				Repo:        site,
 			}); err != nil {
 				return fmt.Errorf("rendering page: %w", err)
@@ -3144,7 +2874,7 @@ func generateRepoPages(outDir string, tmpl *template.Template, sites []*SiteData
 			if err := renderPage(filepath.Join(repoDir, "info_pkgs", "index.html"), tmpl, "repo_info_pkgs.html", GenericPageContext{
 				Title:       site.RepoName + " - Info Packages",
 				BaseURL:     "../../../",
-				Breadcrumbs: []Breadcrumb{{Name: title, URL: "../../../"}, {Name: site.RepoName, URL: "../"}, {Name: "Info Packages"}},
+				Breadcrumbs: []g2.Breadcrumb{{Name: title, URL: "../../../"}, {Name: site.RepoName, URL: "../"}, {Name: "Info Packages"}},
 				Repo:        site,
 			}); err != nil {
 				return fmt.Errorf("rendering page: %w", err)
@@ -3191,7 +2921,7 @@ func generateRepoPages(outDir string, tmpl *template.Template, sites []*SiteData
 			if err := renderPage(filepath.Join(pkgDir, "index.html"), tmpl, "moved_package.html", GenericPageContext{
 				Title:       fmt.Sprintf("%s - %s/%s (Moved)", site.RepoName, oldCat, oldName),
 				BaseURL:     "../../../../../../",
-				Breadcrumbs: []Breadcrumb{{Name: title, URL: "../../../../../../"}, {Name: site.RepoName, URL: "../../../../"}, {Name: "Categories", URL: "../../../"}, {Name: oldCat, URL: "../../"}, {Name: oldName}},
+				Breadcrumbs: []g2.Breadcrumb{{Name: title, URL: "../../../../../../"}, {Name: site.RepoName, URL: "../../../../"}, {Name: "Categories", URL: "../../../"}, {Name: oldCat, URL: "../../"}, {Name: oldName}},
 				Repo:        site,
 				OldName:     oldCat + "/" + oldName,
 				NewName:     move.New,
@@ -3221,7 +2951,7 @@ func generateRepoPages(outDir string, tmpl *template.Template, sites []*SiteData
 		if err := renderPage(filepath.Join(repoDir, "index.html"), tmpl, "repo_index.html", GenericPageContext{
 			Title:                 site.RepoName,
 			BaseURL:               "../../",
-			Breadcrumbs:           []Breadcrumb{{Name: title, URL: "../../"}, {Name: "Overlays", URL: "../../overlays/"}, {Name: site.RepoName}},
+			Breadcrumbs:           []g2.Breadcrumb{{Name: title, URL: "../../"}, {Name: "Overlays", URL: "../../overlays/"}, {Name: site.RepoName}},
 			Repo:                  site,
 			PackageCount:          site.PackageCount,
 			Version:               version,
@@ -3242,7 +2972,7 @@ func generateRepoPages(outDir string, tmpl *template.Template, sites []*SiteData
 		if err := renderPage(filepath.Join(repoDir, "stats", "index.html"), tmpl, "repo_stats.html", GenericPageContext{
 			Title:       site.RepoName + " - Statistics",
 			BaseURL:     "../../../",
-			Breadcrumbs: []Breadcrumb{{Name: title, URL: "../../../"}, {Name: "Overlays", URL: "../../../overlays/"}, {Name: site.RepoName, URL: "../"}, {Name: "Statistics"}},
+			Breadcrumbs: []g2.Breadcrumb{{Name: title, URL: "../../../"}, {Name: "Overlays", URL: "../../../overlays/"}, {Name: site.RepoName, URL: "../"}, {Name: "Statistics"}},
 			Repo:        site,
 			Version:     version,
 			GenInfo:     genInfo,
@@ -3257,7 +2987,7 @@ func generateRepoPages(outDir string, tmpl *template.Template, sites []*SiteData
 			if err := renderPage(filepath.Join(repoDir, "profiles", "index.html"), tmpl, "repo_profiles.html", GenericPageContext{
 				Title:       site.RepoName + " - Profiles",
 				BaseURL:     "../../../",
-				Breadcrumbs: []Breadcrumb{{Name: title, URL: "../../../"}, {Name: site.RepoName, URL: "../"}, {Name: "Profiles"}},
+				Breadcrumbs: []g2.Breadcrumb{{Name: title, URL: "../../../"}, {Name: site.RepoName, URL: "../"}, {Name: "Profiles"}},
 				Repo:        site,
 				Version:     version,
 				GenInfo:     genInfo,
@@ -3279,7 +3009,7 @@ func generateRepoPages(outDir string, tmpl *template.Template, sites []*SiteData
 				if err := renderPage(filepath.Join(profDir, "index.html"), tmpl, "repo_profile.html", GenericPageContext{
 					Title:       site.RepoName + " - Profile: " + p.Path,
 					BaseURL:     relToRoot,
-					Breadcrumbs: []Breadcrumb{{Name: title, URL: relToRoot}, {Name: site.RepoName, URL: relToRoot + "repos/" + site.RepoName + "/"}, {Name: "Profiles", URL: relToRoot + "repos/" + site.RepoName + "/profiles/"}, {Name: p.Path}},
+					Breadcrumbs: []g2.Breadcrumb{{Name: title, URL: relToRoot}, {Name: site.RepoName, URL: relToRoot + "repos/" + site.RepoName + "/"}, {Name: "Profiles", URL: relToRoot + "repos/" + site.RepoName + "/profiles/"}, {Name: p.Path}},
 					RepoName:    site.RepoName,
 					ProfilePath: p.Path,
 					Profile:     p,
@@ -3293,7 +3023,7 @@ func generateRepoPages(outDir string, tmpl *template.Template, sites []*SiteData
 					if err := renderPage(filepath.Join(profDir, fName+".html"), tmpl, "repo_profile_file.html", GenericPageContext{
 						Title:       site.RepoName + " - Profile File: " + fName,
 						BaseURL:     relToRoot,
-						Breadcrumbs: []Breadcrumb{{Name: title, URL: relToRoot}, {Name: site.RepoName, URL: relToRoot + "repos/" + site.RepoName + "/"}, {Name: "Profiles", URL: relToRoot + "repos/" + site.RepoName + "/profiles/"}, {Name: p.Path, URL: "index.html"}, {Name: fName}},
+						Breadcrumbs: []g2.Breadcrumb{{Name: title, URL: relToRoot}, {Name: site.RepoName, URL: relToRoot + "repos/" + site.RepoName + "/"}, {Name: "Profiles", URL: relToRoot + "repos/" + site.RepoName + "/profiles/"}, {Name: p.Path, URL: "index.html"}, {Name: fName}},
 						RepoName:    site.RepoName,
 						ProfilePath: p.Path,
 						Profile:     p,
@@ -3316,7 +3046,7 @@ func generateRepoPages(outDir string, tmpl *template.Template, sites []*SiteData
 			if err := renderPage(filepath.Join(repoDir, "news", "index.html"), tmpl, "news_dashboard.html", GenericPageContext{
 				Title:       site.RepoName + " - News Dashboard",
 				BaseURL:     "../../../",
-				Breadcrumbs: []Breadcrumb{{Name: title, URL: "../../../"}, {Name: "Overlays", URL: "../../../overlays/"}, {Name: site.RepoName, URL: "../"}, {Name: "News"}},
+				Breadcrumbs: []g2.Breadcrumb{{Name: title, URL: "../../../"}, {Name: "Overlays", URL: "../../../overlays/"}, {Name: site.RepoName, URL: "../"}, {Name: "News"}},
 				RecentNews:  repoRecentNews,
 				Version:     version,
 				GenInfo:     genInfo,
@@ -3331,7 +3061,7 @@ func generateRepoPages(outDir string, tmpl *template.Template, sites []*SiteData
 			if err := renderPage(filepath.Join(repoDir, "news", "archive", "index.html"), tmpl, "news_archive.html", GenericPageContext{
 				Title:       site.RepoName + " - News Archive",
 				BaseURL:     "../../../../",
-				Breadcrumbs: []Breadcrumb{{Name: title, URL: "../../../../"}, {Name: "Overlays", URL: "../../../../overlays/"}, {Name: site.RepoName, URL: "../../"}, {Name: "News", URL: "../"}, {Name: "Archive"}},
+				Breadcrumbs: []g2.Breadcrumb{{Name: title, URL: "../../../../"}, {Name: "Overlays", URL: "../../../../overlays/"}, {Name: site.RepoName, URL: "../../"}, {Name: "News", URL: "../"}, {Name: "Archive"}},
 				News:        site.News,
 				Version:     version,
 				GenInfo:     genInfo,
@@ -3348,7 +3078,7 @@ func generateRepoPages(outDir string, tmpl *template.Template, sites []*SiteData
 				if err := renderPage(filepath.Join(newsDir, "index.html"), tmpl, "news_article.html", GenericPageContext{
 					Title:       n.Title,
 					BaseURL:     "../../../../../",
-					Breadcrumbs: []Breadcrumb{{Name: title, URL: "../../../../../"}, {Name: "Overlays", URL: "../../../../../overlays/"}, {Name: site.RepoName, URL: "../../../"}, {Name: "News", URL: "../../"}, {Name: "Archive", URL: "../"}, {Name: n.Title}},
+					Breadcrumbs: []g2.Breadcrumb{{Name: title, URL: "../../../../../"}, {Name: "Overlays", URL: "../../../../../overlays/"}, {Name: site.RepoName, URL: "../../../"}, {Name: "News", URL: "../../"}, {Name: "Archive", URL: "../"}, {Name: n.Title}},
 					NewsItem:    n,
 					Version:     version,
 					GenInfo:     genInfo,
@@ -3364,7 +3094,7 @@ func generateRepoPages(outDir string, tmpl *template.Template, sites []*SiteData
 		if err := renderPage(filepath.Join(repoDir, "categories", "index.html"), tmpl, "categories.html", GenericPageContext{
 			Title:       site.RepoName + " - Categories",
 			BaseURL:     "../../../",
-			Breadcrumbs: []Breadcrumb{{Name: title, URL: "../../../"}, {Name: site.RepoName, URL: "../"}, {Name: "Categories"}},
+			Breadcrumbs: []g2.Breadcrumb{{Name: title, URL: "../../../"}, {Name: site.RepoName, URL: "../"}, {Name: "Categories"}},
 			Categories:  site.Categories,
 			Version:     version,
 			GenInfo:     genInfo,
@@ -3379,7 +3109,7 @@ func generateRepoPages(outDir string, tmpl *template.Template, sites []*SiteData
 			if err := renderPage(filepath.Join(repoDir, "authors", "index.html"), tmpl, "authors.html", GenericPageContext{
 				Title:       site.RepoName + " - Authors",
 				BaseURL:     "../../../",
-				Breadcrumbs: []Breadcrumb{{Name: title, URL: "../../../"}, {Name: site.RepoName, URL: "../"}, {Name: "Authors"}},
+				Breadcrumbs: []g2.Breadcrumb{{Name: title, URL: "../../../"}, {Name: site.RepoName, URL: "../"}, {Name: "Authors"}},
 				Authors:     site.Authors,
 				Repo:        site,
 				Version:     version,
@@ -3400,7 +3130,7 @@ func generateRepoPages(outDir string, tmpl *template.Template, sites []*SiteData
 
 			type TmplPkg struct {
 				Name                  string
-				ReposList             []*SiteData
+				ReposList             []*g2.SiteData
 				EbuildCount           int
 				HighestStableVersion  template.HTML
 				HighestTestingVersion template.HTML
@@ -3411,13 +3141,13 @@ func generateRepoPages(outDir string, tmpl *template.Template, sites []*SiteData
 			}
 			var tmplPkgs []TmplPkg
 			for _, p := range cat.Packages {
-				tmplPkgs = append(tmplPkgs, TmplPkg{Name: p.Name, ReposList: []*SiteData{site}, EbuildCount: p.EbuildCount, HighestStableVersion: p.HighestStableVersion, HighestTestingVersion: p.HighestTestingVersion, DominantDescription: p.DominantDescription, DominantHomepage: p.DominantHomepage, DominantLicense: p.DominantLicense, ReverseVirtuals: p.ReverseVirtuals})
+				tmplPkgs = append(tmplPkgs, TmplPkg{Name: p.Name, ReposList: []*g2.SiteData{site}, EbuildCount: p.EbuildCount, HighestStableVersion: p.HighestStableVersion, HighestTestingVersion: p.HighestTestingVersion, DominantDescription: p.DominantDescription, DominantHomepage: p.DominantHomepage, DominantLicense: p.DominantLicense, ReverseVirtuals: p.ReverseVirtuals})
 			}
 
 			if err := renderPage(filepath.Join(catDir, "index.html"), tmpl, "category.html", GenericPageContext{
 				Title:       "Category: " + cat.Name,
 				BaseURL:     "../../../../",
-				Breadcrumbs: []Breadcrumb{{Name: title, URL: "../../../../"}, {Name: site.RepoName, URL: "../../"}, {Name: "Categories", URL: "../"}, {Name: cat.Name}},
+				Breadcrumbs: []g2.Breadcrumb{{Name: title, URL: "../../../../"}, {Name: site.RepoName, URL: "../../"}, {Name: "Categories", URL: "../"}, {Name: cat.Name}},
 				Category:    map[string]interface{}{"Name": cat.Name, "Packages": tmplPkgs},
 				Version:     version,
 				GenInfo:     genInfo,
@@ -3429,7 +3159,7 @@ func generateRepoPages(outDir string, tmpl *template.Template, sites []*SiteData
 		if err := os.MkdirAll(filepath.Join(repoDir, "packages"), 0755); err != nil {
 			return fmt.Errorf("creating directory: %w", err)
 		}
-		var repoPkgs []PackageData
+		var repoPkgs []g2.PackageData
 		for _, c := range site.Categories {
 			repoPkgs = append(repoPkgs, c.Packages...)
 		}
@@ -3443,7 +3173,7 @@ func generateRepoPages(outDir string, tmpl *template.Template, sites []*SiteData
 		if err := renderPage(filepath.Join(repoDir, "packages", "index.html"), tmpl, "repo_packages.html", GenericPageContext{
 			Title:       site.RepoName + " - Packages",
 			BaseURL:     "../../../",
-			Breadcrumbs: []Breadcrumb{{Name: title, URL: "../../../"}, {Name: site.RepoName, URL: "../"}, {Name: "Packages"}},
+			Breadcrumbs: []g2.Breadcrumb{{Name: title, URL: "../../../"}, {Name: site.RepoName, URL: "../"}, {Name: "Packages"}},
 			Packages:    repoPkgs,
 			Repo:        site,
 			Version:     version,
@@ -3452,7 +3182,7 @@ func generateRepoPages(outDir string, tmpl *template.Template, sites []*SiteData
 			return fmt.Errorf("rendering page: %w", err)
 		}
 
-		aggPackagesMap := make(map[string]*AggPackage)
+		aggPackagesMap := make(map[string]*g2.AggPackage)
 		for _, p := range data.Packages {
 			aggPackagesMap[p.Category+"/"+p.Name] = p
 		}
@@ -3465,7 +3195,7 @@ func generateRepoPages(outDir string, tmpl *template.Template, sites []*SiteData
 			if err := renderPage(filepath.Join(repoDir, "eclasses", "index.html"), tmpl, "repo_eclasses.html", GenericPageContext{
 				Title:       site.RepoName + " - Eclasses",
 				BaseURL:     "../../../",
-				Breadcrumbs: []Breadcrumb{{Name: title, URL: "../../../"}, {Name: site.RepoName, URL: "../"}, {Name: "Eclasses"}},
+				Breadcrumbs: []g2.Breadcrumb{{Name: title, URL: "../../../"}, {Name: site.RepoName, URL: "../"}, {Name: "Eclasses"}},
 				Eclasses:    site.AggEclasses,
 				Repo:        site,
 				Version:     version,
@@ -3487,7 +3217,7 @@ func generateRepoPages(outDir string, tmpl *template.Template, sites []*SiteData
 				if err := renderPage(filepath.Join(ecDir, "index.html"), tmpl, "repo_eclass.html", GenericPageContext{
 					Title:       site.RepoName + " - Eclass: " + ec.Name,
 					BaseURL:     "../../../../",
-					Breadcrumbs: []Breadcrumb{{Name: title, URL: "../../../../"}, {Name: site.RepoName, URL: "../../"}, {Name: "Eclasses", URL: "../"}, {Name: ec.Name}},
+					Breadcrumbs: []g2.Breadcrumb{{Name: title, URL: "../../../../"}, {Name: site.RepoName, URL: "../../"}, {Name: "Eclasses", URL: "../"}, {Name: ec.Name}},
 					Eclass:      ec,
 					Repo:        site,
 					Version:     version,
@@ -3504,7 +3234,7 @@ func generateRepoPages(outDir string, tmpl *template.Template, sites []*SiteData
 		if err := renderPage(filepath.Join(repoDir, "uses", "index.html"), tmpl, "repo_uses.html", GenericPageContext{
 			Title:       site.RepoName + " - USE Flags",
 			BaseURL:     "../../../",
-			Breadcrumbs: []Breadcrumb{{Name: title, URL: "../../../"}, {Name: site.RepoName, URL: "../"}, {Name: "USE Flags"}},
+			Breadcrumbs: []g2.Breadcrumb{{Name: title, URL: "../../../"}, {Name: site.RepoName, URL: "../"}, {Name: "USE Flags"}},
 			UseFlags:    repoUseFlags,
 			Repo:        site,
 			Version:     version,
@@ -3523,7 +3253,7 @@ func generateRepoPages(outDir string, tmpl *template.Template, sites []*SiteData
 			if err := renderPage(filepath.Join(useDir, "index.html"), tmpl, "repo_use.html", GenericPageContext{
 				Title:       site.RepoName + " - USE Flag: " + f.Name,
 				BaseURL:     "../../../../",
-				Breadcrumbs: []Breadcrumb{{Name: title, URL: "../../../../"}, {Name: site.RepoName, URL: "../../"}, {Name: "USE Flags", URL: "../"}, {Name: f.Name}},
+				Breadcrumbs: []g2.Breadcrumb{{Name: title, URL: "../../../../"}, {Name: site.RepoName, URL: "../../"}, {Name: "USE Flags", URL: "../"}, {Name: f.Name}},
 				UseFlag:     f,
 				Repo:        site,
 				Version:     version,
@@ -3554,7 +3284,7 @@ func generateRepoPages(outDir string, tmpl *template.Template, sites []*SiteData
 			if err := renderPage(filepath.Join(pkgDir, "index.html"), tmpl, "repo_package.html", GenericPageContext{
 				Title:         fmt.Sprintf("%s - %s/%s", site.RepoName, pkg.Category, pkg.Name),
 				BaseURL:       "../../../../../../",
-				Breadcrumbs:   []Breadcrumb{{Name: title, URL: "../../../../../../"}, {Name: site.RepoName, URL: "../../../../"}, {Name: "Categories", URL: "../../../"}, {Name: pkg.Category, URL: "../../"}, {Name: pkg.Name}},
+				Breadcrumbs:   []g2.Breadcrumb{{Name: title, URL: "../../../../../../"}, {Name: site.RepoName, URL: "../../../../"}, {Name: "Categories", URL: "../../../"}, {Name: pkg.Category, URL: "../../"}, {Name: pkg.Name}},
 				Repo:          site,
 				Package:       pkg,
 				MovedToName:   movedToName,
@@ -3576,7 +3306,7 @@ func generateRepoPages(outDir string, tmpl *template.Template, sites []*SiteData
 					if err := renderPage(filepath.Join(mdDir, "index.html"), tmpl, "repo_package_manifest.html", GenericPageContext{
 						Title:       fmt.Sprintf("%s - %s/%s - Manifest: %s", site.RepoName, pkg.Category, pkg.Name, md.Entry.Filename),
 						BaseURL:     "../../../../../../../../",
-						Breadcrumbs: []Breadcrumb{{Name: title, URL: "../../../../../../../../"}, {Name: site.RepoName, URL: "../../../../../../"}, {Name: "Categories", URL: "../../../../../"}, {Name: pkg.Category, URL: "../../../../"}, {Name: pkg.Name, URL: "../../"}, {Name: "Manifest"}, {Name: md.Entry.Filename}},
+						Breadcrumbs: []g2.Breadcrumb{{Name: title, URL: "../../../../../../../../"}, {Name: site.RepoName, URL: "../../../../../../"}, {Name: "Categories", URL: "../../../../../"}, {Name: pkg.Category, URL: "../../../../"}, {Name: pkg.Name, URL: "../../"}, {Name: "Manifest"}, {Name: md.Entry.Filename}},
 						Repo:        site,
 						Package:     pkg,
 						Manifest:    md,
@@ -3598,7 +3328,7 @@ func generateRepoPages(outDir string, tmpl *template.Template, sites []*SiteData
 					return fmt.Errorf("creating directory %s: %w", ebuildDir, err)
 				}
 
-				var filteredManifest []ManifestEntryData
+				var filteredManifest []g2.ManifestEntryData
 				if pkg.Manifest != nil {
 					for _, md := range pkg.ManifestData {
 						for _, mv := range md.Versions {
@@ -3613,10 +3343,10 @@ func generateRepoPages(outDir string, tmpl *template.Template, sites []*SiteData
 				if err := renderPage(filepath.Join(ebuildDir, "index.html"), tmpl, "ebuild_details.html", GenericPageContext{
 					Title:            fmt.Sprintf("%s - %s/%s-%s", site.RepoName, pkg.Category, pkg.Name, versionStr),
 					BaseURL:          "../../../../../../../../",
-					Breadcrumbs:      []Breadcrumb{{Name: title, URL: "../../../../../../../../"}, {Name: site.RepoName, URL: "../../../../../../"}, {Name: "Categories", URL: "../../../../../"}, {Name: pkg.Category, URL: "../../../../"}, {Name: "Packages", URL: "../../../"}, {Name: pkg.Name, URL: "../../"}, {Name: "Ebuild", URL: "../"}, {Name: versionStr}},
+					Breadcrumbs:      []g2.Breadcrumb{{Name: title, URL: "../../../../../../../../"}, {Name: site.RepoName, URL: "../../../../../../"}, {Name: "Categories", URL: "../../../../../"}, {Name: pkg.Category, URL: "../../../../"}, {Name: "Packages", URL: "../../../"}, {Name: pkg.Name, URL: "../../"}, {Name: "Ebuild", URL: "../"}, {Name: versionStr}},
 					Repo:             site,
 					Package:          pkg,
-					VersionData:      v,
+						VersionData:   v,
 					FilteredManifest: filteredManifest,
 					Version:          version,
 					GenInfo:          genInfo,
@@ -3631,7 +3361,7 @@ func generateRepoPages(outDir string, tmpl *template.Template, sites []*SiteData
 	return nil
 }
 
-func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration, recentDurationStr string, genInfo GenerationInfo) error {
+func generateSite(outDir string, sites []*g2.SiteData, recentDuration time.Duration, recentDurationStr string, genInfo GenerationInfo) error {
 	log.Printf("Starting site generation (v%s) with %d repos to %s", version, len(sites), outDir)
 	if err := os.MkdirAll(outDir, 0755); err != nil {
 		return err
@@ -3652,14 +3382,14 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 	}
 
 	for _, site := range sites {
-		aggPackagesMap := make(map[string]*AggPackage)
+		aggPackagesMap := make(map[string]*g2.AggPackage)
 		for _, cat := range site.Categories {
 			for _, pkg := range cat.Packages {
 				pkgKey := cat.Name + "/" + pkg.Name
-				aggPackagesMap[pkgKey] = &AggPackage{
+				aggPackagesMap[pkgKey] = &g2.AggPackage{
 					Name:                pkg.Name,
 					Category:            cat.Name,
-					Repos:               map[string]*SiteData{site.RepoName: site},
+					Repos:               map[string]*g2.SiteData{site.RepoName: site},
 					DominantDescription: pkg.DominantDescription,
 					DominantHomepage:    pkg.DominantHomepage,
 					DominantLicense:     pkg.DominantLicense,
@@ -3791,7 +3521,7 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, 
 	}
 	defer cleanup()
 
-	var allSites []*SiteData
+	var allSites []*g2.SiteData
 	var allSitesMu sync.Mutex
 
 	g, _ := errgroup.WithContext(context.Background())
@@ -3856,7 +3586,7 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, 
 			repoCopy := repo
 
 			t1 := time.Now()
-			siteData, err := parseRepo(os.DirFS(repoPath), ".", repo.Name, fastGit, &repoCopy, SourceURL(gitUrl))
+			siteData, err := parseRepo(os.DirFS(repoPath), ".", repo.Name, fastGit, &repoCopy, g2.SourceURL(gitUrl))
 			if err != nil {
 				log.Printf("Failed to parse repo %s: %v", repo.Name, err)
 				return nil
@@ -3899,8 +3629,8 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, 
 	return nil
 }
 
-func mapToList(m map[string]*SiteData) []*SiteData {
-	var l []*SiteData
+func mapToList(m map[string]*g2.SiteData) []*g2.SiteData {
+	var l []*g2.SiteData
 	for _, v := range m {
 		l = append(l, v)
 	}

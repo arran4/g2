@@ -1,18 +1,20 @@
 package main
 
 import (
+	"github.com/arran4/g2"
+
 	"fmt"
 	"sort"
 	"strings"
 )
 
-// AggregateUseFlags processes a list of SiteData and updates an aggregate map of UseFlags,
-// and returns the sorted global UseFlags list. It also aggregates per-repo USE flags inside SiteData.
-func AggregateUseFlags(sites []*SiteData, aggPackages map[string]*AggPackage) ([]*AggUseFlag, map[string]*AggUseFlag) {
-	globalAggUseFlags := make(map[string]*AggUseFlag)
+// AggregateUseFlags processes a list of g2.SiteData and updates an aggregate map of UseFlags,
+// and returns the sorted global UseFlags list. It also aggregates per-repo USE flags inside g2.SiteData.
+func AggregateUseFlags(sites []*g2.SiteData, aggPackages map[string]*g2.AggPackage) ([]*g2.AggUseFlag, map[string]*g2.AggUseFlag) {
+	globalAggUseFlags := make(map[string]*g2.AggUseFlag)
 
 	for _, site := range sites {
-		repoAggUseFlags := make(map[string]*AggUseFlag)
+		repoAggUseFlags := make(map[string]*g2.AggUseFlag)
 
 		for _, pkg := range site.Categories {
 			for _, p := range pkg.Packages {
@@ -25,7 +27,7 @@ func AggregateUseFlags(sites []*SiteData, aggPackages map[string]*AggPackage) ([
 							for _, flag := range useBlock.Flags {
 								// Global
 								if _, ok := globalAggUseFlags[flag.Name]; !ok {
-									globalAggUseFlags[flag.Name] = &AggUseFlag{
+									globalAggUseFlags[flag.Name] = &g2.AggUseFlag{
 										Name:          flag.Name,
 										LocalDescs:    make(map[string]string),
 										MetadataDescs: make(map[string]string),
@@ -52,7 +54,7 @@ func AggregateUseFlags(sites []*SiteData, aggPackages map[string]*AggPackage) ([
 
 								// Repo
 								if _, ok := repoAggUseFlags[flag.Name]; !ok {
-									repoAggUseFlags[flag.Name] = &AggUseFlag{
+									repoAggUseFlags[flag.Name] = &g2.AggUseFlag{
 										Name:          flag.Name,
 										LocalDescs:    make(map[string]string),
 										MetadataDescs: make(map[string]string),
@@ -92,7 +94,7 @@ func AggregateUseFlags(sites []*SiteData, aggPackages map[string]*AggPackage) ([
 								flag := flagObj.Name
 								// Global
 								if _, ok := globalAggUseFlags[flag]; !ok {
-									globalAggUseFlags[flag] = &AggUseFlag{
+									globalAggUseFlags[flag] = &g2.AggUseFlag{
 										Name:          flag,
 										LocalDescs:    make(map[string]string),
 										MetadataDescs: make(map[string]string),
@@ -100,7 +102,7 @@ func AggregateUseFlags(sites []*SiteData, aggPackages map[string]*AggPackage) ([
 								}
 								// Repo
 								if _, ok := repoAggUseFlags[flag]; !ok {
-									repoAggUseFlags[flag] = &AggUseFlag{
+									repoAggUseFlags[flag] = &g2.AggUseFlag{
 										Name:          flag,
 										LocalDescs:    make(map[string]string),
 										MetadataDescs: make(map[string]string),
@@ -152,7 +154,7 @@ func AggregateUseFlags(sites []*SiteData, aggPackages map[string]*AggPackage) ([
 
 								// Global
 								if _, ok := globalAggUseFlags[flag]; !ok {
-									globalAggUseFlags[flag] = &AggUseFlag{
+									globalAggUseFlags[flag] = &g2.AggUseFlag{
 										Name:          flag,
 										LocalDescs:    make(map[string]string),
 										MetadataDescs: make(map[string]string),
@@ -160,7 +162,7 @@ func AggregateUseFlags(sites []*SiteData, aggPackages map[string]*AggPackage) ([
 								}
 								// Repo
 								if _, ok := repoAggUseFlags[flag]; !ok {
-									repoAggUseFlags[flag] = &AggUseFlag{
+									repoAggUseFlags[flag] = &g2.AggUseFlag{
 										Name:          flag,
 										LocalDescs:    make(map[string]string),
 										MetadataDescs: make(map[string]string),
@@ -207,7 +209,7 @@ func AggregateUseFlags(sites []*SiteData, aggPackages map[string]*AggPackage) ([
 			for flag, desc := range site.UseDesc.Flags {
 				// Global
 				if _, ok := globalAggUseFlags[flag]; !ok {
-					globalAggUseFlags[flag] = &AggUseFlag{
+					globalAggUseFlags[flag] = &g2.AggUseFlag{
 						Name:          flag,
 						LocalDescs:    make(map[string]string),
 						MetadataDescs: make(map[string]string),
@@ -217,7 +219,7 @@ func AggregateUseFlags(sites []*SiteData, aggPackages map[string]*AggPackage) ([
 
 				// Repo
 				if _, ok := repoAggUseFlags[flag]; !ok {
-					repoAggUseFlags[flag] = &AggUseFlag{
+					repoAggUseFlags[flag] = &g2.AggUseFlag{
 						Name:          flag,
 						LocalDescs:    make(map[string]string),
 						MetadataDescs: make(map[string]string),
@@ -259,7 +261,7 @@ func AggregateUseFlags(sites []*SiteData, aggPackages map[string]*AggPackage) ([
 			}
 		}
 
-		var sortedRepoUseFlags []*AggUseFlag
+		var sortedRepoUseFlags []*g2.AggUseFlag
 		for _, flag := range repoAggUseFlags {
 			if flag.GlobalDesc == "" && len(flag.Packages) > 0 {
 				flag.Warnings = append(flag.Warnings, fmt.Sprintf("Warning: USE flag '%s' is used in ebuilds/metadata but is not defined in profiles/use.desc", flag.Name))
@@ -285,7 +287,7 @@ func AggregateUseFlags(sites []*SiteData, aggPackages map[string]*AggPackage) ([
 		site.AggUseFlags = sortedRepoUseFlags
 	}
 
-	var sortedUseFlags []*AggUseFlag
+	var sortedUseFlags []*g2.AggUseFlag
 	for _, flag := range globalAggUseFlags {
 		if flag.GlobalDesc == "" && len(flag.Packages) > 0 {
 			flag.Warnings = append(flag.Warnings, fmt.Sprintf("Warning: USE flag '%s' is used in ebuilds/metadata but is not defined in profiles/use.desc", flag.Name))
@@ -313,7 +315,7 @@ func AggregateUseFlags(sites []*SiteData, aggPackages map[string]*AggPackage) ([
 	return sortedUseFlags, globalAggUseFlags
 }
 
-func populatePkgUseFlags(site *SiteData) {
+func populatePkgUseFlags(site *g2.SiteData) {
 	globalDescs := make(map[string]string)
 	if site.UseDesc != nil {
 		globalDescs = site.UseDesc.Flags
@@ -401,7 +403,7 @@ func populatePkgUseFlags(site *SiteData) {
 			pkg := &site.Categories[i].Packages[j]
 			pkgKey := pkg.Category + "/" + pkg.Name
 
-			flagsMap := make(map[string]*PkgUseFlag)
+			flagsMap := make(map[string]*g2.PkgUseFlag)
 
 			for _, ver := range pkg.Versions {
 				vName := ver.Version
@@ -415,8 +417,8 @@ func populatePkgUseFlags(site *SiteData) {
 						parsed := parseIUSEFlagsFunc(iuse)
 						for _, f := range parsed {
 							if _, ok := flagsMap[f.Name]; !ok {
-								flagsMap[f.Name] = &PkgUseFlag{
-									Name: f.Name,
+								flagsMap[f.Name] = &g2.PkgUseFlag{
+									Name:     f.Name,
 									Versions: make(map[string]string),
 								}
 							}
@@ -435,7 +437,7 @@ func populatePkgUseFlags(site *SiteData) {
 				}
 			}
 
-			var pkgFlags []PkgUseFlag
+			var pkgFlags []g2.PkgUseFlag
 			for name, flag := range flagsMap {
 				desc := ""
 				source := ""

@@ -1,9 +1,9 @@
 package main
 
 import (
-	"strings"
 	"os"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -20,7 +20,7 @@ func TestBuildManifestData(t *testing.T) {
 		},
 	}
 
-	versions := []VersionData{
+	versions := []g2.VersionData{
 		{
 			Version: "1.0",
 			Ebuild: &g2.Ebuild{
@@ -57,7 +57,7 @@ func TestBuildManifestData(t *testing.T) {
 
 	got := buildManifestData(manifest, versions, nil)
 
-	expected := []ManifestEntryData{
+	expected := []g2.ManifestEntryData{
 		{
 			Entry:    manifest.Entries[0],
 			Versions: []string{"1.0"},
@@ -105,7 +105,7 @@ func TestGenerateSite(t *testing.T) {
 
 	outDir := t.TempDir()
 
-	err = generateSite(outDir, []*SiteData{siteData}, 90*24*time.Hour, "3 months", GenerationInfo{})
+	err = generateSite(outDir, []*g2.SiteData{siteData}, 90*24*time.Hour, "3 months", GenerationInfo{})
 	if err != nil {
 		t.Fatalf("generateSite failed: %v", err)
 	}
@@ -117,13 +117,13 @@ func TestGenerateSite_TemplateError(t *testing.T) {
 	// that will cause MkdirAll to fail, or just pass a package with a malformed template format.
 	// We will supply a category with a malformed name to trigger a file path error or a bad move.
 
-	siteData := &SiteData{
+	siteData := &g2.SiteData{
 		Title:    "Bad Template Site",
 		RepoName: "bad-repo",
-		Categories: []CategoryData{
+		Categories: []g2.CategoryData{
 			{
 				Name: "broken-category/\x00/invalid",
-				Packages: []PackageData{
+				Packages: []g2.PackageData{
 					{
 						Name:     "broken-package",
 						Category: "broken-category/\x00/invalid",
@@ -134,7 +134,7 @@ func TestGenerateSite_TemplateError(t *testing.T) {
 	}
 	outDir := t.TempDir()
 
-	err := generateSite(outDir, []*SiteData{siteData}, 90*24*time.Hour, "3 months", GenerationInfo{})
+	err := generateSite(outDir, []*g2.SiteData{siteData}, 90*24*time.Hour, "3 months", GenerationInfo{})
 
 	if err == nil {
 		t.Fatalf("generateSite unexpectedly succeeded with bad parameters, template/file errors are likely being swallowed")
@@ -143,17 +143,17 @@ func TestGenerateSite_TemplateError(t *testing.T) {
 }
 
 func TestDominantMetadataSelection(t *testing.T) {
-	pkgData := PackageData{
-		Versions: []VersionData{
+	pkgData := g2.PackageData{
+		Versions: []g2.VersionData{
 			{
 				Version: "1.0",
 				Ebuild: &g2.Ebuild{
 					Vars: map[string]string{
-						"PV": "1.0",
-						"KEYWORDS": "~amd64",
+						"PV":          "1.0",
+						"KEYWORDS":    "~amd64",
 						"DESCRIPTION": "Ebuild description",
-						"HOMEPAGE": "https://ebuild.com",
-						"LICENSE": "GPL-2",
+						"HOMEPAGE":    "https://ebuild.com",
+						"LICENSE":     "GPL-2",
 					},
 				},
 			},

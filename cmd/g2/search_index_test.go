@@ -16,20 +16,20 @@ func TestGenerateSearchIndex(t *testing.T) {
 	}
 	defer func() { _ = os.RemoveAll(tmpDir) }()
 
-	sites := []*SiteData{
+	sites := []*g2.SiteData{
 		{
 			Title:    "Test Repo",
 			RepoName: "test-repo",
 			LicenseMapping: map[string][]string{
 				"MIT": {"FREE", "OSI-APPROVED"},
 			},
-			Categories: []CategoryData{
+			Categories: []g2.CategoryData{
 				{
 					Name: "app-test",
-					Packages: []PackageData{
+					Packages: []g2.PackageData{
 						{
 							Name: "test-pkg",
-							Versions: []VersionData{
+							Versions: []g2.VersionData{
 								{
 									Version: "1.0",
 									Ebuild: &g2.Ebuild{
@@ -44,7 +44,7 @@ func TestGenerateSearchIndex(t *testing.T) {
 									},
 								},
 							},
-							PkgUseFlags: []PkgUseFlag{
+							PkgUseFlags: []g2.PkgUseFlag{
 								{
 									Name: "test-flag",
 									Desc: "Enables testing",

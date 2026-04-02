@@ -9,28 +9,28 @@ import (
 type GenericPageContext struct {
 	Title       string
 	BaseURL     string
-	Breadcrumbs []Breadcrumb
+	Breadcrumbs []g2.Breadcrumb
 	Version     string
 	GenInfo     GenerationInfo
 	Content     template.HTML
 
 	// Additional data fields used by various templates
-	Repos                []*SiteData
-	GroupedRepos         []RepoGroup
-	Categories           interface{} // Can be []*AggCategory or []CategoryData
-	Packages             interface{} // Can be []*AggPackage or []PackageData
-	Licenses             []*AggLicense
-	UseFlags             []*AggUseFlag
+	Repos                []*g2.SiteData
+	GroupedRepos         []g2.RepoGroup
+	Categories           interface{} // Can be []*g2.AggCategory or []g2.CategoryData
+	Packages             interface{} // Can be []*g2.AggPackage or []g2.PackageData
+	Licenses             []*g2.AggLicense
+	UseFlags             []*g2.AggUseFlag
 	UseExpandDescs        map[string]*g2.UseExpandDesc
 	UseExpandDesc         *g2.UseExpandDesc
-	Projects             []*AggProject
-	Eclass               *AggEclass
-	Eclasses             []*AggEclass
-	Profiles             interface{} // Can be []*AggProfile or []ProfileData
-	Arches               []*AggArch
+	Projects             []*g2.AggProject
+	Eclass               *g2.AggEclass
+	Eclasses             []*g2.AggEclass
+	Profiles             interface{} // Can be []*g2.AggProfile or []g2.ProfileData
+	Arches               []*g2.AggArch
 	RecentDurationString string
-	RecentNews           interface{} // Can be []AggNewsItem or []g2.NewsItem
-	GlobalNews           []AggNewsItem
+	RecentNews           interface{} // Can be []g2.AggNewsItem or []g2.NewsItem
+	GlobalNews           []g2.AggNewsItem
 	News                 []g2.NewsItem
 	NewsItem             interface{}
 	Category             map[string]interface{}
@@ -41,15 +41,15 @@ type GenericPageContext struct {
 	MovedToName          string
 	MovedToURL           string
 	ProfilePath          string
-	ProfileList          interface{} // Can be []AggProfileRepo
+	ProfileList          interface{} // Can be []g2.AggProfileRepo
 	Profile              interface{}
 	FileName             string
 	FileContent          string
-	Arch                 *AggArch
+	Arch                 *g2.AggArch
 	UseFlag              interface{}
 	License              map[string]interface{}
-	Project              *AggProject
-	Repo                 *SiteData
+	Project              *g2.AggProject
+	Repo                 *g2.SiteData
 	PackageCount         int
 	GlobalCategoriesCount int
 	GlobalPackagesCount   int
@@ -60,6 +60,6 @@ type GenericPageContext struct {
 	RepoName             string
 	Group                interface{}
 	VersionData          interface{}
-	FilteredManifest     []ManifestEntryData
+	FilteredManifest     []g2.ManifestEntryData
 	Manifest             interface{}
 }
