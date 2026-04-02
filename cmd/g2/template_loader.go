@@ -41,6 +41,17 @@ func GetSiteTemplates() (*template.Template, error) {
 
 				// Optional: if we want to name them by path for partials
 				// For now, base name is used as before, but we can change this later if collisions happen
+				// However, because we are moving files into subfolders and changing references like "repo_info_pkgs.html"
+				// to "repo/info_pkgs.html", we should name the template after its path relative to "views/", "app/", or "partials/"
+
+				// Determine template name based on path
+				if strings.HasPrefix(path, "views/") {
+					name = strings.TrimPrefix(path, "views/")
+				} else if strings.HasPrefix(path, "app/") {
+					name = strings.TrimPrefix(path, "app/")
+				} else if strings.HasPrefix(path, "partials/") {
+					name = strings.TrimPrefix(path, "partials/")
+				}
 
 				_, err = tmpl.New(name).Parse(string(b))
 				if err != nil {

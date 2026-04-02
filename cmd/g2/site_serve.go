@@ -512,7 +512,7 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				http.Redirect(w, r, targetURL, http.StatusFound)
 				return
 			} else {
-				s.renderPageHTTP(w, "package_picker.html", map[string]interface{}{
+				s.renderPageHTTP(w, "package/picker.html", map[string]interface{}{
 					"Title":       "Package: " + pkg.Category + "/" + pkg.Name,
 					"BaseURL":     baseURL,
 					"Breadcrumbs": []Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: "Packages", URL: "../../"}, {Name: pkg.Category, URL: "../../../categories/" + pkg.Category + "/"}, {Name: pkg.Name}},
@@ -679,7 +679,7 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					pkgCount += len(cat.Packages)
 				}
 
-				s.renderPageHTTP(w, "repo_index.html", map[string]interface{}{
+				s.renderPageHTTP(w, "repo/index.html", map[string]interface{}{
 					"Title":                 site.RepoName,
 					"BaseURL":               baseURL,
 					"Breadcrumbs":           []Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: "Overlays", URL: baseURL + "overlays/"}, {Name: site.RepoName}},
@@ -699,7 +699,7 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				switch parts[2] {
 				case "stats":
 					if len(parts) == 3 {
-						s.renderPageHTTP(w, "repo_stats.html", map[string]interface{}{
+						s.renderPageHTTP(w, "repo/stats.html", map[string]interface{}{
 							"Title":       site.RepoName + " - Statistics",
 							"BaseURL":     baseURL,
 							"Breadcrumbs": []Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: site.RepoName, URL: "../"}, {Name: "Statistics"}},
@@ -711,7 +711,7 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					}
 				case "masked":
 					if len(parts) == 3 {
-						s.renderPageHTTP(w, "repo_masked.html", map[string]interface{}{
+						s.renderPageHTTP(w, "repo/masked.html", map[string]interface{}{
 							"Title":       site.RepoName + " - Masked",
 							"BaseURL":     baseURL,
 							"Breadcrumbs": []Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: site.RepoName, URL: "../"}, {Name: "Masked Packages"}},
@@ -723,7 +723,7 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					}
 				case "deprecated":
 					if len(parts) == 3 {
-						s.renderPageHTTP(w, "repo_deprecated.html", map[string]interface{}{
+						s.renderPageHTTP(w, "repo/deprecated.html", map[string]interface{}{
 							"Title":       site.RepoName + " - Deprecated",
 							"BaseURL":     baseURL,
 							"Breadcrumbs": []Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: site.RepoName, URL: "../"}, {Name: "Deprecated Packages"}},
@@ -735,7 +735,7 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					}
 				case "info_pkgs":
 					if len(parts) == 3 {
-						s.renderPageHTTP(w, "repo_info_pkgs.html", map[string]interface{}{
+						s.renderPageHTTP(w, "repo/info_pkgs.html", map[string]interface{}{
 							"Title":       site.RepoName + " - Info Packages",
 							"BaseURL":     baseURL,
 							"Breadcrumbs": []Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: site.RepoName, URL: "../"}, {Name: "Info Packages"}},
@@ -821,7 +821,7 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 						}
 
 						if len(parts) == 6 {
-							s.renderPageHTTP(w, "repo_package.html", map[string]interface{}{
+							s.renderPageHTTP(w, "repo/package.html", map[string]interface{}{
 								"Title":   fmt.Sprintf("%s - %s/%s", site.RepoName, pkgData.Category, pkgData.Name),
 								"BaseURL": baseURL,
 								"Breadcrumbs": []Breadcrumb{
@@ -863,7 +863,7 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 								}
 							}
 
-							s.renderPageHTTP(w, "ebuild_details.html", map[string]interface{}{
+							s.renderPageHTTP(w, "ebuild/details.html", map[string]interface{}{
 								"Title":   fmt.Sprintf("%s - %s/%s-%s", site.RepoName, pkgData.Category, pkgData.Name, versionName),
 								"BaseURL": baseURL,
 								"Breadcrumbs": []Breadcrumb{
@@ -900,7 +900,7 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 								return
 							}
 
-							s.renderPageHTTP(w, "repo_package_manifest.html", map[string]interface{}{
+							s.renderPageHTTP(w, "repo/package_manifest.html", map[string]interface{}{
 								"Title":   fmt.Sprintf("%s - %s/%s-Manifest-%s", site.RepoName, pkgData.Category, pkgData.Name, manifestName),
 								"BaseURL": baseURL,
 								"Breadcrumbs": []Breadcrumb{
@@ -937,7 +937,7 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 							return repoPkgs[i].Category < repoPkgs[j].Category
 						})
 
-						s.renderPageHTTP(w, "repo_packages.html", map[string]interface{}{
+						s.renderPageHTTP(w, "repo/packages.html", map[string]interface{}{
 							"Title":       site.RepoName + " - Packages",
 							"BaseURL":     baseURL,
 							"Breadcrumbs": []Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: site.RepoName, URL: "../"}, {Name: "Packages"}},
@@ -951,7 +951,7 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 				case "profiles":
 					if len(parts) == 3 {
-						s.renderPageHTTP(w, "repo_profiles.html", map[string]interface{}{
+						s.renderPageHTTP(w, "repo/profiles.html", map[string]interface{}{
 							"Title":       site.RepoName + " - Profiles",
 							"BaseURL":     baseURL,
 							"Breadcrumbs": []Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: site.RepoName, URL: "../"}, {Name: "Profiles"}},
@@ -1007,7 +1007,7 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 								return
 							}
 
-							s.renderPageHTTP(w, "repo_profile_file.html", map[string]interface{}{
+							s.renderPageHTTP(w, "repo/profile_file.html", map[string]interface{}{
 								"Title":       site.RepoName + " - Profile File: " + requestedFile,
 								"BaseURL":     baseURL,
 								"Breadcrumbs": []Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: site.RepoName, URL: baseURL + "repos/" + site.RepoName + "/"}, {Name: "Profiles", URL: baseURL + "repos/" + site.RepoName + "/profiles/"}, {Name: targetProfile.Path, URL: "index.html"}, {Name: requestedFile}},
@@ -1021,7 +1021,7 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 							})
 							return
 						} else {
-							s.renderPageHTTP(w, "repo_profile.html", map[string]interface{}{
+							s.renderPageHTTP(w, "repo/profile.html", map[string]interface{}{
 								"Title":       site.RepoName + " - Profile: " + targetProfile.Path,
 								"BaseURL":     baseURL,
 								"Breadcrumbs": []Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: site.RepoName, URL: baseURL + "repos/" + site.RepoName + "/"}, {Name: "Profiles", URL: baseURL + "repos/" + site.RepoName + "/profiles/"}, {Name: targetProfile.Path}},
@@ -1039,7 +1039,7 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					repoUseFlags := getRepoUseFlags(site, s.PkgMap)
 
 					if len(parts) == 3 {
-						s.renderPageHTTP(w, "repo_uses.html", map[string]interface{}{
+						s.renderPageHTTP(w, "repo/uses.html", map[string]interface{}{
 							"Title":       site.RepoName + " - USE Flags",
 							"BaseURL":     baseURL,
 							"Breadcrumbs": []Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: site.RepoName, URL: "../"}, {Name: "USE Flags"}},
@@ -1063,7 +1063,7 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 							return
 						}
 
-						s.renderPageHTTP(w, "repo_use.html", map[string]interface{}{
+						s.renderPageHTTP(w, "repo/use.html", map[string]interface{}{
 							"Title":       site.RepoName + " - USE Flag: " + flag.Name,
 							"BaseURL":     baseURL,
 							"Breadcrumbs": []Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: site.RepoName, URL: "../../"}, {Name: "USE Flags", URL: "../"}, {Name: flag.Name}},
