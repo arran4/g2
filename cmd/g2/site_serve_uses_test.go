@@ -1,9 +1,9 @@
 package main
 
 import (
+	"github.com/arran4/g2"
 	"reflect"
 	"testing"
-	"github.com/arran4/g2"
 )
 
 func TestParseIUSEFlagsFunc(t *testing.T) {
@@ -31,8 +31,8 @@ func TestParseIUSEFlagsFunc(t *testing.T) {
 			},
 		},
 		{
-			name: "With empty string",
-			iuse: "",
+			name:     "With empty string",
+			iuse:     "",
 			expected: nil,
 		},
 	}
@@ -51,16 +51,16 @@ func TestParseIUSEFlagsFunc(t *testing.T) {
 }
 
 func TestGetRepoUseFlags(t *testing.T) {
-	site := &SiteData{
+	site := &g2.SiteData{
 		RepoName: "test-repo",
-		Categories: []CategoryData{
+		Categories: []g2.CategoryData{
 			{
 				Name: "app-misc",
-				Packages: []PackageData{
+				Packages: []g2.PackageData{
 					{
 						Category: "app-misc",
 						Name:     "foo",
-						Versions: []VersionData{
+						Versions: []g2.VersionData{
 							{
 								Version: "1.0",
 								Ebuild: &g2.Ebuild{
@@ -76,9 +76,9 @@ func TestGetRepoUseFlags(t *testing.T) {
 		},
 	}
 
-	aggPackages := map[string]*AggPackage{
+	aggPackages := map[string]*g2.AggPackage{
 		"app-misc/foo": {
-			Name: "foo",
+			Name:     "foo",
 			Category: "app-misc",
 		},
 	}

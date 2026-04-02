@@ -454,7 +454,6 @@ func TestCompareVersions(t *testing.T) {
 	}
 }
 
-
 func TestGentooVersion_String(t *testing.T) {
 	tests := []string{
 		"1.0",

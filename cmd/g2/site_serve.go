@@ -1,6 +1,8 @@
 package main
 
 import (
+	"github.com/arran4/g2"
+
 	"bytes"
 	"context"
 	"flag"
@@ -46,7 +48,7 @@ func (cfg *MainArgConfig) cmdSiteServe(args []string) error {
 	}
 
 	// Determine if location is a single overlay or we need to fall back to /var/db/repos
-	var sites []*SiteData
+	var sites []*g2.SiteData
 
 	if isOverlayDir(location) {
 		log.Printf("Parsing local overlay at %s", location)
@@ -142,20 +144,20 @@ type SiteServer struct {
 	GenInfo       GenerationInfo
 	tmpl          *template.Template
 	Title         string
-	Sites         []*SiteData
-	AggCategories []*AggCategory
-	AggPackages   []*AggPackage
-	AggLicenses   []*AggLicense
-	AggProjects   []*AggProject
+	Sites         []*g2.SiteData
+	AggCategories []*g2.AggCategory
+	AggPackages   []*g2.AggPackage
+	AggLicenses   []*g2.AggLicense
+	AggProjects   []*g2.AggProject
 
 	// Mappings for faster lookup
-	CatMap      map[string]*AggCategory
-	PkgMap      map[string]*AggPackage
-	LicMap      map[string]*AggLicense
-	UseMap      map[string]*AggUseFlag
-	AggUseFlags []*AggUseFlag
-	ProjMap     map[string]*AggProject
-	RepoMap     map[string]*SiteData
+	CatMap      map[string]*g2.AggCategory
+	PkgMap      map[string]*g2.AggPackage
+	LicMap      map[string]*g2.AggLicense
+	UseMap      map[string]*g2.AggUseFlag
+	AggUseFlags []*g2.AggUseFlag
+	ProjMap     map[string]*g2.AggProject
+	RepoMap     map[string]*g2.SiteData
 }
 
 type ParsedIUSEFlag struct {
@@ -188,7 +190,7 @@ func parseIUSEFlagsFunc(iuse string) []ParsedIUSEFlag {
 	return flags
 }
 
-func newSiteServer(sites []*SiteData, genInfo GenerationInfo) (*SiteServer, error) {
+func newSiteServer(sites []*g2.SiteData, genInfo GenerationInfo) (*SiteServer, error) {
 	for _, site := range sites {
 		populatePkgUseFlags(site)
 	}
@@ -201,38 +203,38 @@ func newSiteServer(sites []*SiteData, genInfo GenerationInfo) (*SiteServer, erro
 	server := &SiteServer{
 		tmpl:    tmpl,
 		Sites:   sites,
-		CatMap:  make(map[string]*AggCategory),
-		PkgMap:  make(map[string]*AggPackage),
-		LicMap:  make(map[string]*AggLicense),
-		ProjMap: make(map[string]*AggProject),
-		RepoMap: make(map[string]*SiteData),
+		CatMap:  make(map[string]*g2.AggCategory),
+		PkgMap:  make(map[string]*g2.AggPackage),
+		LicMap:  make(map[string]*g2.AggLicense),
+		ProjMap: make(map[string]*g2.AggProject),
+		RepoMap: make(map[string]*g2.SiteData),
 		GenInfo: genInfo,
 	}
 
 	// Similar aggregation logic to generateSite
-	aggCategories := make(map[string]*AggCategory)
-	aggPackages := make(map[string]*AggPackage)
-	aggLicenses := make(map[string]*AggLicense)
-	aggProjects := make(map[string]*AggProject)
+	aggCategories := make(map[string]*g2.AggCategory)
+	aggPackages := make(map[string]*g2.AggPackage)
+	aggLicenses := make(map[string]*g2.AggLicense)
+	aggProjects := make(map[string]*g2.AggProject)
 
 	for _, site := range sites {
 		if site.Projects != nil {
 			for i := range site.Projects.Projects {
 				proj := &site.Projects.Projects[i]
 				if _, ok := aggProjects[proj.Email]; !ok {
-					aggProjects[proj.Email] = &AggProject{Project: proj}
+					aggProjects[proj.Email] = &g2.AggProject{Project: proj}
 				}
 			}
 		}
 		server.RepoMap[site.RepoName] = site
 		for _, cat := range site.Categories {
 			if _, ok := aggCategories[cat.Name]; !ok {
-				aggCategories[cat.Name] = &AggCategory{Name: cat.Name, Packages: make(map[string]*AggPackage)}
+				aggCategories[cat.Name] = &g2.AggCategory{Name: cat.Name, Packages: make(map[string]*g2.AggPackage)}
 			}
 			for _, pkg := range cat.Packages {
 				pkgKey := cat.Name + "/" + pkg.Name
 				if _, ok := aggPackages[pkgKey]; !ok {
-					aggPackages[pkgKey] = &AggPackage{Name: pkg.Name, Category: cat.Name, Repos: make(map[string]*SiteData)}
+					aggPackages[pkgKey] = &g2.AggPackage{Name: pkg.Name, Category: cat.Name, Repos: make(map[string]*g2.SiteData)}
 				}
 				aggPackages[pkgKey].Repos[site.RepoName] = site
 				if aggPackages[pkgKey].DominantDescription == "" {
@@ -272,7 +274,7 @@ func newSiteServer(sites []*SiteData, genInfo GenerationInfo) (*SiteServer, erro
 								continue
 							}
 							if _, ok := aggLicenses[lic]; !ok {
-								aggLicenses[lic] = &AggLicense{Name: lic}
+								aggLicenses[lic] = &g2.AggLicense{Name: lic}
 							}
 
 							found := false
@@ -410,7 +412,7 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			s.renderPageHTTP(w, "overlays.html", map[string]interface{}{
 				"Title":       "Overlays",
 				"BaseURL":     baseURL,
-				"Breadcrumbs": []Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: "Overlays"}},
+				"Breadcrumbs": []g2.Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: "Overlays"}},
 				"Repos":       s.Sites,
 				"Version":     version,
 				"GenInfo":     s.GenInfo,
@@ -423,7 +425,7 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			s.renderPageHTTP(w, "categories.html", map[string]interface{}{
 				"Title":       "Categories",
 				"BaseURL":     baseURL,
-				"Breadcrumbs": []Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: "Categories"}},
+				"Breadcrumbs": []g2.Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: "Categories"}},
 				"Categories":  s.AggCategories,
 				"Version":     version,
 				"GenInfo":     s.GenInfo,
@@ -437,7 +439,7 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 
-			var catPkgs []*AggPackage
+			var catPkgs []*g2.AggPackage
 			for _, p := range cat.Packages {
 				catPkgs = append(catPkgs, p)
 			}
@@ -445,7 +447,7 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 			type TmplPkg struct {
 				Name                  string
-				ReposList             []*SiteData
+				ReposList             []*g2.SiteData
 				EbuildCount           int
 				HighestStableVersion  template.HTML
 				HighestTestingVersion template.HTML
@@ -456,7 +458,7 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			}
 			var tmplPkgs []TmplPkg
 			for _, p := range catPkgs {
-				var allVersions []VersionData
+				var allVersions []g2.VersionData
 				for _, r := range p.Repos {
 					for _, c := range r.Categories {
 						if c.Name == catName {
@@ -475,7 +477,7 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			s.renderPageHTTP(w, "category.html", map[string]interface{}{
 				"Title":       "Category: " + cat.Name,
 				"BaseURL":     baseURL,
-				"Breadcrumbs": []Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: "Categories", URL: "../"}, {Name: cat.Name}},
+				"Breadcrumbs": []g2.Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: "Categories", URL: "../"}, {Name: cat.Name}},
 				"Category":    map[string]interface{}{"Name": cat.Name, "Packages": tmplPkgs},
 				"Version":     version,
 				"GenInfo":     s.GenInfo,
@@ -488,7 +490,7 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			s.renderPageHTTP(w, "packages.html", map[string]interface{}{
 				"Title":       "Packages",
 				"BaseURL":     baseURL,
-				"Breadcrumbs": []Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: "Packages"}},
+				"Breadcrumbs": []g2.Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: "Packages"}},
 				"Packages":    s.AggPackages,
 				"Version":     version,
 				"GenInfo":     s.GenInfo,
@@ -515,7 +517,7 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				s.renderPageHTTP(w, "package_picker.html", map[string]interface{}{
 					"Title":       "Package: " + pkg.Category + "/" + pkg.Name,
 					"BaseURL":     baseURL,
-					"Breadcrumbs": []Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: "Packages", URL: "../../"}, {Name: pkg.Category, URL: "../../../categories/" + pkg.Category + "/"}, {Name: pkg.Name}},
+					"Breadcrumbs": []g2.Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: "Packages", URL: "../../"}, {Name: pkg.Category, URL: "../../../categories/" + pkg.Category + "/"}, {Name: pkg.Name}},
 					"Package":     map[string]interface{}{"Category": pkg.Category, "Name": pkg.Name, "ReposList": reposList},
 					"Version":     version,
 					"GenInfo":     s.GenInfo,
@@ -529,7 +531,7 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			s.renderPageHTTP(w, "uses.html", map[string]interface{}{
 				"Title":       "USE Flags",
 				"BaseURL":     baseURL,
-				"Breadcrumbs": []Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: "USE Flags"}},
+				"Breadcrumbs": []g2.Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: "USE Flags"}},
 				"UseFlags":    s.AggUseFlags,
 				"Version":     version,
 				"GenInfo":     s.GenInfo,
@@ -545,7 +547,7 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			s.renderPageHTTP(w, "use.html", map[string]interface{}{
 				"Title":       "USE Flag: " + flag.Name,
 				"BaseURL":     baseURL,
-				"Breadcrumbs": []Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: "USE Flags", URL: "../"}, {Name: flag.Name}},
+				"Breadcrumbs": []g2.Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: "USE Flags", URL: "../"}, {Name: flag.Name}},
 				"UseFlag":     flag,
 				"Version":     version,
 				"GenInfo":     s.GenInfo,
@@ -558,7 +560,7 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			s.renderPageHTTP(w, "licenses.html", map[string]interface{}{
 				"Title":       "Licenses",
 				"BaseURL":     baseURL,
-				"Breadcrumbs": []Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: "Licenses"}},
+				"Breadcrumbs": []g2.Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: "Licenses"}},
 				"Licenses":    s.AggLicenses,
 				"Version":     version,
 				"GenInfo":     s.GenInfo,
@@ -566,7 +568,7 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		} else if len(parts) == 2 {
 			licNameSlug := parts[1]
-			var lic *AggLicense
+			var lic *g2.AggLicense
 			for _, l := range s.AggLicenses {
 				if sanitizeFilename(l.Name) == licNameSlug {
 					lic = l
@@ -581,7 +583,7 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			type TmplPkg struct {
 				Name      string
 				Category  string
-				ReposList []*SiteData
+				ReposList []*g2.SiteData
 			}
 			var tmplPkgs []TmplPkg
 			for _, p := range lic.Packages {
@@ -591,7 +593,7 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			s.renderPageHTTP(w, "license.html", map[string]interface{}{
 				"Title":       "License: " + lic.Name,
 				"BaseURL":     baseURL,
-				"Breadcrumbs": []Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: "Licenses", URL: "../"}, {Name: lic.Name}},
+				"Breadcrumbs": []g2.Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: "Licenses", URL: "../"}, {Name: lic.Name}},
 				"License":     map[string]interface{}{"Name": lic.Name, "Packages": tmplPkgs, "Text": lic.Text, "Aliases": lic.Aliases},
 				"Version":     version,
 				"GenInfo":     s.GenInfo,
@@ -604,7 +606,7 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			s.renderPageHTTP(w, "projects.html", map[string]interface{}{
 				"Title":       "Projects",
 				"BaseURL":     baseURL,
-				"Breadcrumbs": []Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: "Projects"}},
+				"Breadcrumbs": []g2.Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: "Projects"}},
 				"Projects":    s.AggProjects,
 				"Version":     version,
 				"GenInfo":     s.GenInfo,
@@ -621,7 +623,7 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			type TmplPkg struct {
 				Name      string
 				Category  string
-				ReposList []*SiteData
+				ReposList []*g2.SiteData
 			}
 			var tmplPkgs []TmplPkg
 			for _, p := range proj.Packages {
@@ -631,7 +633,7 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			s.renderPageHTTP(w, "project.html", map[string]interface{}{
 				"Title":       "Project: " + proj.Project.Name,
 				"BaseURL":     baseURL,
-				"Breadcrumbs": []Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: "Projects", URL: "../"}, {Name: proj.Project.Name}},
+				"Breadcrumbs": []g2.Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: "Projects", URL: "../"}, {Name: proj.Project.Name}},
 				"Project":     proj,
 				"Packages":    tmplPkgs,
 				"Version":     version,
@@ -645,7 +647,7 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			s.renderPageHTTP(w, "stats.html", map[string]interface{}{
 				"Title":       "Generation Statistics",
 				"BaseURL":     baseURL,
-				"Breadcrumbs": []Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: "Statistics"}},
+				"Breadcrumbs": []g2.Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: "Statistics"}},
 				"Version":     version,
 				"GenInfo":     s.GenInfo,
 			})
@@ -657,7 +659,7 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			s.renderPageHTTP(w, "help.html", map[string]interface{}{
 				"Title":       "Help & Legend",
 				"BaseURL":     baseURL,
-				"Breadcrumbs": []Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: "Help"}},
+				"Breadcrumbs": []g2.Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: "Help"}},
 				"Version":     version,
 				"GenInfo":     s.GenInfo,
 			})
@@ -682,7 +684,7 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				s.renderPageHTTP(w, "repo_index.html", map[string]interface{}{
 					"Title":                 site.RepoName,
 					"BaseURL":               baseURL,
-					"Breadcrumbs":           []Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: "Overlays", URL: baseURL + "overlays/"}, {Name: site.RepoName}},
+					"Breadcrumbs":           []g2.Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: "Overlays", URL: baseURL + "overlays/"}, {Name: site.RepoName}},
 					"Repo":                  site,
 					"PackageCount":          site.PackageCount,
 					"Version":               version,
@@ -702,7 +704,7 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 						s.renderPageHTTP(w, "repo_stats.html", map[string]interface{}{
 							"Title":       site.RepoName + " - Statistics",
 							"BaseURL":     baseURL,
-							"Breadcrumbs": []Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: site.RepoName, URL: "../"}, {Name: "Statistics"}},
+							"Breadcrumbs": []g2.Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: site.RepoName, URL: "../"}, {Name: "Statistics"}},
 							"Repo":        site,
 							"Version":     version,
 							"GenInfo":     s.GenInfo,
@@ -714,7 +716,7 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 						s.renderPageHTTP(w, "repo_masked.html", map[string]interface{}{
 							"Title":       site.RepoName + " - Masked",
 							"BaseURL":     baseURL,
-							"Breadcrumbs": []Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: site.RepoName, URL: "../"}, {Name: "Masked Packages"}},
+							"Breadcrumbs": []g2.Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: site.RepoName, URL: "../"}, {Name: "Masked Packages"}},
 							"Repo":        site,
 							"Version":     version,
 							"GenInfo":     s.GenInfo,
@@ -726,7 +728,7 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 						s.renderPageHTTP(w, "repo_deprecated.html", map[string]interface{}{
 							"Title":       site.RepoName + " - Deprecated",
 							"BaseURL":     baseURL,
-							"Breadcrumbs": []Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: site.RepoName, URL: "../"}, {Name: "Deprecated Packages"}},
+							"Breadcrumbs": []g2.Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: site.RepoName, URL: "../"}, {Name: "Deprecated Packages"}},
 							"Repo":        site,
 							"Version":     version,
 							"GenInfo":     s.GenInfo,
@@ -738,7 +740,7 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 						s.renderPageHTTP(w, "repo_info_pkgs.html", map[string]interface{}{
 							"Title":       site.RepoName + " - Info Packages",
 							"BaseURL":     baseURL,
-							"Breadcrumbs": []Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: site.RepoName, URL: "../"}, {Name: "Info Packages"}},
+							"Breadcrumbs": []g2.Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: site.RepoName, URL: "../"}, {Name: "Info Packages"}},
 							"Repo":        site,
 							"Version":     version,
 							"GenInfo":     s.GenInfo,
@@ -750,7 +752,7 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 						s.renderPageHTTP(w, "categories.html", map[string]interface{}{
 							"Title":       site.RepoName + " - Categories",
 							"BaseURL":     baseURL,
-							"Breadcrumbs": []Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: site.RepoName, URL: "../"}, {Name: "Categories"}},
+							"Breadcrumbs": []g2.Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: site.RepoName, URL: "../"}, {Name: "Categories"}},
 							"Categories":  site.Categories,
 							"Version":     version,
 							"GenInfo":     s.GenInfo,
@@ -758,7 +760,7 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 						return
 					} else if len(parts) == 4 {
 						catName := parts[3]
-						var catData *CategoryData
+						var catData *g2.CategoryData
 						for _, c := range site.Categories {
 							if c.Name == catName {
 								catData = &c
@@ -772,7 +774,7 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 						type TmplPkg struct {
 							Name                  string
-							ReposList             []*SiteData
+							ReposList             []*g2.SiteData
 							EbuildCount           int
 							HighestStableVersion  template.HTML
 							HighestTestingVersion template.HTML
@@ -783,13 +785,13 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 						}
 						var tmplPkgs []TmplPkg
 						for _, p := range catData.Packages {
-							tmplPkgs = append(tmplPkgs, TmplPkg{Name: p.Name, ReposList: []*SiteData{site}, EbuildCount: p.EbuildCount, HighestStableVersion: p.HighestStableVersion, HighestTestingVersion: p.HighestTestingVersion, DominantDescription: p.DominantDescription, DominantHomepage: p.DominantHomepage, DominantLicense: p.DominantLicense, ReverseVirtuals: p.ReverseVirtuals})
+							tmplPkgs = append(tmplPkgs, TmplPkg{Name: p.Name, ReposList: []*g2.SiteData{site}, EbuildCount: p.EbuildCount, HighestStableVersion: p.HighestStableVersion, HighestTestingVersion: p.HighestTestingVersion, DominantDescription: p.DominantDescription, DominantHomepage: p.DominantHomepage, DominantLicense: p.DominantLicense, ReverseVirtuals: p.ReverseVirtuals})
 						}
 
 						s.renderPageHTTP(w, "category.html", map[string]interface{}{
 							"Title":       "Category: " + catData.Name,
 							"BaseURL":     baseURL,
-							"Breadcrumbs": []Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: site.RepoName, URL: "../../"}, {Name: "Categories", URL: "../"}, {Name: catData.Name}},
+							"Breadcrumbs": []g2.Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: site.RepoName, URL: "../../"}, {Name: "Categories", URL: "../"}, {Name: catData.Name}},
 							"Category":    map[string]interface{}{"Name": catData.Name, "Packages": tmplPkgs},
 							"Version":     version,
 							"GenInfo":     s.GenInfo,
@@ -799,7 +801,7 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 						catName := parts[3]
 						pkgName := parts[5]
 
-						var pkgData *PackageData
+						var pkgData *g2.PackageData
 						for _, c := range site.Categories {
 							if c.Name == catName {
 								for _, p := range c.Packages {
@@ -824,7 +826,7 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 							s.renderPageHTTP(w, "repo_package.html", map[string]interface{}{
 								"Title":   fmt.Sprintf("%s - %s/%s", site.RepoName, pkgData.Category, pkgData.Name),
 								"BaseURL": baseURL,
-								"Breadcrumbs": []Breadcrumb{
+								"Breadcrumbs": []g2.Breadcrumb{
 									{Name: s.Title, URL: baseURL},
 									{Name: site.RepoName, URL: "../../../../"},
 									{Name: "Categories", URL: "../../../"},
@@ -841,7 +843,7 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 						} else if len(parts) == 8 && parts[6] == "ebuild" {
 							versionName := strings.TrimSuffix(parts[7], ".html")
 
-							var versionData *VersionData
+							var versionData *g2.VersionData
 							for _, v := range pkgData.Versions {
 								if v.Version == versionName || (v.Ebuild != nil && v.Ebuild.Vars != nil && v.Ebuild.Vars["PV"] == versionName) {
 									versionData = &v
@@ -853,7 +855,7 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 								return
 							}
 
-							var filteredManifest []ManifestEntryData
+							var filteredManifest []g2.ManifestEntryData
 							for _, md := range pkgData.ManifestData {
 								for _, v := range md.Versions {
 									if v == versionData.Version || (versionData.Ebuild != nil && versionData.Ebuild.Vars != nil && v == versionData.Ebuild.Vars["PV"]) {
@@ -866,7 +868,7 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 							s.renderPageHTTP(w, "ebuild_details.html", map[string]interface{}{
 								"Title":   fmt.Sprintf("%s - %s/%s-%s", site.RepoName, pkgData.Category, pkgData.Name, versionName),
 								"BaseURL": baseURL,
-								"Breadcrumbs": []Breadcrumb{
+								"Breadcrumbs": []g2.Breadcrumb{
 									{Name: s.Title, URL: baseURL},
 									{Name: site.RepoName, URL: "../../../../../../"},
 									{Name: "Categories", URL: "../../../../../"},
@@ -878,7 +880,7 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 								},
 								"Repo":             site,
 								"Package":          *pkgData,
-								"VersionData":      *versionData,
+								"g2.VersionData":   *versionData,
 								"FilteredManifest": filteredManifest,
 								"Version":          version,
 								"GenInfo":          s.GenInfo,
@@ -888,7 +890,7 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 						} else if len(parts) == 8 && parts[6] == "manifest" {
 							manifestName := strings.TrimSuffix(parts[7], ".html")
 
-							var targetMD *ManifestEntryData
+							var targetMD *g2.ManifestEntryData
 							for _, md := range pkgData.ManifestData {
 								if md.Entry.Filename == manifestName {
 									targetMD = &md
@@ -903,7 +905,7 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 							s.renderPageHTTP(w, "repo_package_manifest.html", map[string]interface{}{
 								"Title":   fmt.Sprintf("%s - %s/%s-Manifest-%s", site.RepoName, pkgData.Category, pkgData.Name, manifestName),
 								"BaseURL": baseURL,
-								"Breadcrumbs": []Breadcrumb{
+								"Breadcrumbs": []g2.Breadcrumb{
 									{Name: s.Title, URL: baseURL},
 									{Name: site.RepoName, URL: "../../../../../../"},
 									{Name: "Categories", URL: "../../../../../"},
@@ -926,7 +928,7 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 				case "packages":
 					if len(parts) == 3 {
-						var repoPkgs []PackageData
+						var repoPkgs []g2.PackageData
 						for _, c := range site.Categories {
 							repoPkgs = append(repoPkgs, c.Packages...)
 						}
@@ -940,7 +942,7 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 						s.renderPageHTTP(w, "repo_packages.html", map[string]interface{}{
 							"Title":       site.RepoName + " - Packages",
 							"BaseURL":     baseURL,
-							"Breadcrumbs": []Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: site.RepoName, URL: "../"}, {Name: "Packages"}},
+							"Breadcrumbs": []g2.Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: site.RepoName, URL: "../"}, {Name: "Packages"}},
 							"Packages":    repoPkgs,
 							"Repo":        site,
 							"Version":     version,
@@ -954,7 +956,7 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 						s.renderPageHTTP(w, "repo_profiles.html", map[string]interface{}{
 							"Title":       site.RepoName + " - Profiles",
 							"BaseURL":     baseURL,
-							"Breadcrumbs": []Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: site.RepoName, URL: "../"}, {Name: "Profiles"}},
+							"Breadcrumbs": []g2.Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: site.RepoName, URL: "../"}, {Name: "Profiles"}},
 							"Repo":        site,
 							"Version":     version,
 							"GenInfo":     s.GenInfo,
@@ -987,7 +989,7 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 							profilePath = remaining
 						}
 
-						var targetProfile *ProfileData
+						var targetProfile *g2.ProfileData
 						for _, p := range site.Profiles {
 							if p.Path == profilePath {
 								targetProfile = &p
@@ -1010,7 +1012,7 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 							s.renderPageHTTP(w, "repo_profile_file.html", map[string]interface{}{
 								"Title":       site.RepoName + " - Profile File: " + requestedFile,
 								"BaseURL":     baseURL,
-								"Breadcrumbs": []Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: site.RepoName, URL: baseURL + "repos/" + site.RepoName + "/"}, {Name: "Profiles", URL: baseURL + "repos/" + site.RepoName + "/profiles/"}, {Name: targetProfile.Path, URL: "index.html"}, {Name: requestedFile}},
+								"Breadcrumbs": []g2.Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: site.RepoName, URL: baseURL + "repos/" + site.RepoName + "/"}, {Name: "Profiles", URL: baseURL + "repos/" + site.RepoName + "/profiles/"}, {Name: targetProfile.Path, URL: "index.html"}, {Name: requestedFile}},
 								"RepoName":    site.RepoName,
 								"ProfilePath": targetProfile.Path,
 								"Profile":     targetProfile,
@@ -1024,7 +1026,7 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 							s.renderPageHTTP(w, "repo_profile.html", map[string]interface{}{
 								"Title":       site.RepoName + " - Profile: " + targetProfile.Path,
 								"BaseURL":     baseURL,
-								"Breadcrumbs": []Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: site.RepoName, URL: baseURL + "repos/" + site.RepoName + "/"}, {Name: "Profiles", URL: baseURL + "repos/" + site.RepoName + "/profiles/"}, {Name: targetProfile.Path}},
+								"Breadcrumbs": []g2.Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: site.RepoName, URL: baseURL + "repos/" + site.RepoName + "/"}, {Name: "Profiles", URL: baseURL + "repos/" + site.RepoName + "/profiles/"}, {Name: targetProfile.Path}},
 								"RepoName":    site.RepoName,
 								"ProfilePath": targetProfile.Path,
 								"Profile":     targetProfile,
@@ -1042,7 +1044,7 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 						s.renderPageHTTP(w, "repo_uses.html", map[string]interface{}{
 							"Title":       site.RepoName + " - USE Flags",
 							"BaseURL":     baseURL,
-							"Breadcrumbs": []Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: site.RepoName, URL: "../"}, {Name: "USE Flags"}},
+							"Breadcrumbs": []g2.Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: site.RepoName, URL: "../"}, {Name: "USE Flags"}},
 							"UseFlags":    repoUseFlags,
 							"Repo":        site,
 							"Version":     version,
@@ -1051,7 +1053,7 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 						return
 					} else if len(parts) == 4 {
 						flagName := parts[3]
-						var flag *AggUseFlag
+						var flag *g2.AggUseFlag
 						for _, f := range repoUseFlags {
 							if f.Name == flagName {
 								flag = f
@@ -1066,7 +1068,7 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 						s.renderPageHTTP(w, "repo_use.html", map[string]interface{}{
 							"Title":       site.RepoName + " - USE Flag: " + flag.Name,
 							"BaseURL":     baseURL,
-							"Breadcrumbs": []Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: site.RepoName, URL: "../../"}, {Name: "USE Flags", URL: "../"}, {Name: flag.Name}},
+							"Breadcrumbs": []g2.Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: site.RepoName, URL: "../../"}, {Name: "USE Flags", URL: "../"}, {Name: flag.Name}},
 							"UseFlag":     flag,
 							"Repo":        site,
 							"Version":     version,

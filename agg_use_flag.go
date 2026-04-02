@@ -1,4 +1,4 @@
-package main
+package g2
 
 func (a *AggUseFlag) Desc() string {
 	if a.GlobalDesc != "" {

@@ -383,7 +383,7 @@ func (cfg *CmdPackageArgConfig) cmdIndexOverlay(args []string) error {
 		return fmt.Errorf("failed to parse repo: %w", err)
 	}
 
-	sites := []*SiteData{repo}
+	sites := []*g2.SiteData{repo}
 
 	if err := generateSearchData(*outDir, *outZip, sites); err != nil {
 		return fmt.Errorf("generating search data: %w", err)
@@ -443,7 +443,7 @@ func (cfg *CmdPackageArgConfig) cmdIndexRepositories(args []string) error {
 	}
 	repos = reposObj.Repositories
 
-	var sites []*SiteData
+	var sites []*g2.SiteData
 
 	for _, rep := range repos {
 		if allowRepos != nil && !allowRepos[rep.Name] {
@@ -521,7 +521,7 @@ func (cfg *CmdPackageArgConfig) cmdIndex(args []string) error {
 		overlayPaths = append(overlayPaths, fmt.Sprintf("%s/%s", reposDir, repoName))
 	}
 
-	var sites []*SiteData
+	var sites []*g2.SiteData
 	for _, overlayPath := range overlayPaths {
 		sysFS := os.DirFS(overlayPath)
 		repo, err := parseRepo(sysFS, overlayPath, "local", false, nil)

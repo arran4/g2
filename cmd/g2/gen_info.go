@@ -6,7 +6,7 @@ type GenerationInfo struct {
 	FastGit         bool
 	RecentDuration  string
 	// Placeholders for later:
-	TimeTaken       string
-	MemoryConsumed  string
-	DiskConsumed    string
+	TimeTaken      string
+	MemoryConsumed string
+	DiskConsumed   string
 }

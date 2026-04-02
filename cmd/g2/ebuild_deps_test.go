@@ -106,7 +106,7 @@ func TestEbuildDeps(t *testing.T) {
 			// Fix path differences
 			// Our output prints the full temporary path when we pass temporary file path.
 			// But the expected output has the base name.
-			got = strings.ReplaceAll(got, tmpDir + string(filepath.Separator), "")
+			got = strings.ReplaceAll(got, tmpDir+string(filepath.Separator), "")
 
 			if strings.TrimSpace(got) != strings.TrimSpace(want) {
 				t.Errorf("mismatch\nwant:\n%s\n\ngot:\n%s\n", want, got)
