@@ -55,7 +55,7 @@ type SearchManifest struct {
 	DataFiles     []string `json:"data_files"`
 }
 
-func generateSearchData(outDir, outZip string, sites []*SiteData, maxChunkSizeOverride ...int) error {
+func generateSearchData(outDir, outZip string, sites []*g2.SiteData, maxChunkSizeOverride ...int) error {
 	var documents []SearchDocument
 	docID := 0
 
@@ -387,7 +387,7 @@ func generateSearchData(outDir, outZip string, sites []*SiteData, maxChunkSizeOv
 	return nil
 }
 
-func generateSearchIndex(outDir string, sites []*SiteData) error {
+func generateSearchIndex(outDir string, sites []*g2.SiteData) error {
 	searchDir := filepath.Join(outDir, "search")
 	dataDir := filepath.Join(searchDir, "data")
 

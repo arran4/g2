@@ -6,11 +6,11 @@ import (
 )
 
 func TestResolveDependencies(t *testing.T) {
-	site := &SiteData{
-		Categories: []CategoryData{
+	site := &g2.SiteData{
+		Categories: []g2.CategoryData{
 			{
 				Name: "app-misc",
-				Packages: []PackageData{
+				Packages: []g2.PackageData{
 					{
 						Category: "app-misc",
 						Name:     "bar",

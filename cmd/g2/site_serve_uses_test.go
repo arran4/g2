@@ -51,16 +51,16 @@ func TestParseIUSEFlagsFunc(t *testing.T) {
 }
 
 func TestGetRepoUseFlags(t *testing.T) {
-	site := &SiteData{
+	site := &g2.SiteData{
 		RepoName: "test-repo",
-		Categories: []CategoryData{
+		Categories: []g2.CategoryData{
 			{
 				Name: "app-misc",
-				Packages: []PackageData{
+				Packages: []g2.PackageData{
 					{
 						Category: "app-misc",
 						Name:     "foo",
-						Versions: []VersionData{
+						Versions: []g2.VersionData{
 							{
 								Version: "1.0",
 								Ebuild: &g2.Ebuild{
@@ -76,7 +76,7 @@ func TestGetRepoUseFlags(t *testing.T) {
 		},
 	}
 
-	aggPackages := map[string]*AggPackage{
+	aggPackages := map[string]*g2.AggPackage{
 		"app-misc/foo": {
 			Name: "foo",
 			Category: "app-misc",
