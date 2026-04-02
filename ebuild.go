@@ -522,87 +522,91 @@ func ResolveVariables(text string, variables map[string]string) string {
 	for i := 0; i < 5; i++ { // Limit recursion depth
 		original := text
 
-		// 1. Replace all simple $VAR substitutions
-		for _, key := range keys {
-			value := variables[key]
-			varRef := fmt.Sprintf("$%s", key)
-			if strings.Contains(text, varRef) {
-				if strings.Contains(value, varRef) {
-					continue
+		if strings.Contains(text, "$") {
+			// 1. Replace all simple $VAR substitutions
+			for _, key := range keys {
+				value := variables[key]
+				varRef := fmt.Sprintf("$%s", key)
+				if strings.Contains(text, varRef) {
+					if strings.Contains(value, varRef) {
+						continue
+					}
+					text = strings.ReplaceAll(text, varRef, value)
 				}
-				text = strings.ReplaceAll(text, varRef, value)
+			}
+
+			// 2. Replace all ${VAR...} substitutions
+			if strings.Contains(text, "${") {
+				text = varExpansionRegex.ReplaceAllStringFunc(text, func(match string) string {
+					parts := varExpansionRegex.FindStringSubmatch(match)
+					if len(parts) != 3 {
+						return match
+					}
+					k := parts[1]
+					op := parts[2]
+					v, ok := variables[k]
+
+					if op == "" {
+						if ok {
+							return v
+						}
+						return ""
+					}
+					if strings.HasPrefix(op, ":-") || strings.HasPrefix(op, "-") {
+						defVal := strings.TrimPrefix(strings.TrimPrefix(op, ":-"), "-")
+						if v != "" {
+							return v
+						}
+						return defVal
+					}
+					if strings.HasPrefix(op, "//") {
+						replParts := strings.SplitN(op[2:], "/", 2)
+						if len(replParts) == 2 {
+							return strings.ReplaceAll(v, replParts[0], replParts[1])
+						}
+						return strings.ReplaceAll(v, replParts[0], "")
+					}
+					if strings.HasPrefix(op, "/") {
+						replParts := strings.SplitN(op[1:], "/", 2)
+						if len(replParts) == 2 {
+							return strings.Replace(v, replParts[0], replParts[1], 1)
+						}
+						return strings.Replace(v, replParts[0], "", 1)
+					}
+					if strings.HasPrefix(op, "##") {
+						prefix := op[2:]
+						if strings.HasPrefix(v, prefix) {
+							return v[len(prefix):]
+						}
+						return v
+					}
+					if strings.HasPrefix(op, "#") {
+						prefix := op[1:]
+						if strings.HasPrefix(v, prefix) {
+							return v[len(prefix):]
+						}
+						return v
+					}
+					if strings.HasPrefix(op, "%%") {
+						suffix := op[2:]
+						if strings.HasSuffix(v, suffix) {
+							return v[:len(v)-len(suffix)]
+						}
+						return v
+					}
+					if strings.HasPrefix(op, "%") {
+						suffix := op[1:]
+						if strings.HasSuffix(v, suffix) {
+							return v[:len(v)-len(suffix)]
+						}
+						return v
+					}
+
+					// Unknown operation
+					return match
+				})
 			}
 		}
-
-		// 2. Replace all ${VAR...} substitutions
-		text = varExpansionRegex.ReplaceAllStringFunc(text, func(match string) string {
-			parts := varExpansionRegex.FindStringSubmatch(match)
-			if len(parts) != 3 {
-				return match
-			}
-			k := parts[1]
-			op := parts[2]
-			v, ok := variables[k]
-
-			if op == "" {
-				if ok {
-					return v
-				}
-				return ""
-			}
-			if strings.HasPrefix(op, ":-") || strings.HasPrefix(op, "-") {
-				defVal := strings.TrimPrefix(strings.TrimPrefix(op, ":-"), "-")
-				if v != "" {
-					return v
-				}
-				return defVal
-			}
-			if strings.HasPrefix(op, "//") {
-				replParts := strings.SplitN(op[2:], "/", 2)
-				if len(replParts) == 2 {
-					return strings.ReplaceAll(v, replParts[0], replParts[1])
-				}
-				return strings.ReplaceAll(v, replParts[0], "")
-			}
-			if strings.HasPrefix(op, "/") {
-				replParts := strings.SplitN(op[1:], "/", 2)
-				if len(replParts) == 2 {
-					return strings.Replace(v, replParts[0], replParts[1], 1)
-				}
-				return strings.Replace(v, replParts[0], "", 1)
-			}
-			if strings.HasPrefix(op, "##") {
-				prefix := op[2:]
-				if strings.HasPrefix(v, prefix) {
-					return v[len(prefix):]
-				}
-				return v
-			}
-			if strings.HasPrefix(op, "#") {
-				prefix := op[1:]
-				if strings.HasPrefix(v, prefix) {
-					return v[len(prefix):]
-				}
-				return v
-			}
-			if strings.HasPrefix(op, "%%") {
-				suffix := op[2:]
-				if strings.HasSuffix(v, suffix) {
-					return v[:len(v)-len(suffix)]
-				}
-				return v
-			}
-			if strings.HasPrefix(op, "%") {
-				suffix := op[1:]
-				if strings.HasSuffix(v, suffix) {
-					return v[:len(v)-len(suffix)]
-				}
-				return v
-			}
-
-			// Unknown operation
-			return match
-		})
 
 		if len(text) > maxLen {
 			return text[:maxLen]
