@@ -16,9 +16,12 @@ func TestGetSiteTemplates(t *testing.T) {
 		t.Fatal("Expected templates to be loaded, got nil")
 	}
 
-	// Make sure layout.html is loaded
-	if tmpl.Lookup("layout.html") == nil {
-		t.Error("Expected layout.html to be loaded")
+	// Make sure layout_header.html and layout_footer.html are loaded
+	if tmpl.Lookup("layout_header.html") == nil {
+		t.Error("Expected layout_header.html to be loaded")
+	}
+	if tmpl.Lookup("layout_footer.html") == nil {
+		t.Error("Expected layout_footer.html to be loaded")
 	}
 
 	// Make sure dashboard.html is loaded

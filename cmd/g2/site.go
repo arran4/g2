@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"encoding/xml"
@@ -3853,23 +3852,6 @@ func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration
 
 func renderPage(path string, tmpl *template.Template, name string, data interface{}) error {
 	log.Printf("Rendering page %s using template %s", path, name)
-	var buf bytes.Buffer
-	if err := tmpl.ExecuteTemplate(&buf, name, data); err != nil {
-		return fmt.Errorf("executing template %s for path %s: %w", name, path, err)
-	}
-
-	// Update Content field
-	var layoutData = data
-	if ctx, ok := data.(GenericPageContext); ok {
-		ctx.Content = template.HTML(buf.String())
-		layoutData = ctx
-	} else if ctx, ok := data.(*GenericPageContext); ok {
-		ctx.Content = template.HTML(buf.String())
-		layoutData = ctx
-	} else if m, ok := data.(map[string]interface{}); ok {
-		m["Content"] = template.HTML(buf.String())
-		layoutData = m
-	}
 
 	f, err := os.Create(path)
 	if err != nil {
@@ -3877,9 +3859,16 @@ func renderPage(path string, tmpl *template.Template, name string, data interfac
 	}
 	defer func() { _ = f.Close() }()
 
-	if err := tmpl.ExecuteTemplate(f, "layout.html", layoutData); err != nil {
-		return fmt.Errorf("executing layout template for %s: %w", path, err)
+	if err := tmpl.ExecuteTemplate(f, "layout_header.html", data); err != nil {
+		return fmt.Errorf("executing layout_header template for %s: %w", path, err)
 	}
+	if err := tmpl.ExecuteTemplate(f, name, data); err != nil {
+		return fmt.Errorf("executing template %s for %s: %w", name, path, err)
+	}
+	if err := tmpl.ExecuteTemplate(f, "layout_footer.html", data); err != nil {
+		return fmt.Errorf("executing layout_footer template for %s: %w", path, err)
+	}
+
 	return nil
 }
 
