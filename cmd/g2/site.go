@@ -3839,8 +3839,13 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, 
 			}
 			checkoutTime := time.Since(t0)
 			freeSpace, err := getFreeSpace(repoPath)
-			if err == nil {
+			freeMem, memErr := getFreeMemory()
+			if err == nil && memErr == nil {
+				log.Printf("[DONE] Finished fetching repository %s in %s. Free space: %.2f MB. Free memory: %.2f MB", repo.Name, checkoutTime, float64(freeSpace)/(1024*1024), float64(freeMem)/(1024*1024))
+			} else if err == nil {
 				log.Printf("[DONE] Finished fetching repository %s in %s. Free space: %.2f MB", repo.Name, checkoutTime, float64(freeSpace)/(1024*1024))
+			} else if memErr == nil {
+				log.Printf("[DONE] Finished fetching repository %s in %s. Free memory: %.2f MB", repo.Name, checkoutTime, float64(freeMem)/(1024*1024))
 			} else {
 				log.Printf("[DONE] Finished fetching repository %s in %s", repo.Name, checkoutTime)
 			}
@@ -3863,8 +3868,13 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, 
 			}
 			processTime := time.Since(t1)
 			freeSpaceAfter, err := getFreeSpace(repoPath)
-			if err == nil {
+			freeMemAfter, memErrAfter := getFreeMemory()
+			if err == nil && memErrAfter == nil {
+				log.Printf("[DONE] Finished parsing repository %s in %s. Free space: %.2f MB. Free memory: %.2f MB", repo.Name, processTime, float64(freeSpaceAfter)/(1024*1024), float64(freeMemAfter)/(1024*1024))
+			} else if err == nil {
 				log.Printf("[DONE] Finished parsing repository %s in %s. Free space: %.2f MB", repo.Name, processTime, float64(freeSpaceAfter)/(1024*1024))
+			} else if memErrAfter == nil {
+				log.Printf("[DONE] Finished parsing repository %s in %s. Free memory: %.2f MB", repo.Name, processTime, float64(freeMemAfter)/(1024*1024))
 			} else {
 				log.Printf("[DONE] Finished parsing repository %s in %s", repo.Name, processTime)
 			}
