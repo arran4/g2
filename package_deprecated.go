@@ -24,6 +24,9 @@ type PackageDeprecated struct {
 	Entries     []PackageDeprecatedEntry
 }
 
+// Match: # Michał Górny <mgorny@gentoo.org> (2025-11-25)
+var authorLineRegex = regexp.MustCompile(`^#\s*(.*?)\s*<(.*?)>\s*\((.*?)\)$`)
+
 func parsePackageDeprecatedReader(r io.Reader) ([]PackageDeprecated, error) {
 	var results []PackageDeprecated
 	scanner := bufio.NewScanner(r)
@@ -31,9 +34,6 @@ func parsePackageDeprecatedReader(r io.Reader) ([]PackageDeprecated, error) {
 	var currentReason []string
 	var currentAuthor, currentEmail, currentDate string
 	var currentEntries []PackageDeprecatedEntry
-
-	// Match: # Michał Górny <mgorny@gentoo.org> (2025-11-25)
-	authorLineRegex := regexp.MustCompile(`^#\s*(.*?)\s*<(.*?)>\s*\((.*?)\)$`)
 
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
