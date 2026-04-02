@@ -2484,6 +2484,7 @@ func generateGlobalPages(outDir string, tmpl *template.Template, sites []*SiteDa
 		UseFlags:             data.UseFlags,
 		Projects:             data.Projects,
 		Profiles:             data.Profiles,
+		Arches:               data.Arches,
 		Version:              version,
 		GenInfo:              genInfo,
 		RecentDurationString: recentDurationStr,
@@ -2742,37 +2743,35 @@ func generatePackagePages(outDir string, tmpl *template.Template, data *Aggregat
 
 func generateOtherGlobalPages(outDir string, tmpl *template.Template, data *AggregatedData, title, version string, genInfo GenerationInfo) error {
 	// Arches
-	if len(data.Arches) > 0 {
-		if err := os.MkdirAll(filepath.Join(outDir, "arches"), 0755); err != nil {
-			return fmt.Errorf("creating directory: %w", err)
+	if err := os.MkdirAll(filepath.Join(outDir, "arches"), 0755); err != nil {
+		return fmt.Errorf("creating directory: %w", err)
+	}
+	if err := renderPage(filepath.Join(outDir, "arches", "index.html"), tmpl, "arches.html", GenericPageContext{
+		Title:       "Architectures",
+		BaseURL:     "../",
+		Breadcrumbs: []Breadcrumb{{Name: title, URL: "../"}, {Name: "Architectures"}},
+		Arches:      data.Arches,
+		Version:     version,
+		GenInfo:     genInfo,
+	}); err != nil {
+		return fmt.Errorf("rendering page: %w", err)
+	}
+
+	for _, a := range data.Arches {
+		archDir := filepath.Join(outDir, "arches", a.Name)
+		if err := os.MkdirAll(archDir, 0755); err != nil {
+			return fmt.Errorf("creating directory %s: %w", archDir, err)
 		}
-		if err := renderPage(filepath.Join(outDir, "arches", "index.html"), tmpl, "arches.html", GenericPageContext{
-			Title:       "Architectures",
-			BaseURL:     "../",
-			Breadcrumbs: []Breadcrumb{{Name: title, URL: "../"}, {Name: "Architectures"}},
-			Arches:      data.Arches,
+
+		if err := renderPage(filepath.Join(archDir, "index.html"), tmpl, "arch.html", GenericPageContext{
+			Title:       "Architecture: " + a.Name,
+			BaseURL:     "../../",
+			Breadcrumbs: []Breadcrumb{{Name: title, URL: "../../"}, {Name: "Architectures", URL: "../../arches/"}, {Name: a.Name}},
+			Arch:        a,
 			Version:     version,
 			GenInfo:     genInfo,
 		}); err != nil {
 			return fmt.Errorf("rendering page: %w", err)
-		}
-
-		for _, a := range data.Arches {
-			archDir := filepath.Join(outDir, "arches", a.Name)
-			if err := os.MkdirAll(archDir, 0755); err != nil {
-				return fmt.Errorf("creating directory %s: %w", archDir, err)
-			}
-
-			if err := renderPage(filepath.Join(archDir, "index.html"), tmpl, "arch.html", GenericPageContext{
-				Title:       "Architecture: " + a.Name,
-				BaseURL:     "../../",
-				Breadcrumbs: []Breadcrumb{{Name: title, URL: "../../"}, {Name: "Architectures", URL: "../../arches/"}, {Name: a.Name}},
-				Arch:        a,
-				Version:     version,
-				GenInfo:     genInfo,
-			}); err != nil {
-				return fmt.Errorf("rendering page: %w", err)
-			}
 		}
 	}
 
