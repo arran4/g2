@@ -55,14 +55,14 @@ type SearchManifest struct {
 	DataFiles     []string `json:"data_files"`
 }
 
+var pkgRegex = regexp.MustCompile(`([a-zA-Z0-9_][a-zA-Z0-9_\-\+]*\/[a-zA-Z0-9_][a-zA-Z0-9_\-\+]+)`)
+
 func generateSearchData(outDir, outZip string, sites []*SiteData, maxChunkSizeOverride ...int) error {
 	var documents []SearchDocument
 	docID := 0
 
 	dependedBy := make(map[string]map[string]bool)
 	rdependedBy := make(map[string]map[string]bool)
-
-	pkgRegex := regexp.MustCompile(`([a-zA-Z0-9_][a-zA-Z0-9_\-\+]*\/[a-zA-Z0-9_][a-zA-Z0-9_\-\+]+)`)
 
 	for _, site := range sites {
 		overlayName := site.RepoName

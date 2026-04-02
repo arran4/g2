@@ -977,16 +977,15 @@ func CompareVersions(v1, v2 string) int {
 	return strings.Compare(v1, v2)
 }
 
+var (
+	reRevisionMatch = regexp.MustCompile(`-r(\d+)$`)
+	reDigitMatch    = regexp.MustCompile(`(\d+)`)
+)
+
 // PadVersionTokens produces a sortable string representation of a gentoo version.
 func PadVersionTokens(v string) string {
-	parseGentooVersion := func(v string) string {
-		v = regexp.MustCompile(`-r(\d+)$`).ReplaceAllString(v, "+r$1")
-		return v
-	}
-
-	v = parseGentooVersion(v)
-	re := regexp.MustCompile(`(\d+)`)
-	return re.ReplaceAllStringFunc(v, func(s string) string {
+	v = reRevisionMatch.ReplaceAllString(v, "+r$1")
+	return reDigitMatch.ReplaceAllStringFunc(v, func(s string) string {
 		return fmt.Sprintf("%010s", s)
 	})
 }
