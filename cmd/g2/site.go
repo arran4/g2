@@ -162,7 +162,7 @@ type PackageData struct {
 	LintWarnings []string
 
 	// Deprecation
-	Masked *g2.PackageMasked
+	Masked     *g2.PackageMasked
 	Deprecated *g2.PackageDeprecated
 
 	// InfoPkg matching
@@ -190,7 +190,7 @@ type VersionData struct {
 
 	// Deprecation
 	Deprecated *g2.PackageDeprecated
-	Masked *g2.PackageMasked
+	Masked     *g2.PackageMasked
 
 	// Moves
 	MovedToSlot string
@@ -2038,37 +2038,26 @@ type RepoGroup struct {
 }
 
 type AggregatedData struct {
-	Categories     []*AggCategory
-	Packages       []*AggPackage
-	Licenses       []*AggLicense
-	Projects       []*AggProject
-	Profiles       []*AggProfile
-	Arches         []*AggArch
-	Moves          map[string]*AggPackageMove
-	GlobalNews     []AggNewsItem
-	RecentNews     []AggNewsItem
-	TotalPackages  int
-	UseFlags       []*AggUseFlag
-	Eclasses       []*AggEclass
-	UseExpandDescs map[string]*g2.UseExpandDesc
-	ValidLicenses  map[string]bool
+	Categories      []*AggCategory
+	Packages        []*AggPackage
+	Licenses        []*AggLicense
+	Projects        []*AggProject
+	Profiles        []*AggProfile
+	Arches          []*AggArch
+	Moves           map[string]*AggPackageMove
+	GlobalNews      []AggNewsItem
+	RecentNews      []AggNewsItem
+	TotalPackages   int
+	UseFlags        []*AggUseFlag
+	Eclasses        []*AggEclass
+	UseExpandDescs  map[string]*g2.UseExpandDesc
+	ValidLicenses   map[string]bool
 	ValidUseExpands map[string]bool
-	GroupedRepos   []RepoGroup
+	GroupedRepos    []RepoGroup
 }
 
-func prepareAggregatedData(sites []*SiteData) *AggregatedData {
-	aggCategories := make(map[string]*AggCategory)
-	aggPackages := make(map[string]*AggPackage)
-	aggLicenses := make(map[string]*AggLicense)
-	aggProjects := make(map[string]*AggProject)
-	aggProfiles := make(map[string]*AggProfile)
-	aggArches := make(map[string]*AggArch)
-	aggMoves := make(map[string]*AggPackageMove)
-	aggEclasses := make(map[string]*AggEclass)
-	var globalNews []AggNewsItem
-	aggUseExpandDescs := make(map[string]*g2.UseExpandDesc)
+func aggregateGroupedRepos(sites []*SiteData) map[string]*RepoGroup {
 	groupedReposMap := make(map[string]*RepoGroup)
-
 	for _, site := range sites {
 		quality := "experimental"
 		status := "unofficial"
@@ -2089,7 +2078,13 @@ func prepareAggregatedData(sites []*SiteData) *AggregatedData {
 			}
 		}
 		groupedReposMap[groupKey].Repos = append(groupedReposMap[groupKey].Repos, site)
+	}
+	return groupedReposMap
+}
 
+func aggregateUseExpandDescs(sites []*SiteData) map[string]*g2.UseExpandDesc {
+	aggUseExpandDescs := make(map[string]*g2.UseExpandDesc)
+	for _, site := range sites {
 		if site.UseExpandDescs != nil {
 			for prefix, desc := range site.UseExpandDescs {
 				if _, ok := aggUseExpandDescs[prefix]; !ok {
@@ -2097,6 +2092,13 @@ func prepareAggregatedData(sites []*SiteData) *AggregatedData {
 				}
 			}
 		}
+	}
+	return aggUseExpandDescs
+}
+
+func aggregateProjects(sites []*SiteData) map[string]*AggProject {
+	aggProjects := make(map[string]*AggProject)
+	for _, site := range sites {
 		if site.Projects != nil {
 			for i := range site.Projects.Projects {
 				proj := &site.Projects.Projects[i]
@@ -2106,8 +2108,11 @@ func prepareAggregatedData(sites []*SiteData) *AggregatedData {
 			}
 		}
 	}
-	totalPackages := 0
+	return aggProjects
+}
 
+func aggregateProfiles(sites []*SiteData) map[string]*AggProfile {
+	aggProfiles := make(map[string]*AggProfile)
 	for _, site := range sites {
 		for _, p := range site.Profiles {
 			if _, ok := aggProfiles[p.Path]; !ok {
@@ -2125,13 +2130,26 @@ func prepareAggregatedData(sites []*SiteData) *AggregatedData {
 				aggProfiles[p.Path].DescStat = p.DescStat
 			}
 		}
+	}
+	return aggProfiles
+}
+
+func aggregateGlobalNews(sites []*SiteData) []AggNewsItem {
+	var globalNews []AggNewsItem
+	for _, site := range sites {
 		for _, news := range site.News {
 			globalNews = append(globalNews, AggNewsItem{
 				NewsItem: news,
 				RepoName: site.RepoName,
 			})
 		}
+	}
+	return globalNews
+}
 
+func aggregateArches(sites []*SiteData) map[string]*AggArch {
+	aggArches := make(map[string]*AggArch)
+	for _, site := range sites {
 		if site.ArchList != nil {
 			for _, arch := range site.ArchList.Arches {
 				if _, ok := aggArches[arch]; !ok {
@@ -2161,7 +2179,73 @@ func prepareAggregatedData(sites []*SiteData) *AggregatedData {
 				}
 			}
 		}
+	}
+	return aggArches
+}
 
+func aggregateMoves(sites []*SiteData) map[string]*AggPackageMove {
+	aggMoves := make(map[string]*AggPackageMove)
+	for _, site := range sites {
+		for _, move := range site.Moves {
+			if _, ok := aggMoves[move.Old]; !ok {
+				aggMoves[move.Old] = &AggPackageMove{Old: move.Old, New: move.New}
+			}
+		}
+	}
+	return aggMoves
+}
+
+func aggregateEclasses(sites []*SiteData) map[string]*AggEclass {
+	aggEclasses := make(map[string]*AggEclass)
+	for _, site := range sites {
+		for _, eclass := range site.AggEclasses {
+			if _, ok := aggEclasses[eclass.Name]; !ok {
+				aggEclasses[eclass.Name] = &AggEclass{
+					Name:  eclass.Name,
+					Repos: make(map[string]*SiteData),
+				}
+			}
+			for rName, rData := range eclass.Repos {
+				aggEclasses[eclass.Name].Repos[rName] = rData
+			}
+			for _, pkg := range eclass.Packages {
+				foundPkg := false
+				for _, existingPkg := range aggEclasses[eclass.Name].Packages {
+					if existingPkg.Name == pkg.Name && existingPkg.Category == pkg.Category {
+						newRepos := make(map[string]*SiteData)
+						for k, v := range existingPkg.Repos {
+							newRepos[k] = v
+						}
+						for rName, rData := range pkg.Repos {
+							newRepos[rName] = rData
+						}
+						existingPkg.Repos = newRepos
+						foundPkg = true
+						break
+					}
+				}
+				if !foundPkg {
+					newPkg := *pkg
+					newRepos := make(map[string]*SiteData)
+					for k, v := range pkg.Repos {
+						newRepos[k] = v
+					}
+					newPkg.Repos = newRepos
+					aggEclasses[eclass.Name].Packages = append(aggEclasses[eclass.Name].Packages, &newPkg)
+				}
+			}
+		}
+	}
+	return aggEclasses
+}
+
+func aggregatePackagesAndCategories(sites []*SiteData, aggProjects map[string]*AggProject) (map[string]*AggCategory, map[string]*AggPackage, map[string]*AggLicense, int) {
+	aggCategories := make(map[string]*AggCategory)
+	aggPackages := make(map[string]*AggPackage)
+	aggLicenses := make(map[string]*AggLicense)
+	totalPackages := 0
+
+	for _, site := range sites {
 		for _, cat := range site.Categories {
 			if _, ok := aggCategories[cat.Name]; !ok {
 				aggCategories[cat.Name] = &AggCategory{Name: cat.Name, Packages: make(map[string]*AggPackage)}
@@ -2278,57 +2362,20 @@ func prepareAggregatedData(sites []*SiteData) *AggregatedData {
 				}
 			}
 		}
-		for _, move := range site.Moves {
-			if _, ok := aggMoves[move.Old]; !ok {
-				aggMoves[move.Old] = &AggPackageMove{Old: move.Old, New: move.New}
-			}
-		}
-		for _, eclass := range site.AggEclasses {
-			if _, ok := aggEclasses[eclass.Name]; !ok {
-				aggEclasses[eclass.Name] = &AggEclass{
-					Name:  eclass.Name,
-					Repos: make(map[string]*SiteData),
-				}
-			}
-			for rName, rData := range eclass.Repos {
-				aggEclasses[eclass.Name].Repos[rName] = rData
-			}
-			for _, pkg := range eclass.Packages {
-				foundPkg := false
-				for _, existingPkg := range aggEclasses[eclass.Name].Packages {
-					if existingPkg.Name == pkg.Name && existingPkg.Category == pkg.Category {
-						newRepos := make(map[string]*SiteData)
-						for k, v := range existingPkg.Repos {
-							newRepos[k] = v
-						}
-						for rName, rData := range pkg.Repos {
-							newRepos[rName] = rData
-						}
-						existingPkg.Repos = newRepos
-						foundPkg = true
-						break
-					}
-				}
-				if !foundPkg {
-					newPkg := *pkg
-					newRepos := make(map[string]*SiteData)
-					for k, v := range pkg.Repos {
-						newRepos[k] = v
-					}
-					newPkg.Repos = newRepos
-					aggEclasses[eclass.Name].Packages = append(aggEclasses[eclass.Name].Packages, &newPkg)
-				}
-			}
-		}
 	}
+	return aggCategories, aggPackages, aggLicenses, totalPackages
+}
 
-	// Sort structures for templates
+func sortCategories(aggCategories map[string]*AggCategory) []*AggCategory {
 	var sortedCategories []*AggCategory
 	for _, c := range aggCategories {
 		sortedCategories = append(sortedCategories, c)
 	}
 	sort.Slice(sortedCategories, func(i, j int) bool { return sortedCategories[i].Name < sortedCategories[j].Name })
+	return sortedCategories
+}
 
+func sortPackages(aggPackages map[string]*AggPackage) []*AggPackage {
 	var sortedPackages []*AggPackage
 	for _, p := range aggPackages {
 		sortedPackages = append(sortedPackages, p)
@@ -2339,15 +2386,20 @@ func prepareAggregatedData(sites []*SiteData) *AggregatedData {
 		}
 		return sortedPackages[i].Category < sortedPackages[j].Category
 	})
+	return sortedPackages
+}
 
-	sortedUseFlags, _ := AggregateUseFlags(sites, aggPackages)
-
+func aggregateValidUseExpands(sites []*SiteData) map[string]bool {
 	validUseExpands := make(map[string]bool)
 	for _, site := range sites {
 		for prefix := range site.ValidUseExpands {
 			validUseExpands[prefix] = true
 		}
 	}
+	return validUseExpands
+}
+
+func sortLicenses(aggLicenses map[string]*AggLicense) ([]*AggLicense, map[string]bool) {
 	validLicenses := make(map[string]bool)
 	var sortedLicenses []*AggLicense
 	for _, l := range aggLicenses {
@@ -2356,25 +2408,37 @@ func prepareAggregatedData(sites []*SiteData) *AggregatedData {
 		validLicenses[l.Name] = true
 	}
 	sort.Slice(sortedLicenses, func(i, j int) bool { return sortedLicenses[i].Name < sortedLicenses[j].Name })
+	return sortedLicenses, validLicenses
+}
 
+func sortProjects(aggProjects map[string]*AggProject) []*AggProject {
 	var sortedProjects []*AggProject
 	for _, p := range aggProjects {
 		sortedProjects = append(sortedProjects, p)
 	}
 	sort.Slice(sortedProjects, func(i, j int) bool { return sortedProjects[i].Project.Name < sortedProjects[j].Project.Name })
+	return sortedProjects
+}
 
+func sortProfiles(aggProfiles map[string]*AggProfile) []*AggProfile {
 	var sortedProfiles []*AggProfile
 	for _, p := range aggProfiles {
 		sortedProfiles = append(sortedProfiles, p)
 	}
 	sort.Slice(sortedProfiles, func(i, j int) bool { return sortedProfiles[i].Path < sortedProfiles[j].Path })
+	return sortedProfiles
+}
 
+func sortArches(aggArches map[string]*AggArch) []*AggArch {
 	var sortedArches []*AggArch
 	for _, a := range aggArches {
 		sortedArches = append(sortedArches, a)
 	}
 	sort.Slice(sortedArches, func(i, j int) bool { return sortedArches[i].Name < sortedArches[j].Name })
+	return sortedArches
+}
 
+func sortEclasses(aggEclasses map[string]*AggEclass) []*AggEclass {
 	var sortedEclasses []*AggEclass
 	for _, ec := range aggEclasses {
 		sort.Slice(ec.Packages, func(i, j int) bool {
@@ -2386,12 +2450,14 @@ func prepareAggregatedData(sites []*SiteData) *AggregatedData {
 		sortedEclasses = append(sortedEclasses, ec)
 	}
 	sort.Slice(sortedEclasses, func(i, j int) bool { return sortedEclasses[i].Name < sortedEclasses[j].Name })
+	return sortedEclasses
+}
 
+func extractRecentNews(globalNews []AggNewsItem) []AggNewsItem {
 	sort.Slice(globalNews, func(i, j int) bool {
 		return globalNews[i].Posted.After(globalNews[j].Posted)
 	})
 
-	// Generate Feeds for Repo
 	var recentNews []AggNewsItem
 	cutoffDate := time.Now().AddDate(0, -3, 0)
 	for _, n := range globalNews {
@@ -2407,7 +2473,10 @@ func prepareAggregatedData(sites []*SiteData) *AggregatedData {
 			recentNews = append(recentNews, globalNews[i])
 		}
 	}
+	return recentNews
+}
 
+func sortGroupedRepos(groupedReposMap map[string]*RepoGroup) []RepoGroup {
 	var sortedGroupedRepos []RepoGroup
 	for _, group := range groupedReposMap {
 		sortedGroupedRepos = append(sortedGroupedRepos, *group)
@@ -2418,24 +2487,50 @@ func prepareAggregatedData(sites []*SiteData) *AggregatedData {
 		}
 		return sortedGroupedRepos[i].Quality < sortedGroupedRepos[j].Quality
 	})
+	return sortedGroupedRepos
+}
+
+func prepareAggregatedData(sites []*SiteData) *AggregatedData {
+	groupedReposMap := aggregateGroupedRepos(sites)
+	aggUseExpandDescs := aggregateUseExpandDescs(sites)
+	aggProjects := aggregateProjects(sites)
+	aggProfiles := aggregateProfiles(sites)
+	globalNews := aggregateGlobalNews(sites)
+	aggArches := aggregateArches(sites)
+	aggMoves := aggregateMoves(sites)
+	aggEclasses := aggregateEclasses(sites)
+	aggCategories, aggPackages, aggLicenses, totalPackages := aggregatePackagesAndCategories(sites, aggProjects)
+
+	sortedCategories := sortCategories(aggCategories)
+	sortedPackages := sortPackages(aggPackages)
+	validUseExpands := aggregateValidUseExpands(sites)
+	sortedLicenses, validLicenses := sortLicenses(aggLicenses)
+	sortedProjects := sortProjects(aggProjects)
+	sortedProfiles := sortProfiles(aggProfiles)
+	sortedArches := sortArches(aggArches)
+	sortedEclasses := sortEclasses(aggEclasses)
+	recentNews := extractRecentNews(globalNews)
+	sortedGroupedRepos := sortGroupedRepos(groupedReposMap)
+
+	sortedUseFlags, _ := AggregateUseFlags(sites, aggPackages)
 
 	return &AggregatedData{
-		Categories:     sortedCategories,
-		Packages:       sortedPackages,
-		Licenses:       sortedLicenses,
-		Projects:       sortedProjects,
-		Profiles:       sortedProfiles,
-		Arches:         sortedArches,
-		Moves:          aggMoves,
-		GlobalNews:     globalNews,
-		RecentNews:     recentNews,
-		TotalPackages:  totalPackages,
-		UseFlags:       sortedUseFlags,
-		ValidLicenses:  validLicenses,
-		Eclasses:       sortedEclasses,
-		UseExpandDescs: aggUseExpandDescs,
+		Categories:      sortedCategories,
+		Packages:        sortedPackages,
+		Licenses:        sortedLicenses,
+		Projects:        sortedProjects,
+		Profiles:        sortedProfiles,
+		Arches:          sortedArches,
+		Moves:           aggMoves,
+		GlobalNews:      globalNews,
+		RecentNews:      recentNews,
+		TotalPackages:   totalPackages,
+		UseFlags:        sortedUseFlags,
+		ValidLicenses:   validLicenses,
+		Eclasses:        sortedEclasses,
+		UseExpandDescs:  aggUseExpandDescs,
 		ValidUseExpands: validUseExpands,
-		GroupedRepos:   sortedGroupedRepos,
+		GroupedRepos:    sortedGroupedRepos,
 	}
 }
 
@@ -2816,7 +2911,6 @@ func generateOtherGlobalPages(outDir string, tmpl *template.Template, data *Aggr
 			}
 		}
 
-
 	}
 
 	// 5. Global Licenses
@@ -2861,12 +2955,12 @@ func generateOtherGlobalPages(outDir string, tmpl *template.Template, data *Aggr
 			return fmt.Errorf("creating directory: %w", err)
 		}
 		if err := renderPage(filepath.Join(outDir, "uses_expand", "index.html"), tmpl, "use_expands.html", GenericPageContext{
-			Title:       "USE_EXPAND Flags",
-			BaseURL:     "../",
-			Breadcrumbs: []Breadcrumb{{Name: title, URL: "../"}, {Name: "USE_EXPAND Flags"}},
+			Title:          "USE_EXPAND Flags",
+			BaseURL:        "../",
+			Breadcrumbs:    []Breadcrumb{{Name: title, URL: "../"}, {Name: "USE_EXPAND Flags"}},
 			UseExpandDescs: data.UseExpandDescs,
-			Version:     version,
-			GenInfo:     genInfo,
+			Version:        version,
+			GenInfo:        genInfo,
 		}); err != nil {
 			return fmt.Errorf("rendering page: %w", err)
 		}
@@ -2876,12 +2970,12 @@ func generateOtherGlobalPages(outDir string, tmpl *template.Template, data *Aggr
 				return fmt.Errorf("creating directory %s: %w", useExpandDir, err)
 			}
 			if err := renderPage(filepath.Join(useExpandDir, "index.html"), tmpl, "use_expand.html", GenericPageContext{
-				Title:       "USE_EXPAND: " + prefix,
-				BaseURL:     "../../",
-				Breadcrumbs: []Breadcrumb{{Name: title, URL: "../../"}, {Name: "USE_EXPAND Flags", URL: "../"}, {Name: prefix}},
+				Title:         "USE_EXPAND: " + prefix,
+				BaseURL:       "../../",
+				Breadcrumbs:   []Breadcrumb{{Name: title, URL: "../../"}, {Name: "USE_EXPAND Flags", URL: "../"}, {Name: prefix}},
 				UseExpandDesc: desc,
-				Version:     version,
-				GenInfo:     genInfo,
+				Version:       version,
+				GenInfo:       genInfo,
 			}); err != nil {
 				return fmt.Errorf("rendering page: %w", err)
 			}
@@ -3084,13 +3178,13 @@ func generateRepoPages(outDir string, tmpl *template.Template, sites []*SiteData
 					return fmt.Errorf("creating directory %s: %w", useExpandDir, err)
 				}
 				if err := renderPage(filepath.Join(useExpandDir, "index.html"), tmpl, "repo_use_expand.html", GenericPageContext{
-					Title:       site.RepoName + " - USE_EXPAND: " + prefix,
-					BaseURL:     "../../../../",
-					Breadcrumbs: []Breadcrumb{{Name: title, URL: "../../../../"}, {Name: site.RepoName, URL: "../../"}, {Name: "USE_EXPAND Flags", URL: "../"}, {Name: prefix}},
-					Repo:        site,
+					Title:         site.RepoName + " - USE_EXPAND: " + prefix,
+					BaseURL:       "../../../../",
+					Breadcrumbs:   []Breadcrumb{{Name: title, URL: "../../../../"}, {Name: site.RepoName, URL: "../../"}, {Name: "USE_EXPAND Flags", URL: "../"}, {Name: prefix}},
+					Repo:          site,
 					UseExpandDesc: desc,
-					Version:     version,
-					GenInfo:     genInfo,
+					Version:       version,
+					GenInfo:       genInfo,
 				}); err != nil {
 					return fmt.Errorf("rendering page: %w", err)
 				}
