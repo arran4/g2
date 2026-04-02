@@ -35,6 +35,8 @@ func (cfg *MainArgConfig) cmdEbuild(args []string) error {
 		fmt.Printf("\t\t %s \t\t %s\n", "check", "A lightweight structural validator for ebuild files (alias: lint)")
 		fmt.Printf("\t\t %s \t\t %s\n", "deps", "Extract and format dependency fields")
 		fmt.Printf("\t\t %s \t\t %s\n", "query", "Query specific fields from parsed output")
+		fmt.Printf("\t\t %s \t\t %s\n", "bump-version", "Rename ebuild to a new version and fix references")
+		fmt.Printf("\t\t %s \t\t %s\n", "tag", "Ebuild specific tag subcommand supporting version comparisons")
 	}
 
 	config := &CmdEbuildArgConfig{
@@ -85,6 +87,14 @@ func (cfg *MainArgConfig) cmdEbuild(args []string) error {
 	case "query":
 		if err := config.cmdEbuildQuery(fs.Args()[1:]); err != nil {
 			return fmt.Errorf("ebuild query: %w", err)
+		}
+	case "bump-version":
+		if err := config.cmdEbuildBumpVersion(fs.Args()[1:]); err != nil {
+			return fmt.Errorf("ebuild bump-version: %w", err)
+		}
+	case "tag":
+		if err := config.cmdEbuildTag(fs.Args()[1:]); err != nil {
+			return fmt.Errorf("ebuild tag: %w", err)
 		}
 	case "help", "-help", "--help":
 		fs.Usage()
