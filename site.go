@@ -1,5 +1,10 @@
 package g2
 
+import (
+	"io"
+	"weak"
+)
+
 type SiteData struct {
 	Title          string
 	RepoName       string
@@ -28,6 +33,31 @@ type FileData struct {
 	Name   string
 	Path   string
 	RawURL string
+}
+
+type FileContent struct {
+	data     weak.Pointer[[]byte]
+	generate func() (io.ReadCloser, error)
+}
+
+func (fc *FileContent) Data() ([]byte, error) {
+	if ptr := fc.data.Value(); ptr != nil {
+		return *ptr, nil
+	}
+
+	rc, err := fc.generate()
+	if err != nil {
+		return nil, err
+	}
+	defer rc.Close()
+
+	b, err := io.ReadAll(rc)
+	if err != nil {
+		return nil, err
+	}
+
+	fc.data = weak.Make(&b)
+	return b, nil
 }
 
 type PackageData struct {
