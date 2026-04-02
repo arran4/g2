@@ -78,5 +78,3 @@ func ParseRepositoriesFromReader(r io.Reader) (*Repositories, error) {
 
 	return &repositories, nil
 }
-
-// RemoteRepositories models a list of overlay repositories.
