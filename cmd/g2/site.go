@@ -27,23 +27,7 @@ import (
 )
 
 
-type ProfileDescEntry struct {
-	Arch   string
-	Path   string
-	Status string
-}
-
 type SourceURL string
-
-type ProfileData struct {
-	Path     string
-	IsDesc   bool
-	DescArch string
-	DescStat string
-	Parents  []string
-	Children []string
-	Files    map[string]string // Maps filename to its content
-}
 
 type EclassData struct {
 	Name string
@@ -57,7 +41,7 @@ type SiteData struct {
 	EAPI              string
 	Projects          *g2.Projects
 	Categories        []CategoryData
-	Profiles          []ProfileData
+	Profiles          []g2.ProfileData
 	DefinedEclasses   []EclassData
 	AggEclasses       []*AggEclass
 	Authors           []g2.Author
@@ -890,7 +874,7 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool, r
 		_ = authorsFile.Close()
 	}
 
-	var profilesDescEntries []ProfileDescEntry
+	var profilesDescEntries []g2.ProfileDescEntry
 	profilesDescBytes, err := fs.ReadFile(sysFS, filepath.ToSlash(filepath.Join(repoDir, "profiles", "profiles.desc")))
 	if err == nil {
 		profilesDescEntries = parseProfilesDesc(string(profilesDescBytes))
@@ -1553,23 +1537,23 @@ func buildManifestData(manifest *g2.Manifest, versions []VersionData, thirdParty
 	return manifestData
 }
 
-func parseProfilesDir(repoDir string, entries []ProfileDescEntry) ([]ProfileData, error) {
+func parseProfilesDir(repoDir string, entries []g2.ProfileDescEntry) ([]g2.ProfileData, error) {
 	return parseProfilesDirFS(os.DirFS(repoDir), ".", entries)
 }
 
-func parseProfilesDirFS(sysFS fs.FS, repoDir string, entries []ProfileDescEntry) ([]ProfileData, error) {
+func parseProfilesDirFS(sysFS fs.FS, repoDir string, entries []g2.ProfileDescEntry) ([]g2.ProfileData, error) {
 	profilesDir := path2.Join(repoDir, "profiles")
 
 	if info, err := fs.Stat(sysFS, profilesDir); err != nil || !info.IsDir() {
 		return nil, nil
 	}
 
-	descMap := make(map[string]ProfileDescEntry)
+	descMap := make(map[string]g2.ProfileDescEntry)
 	for _, e := range entries {
 		descMap[e.Path] = e
 	}
 
-	profilesMap := make(map[string]*ProfileData)
+	profilesMap := make(map[string]*g2.ProfileData)
 
 	err := fs.WalkDir(sysFS, profilesDir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -1585,7 +1569,7 @@ func parseProfilesDirFS(sysFS fs.FS, repoDir string, entries []ProfileDescEntry)
 			return nil
 		}
 
-		pData := &ProfileData{
+		pData := &g2.ProfileData{
 			Path:  relPath,
 			Files: make(map[string]string),
 		}
@@ -1640,7 +1624,7 @@ func parseProfilesDirFS(sysFS fs.FS, repoDir string, entries []ProfileDescEntry)
 		}
 	}
 
-	var result []ProfileData
+	var result []g2.ProfileData
 	for _, pData := range profilesMap {
 		result = append(result, *pData)
 	}
@@ -1648,8 +1632,8 @@ func parseProfilesDirFS(sysFS fs.FS, repoDir string, entries []ProfileDescEntry)
 	return result, nil
 }
 
-func parseProfilesDesc(content string) []ProfileDescEntry {
-	var entries []ProfileDescEntry
+func parseProfilesDesc(content string) []g2.ProfileDescEntry {
+	var entries []g2.ProfileDescEntry
 	lines := strings.Split(content, "\n")
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
@@ -1658,7 +1642,7 @@ func parseProfilesDesc(content string) []ProfileDescEntry {
 		}
 		parts := strings.Fields(line)
 		if len(parts) >= 3 {
-			entries = append(entries, ProfileDescEntry{
+			entries = append(entries, g2.ProfileDescEntry{
 				Arch:   parts[0],
 				Path:   parts[1],
 				Status: parts[2],
@@ -1976,22 +1960,6 @@ func parseDuration(s string) (time.Duration, string, error) {
 	return d, s, nil
 }
 
-// TODO migrate to / if it hasn't been done already check for differences
-
-type AggProfileRepo struct {
-	RepoName string
-	Profile  ProfileData
-}
-
-type AggProfile struct {
-	Path     string
-	IsDesc   bool
-	DescArch string
-	DescStat string
-	Repos    []AggProfileRepo
-	Files    map[string]string // Maps filename to its content
-}
-
 type AggEclass struct {
 	Name     string
 	Repos    map[string]*SiteData
@@ -2025,7 +1993,7 @@ type AggregatedData struct {
 	Packages        []*AggPackage
 	Licenses        []*AggLicense
 	Projects        []*AggProject
-	Profiles        []*AggProfile
+	Profiles        []*g2.AggProfile
 	Arches          []*AggArch
 	Moves           map[string]*AggPackageMove
 	GlobalNews      []AggNewsItem
@@ -2094,16 +2062,16 @@ func aggregateProjects(sites []*SiteData) map[string]*AggProject {
 	return aggProjects
 }
 
-func aggregateProfiles(sites []*SiteData) map[string]*AggProfile {
-	aggProfiles := make(map[string]*AggProfile)
+func aggregateProfiles(sites []*SiteData) map[string]*g2.AggProfile {
+	aggProfiles := make(map[string]*g2.AggProfile)
 	for _, site := range sites {
 		for _, p := range site.Profiles {
 			if _, ok := aggProfiles[p.Path]; !ok {
-				aggProfiles[p.Path] = &AggProfile{
+				aggProfiles[p.Path] = &g2.AggProfile{
 					Path: p.Path,
 				}
 			}
-			aggProfiles[p.Path].Repos = append(aggProfiles[p.Path].Repos, AggProfileRepo{
+			aggProfiles[p.Path].Repos = append(aggProfiles[p.Path].Repos, g2.AggProfileRepo{
 				RepoName: site.RepoName,
 				Profile:  p,
 			})
@@ -2403,8 +2371,8 @@ func sortProjects(aggProjects map[string]*AggProject) []*AggProject {
 	return sortedProjects
 }
 
-func sortProfiles(aggProfiles map[string]*AggProfile) []*AggProfile {
-	var sortedProfiles []*AggProfile
+func sortProfiles(aggProfiles map[string]*g2.AggProfile) []*g2.AggProfile {
+	var sortedProfiles []*g2.AggProfile
 	for _, p := range aggProfiles {
 		sortedProfiles = append(sortedProfiles, p)
 	}
