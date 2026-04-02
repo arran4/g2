@@ -26,7 +26,7 @@ type GenericPageContext struct {
 	Projects             []*AggProject
 	Eclass               *AggEclass
 	Eclasses             []*AggEclass
-	Profiles             interface{} // Can be []*AggProfile or []ProfileData
+	Profiles             interface{} // Can be []*g2.AggProfile or []g2.ProfileData
 	Arches               []*AggArch
 	RecentDurationString string
 	RecentNews           interface{} // Can be []AggNewsItem or []g2.NewsItem
@@ -41,7 +41,7 @@ type GenericPageContext struct {
 	MovedToName          string
 	MovedToURL           string
 	ProfilePath          string
-	ProfileList          interface{} // Can be []AggProfileRepo
+	ProfileList          interface{} // Can be []g2.AggProfileRepo
 	Profile              interface{}
 	FileName             string
 	FileContent          string
