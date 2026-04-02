@@ -2,6 +2,7 @@ package g2
 
 import (
 	"io"
+	"sync"
 	"weak"
 )
 
@@ -36,20 +37,24 @@ type FileData struct {
 }
 
 type FileContent struct {
+	mu       sync.Mutex
 	data     weak.Pointer[[]byte]
 	generate func() (io.ReadCloser, error)
 }
 
-func (fc *FileContent) Data() ([]byte, error) {
+func (fc *FileContent) Data() (*[]byte, error) {
+	fc.mu.Lock()
+	defer fc.mu.Unlock()
+
 	if ptr := fc.data.Value(); ptr != nil {
-		return *ptr, nil
+		return ptr, nil
 	}
 
 	rc, err := fc.generate()
 	if err != nil {
 		return nil, err
 	}
-	defer rc.Close()
+	defer func() { _ = rc.Close() }()
 
 	b, err := io.ReadAll(rc)
 	if err != nil {
@@ -57,7 +62,7 @@ func (fc *FileContent) Data() ([]byte, error) {
 	}
 
 	fc.data = weak.Make(&b)
-	return b, nil
+	return &b, nil
 }
 
 type PackageData struct {
