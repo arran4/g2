@@ -8,6 +8,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"net/http"
+	_ "net/http/pprof"
 )
 
 var version = "dev"
@@ -17,6 +19,9 @@ type MainArgConfig struct {
 }
 
 func main() {
+	go func() {
+		log.Println(http.ListenAndServe("localhost:6060", nil))
+	}()
 	fs := flag.NewFlagSet("", flag.ExitOnError)
 	cfg := &MainArgConfig{
 		Args: []string{os.Args[0]},
