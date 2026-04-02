@@ -172,15 +172,19 @@ func wrapTextMasked(text string, width int) []string {
 		return lines
 	}
 
-	currentLine := words[0]
+	var currentLine strings.Builder
+	currentLine.WriteString(words[0])
+
 	for _, word := range words[1:] {
-		if len(currentLine)+1+len(word) > width {
-			lines = append(lines, currentLine)
-			currentLine = word
+		if currentLine.Len()+1+len(word) > width {
+			lines = append(lines, currentLine.String())
+			currentLine.Reset()
+			currentLine.WriteString(word)
 		} else {
-			currentLine += " " + word
+			currentLine.WriteByte(' ')
+			currentLine.WriteString(word)
 		}
 	}
-	lines = append(lines, currentLine)
+	lines = append(lines, currentLine.String())
 	return lines
 }
