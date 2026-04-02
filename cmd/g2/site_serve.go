@@ -357,17 +357,26 @@ func newSiteServer(sites []*SiteData, genInfo GenerationInfo) (*SiteServer, erro
 func (s *SiteServer) renderPageHTTP(w http.ResponseWriter, name string, data map[string]interface{}) {
 	log.Printf("Serving page using template %s", name)
 	var buf bytes.Buffer
+	if err := s.tmpl.ExecuteTemplate(&buf, "layout_header.html", data); err != nil {
+		errWrapped := fmt.Errorf("executing header template for %s: %w", name, err)
+		log.Printf("Error: %v", errWrapped)
+		http.Error(w, errWrapped.Error(), http.StatusInternalServerError)
+		return
+	}
 	if err := s.tmpl.ExecuteTemplate(&buf, name, data); err != nil {
 		errWrapped := fmt.Errorf("executing template %s: %w", name, err)
 		log.Printf("Error: %v", errWrapped)
 		http.Error(w, errWrapped.Error(), http.StatusInternalServerError)
 		return
 	}
-
-	data["Content"] = template.HTML(buf.String())
-	if err := s.tmpl.ExecuteTemplate(w, "layout.html", data); err != nil {
-		log.Printf("Error rendering layout template for %s: %v", name, err)
+	if err := s.tmpl.ExecuteTemplate(&buf, "layout_footer.html", data); err != nil {
+		errWrapped := fmt.Errorf("executing footer template for %s: %w", name, err)
+		log.Printf("Error: %v", errWrapped)
+		http.Error(w, errWrapped.Error(), http.StatusInternalServerError)
+		return
 	}
+
+	w.Write(buf.Bytes())
 }
 
 func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
