@@ -27,22 +27,6 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-// TODO evaluate the following they should be redundant OR moved to `/`
-
-type RemoteRepositories struct {
-	XMLName xml.Name     `xml:"repositories"`
-	Repos   []RemoteRepo `xml:"repo"`
-}
-
-type RemoteRepo struct {
-	Name    string       `xml:"name"`
-	Sources []RepoSource `xml:"source"`
-}
-
-type RepoSource struct {
-	Type string `xml:"type,attr"`
-	URL  string `xml:",chardata"`
-}
 
 type ProfileDescEntry struct {
 	Arch   string
