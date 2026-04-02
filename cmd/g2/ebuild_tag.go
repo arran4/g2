@@ -16,6 +16,7 @@ func (cfg *CmdEbuildArgConfig) cmdEbuildTag(args []string) error {
 	dir := fs.String("dir", ".", "Directory to search for ebuilds")
 	compare := fs.String("compare", "", "Compare a version to the highest tag (outputs -, =, or +)")
 	downgrades := fs.Bool("downgrades", false, "Include downgrades in comparison")
+	bumpRevision := fs.Bool("revision", false, "Bump the revision version")
 	bumpPatch := fs.Bool("patch", false, "Bump the patch version")
 	bumpMinor := fs.Bool("minor", false, "Bump the minor version")
 	bumpMajor := fs.Bool("major", false, "Bump the major version")
@@ -79,13 +80,15 @@ func (cfg *CmdEbuildArgConfig) cmdEbuildTag(args []string) error {
 	}
 
 	// Output incremented version if asked
-	if *bumpPatch || *bumpMinor || *bumpMajor {
+	if *bumpRevision || *bumpPatch || *bumpMinor || *bumpMajor {
 		gv := g2.ParseGentooVersion(highestVersion)
 		if !gv.IsValid {
 			return fmt.Errorf("could not parse version %s for incrementing", highestVersion)
 		}
 
-		if *bumpMajor {
+		if *bumpRevision {
+			gv.IncrementPart("revision")
+		} else if *bumpMajor {
 			gv.IncrementPart("major")
 		} else if *bumpMinor {
 			gv.IncrementPart("minor")

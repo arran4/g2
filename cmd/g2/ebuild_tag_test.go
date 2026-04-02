@@ -129,4 +129,20 @@ func TestEbuildTag(t *testing.T) {
 	if output != "2.0.1" { // 2.0.0-r1 -> micro increment drops suffix and goes to next number
 		t.Errorf("Expected '2.0.1' output for patch bump, got %s", output)
 	}
+
+	// Test revision bump
+	r7, w7, _ := os.Pipe()
+	os.Stdout = w7
+	err = cfg.cmdEbuildTag([]string{"-dir", tmpDir, "-revision"})
+	if err != nil {
+		t.Fatalf("cmdEbuildTag failed: %v", err)
+	}
+	_ = w7.Close()
+	os.Stdout = oldStdout
+	buf.Reset()
+	_, _ = buf.ReadFrom(r7)
+	output = strings.TrimSpace(buf.String())
+	if output != "2.0.0-r2" {
+		t.Errorf("Expected '2.0.0-r2' output for revision bump, got %s", output)
+	}
 }

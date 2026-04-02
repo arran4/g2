@@ -59,6 +59,17 @@ SRC_URI="https://example.com/${P}.tar.gz"
 		t.Errorf("New ebuild file %s was not created: %v", newEbuildPath, err)
 	}
 
+	// Now try bumping with -revision flag instead of explicit version
+	args2 := []string{"-revision", newEbuildPath}
+	if err := cfg.cmdEbuildBumpVersion(args2); err != nil {
+		t.Fatalf("cmdEbuildBumpVersion with -revision failed: %v", err)
+	}
+	newPvRevision := "1.1.0-r1"
+	newEbuildRevisionPath := filepath.Join(tmpDir, pn+"-"+newPvRevision+".ebuild")
+	if _, err := os.Stat(newEbuildRevisionPath); err != nil {
+		t.Errorf("New ebuild file %s was not created by revision bump: %v", newEbuildRevisionPath, err)
+	}
+
 	// Check if manifest is updated properly
 	newManifestBytes, err := os.ReadFile(manifestPath)
 	if err != nil {

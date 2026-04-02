@@ -13,16 +13,20 @@ import (
 func (cfg *CmdEbuildArgConfig) cmdEbuildBumpVersion(args []string) error {
 	fs := flag.NewFlagSet("bump-version", flag.ExitOnError)
 	tagOnly := fs.Bool("tag", false, "Only focus on the ebuild file, do not update Manifest")
+	bumpRevision := fs.Bool("revision", false, "Bump the revision version")
+	bumpPatch := fs.Bool("patch", false, "Bump the patch version")
+	bumpMinor := fs.Bool("minor", false, "Bump the minor version")
+	bumpMajor := fs.Bool("major", false, "Bump the major version")
+
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 
-	if fs.NArg() != 2 {
-		return fmt.Errorf("usage: g2 ebuild bump-version [--tag] <old-ebuild> <new-version>")
+	if fs.NArg() < 1 {
+		return fmt.Errorf("usage: g2 ebuild bump-version [--tag] [--revision|--patch|--minor|--major] <old-ebuild> [new-version]")
 	}
 
 	oldEbuildPath := fs.Arg(0)
-	newVersion := fs.Arg(1)
 
 	// Clean the path
 	oldEbuildPath = filepath.Clean(oldEbuildPath)
@@ -38,6 +42,33 @@ func (cfg *CmdEbuildArgConfig) cmdEbuildBumpVersion(args []string) error {
 		return fmt.Errorf("failed to parse PN from ebuild filename %s", base)
 	}
 	pn := vars["PN"]
+
+	var newVersion string
+	if *bumpRevision || *bumpPatch || *bumpMinor || *bumpMajor {
+		if fs.NArg() > 1 {
+			return fmt.Errorf("cannot specify both bump flags and a manual new-version")
+		}
+		gv := g2.ParseGentooVersion(vars["PV"])
+		if !gv.IsValid {
+			return fmt.Errorf("could not parse version %s for incrementing", vars["PV"])
+		}
+
+		if *bumpRevision {
+			gv.IncrementPart("revision")
+		} else if *bumpMajor {
+			gv.IncrementPart("major")
+		} else if *bumpMinor {
+			gv.IncrementPart("minor")
+		} else if *bumpPatch {
+			gv.IncrementPart("patch")
+		}
+		newVersion = gv.String()
+	} else {
+		if fs.NArg() != 2 {
+			return fmt.Errorf("usage: g2 ebuild bump-version [--tag] <old-ebuild> <new-version>")
+		}
+		newVersion = fs.Arg(1)
+	}
 
 	// Rename ebuild
 	newBase := fmt.Sprintf("%s-%s.ebuild", pn, newVersion)
