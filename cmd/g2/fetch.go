@@ -229,10 +229,15 @@ func downloadAndExtractZip(ctx context.Context, zipUrl string, destDir string) e
 			relPath = strings.TrimPrefix(f.Name, rootPrefix)
 		}
 
-		targetPath := filepath.Clean(filepath.Join(destDir, relPath))
-		if !strings.HasPrefix(targetPath, filepath.Clean(destDir)+string(os.PathSeparator)) && targetPath != filepath.Clean(destDir) {
-			continue
+		localPath := filepath.FromSlash(relPath)
+		if localPath == "" {
+			continue // Root directory entry stripped by rootPrefix logic
 		}
+		if !filepath.IsLocal(localPath) {
+			return fmt.Errorf("zip slip vulnerability detected: invalid path %q", relPath)
+		}
+
+		targetPath := filepath.Join(destDir, localPath)
 
 		if err := os.MkdirAll(filepath.Dir(targetPath), 0755); err != nil {
 			return err

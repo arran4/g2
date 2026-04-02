@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"golang.org/x/tools/txtar"
@@ -88,5 +89,50 @@ package main
 	_, err = os.Stat(filepath.Join(destDir, "myrepo-HEAD"))
 	if err == nil {
 		t.Errorf("myrepo-HEAD directory was not stripped")
+	}
+}
+
+func TestDownloadAndExtractZip_ZipSlip(t *testing.T) {
+	buf := new(bytes.Buffer)
+	zw := zip.NewWriter(buf)
+
+	// Add a normal file
+	w, err := zw.Create("normal.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _ = w.Write([]byte("normal"))
+
+	// Add a malicious file
+	wMalicious, err := zw.Create("../../etc/passwd")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _ = wMalicious.Write([]byte("malicious"))
+
+	err = zw.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/zip")
+		_, _ = w.Write(buf.Bytes())
+	}))
+	defer ts.Close()
+
+	destDir, err := os.MkdirTemp("", "g2-fetch-zipslip-test-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = os.RemoveAll(destDir) }()
+
+	err = downloadAndExtractZip(context.Background(), ts.URL, destDir)
+	if err == nil {
+		t.Fatal("expected error due to zip slip, got nil")
+	}
+
+	if !strings.Contains(err.Error(), "zip slip vulnerability detected") {
+		t.Errorf("expected zip slip error message, got: %v", err)
 	}
 }
