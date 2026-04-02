@@ -154,6 +154,11 @@ func (e *SearchEngine) matchSequence(doc SearchDocument, seq string) bool {
 	return true
 }
 
+var (
+	reVersionRev = regexp.MustCompile(`-r(\d+)$`)
+	reDigits     = regexp.MustCompile(`\d+`)
+)
+
 func (e *SearchEngine) matchVersion(doc SearchDocument, queryVersion string) bool {
 	op := "=="
 	v := queryVersion
@@ -176,10 +181,8 @@ func (e *SearchEngine) matchVersion(doc SearchDocument, queryVersion string) boo
 			return ""
 		}
 
-		re := regexp.MustCompile(`-r(\d+)$`)
-		pVer := re.ReplaceAllString(ver, "+r$1")
+		pVer := reVersionRev.ReplaceAllString(ver, "+r$1")
 
-		reDigits := regexp.MustCompile(`\d+`)
 		return reDigits.ReplaceAllStringFunc(pVer, func(s string) string {
 			return fmt.Sprintf("%010s", s)
 		})
