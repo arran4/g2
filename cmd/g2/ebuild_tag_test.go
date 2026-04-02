@@ -14,7 +14,7 @@ func TestEbuildTag(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	// Create some fake ebuilds
 	versions := []string{"1.0.0", "1.1.0", "1.1.1", "2.0.0-r1", "2.0.0"}
@@ -39,11 +39,11 @@ func TestEbuildTag(t *testing.T) {
 		t.Fatalf("cmdEbuildTag failed: %v", err)
 	}
 
-	w.Close()
+	_ = w.Close()
 	os.Stdout = oldStdout
 
 	var buf bytes.Buffer
-	buf.ReadFrom(r)
+	_, _ = buf.ReadFrom(r)
 	output := strings.TrimSpace(buf.String())
 
 	if output != "2.0.0-r1" {
@@ -57,10 +57,10 @@ func TestEbuildTag(t *testing.T) {
 	if err != nil {
 		t.Fatalf("cmdEbuildTag failed: %v", err)
 	}
-	w2.Close()
+	_ = w2.Close()
 	os.Stdout = oldStdout
 	buf.Reset()
-	buf.ReadFrom(r2)
+	_, _ = buf.ReadFrom(r2)
 	output = strings.TrimSpace(buf.String())
 	if output != "" {
 		t.Errorf("Expected empty output for downgrade without -downgrades flag, got %s", output)
@@ -73,10 +73,10 @@ func TestEbuildTag(t *testing.T) {
 	if err != nil {
 		t.Fatalf("cmdEbuildTag failed: %v", err)
 	}
-	w3.Close()
+	_ = w3.Close()
 	os.Stdout = oldStdout
 	buf.Reset()
-	buf.ReadFrom(r3)
+	_, _ = buf.ReadFrom(r3)
 	output = strings.TrimSpace(buf.String())
 	if output != "-" {
 		t.Errorf("Expected '-' output for downgrade with -downgrades flag, got %s", output)
@@ -89,10 +89,10 @@ func TestEbuildTag(t *testing.T) {
 	if err != nil {
 		t.Fatalf("cmdEbuildTag failed: %v", err)
 	}
-	w4.Close()
+	_ = w4.Close()
 	os.Stdout = oldStdout
 	buf.Reset()
-	buf.ReadFrom(r4)
+	_, _ = buf.ReadFrom(r4)
 	output = strings.TrimSpace(buf.String())
 	if output != "=" {
 		t.Errorf("Expected '=' output for equal version, got %s", output)
@@ -105,10 +105,10 @@ func TestEbuildTag(t *testing.T) {
 	if err != nil {
 		t.Fatalf("cmdEbuildTag failed: %v", err)
 	}
-	w5.Close()
+	_ = w5.Close()
 	os.Stdout = oldStdout
 	buf.Reset()
-	buf.ReadFrom(r5)
+	_, _ = buf.ReadFrom(r5)
 	output = strings.TrimSpace(buf.String())
 	if output != "+" {
 		t.Errorf("Expected '+' output for upgrade version, got %s", output)
@@ -121,10 +121,10 @@ func TestEbuildTag(t *testing.T) {
 	if err != nil {
 		t.Fatalf("cmdEbuildTag failed: %v", err)
 	}
-	w6.Close()
+	_ = w6.Close()
 	os.Stdout = oldStdout
 	buf.Reset()
-	buf.ReadFrom(r6)
+	_, _ = buf.ReadFrom(r6)
 	output = strings.TrimSpace(buf.String())
 	if output != "2.0.1" { // 2.0.0-r1 -> micro increment drops suffix and goes to next number
 		t.Errorf("Expected '2.0.1' output for patch bump, got %s", output)
