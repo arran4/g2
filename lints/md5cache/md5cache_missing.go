@@ -3,6 +3,7 @@ package md5cache
 import (
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/arran4/g2"
 	"github.com/arran4/g2/lints"
@@ -51,9 +52,11 @@ func (r *MD5CacheLintRule) LintWithQA(repoDir string, pkg *g2.PackageData, qa *g
 		if ver.Ebuild != nil {
 			cachePath := filepath.Join(repoDir, "metadata", "md5-cache", pkg.Category, pkg.Name+"-"+ver.Version)
 			if _, err := os.Stat(cachePath); os.IsNotExist(err) {
+				sevStr := string(severity)
+				sevTitle := strings.ToUpper(sevStr[:1]) + sevStr[1:]
 				res := lints.LintResult{
 					RuleMetadata: ruleMD5CacheMissing,
-					Message:      "[" + string(severity) + "] Missing md5-cache for ebuild " + pkg.Name + "-" + ver.Version,
+					Message:      "[" + sevTitle + "] Missing md5-cache for ebuild " + pkg.Name + "-" + ver.Version,
 					Package:      pkg.Category + "/" + pkg.Name,
 				}
 				res.RuleMetadata.Severity = severity
