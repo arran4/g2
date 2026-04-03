@@ -65,6 +65,20 @@ func (fc *FileContent) Data() (*[]byte, error) {
 	return &b, nil
 }
 
+func (fc *FileContent) Close() error {
+	fc.mu.Lock()
+	defer fc.mu.Unlock()
+	fc.data = weak.Pointer[[]byte]{}
+	return nil
+}
+
+func (fc *FileContent) SetGenerator(generate func() (io.ReadCloser, error)) {
+	fc.mu.Lock()
+	defer fc.mu.Unlock()
+	fc.generate = generate
+	fc.data = weak.Pointer[[]byte]{}
+}
+
 type PackageData struct {
 	Name          string
 	Category      string
