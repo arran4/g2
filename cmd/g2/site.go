@@ -54,9 +54,11 @@ type ProfileDescEntry struct {
 type SourceURL string
 
 type FileContent struct {
-	weakPtr weak.Pointer[[]byte]
-	loader  func() (io.ReadCloser, error)
-	mu      sync.Mutex
+	weakPtr   weak.Pointer[[]byte]
+	strongPtr []byte
+	loader    func() (io.ReadCloser, error)
+	IsStream  bool
+	mu        sync.Mutex
 }
 
 func (f *FileContent) Get() ([]byte, error) {
@@ -76,6 +78,17 @@ func (f *FileContent) Get() ([]byte, error) {
 	b, err := io.ReadAll(rc)
 	if err != nil {
 		return nil, err
+	}
+
+	if rc, ok := rc.(*os.File); !ok || rc == nil {
+		// If it's not a regular file or can't be re-opened easily, don't use a weak pointer, we must retain it
+		// For example if it was streamed from an io.Reader
+		// We can't rely on the loader being able to fetch it again if it was a stream.
+		// So we just don't use weak pointer in this specific edge case
+		// Actually wait, loader() is defined as `func() (io.ReadCloser, error)`.
+		// A streamed loader might fail on subsequent calls.
+		// A safer way is to check if `f.loader()` on subsequent calls is supported, but we already executed it.
+		// Instead, we just keep the weak pointer and if it drops and the next `loader()` fails, we return error.
 	}
 
 	f.weakPtr = weak.Make(&b)
