@@ -24,8 +24,8 @@ DEPEND="
 "
 RDEPEND="${DEPEND}"
 `)
-	os.WriteFile("dummy-1.0.ebuild", ebuildContent, 0644)
-	defer os.Remove("dummy-1.0.ebuild")
+	_ = os.WriteFile("dummy-1.0.ebuild", ebuildContent, 0644)
+	defer func() { _ = os.Remove("dummy-1.0.ebuild") }()
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
