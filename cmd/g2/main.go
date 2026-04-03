@@ -44,6 +44,7 @@ func main() {
 		fmt.Printf("\t\t %s \t\t %s\n", "eclass", "commands relating to eclasses")
 		fmt.Printf("\t\t %s \t\t %s\n", "arch", "commands relating to architectures")
 		fmt.Printf("\t\t %s \t\t %s\n", "profile", "commands relating to profiles")
+		fmt.Printf("\t\t %s \t\t %s\n", "repos-conf", "commands relating to repos.conf")
 	}
 	if err := fs.Parse(os.Args); err != nil {
 		log.Printf("Flag parse error: %s", err)
@@ -68,6 +69,12 @@ func main() {
 	case "profile":
 		if err := ProfileCommand(fs.Args()[2:]); err != nil {
 			log.Printf("profile error: %s", err)
+			os.Exit(-1)
+			return
+		}
+	case "repos-conf":
+		if err := cfg.cmdReposConf(fs.Args()[2:]); err != nil {
+			log.Printf("repos-conf error: %s", err)
 			os.Exit(-1)
 			return
 		}
