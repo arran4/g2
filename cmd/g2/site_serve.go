@@ -37,6 +37,7 @@ func (cfg *MainArgConfig) cmdSiteServe(args []string) error {
 	fs := flag.NewFlagSet("site serve", flag.ExitOnError)
 	port := fs.Int("port", 8080, "Port to run the site server on")
 	concurrency := fs.Int("concurrency", 4, "Maximum number of concurrent repository fetches/parses")
+	reposConfOpt := fs.String("repos-conf", "", "Path to repos.conf file or directory")
 
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -47,7 +48,7 @@ func (cfg *MainArgConfig) cmdSiteServe(args []string) error {
 		location = fs.Arg(0)
 	}
 
-	// Determine if location is a single overlay or we need to fall back to /var/db/repos
+	// Determine if location is a single overlay or we need to fall back to repos.conf / /var/db/repos
 	var sites []*SiteData
 
 	if isOverlayDir(location) {
@@ -58,12 +59,43 @@ func (cfg *MainArgConfig) cmdSiteServe(args []string) error {
 		}
 		sites = append(sites, siteData)
 	} else {
-		dbReposPath := "/var/db/repos"
-		log.Printf("Location %s is not an overlay, checking %s", location, dbReposPath)
+		var repoPaths []string
+		var repoNames []string
 
-		entries, err := os.ReadDir(dbReposPath)
-		if err != nil {
-			return fmt.Errorf("could not read %s: %w", dbReposPath, err)
+		if *reposConfOpt != "" {
+			rc, err := g2.ParseReposConf(*reposConfOpt)
+			if err != nil {
+				return fmt.Errorf("parsing repos.conf: %w", err)
+			}
+			for _, f := range rc.Files {
+				for _, s := range f.Sections {
+					if s.Name == "DEFAULT" || s.Disabled {
+						continue
+					}
+					loc := s.Get("location")
+					if loc != "" {
+						repoPaths = append(repoPaths, loc)
+						repoNames = append(repoNames, s.Name)
+					}
+				}
+			}
+			log.Printf("Location %s is not an overlay, checking %d repos from %s", location, len(repoPaths), *reposConfOpt)
+		} else {
+			dbReposPath := "/var/db/repos"
+			log.Printf("Location %s is not an overlay, checking %s", location, dbReposPath)
+
+			entries, err := os.ReadDir(dbReposPath)
+			if err == nil {
+				for _, entry := range entries {
+					if !entry.IsDir() {
+						continue
+					}
+					repoPaths = append(repoPaths, filepath.Join(dbReposPath, entry.Name()))
+					repoNames = append(repoNames, entry.Name())
+				}
+			} else {
+				return fmt.Errorf("could not read %s: %w", dbReposPath, err)
+			}
 		}
 
 		var sitesMu sync.Mutex
@@ -75,27 +107,24 @@ func (cfg *MainArgConfig) cmdSiteServe(args []string) error {
 			log.Printf("Starting concurrent repository processing with unbounded concurrency")
 		}
 
-		for _, entry := range entries {
-			if !entry.IsDir() {
-				continue
-			}
-			entry := entry
-			repoPath := filepath.Join(dbReposPath, entry.Name())
+		for i, repoPath := range repoPaths {
+			repoPath := repoPath
+			repoName := repoNames[i]
 
 			if isOverlayDir(repoPath) {
 				g.Go(func() error {
-					log.Printf("[START] Parsing repository %s", entry.Name())
-					siteData, err := parseRepo(os.DirFS(repoPath), ".", entry.Name(), false, nil)
+					log.Printf("[START] Parsing repository %s", repoName)
+					siteData, err := parseRepo(os.DirFS(repoPath), ".", repoName, false, nil)
 					if err != nil {
-						log.Printf("Warning: failed to parse repo %s: %v", entry.Name(), err)
+						log.Printf("Warning: failed to parse repo %s: %v", repoName, err)
 						return nil // Don't fail entire group
 					}
 
 					freeSpace, err := getFreeSpace(repoPath)
 					if err == nil {
-						log.Printf("[DONE] Finished parsing repository %s. Free space: %.2f MB", entry.Name(), float64(freeSpace)/(1024*1024))
+						log.Printf("[DONE] Finished parsing repository %s. Free space: %.2f MB", repoName, float64(freeSpace)/(1024*1024))
 					} else {
-						log.Printf("[DONE] Finished parsing repository %s", entry.Name())
+						log.Printf("[DONE] Finished parsing repository %s", repoName)
 					}
 
 					sitesMu.Lock()
@@ -115,7 +144,7 @@ func (cfg *MainArgConfig) cmdSiteServe(args []string) error {
 		})
 
 		if len(sites) == 0 {
-			return fmt.Errorf("no valid repositories found in %s", dbReposPath)
+			return fmt.Errorf("no valid repositories found from given configuration or default path")
 		}
 	}
 
