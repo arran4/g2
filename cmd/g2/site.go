@@ -53,20 +53,22 @@ type ProfileDescEntry struct {
 
 type SourceURL string
 
-type FileContent struct {
-	weakPtr   weak.Pointer[[]byte]
-	strongPtr []byte
-	loader    func() (io.ReadCloser, error)
-	IsStream  bool
-	mu        sync.Mutex
+type FileContent interface {
+	Get() (*[]byte, error)
 }
 
-func (f *FileContent) Get() ([]byte, error) {
+type WeakFileContent struct {
+	weakPtr weak.Pointer[[]byte]
+	loader  func() (io.ReadCloser, error)
+	mu      sync.Mutex
+}
+
+func (f *WeakFileContent) Get() (*[]byte, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
 	if p := f.weakPtr.Value(); p != nil {
-		return *p, nil
+		return p, nil
 	}
 
 	rc, err := f.loader()
@@ -80,19 +82,53 @@ func (f *FileContent) Get() ([]byte, error) {
 		return nil, err
 	}
 
-	if rc, ok := rc.(*os.File); !ok || rc == nil {
-		// If it's not a regular file or can't be re-opened easily, don't use a weak pointer, we must retain it
-		// For example if it was streamed from an io.Reader
-		// We can't rely on the loader being able to fetch it again if it was a stream.
-		// So we just don't use weak pointer in this specific edge case
-		// Actually wait, loader() is defined as `func() (io.ReadCloser, error)`.
-		// A streamed loader might fail on subsequent calls.
-		// A safer way is to check if `f.loader()` on subsequent calls is supported, but we already executed it.
-		// Instead, we just keep the weak pointer and if it drops and the next `loader()` fails, we return error.
+	ptr := &b
+	f.weakPtr = weak.Make(ptr)
+	return ptr, nil
+}
+
+type StreamFileContent struct {
+	strongPtr []byte
+	loader    func() (io.ReadCloser, error)
+	mu        sync.Mutex
+}
+
+func (f *StreamFileContent) Get() (*[]byte, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	if f.strongPtr != nil {
+		return &f.strongPtr, nil
 	}
 
-	f.weakPtr = weak.Make(&b)
-	return b, nil
+	rc, err := f.loader()
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rc.Close() }()
+
+	b, err := io.ReadAll(rc)
+	if err != nil {
+		return nil, err
+	}
+
+	f.strongPtr = b
+	return &f.strongPtr, nil
+}
+
+type MmapFileContent struct {
+	path string
+	mu   sync.Mutex
+}
+
+func (m *MmapFileContent) Get() (*[]byte, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	b, err := os.ReadFile(m.path)
+	if err != nil {
+		return nil, err
+	}
+	return &b, nil
 }
 
 type ProfileData struct {
@@ -102,7 +138,7 @@ type ProfileData struct {
 	DescStat string
 	Parents  []string
 	Children []string
-	Files    map[string]*FileContent // Maps filename to its content
+	Files    map[string]FileContent // Maps filename to its content
 }
 
 type EclassData struct {
@@ -1647,7 +1683,7 @@ func parseProfilesDirFS(sysFS fs.FS, repoDir string, entries []ProfileDescEntry)
 
 		pData := &ProfileData{
 			Path:  relPath,
-			Files: make(map[string]*FileContent),
+			Files: make(map[string]FileContent),
 		}
 
 		if desc, ok := descMap[relPath]; ok {
@@ -1668,20 +1704,21 @@ func parseProfilesDirFS(sysFS fs.FS, repoDir string, entries []ProfileDescEntry)
 			filePath := path2.Join(path, fname)
 			info, err := fs.Stat(sysFS, filePath)
 			if err == nil && !info.IsDir() {
-				fc := &FileContent{
+				fc := &WeakFileContent{
 					loader: func() (io.ReadCloser, error) {
-						return sysFS.Open(filePath)
+						f, err := sysFS.Open(filePath)
+						return f, err
 					},
 				}
 				if pData.Files == nil {
-					pData.Files = make(map[string]*FileContent)
+					pData.Files = make(map[string]FileContent)
 				}
 				pData.Files[fname] = fc
 
 				if fname == "parent" {
 					b, err := fc.Get()
 					if err == nil {
-						lines := strings.Split(string(b), "\n")
+						lines := strings.Split(string(*b), "\n")
 						for _, line := range lines {
 							line = strings.TrimSpace(line)
 							if line == "" || strings.HasPrefix(line, "#") {
@@ -2062,7 +2099,7 @@ type AggProfile struct {
 	DescArch string
 	DescStat string
 	Repos    []AggProfileRepo
-	Files    map[string]*FileContent // Maps filename to its content
+	Files    map[string]FileContent // Maps filename to its content
 }
 
 type AggEclass struct {
@@ -3348,7 +3385,7 @@ func generateRepoPages(outDir string, tmpl *template.Template, sites []*SiteData
 					b, err := fc.Get()
 					var fContent string
 					if err == nil {
-						fContent = string(b)
+						fContent = string(*b)
 					}
 					if err := renderPage(filepath.Join(profDir, fName+".html"), tmpl, "repo_profile_file.html", GenericPageContext{
 						Title:       site.RepoName + " - Profile File: " + fName,
