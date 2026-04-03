@@ -2949,16 +2949,6 @@ func generateOtherGlobalPages(outDir string, tmpl *template.Template, data *Aggr
 			return fmt.Errorf("creating directory %s: %w", licDir, err)
 		}
 
-		type TmplPkg struct {
-			Name      string
-			Category  string
-			ReposList []*SiteData
-		}
-		var tmplPkgs []TmplPkg
-		for _, p := range lic.Packages {
-			tmplPkgs = append(tmplPkgs, TmplPkg{Name: p.Name, Category: p.Category, ReposList: mapToList(p.Repos)})
-		}
-
 		if err := renderPage(filepath.Join(licDir, "index.html"), tmpl, "license.html", GenericPageContext{
 			Title:       "License: " + lic.Name,
 			BaseURL:     "../../",
