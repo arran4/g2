@@ -1,10 +1,10 @@
 
-<h2>Category: {{.Category.Name}}</h2>
+<h2>Category: {{if .GlobalCategory}}{{.GlobalCategory.Name}}{{else if .RepoCategory}}{{.RepoCategory.Name}}{{else}}{{.Category.Name}}{{end}}</h2>
 
 <div class="metadata-section">
     <h3>Search</h3>
     <form action="{{.BaseURL}}search/" method="get">
-        <input type="text" name="q" value="category:{{.Category.Name}} " placeholder="Search packages, descriptions, use flags..." style="width: 80%; padding: 0.5rem;" />
+        <input type="text" name="q" value="category:{{if .GlobalCategory}}{{.GlobalCategory.Name}}{{else if .RepoCategory}}{{.RepoCategory.Name}}{{else}}{{.Category.Name}}{{end}} " placeholder="Search packages, descriptions, use flags..." style="width: 80%; padding: 0.5rem;" />
         <button type="submit" style="padding: 0.5rem;">Search</button>
     </form>
 </div>
@@ -33,6 +33,42 @@
 </script>
 
 <ul id="package-list" style="clear: both;">
+    {{if .GlobalCategory}}
+    {{range .Category.Packages}}
+        <li>
+            {{if eq (len .ReposList) 1}}
+                {{$repo := index .ReposList 0}}
+                <a href="{{$.BaseURL}}repos/{{$repo.RepoName}}/categories/{{$.GlobalCategory.Name}}/packages/{{.Name}}/">{{.Name}}</a>
+            {{else}}
+                <a href="{{$.BaseURL}}packages/{{$.GlobalCategory.Name}}/{{.Name}}/">{{.Name}}</a> (ambiguous, available in {{len .ReposList}} overlays)
+            {{end}}
+            - Ebuilds: {{.EbuildCount}}{{if .HighestStableVersion}}, Stable: {{.HighestStableVersion}}{{end}}{{if .HighestTestingVersion}}, Testing: {{.HighestTestingVersion}}{{end}}
+            {{if .ReverseVirtuals}}
+            <span class="badge" style="background-color: #17a2b8; color: white; padding: 2px 5px; border-radius: 3px; font-size: 0.8em;">Virtual</span>
+            {{end}}
+            <span class="package-details">
+            {{if .DominantDescription}}<br/><small><b>Description:</b> {{.DominantDescription}}</small>{{end}}
+            {{if .DominantHomepage}}<br/><small><b>Homepage:</b> <a href="{{.DominantHomepage}}">{{.DominantHomepage}}</a></small>{{end}}
+            {{if .DominantLicense}}<br/><small><b>License:</b> {{.DominantLicense}}</small>{{end}}
+            </span>
+        </li>
+    {{end}}
+    {{else if .RepoCategory}}
+    {{range .RepoCategory.Packages}}
+        <li>
+            <a href="{{$.BaseURL}}repos/{{$.Repo.RepoName}}/categories/{{$.RepoCategory.Name}}/packages/{{.Name}}/">{{.Name}}</a>
+            - Ebuilds: {{.EbuildCount}}{{if .HighestStableVersion}}, Stable: {{.HighestStableVersion}}{{end}}{{if .HighestTestingVersion}}, Testing: {{.HighestTestingVersion}}{{end}}
+            {{if .ReverseVirtuals}}
+            <span class="badge" style="background-color: #17a2b8; color: white; padding: 2px 5px; border-radius: 3px; font-size: 0.8em;">Virtual</span>
+            {{end}}
+            <span class="package-details">
+            {{if .DominantDescription}}<br/><small><b>Description:</b> {{.DominantDescription}}</small>{{end}}
+            {{if .DominantHomepage}}<br/><small><b>Homepage:</b> <a href="{{.DominantHomepage}}">{{.DominantHomepage}}</a></small>{{end}}
+            {{if .DominantLicense}}<br/><small><b>License:</b> {{.DominantLicense}}</small>{{end}}
+            </span>
+        </li>
+    {{end}}
+    {{else}}
     {{range .Category.Packages}}
         <li>
             {{if eq (len .ReposList) 1}}
@@ -51,5 +87,6 @@
             {{if .DominantLicense}}<br/><small><b>License:</b> {{.DominantLicense}}</small>{{end}}
             </span>
         </li>
+    {{end}}
     {{end}}
 </ul>

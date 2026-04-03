@@ -1,7 +1,7 @@
 
 <h2>All Categories</h2>
 <ul>
-    {{range .Categories}}
+    {{range .GlobalCategories}}
     <li><a href="{{.Name}}/">{{.Name}}</a> ({{len .Packages}} packages)</li>
     {{end}}
 </ul>

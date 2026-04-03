@@ -2,34 +2,34 @@
 
 <div class="metadata-section">
     <h3>Provided by: <a href="{{.BaseURL}}repos/{{.RepoName}}/">{{.RepoName}}</a></h3>
-    {{if .Profile.IsDesc}}
-    <p><strong>Arch:</strong> {{.Profile.DescArch}}</p>
-    <p><strong>Status:</strong> {{.Profile.DescStat}}</p>
+    {{if .RepoProfile.IsDesc}}
+    <p><strong>Arch:</strong> {{.RepoProfile.DescArch}}</p>
+    <p><strong>Status:</strong> {{.RepoProfile.DescStat}}</p>
     {{end}}
 
-    {{if .Profile.Parents}}
+    {{if .RepoProfile.Parents}}
     <h4>Parents:</h4>
     <ul>
-        {{range .Profile.Parents}}
+        {{range .RepoProfile.Parents}}
         <li><a href="{{$.BaseURL}}repos/{{$.RepoName}}/profiles/{{.}}/">{{.}}</a></li>
         {{end}}
     </ul>
     {{end}}
 
-    {{if .Profile.Children}}
+    {{if .RepoProfile.Children}}
     <h4>Children:</h4>
     <ul>
-        {{range .Profile.Children}}
+        {{range .RepoProfile.Children}}
         <li><a href="{{$.BaseURL}}repos/{{$.RepoName}}/profiles/{{.}}/">{{.}}</a></li>
         {{end}}
     </ul>
     {{end}}
 
-    {{if .Profile.Files}}
+    {{if .RepoProfile.Files}}
     <h4>Files:</h4>
     <ul>
-        {{range $name, $content := .Profile.Files}}
-        <li><a href="{{$.BaseURL}}repos/{{$.RepoName}}/profiles/{{$.Profile.Path}}/{{$name}}.html">{{$name}}</a></li>
+        {{range $name, $content := .RepoProfile.Files}}
+        <li><a href="{{$.BaseURL}}repos/{{$.RepoName}}/profiles/{{$.RepoProfile.Path}}/{{$name}}.html">{{$name}}</a></li>
         {{end}}
     </ul>
     {{end}}
