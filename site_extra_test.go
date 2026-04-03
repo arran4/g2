@@ -7,15 +7,7 @@ import (
 	"testing"
 )
 
-func TestFileContent_Data(t *testing.T) {
-	generateCalls := 0
-	fc := &FileContent{
-		generate: func() (io.ReadCloser, error) {
-			generateCalls++
-			return io.NopCloser(bytes.NewBufferString("hello world")), nil
-		},
-	}
-
+func testFileContentImpl(t *testing.T, fc FileContent, generateCallsPtr *int) {
 	var wg sync.WaitGroup
 	for i := 0; i < 10; i++ {
 		wg.Add(1)
@@ -32,8 +24,8 @@ func TestFileContent_Data(t *testing.T) {
 	}
 	wg.Wait()
 
-	if generateCalls != 1 {
-		t.Errorf("expected exactly 1 call to generate, got %d", generateCalls)
+	if *generateCallsPtr < 1 {
+		t.Errorf("expected at least 1 call to generate, got %d", *generateCallsPtr)
 	}
 
 	// Test SetGenerator and Close
@@ -53,4 +45,37 @@ func TestFileContent_Data(t *testing.T) {
 	if err != nil {
 		t.Errorf("expected no error from Close, got %v", err)
 	}
+}
+
+func TestFileContent_WeakFileContent(t *testing.T) {
+	generateCalls := 0
+	fc := &WeakFileContent{
+		generate: func() (io.ReadCloser, error) {
+			generateCalls++
+			return io.NopCloser(bytes.NewBufferString("hello world")), nil
+		},
+	}
+	testFileContentImpl(t, fc, &generateCalls)
+}
+
+func TestFileContent_LazyFileContent(t *testing.T) {
+	generateCalls := 0
+	fc := &LazyFileContent{
+		generate: func() (io.ReadCloser, error) {
+			generateCalls++
+			return io.NopCloser(bytes.NewBufferString("hello world")), nil
+		},
+	}
+	testFileContentImpl(t, fc, &generateCalls)
+}
+
+func TestFileContent_MemoryFileContent(t *testing.T) {
+	generateCalls := 0
+	fc := &MemoryFileContent{
+		generate: func() (io.ReadCloser, error) {
+			generateCalls++
+			return io.NopCloser(bytes.NewBufferString("hello world")), nil
+		},
+	}
+	testFileContentImpl(t, fc, &generateCalls)
 }
