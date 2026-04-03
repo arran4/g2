@@ -262,7 +262,7 @@ func (cfg *MainArgConfig) cmdReposConfMove(location string, args []string) error
 
 	// Optional: remove source file if empty
 	if len(sourceFile.Sections) == 0 && len(sourceFile.HeaderLines) == 0 {
-		os.Remove(sourceFile.Path)
+		_ = os.Remove(sourceFile.Path)
 	}
 
 	return nil
