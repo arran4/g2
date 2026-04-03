@@ -1,14 +1,11 @@
 package md5cache
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 
 	"github.com/arran4/g2"
 	"github.com/arran4/g2/lints"
-	"golang.org/x/text/cases"
-	"golang.org/x/text/language"
 )
 
 var ruleMD5CacheMissing = lints.RuleMetadata{
@@ -56,7 +53,7 @@ func (r *MD5CacheLintRule) LintWithQA(repoDir string, pkg *g2.PackageData, qa *g
 			if _, err := os.Stat(cachePath); os.IsNotExist(err) {
 				res := lints.LintResult{
 					RuleMetadata: ruleMD5CacheMissing,
-					Message:      fmt.Sprintf("[%s] Missing md5-cache for ebuild %s-%s", cases.Title(language.English).String(string(severity)), pkg.Name, ver.Version),
+					Message:      "[" + string(severity) + "] Missing md5-cache for ebuild " + pkg.Name + "-" + ver.Version,
 					Package:      pkg.Category + "/" + pkg.Name,
 				}
 				res.RuleMetadata.Severity = severity

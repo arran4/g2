@@ -998,12 +998,7 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool, r
 				}
 
 				ebuildPath := filepath.Join(pkgPath, file.Name())
-				subFS, err := fs.Sub(sysFS, filepath.ToSlash(filepath.Dir(ebuildPath)))
-				if err != nil {
-					log.Printf("Warning: subfs ebuild %s: %v", ebuildPath, err)
-					continue
-				}
-				ebuild, err := g2.ParseEbuild(subFS, file.Name(), g2.ParseFull)
+				ebuild, err := g2.ParseEbuild(sysFS, filepath.ToSlash(ebuildPath), g2.ParseFull)
 				if err != nil {
 					log.Printf("Warning: parsing ebuild %s: %v", ebuildPath, err)
 					continue
