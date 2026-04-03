@@ -505,28 +505,38 @@ var varExpansionRegex = regexp.MustCompile(`\$\{([a-zA-Z0-9_]+)([^}]*)\}`)
 
 // ResolveVariables replaces ${VAR} and $VAR in the text with values from variables map.
 func ResolveVariables(text string, variables map[string]string) string {
+	if !strings.Contains(text, "$") {
+		return text
+	}
+
 	// Simple resolution: multiple passes until no change or limit reached
 	// To prevent memory exhaustion from self-referential or heavily nested variables,
 	// cap the maximum expanded length.
 	maxLen := 1024 * 1024 // 1MB limit for expanded strings
 
-	// 1. Sort keys by length descending to prevent $P from matching before $PN
 	var keys []string
-	for k := range variables {
-		keys = append(keys, k)
-	}
-	sort.Slice(keys, func(i, j int) bool {
-		return len(keys[i]) > len(keys[j])
-	})
+	var varRefs []string
 
 	for i := 0; i < 5; i++ { // Limit recursion depth
 		original := text
 
 		if strings.Contains(text, "$") {
 			// 1. Replace all simple $VAR substitutions
-			for _, key := range keys {
+			if keys == nil {
+				for k := range variables {
+					keys = append(keys, k)
+				}
+				sort.Slice(keys, func(i, j int) bool {
+					return len(keys[i]) > len(keys[j])
+				})
+				for _, k := range keys {
+					varRefs = append(varRefs, "$"+k)
+				}
+			}
+
+			for j, key := range keys {
 				value := variables[key]
-				varRef := fmt.Sprintf("$%s", key)
+				varRef := varRefs[j]
 				if strings.Contains(text, varRef) {
 					if strings.Contains(value, varRef) {
 						continue
@@ -1061,6 +1071,9 @@ func ParsePackageAtom(dep string) PackageAtom {
 // ExtractPackageNameFromDep strips version, slot, and USE flags from a package string
 // using the AST parser PackageAtom to satisfy architectural requirements.
 func ExtractPackageNameFromDep(dep string) string {
+	if !strings.ContainsAny(dep, "><=~![:") && !strings.Contains(dep, "/*") && !strings.ContainsAny(dep, "0123456789") {
+		return dep
+	}
 	atom := ParsePackageAtom(dep)
 	if atom.Category != "" {
 		return atom.Category + "/" + atom.Name

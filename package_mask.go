@@ -6,7 +6,7 @@ import (
 	"io"
 	"io/fs"
 	"os"
-	"regexp"
+
 	"strings"
 )
 
@@ -31,9 +31,6 @@ func parsePackageMaskedReader(r io.Reader) ([]PackageMasked, error) {
 	var currentReason []string
 	var currentAuthor, currentEmail, currentDate string
 	var currentEntries []PackageMaskedEntry
-
-	// Match: # Michał Górny <mgorny@gentoo.org> (2025-11-25)
-	authorLineRegex := regexp.MustCompile(`^#\s*(.*?)\s*<(.*?)>\s*\((.*?)\)$`)
 
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
