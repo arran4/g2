@@ -3002,7 +3002,7 @@ func generateOtherGlobalPages(outDir string, tmpl *template.Template, data *Aggr
 				BaseURL:     "../../",
 				Breadcrumbs: []Breadcrumb{{Name: title, URL: "../../"}, {Name: "Projects", URL: "../"}, {Name: proj.Project.Name}},
 				Project:     proj,
-			Packages:     tmplPkgs,
+			Packages:     tmplPkgs, // Legacy any for TmplPkgs
 				Version:     version,
 				GenInfo:     genInfo,
 			}); err != nil {
