@@ -3,24 +3,24 @@
 {{range .ProfileList}}
 <div class="metadata-section">
     <h3>Provided by: <a href="{{$.BaseURL}}repos/{{.RepoName}}/">{{.RepoName}}</a></h3>
-    {{if .Profile.IsDesc}}
-    <p><strong>Arch:</strong> {{.Profile.DescArch}}</p>
-    <p><strong>Status:</strong> {{.Profile.DescStat}}</p>
+    {{if .GlobalProfile.IsDesc}}
+    <p><strong>Arch:</strong> {{.GlobalProfile.DescArch}}</p>
+    <p><strong>Status:</strong> {{.GlobalProfile.DescStat}}</p>
     {{end}}
 
-    {{if .Profile.Parents}}
+    {{if .GlobalProfile.Parents}}
     <h4>Parents:</h4>
     <ul>
-        {{range .Profile.Parents}}
+        {{range .GlobalProfile.Parents}}
         <li><a href="{{$.BaseURL}}profiles/{{.}}/">{{.}}</a></li>
         {{end}}
     </ul>
     {{end}}
 
-    {{if .Profile.Children}}
+    {{if .GlobalProfile.Children}}
     <h4>Children:</h4>
     <ul>
-        {{range .Profile.Children}}
+        {{range .GlobalProfile.Children}}
         <li><a href="{{$.BaseURL}}profiles/{{.}}/">{{.}}</a></li>
         {{end}}
     </ul>

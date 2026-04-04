@@ -1,9 +1,9 @@
-<h2>USE Flag: {{.UseFlag.Name}}</h2>
+<h2>USE Flag: {{.GlobalUseFlag.Name}}</h2>
 
 <div class="metadata-section">
     <h3>Search</h3>
     <form action="{{.BaseURL}}search/" method="get">
-        <input type="text" name="q" value="use:{{.UseFlag.Name}} " placeholder="Search packages, descriptions, use flags..." style="width: 80%; padding: 0.5rem;" />
+        <input type="text" name="q" value="use:{{.GlobalUseFlag.Name}} " placeholder="Search packages, descriptions, use flags..." style="width: 80%; padding: 0.5rem;" />
         <button type="submit" style="padding: 0.5rem;">Search</button>
     </form>
 </div>
@@ -11,35 +11,35 @@
 <div class="metadata-section">
     <h3>Manage</h3>
     <ul>
-        <li>Information: <code>euse -i {{.UseFlag.Name}}</code></li>
-        <li>Enable: <code>euse -E {{.UseFlag.Name}}</code></li>
-        <li>Disable: <code>euse -D {{.UseFlag.Name}}</code></li>
+        <li>Information: <code>euse -i {{.GlobalUseFlag.Name}}</code></li>
+        <li>Enable: <code>euse -E {{.GlobalUseFlag.Name}}</code></li>
+        <li>Disable: <code>euse -D {{.GlobalUseFlag.Name}}</code></li>
     </ul>
 </div>
 
-{{if .UseFlag.GlobalDesc}}
+{{if .GlobalUseFlag.GlobalDesc}}
 <div class="metadata-section">
     <h3>Global Description</h3>
-    <p>{{.UseFlag.GlobalDesc}}</p>
+    <p>{{.GlobalUseFlag.GlobalDesc}}</p>
 </div>
 {{end}}
 
-{{if or .UseFlag.LocalDescs .UseFlag.MetadataDescs}}
+{{if or .GlobalUseFlag.LocalDescs .GlobalUseFlag.MetadataDescs}}
 <div class="metadata-section">
     <h3>Local and Metadata Descriptions</h3>
-    {{if .UseFlag.MetadataDescs}}
+    {{if .GlobalUseFlag.MetadataDescs}}
     <h4>Metadata Descriptions (metadata.xml)</h4>
     <ul>
-        {{range $pkgKey, $desc := .UseFlag.MetadataDescs}}
+        {{range $pkgKey, $desc := .GlobalUseFlag.MetadataDescs}}
         <li><strong>{{$pkgKey}}:</strong> {{$desc}}</li>
         {{end}}
     </ul>
     {{end}}
 
-    {{if .UseFlag.LocalDescs}}
+    {{if .GlobalUseFlag.LocalDescs}}
     <h4>Local Descriptions (use.local.desc)</h4>
     <ul>
-        {{range $pkgKey, $desc := .UseFlag.LocalDescs}}
+        {{range $pkgKey, $desc := .GlobalUseFlag.LocalDescs}}
         <li><strong>{{$pkgKey}}:</strong> {{$desc}}</li>
         {{end}}
     </ul>
@@ -47,11 +47,11 @@
 </div>
 {{end}}
 
-{{if .UseFlag.Warnings}}
+{{if .GlobalUseFlag.Warnings}}
 <div class="metadata-section" style="border: 1px solid #cc0000; padding: 10px; margin-bottom: 20px;">
     <h3 style="color: #cc0000;">Warnings</h3>
     <ul>
-        {{range .UseFlag.Warnings}}
+        {{range .GlobalUseFlag.Warnings}}
         <li style="color: #cc0000;">{{.}}</li>
         {{end}}
     </ul>
@@ -66,18 +66,18 @@
             <th>Local Description (use.local.desc)</th>
             <th>Metadata Description (metadata.xml)</th>
         </tr>
-        {{range .UseFlag.Packages}}
+        {{range .GlobalUseFlag.Packages}}
         {{$pkgKey := printf "%s/%s" .Category .Name}}
         {{$firstRepo := ""}}
         {{range $r, $d := .Repos}}{{$firstRepo = $r}}{{end}}
         <tr>
             <td><a href="{{$.BaseURL}}repos/{{$firstRepo}}/categories/{{.Category}}/packages/{{.Name}}/">{{$pkgKey}}</a></td>
             <td>
-                {{$localDesc := index $.UseFlag.LocalDescs $pkgKey}}
+                {{$localDesc := index $.GlobalUseFlag.LocalDescs $pkgKey}}
                 {{if $localDesc}}{{$localDesc}}{{else}}<em>-</em>{{end}}
             </td>
             <td>
-                {{$metaDesc := index $.UseFlag.MetadataDescs $pkgKey}}
+                {{$metaDesc := index $.GlobalUseFlag.MetadataDescs $pkgKey}}
                 {{if $metaDesc}}{{$metaDesc}}{{else}}<em>-</em>{{end}}
             </td>
         </tr>

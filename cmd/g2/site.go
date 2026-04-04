@@ -2530,17 +2530,17 @@ func generateGlobalPages(outDir string, tmpl *template.Template, sites []*SiteDa
 		BaseURL:              "",
 		Repos:                sites,
 		GroupedRepos:         data.GroupedRepos,
-		Categories:           data.Categories,
-		Packages:             data.Packages,
+		GlobalCategories:           data.Categories,
+		GlobalPackages:             data.Packages,
 		Licenses:             data.Licenses,
 		UseFlags:             data.UseFlags,
 		Projects:             data.Projects,
-		Profiles:             data.Profiles,
+		GlobalProfiles:             data.Profiles,
 		Arches:               data.Arches,
 		Version:              version,
 		GenInfo:              genInfo,
 		RecentDurationString: recentDurationStr,
-		RecentNews:           data.RecentNews,
+		RecentGlobalNews:           data.RecentNews,
 		GlobalNews:           data.GlobalNews,
 	}); err != nil {
 		return fmt.Errorf("rendering page: %w", err)
@@ -2555,7 +2555,7 @@ func generateGlobalPages(outDir string, tmpl *template.Template, sites []*SiteDa
 			Title:       "News Dashboard",
 			BaseURL:     "../",
 			Breadcrumbs: []Breadcrumb{{Name: title, URL: "../"}, {Name: "News"}},
-			RecentNews:  data.RecentNews,
+			RecentGlobalNews:  data.RecentNews,
 			Version:     version,
 			GenInfo:     genInfo,
 		}); err != nil {
@@ -2587,7 +2587,7 @@ func generateGlobalPages(outDir string, tmpl *template.Template, sites []*SiteDa
 				Title:       n.Title,
 				BaseURL:     "../../../",
 				Breadcrumbs: []Breadcrumb{{Name: title, URL: "../../../"}, {Name: "News", URL: "../../"}, {Name: "Archive", URL: "../"}, {Name: n.Title}},
-				NewsItem:    n,
+				GlobalNewsItem:    &n,
 				Version:     version,
 				GenInfo:     genInfo,
 			}); err != nil {
@@ -2624,7 +2624,7 @@ func generateCategoryPages(outDir string, tmpl *template.Template, data *Aggrega
 		Title:       "Categories",
 		BaseURL:     "../",
 		Breadcrumbs: []Breadcrumb{{Name: title, URL: "../"}, {Name: "Categories"}},
-		Categories:  data.Categories,
+		GlobalCategories:  data.Categories,
 		Version:     version,
 		GenInfo:     genInfo,
 	}); err != nil {
@@ -2738,7 +2738,7 @@ func generatePackagePages(outDir string, tmpl *template.Template, data *Aggregat
 		Title:       "Packages",
 		BaseURL:     "../",
 		Breadcrumbs: []Breadcrumb{{Name: title, URL: "../"}, {Name: "Packages"}},
-		Packages:    data.Packages,
+		GlobalPackages:    data.Packages,
 		Version:     version,
 		GenInfo:     genInfo,
 	}); err != nil {
@@ -2773,7 +2773,7 @@ func generatePackagePages(outDir string, tmpl *template.Template, data *Aggregat
 				Title:       "Package: " + pkg.Category + "/" + pkg.Name,
 				BaseURL:     "../../../",
 				Breadcrumbs: []Breadcrumb{{Name: title, URL: "../../../"}, {Name: "Packages", URL: "../../"}, {Name: pkg.Category, URL: "../../../categories/" + pkg.Category + "/"}, {Name: pkg.Name}},
-				Package:     map[string]interface{}{"Category": pkg.Category, "Name": pkg.Name, "ReposList": reposList},
+				GlobalPackage:     pkg,
 				MovedToName: movedToName,
 				MovedToURL:  movedToURL,
 				Version:     version,
@@ -2830,7 +2830,7 @@ func generateOtherGlobalPages(outDir string, tmpl *template.Template, data *Aggr
 			Title:       "Profiles",
 			BaseURL:     "../",
 			Breadcrumbs: []Breadcrumb{{Name: title, URL: "../"}, {Name: "Profiles"}},
-			Profiles:    data.Profiles,
+			GlobalProfiles:    data.Profiles,
 			Version:     version,
 			GenInfo:     genInfo,
 		}); err != nil {
@@ -2889,7 +2889,7 @@ func generateOtherGlobalPages(outDir string, tmpl *template.Template, data *Aggr
 			Title:       "USE Flag: " + f.Name,
 			BaseURL:     "../../",
 			Breadcrumbs: []Breadcrumb{{Name: title, URL: "../../"}, {Name: "USE Flags", URL: "../"}, {Name: f.Name}},
-			UseFlag:     f,
+			GlobalUseFlag:     f,
 			Version:     version,
 			GenInfo:     genInfo,
 		}); err != nil {
@@ -2949,21 +2949,11 @@ func generateOtherGlobalPages(outDir string, tmpl *template.Template, data *Aggr
 			return fmt.Errorf("creating directory %s: %w", licDir, err)
 		}
 
-		type TmplPkg struct {
-			Name      string
-			Category  string
-			ReposList []*SiteData
-		}
-		var tmplPkgs []TmplPkg
-		for _, p := range lic.Packages {
-			tmplPkgs = append(tmplPkgs, TmplPkg{Name: p.Name, Category: p.Category, ReposList: mapToList(p.Repos)})
-		}
-
 		if err := renderPage(filepath.Join(licDir, "index.html"), tmpl, "license.html", GenericPageContext{
 			Title:       "License: " + lic.Name,
 			BaseURL:     "../../",
 			Breadcrumbs: []Breadcrumb{{Name: title, URL: "../../"}, {Name: "Licenses", URL: "../"}, {Name: lic.Name}},
-			License:     map[string]interface{}{"Name": lic.Name, "Packages": tmplPkgs, "Text": lic.Text, "Aliases": lic.Aliases},
+			License:     lic,
 			Version:     version,
 			GenInfo:     genInfo,
 		}); err != nil {
@@ -3012,7 +3002,7 @@ func generateOtherGlobalPages(outDir string, tmpl *template.Template, data *Aggr
 				BaseURL:     "../../",
 				Breadcrumbs: []Breadcrumb{{Name: title, URL: "../../"}, {Name: "Projects", URL: "../"}, {Name: proj.Project.Name}},
 				Project:     proj,
-				Packages:    tmplPkgs,
+			Packages:     tmplPkgs, // Legacy any for TmplPkgs
 				Version:     version,
 				GenInfo:     genInfo,
 			}); err != nil {
@@ -3126,7 +3116,7 @@ func generateRepoGroupPages(outDir string, tmpl *template.Template, data *Aggreg
 			Title:       "Overlays: " + group.Quality + " - " + group.Status,
 			BaseURL:     "../../",
 			Breadcrumbs: []Breadcrumb{{Name: title, URL: "../../"}, {Name: "Overlays: " + group.Quality + " - " + group.Status}},
-			Group:       group,
+			Group:       &group,
 			Version:     version,
 			GenInfo:     genInfo,
 		}); err != nil {
@@ -3163,7 +3153,7 @@ func generateRepoUseFlagsPages(repoDir string, tmpl *template.Template, site *Si
 				Title:       "USE Flag: " + f.Name,
 				BaseURL:     "../../../../",
 				Breadcrumbs: []Breadcrumb{{Name: title, URL: "../../../../"}, {Name: site.RepoName, URL: "../../"}, {Name: "USE Flags", URL: "../"}, {Name: f.Name}},
-				UseFlag:     f,
+				GlobalUseFlag:     f,
 				Version:     version,
 				GenInfo:     genInfo,
 			}); err != nil {
@@ -3332,7 +3322,7 @@ func generateRepoIndexAndStatsPages(repoDir string, tmpl *template.Template, sit
 		Version:               version,
 		GenInfo:               genInfo,
 		RecentDurationString:  recentDurationStr,
-		RecentNews:            repoRecentNews,
+		RecentRepoNews:            repoRecentNews,
 		GlobalCategoriesCount: len(data.Categories),
 		GlobalPackagesCount:   data.TotalPackages,
 		GlobalLicensesCount:   len(data.Licenses),
@@ -3387,7 +3377,7 @@ func generateRepoProfilesPages(repoDir string, tmpl *template.Template, site *Si
 				Breadcrumbs: []Breadcrumb{{Name: title, URL: relToRoot}, {Name: site.RepoName, URL: relToRoot + "repos/" + site.RepoName + "/"}, {Name: "Profiles", URL: relToRoot + "repos/" + site.RepoName + "/profiles/"}, {Name: p.Path}},
 				RepoName:    site.RepoName,
 				ProfilePath: p.Path,
-				Profile:     p,
+				RepoProfile:     &p,
 				Version:     version,
 				GenInfo:     genInfo,
 			}); err != nil {
@@ -3401,7 +3391,7 @@ func generateRepoProfilesPages(repoDir string, tmpl *template.Template, site *Si
 					Breadcrumbs: []Breadcrumb{{Name: title, URL: relToRoot}, {Name: site.RepoName, URL: relToRoot + "repos/" + site.RepoName + "/"}, {Name: "Profiles", URL: relToRoot + "repos/" + site.RepoName + "/profiles/"}, {Name: p.Path, URL: "index.html"}, {Name: fName}},
 					RepoName:    site.RepoName,
 					ProfilePath: p.Path,
-					Profile:     p,
+					RepoProfile:     &p,
 					FileName:    fName,
 					FileContent: fContent,
 					Version:     version,
@@ -3424,7 +3414,7 @@ func generateRepoNewsPages(repoDir string, tmpl *template.Template, site *SiteDa
 			Title:       site.RepoName + " - News Dashboard",
 			BaseURL:     "../../../",
 			Breadcrumbs: []Breadcrumb{{Name: title, URL: "../../../"}, {Name: "Overlays", URL: "../../../overlays/"}, {Name: site.RepoName, URL: "../"}, {Name: "News"}},
-			RecentNews:  repoRecentNews,
+			RecentRepoNews:  repoRecentNews,
 			Version:     version,
 			GenInfo:     genInfo,
 		}); err != nil {
@@ -3456,7 +3446,7 @@ func generateRepoNewsPages(repoDir string, tmpl *template.Template, site *SiteDa
 				Title:       n.Title,
 				BaseURL:     "../../../../../",
 				Breadcrumbs: []Breadcrumb{{Name: title, URL: "../../../../../"}, {Name: "Overlays", URL: "../../../../../overlays/"}, {Name: site.RepoName, URL: "../../../"}, {Name: "News", URL: "../../"}, {Name: "Archive", URL: "../"}, {Name: n.Title}},
-				NewsItem:    n,
+				RepoNewsItem:    &n,
 				Version:     version,
 				GenInfo:     genInfo,
 			}); err != nil {
@@ -3475,7 +3465,7 @@ func generateRepoCategoriesPages(repoDir string, tmpl *template.Template, site *
 		Title:       site.RepoName + " - Categories",
 		BaseURL:     "../../../",
 		Breadcrumbs: []Breadcrumb{{Name: title, URL: "../../../"}, {Name: site.RepoName, URL: "../"}, {Name: "Categories"}},
-		Categories:  site.Categories,
+		RepoCategories:  site.Categories,
 		Version:     version,
 		GenInfo:     genInfo,
 	}); err != nil {
@@ -3561,7 +3551,7 @@ func generateRepoPackagesPages(repoDir string, tmpl *template.Template, site *Si
 		Title:       site.RepoName + " - Packages",
 		BaseURL:     "../../../",
 		Breadcrumbs: []Breadcrumb{{Name: title, URL: "../../../"}, {Name: site.RepoName, URL: "../"}, {Name: "Packages"}},
-		Packages:    repoPkgs,
+		RepoPackages:    repoPkgs,
 		Repo:        site,
 		Version:     version,
 		GenInfo:     genInfo,
@@ -3641,7 +3631,7 @@ func generateRepoPackagesPages(repoDir string, tmpl *template.Template, site *Si
 			Title:       site.RepoName + " - USE Flag: " + f.Name,
 			BaseURL:     "../../../../",
 			Breadcrumbs: []Breadcrumb{{Name: title, URL: "../../../../"}, {Name: site.RepoName, URL: "../../"}, {Name: "USE Flags", URL: "../"}, {Name: f.Name}},
-			UseFlag:     f,
+			GlobalUseFlag:     f,
 			Repo:        site,
 			Version:     version,
 			GenInfo:     genInfo,
@@ -3673,7 +3663,7 @@ func generateRepoPackagesPages(repoDir string, tmpl *template.Template, site *Si
 			BaseURL:       "../../../../../../",
 			Breadcrumbs:   []Breadcrumb{{Name: title, URL: "../../../../../../"}, {Name: site.RepoName, URL: "../../../../"}, {Name: "Categories", URL: "../../../"}, {Name: pkg.Category, URL: "../../"}, {Name: pkg.Name}},
 			Repo:          site,
-			Package:       pkg,
+			RepoPackage:       &pkg,
 			MovedToName:   movedToName,
 			MovedToURL:    movedToURL,
 			Version:       version,
@@ -3695,8 +3685,8 @@ func generateRepoPackagesPages(repoDir string, tmpl *template.Template, site *Si
 					BaseURL:     "../../../../../../../../",
 					Breadcrumbs: []Breadcrumb{{Name: title, URL: "../../../../../../../../"}, {Name: site.RepoName, URL: "../../../../../../"}, {Name: "Categories", URL: "../../../../../"}, {Name: pkg.Category, URL: "../../../../"}, {Name: pkg.Name, URL: "../../"}, {Name: "Manifest"}, {Name: md.Entry.Filename}},
 					Repo:        site,
-					Package:     pkg,
-					Manifest:    md,
+					RepoPackage:     &pkg,
+					Manifest:    &md,
 					Version:     version,
 					GenInfo:     genInfo,
 				}); err != nil {
@@ -3732,8 +3722,8 @@ func generateRepoPackagesPages(repoDir string, tmpl *template.Template, site *Si
 				BaseURL:          "../../../../../../../../",
 				Breadcrumbs:      []Breadcrumb{{Name: title, URL: "../../../../../../../../"}, {Name: site.RepoName, URL: "../../../../../../"}, {Name: "Categories", URL: "../../../../../"}, {Name: pkg.Category, URL: "../../../../"}, {Name: "Packages", URL: "../../../"}, {Name: pkg.Name, URL: "../../"}, {Name: "Ebuild", URL: "../"}, {Name: versionStr}},
 				Repo:             site,
-				Package:          pkg,
-				VersionData:      v,
+				RepoPackage:          &pkg,
+				VersionData:      &v,
 				FilteredManifest: filteredManifest,
 				Version:          version,
 				GenInfo:          genInfo,

@@ -626,21 +626,11 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 
-			type TmplPkg struct {
-				Name      string
-				Category  string
-				ReposList []*SiteData
-			}
-			var tmplPkgs []TmplPkg
-			for _, p := range lic.Packages {
-				tmplPkgs = append(tmplPkgs, TmplPkg{Name: p.Name, Category: p.Category, ReposList: mapToList(p.Repos)})
-			}
-
 			s.renderPageHTTP(w, "license.html", map[string]interface{}{
 				"Title":       "License: " + lic.Name,
 				"BaseURL":     baseURL,
 				"Breadcrumbs": []Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: "Licenses", URL: "../"}, {Name: lic.Name}},
-				"License":     map[string]interface{}{"Name": lic.Name, "Packages": tmplPkgs, "Text": lic.Text, "Aliases": lic.Aliases},
+				"License":     lic,
 				"Version":     version,
 				"GenInfo":     s.GenInfo,
 			})
