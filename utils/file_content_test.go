@@ -47,35 +47,38 @@ func testFileContentImpl(t *testing.T, fc FileContent, generateCallsPtr *int) {
 	}
 }
 
-func TestFileContent_WeakFileContent(t *testing.T) {
+func TestFileContent_LazyWeak(t *testing.T) {
 	generateCalls := 0
-	fc := &WeakFileContent{
-		generate: func() (io.ReadCloser, error) {
-			generateCalls++
-			return io.NopCloser(bytes.NewBufferString("hello world")), nil
-		},
-	}
+	fc := NewLazyFileContent(&WeakBytesStore{}, func() (io.ReadCloser, error) {
+		generateCalls++
+		return io.NopCloser(bytes.NewBufferString("hello world")), nil
+	})
 	testFileContentImpl(t, fc, &generateCalls)
 }
 
-func TestFileContent_LazyFileContent(t *testing.T) {
+func TestFileContent_LazyMemory(t *testing.T) {
 	generateCalls := 0
-	fc := &LazyFileContent{
-		generate: func() (io.ReadCloser, error) {
-			generateCalls++
-			return io.NopCloser(bytes.NewBufferString("hello world")), nil
-		},
-	}
+	fc := NewLazyFileContent(&MemoryBytesStore{}, func() (io.ReadCloser, error) {
+		generateCalls++
+		return io.NopCloser(bytes.NewBufferString("hello world")), nil
+	})
 	testFileContentImpl(t, fc, &generateCalls)
 }
 
-func TestFileContent_MemoryFileContent(t *testing.T) {
+func TestFileContent_EagerWeak(t *testing.T) {
 	generateCalls := 0
-	fc := &MemoryFileContent{
-		generate: func() (io.ReadCloser, error) {
-			generateCalls++
-			return io.NopCloser(bytes.NewBufferString("hello world")), nil
-		},
-	}
+	fc := NewEagerFileContent(&WeakBytesStore{}, func() (io.ReadCloser, error) {
+		generateCalls++
+		return io.NopCloser(bytes.NewBufferString("hello world")), nil
+	})
+	testFileContentImpl(t, fc, &generateCalls)
+}
+
+func TestFileContent_EagerMemory(t *testing.T) {
+	generateCalls := 0
+	fc := NewEagerFileContent(&MemoryBytesStore{}, func() (io.ReadCloser, error) {
+		generateCalls++
+		return io.NopCloser(bytes.NewBufferString("hello world")), nil
+	})
 	testFileContentImpl(t, fc, &generateCalls)
 }

@@ -12,61 +12,67 @@ type FileContent interface {
 	SetGenerator(func() (io.ReadCloser, error))
 }
 
-type WeakFileContent struct {
-	mu       sync.Mutex
-	data     weak.Pointer[[]byte]
-	generate func() (io.ReadCloser, error)
+type BytesStore interface {
+	Get() *[]byte
+	Set(*[]byte)
+	Clear()
 }
 
-func (fc *WeakFileContent) Data() (*[]byte, error) {
-	fc.mu.Lock()
-	defer fc.mu.Unlock()
-
-	if ptr := fc.data.Value(); ptr != nil {
-		return ptr, nil
-	}
-
-	rc, err := fc.generate()
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = rc.Close() }()
-
-	b, err := io.ReadAll(rc)
-	if err != nil {
-		return nil, err
-	}
-
-	fc.data = weak.Make(&b)
-	return &b, nil
+type WeakBytesStore struct {
+	ptr weak.Pointer[[]byte]
 }
 
-func (fc *WeakFileContent) Close() error {
-	fc.mu.Lock()
-	defer fc.mu.Unlock()
-	fc.data = weak.Pointer[[]byte]{}
-	return nil
+func (s *WeakBytesStore) Get() *[]byte {
+	return s.ptr.Value()
 }
 
-func (fc *WeakFileContent) SetGenerator(generate func() (io.ReadCloser, error)) {
-	fc.mu.Lock()
-	defer fc.mu.Unlock()
-	fc.generate = generate
-	fc.data = weak.Pointer[[]byte]{}
+func (s *WeakBytesStore) Set(val *[]byte) {
+	if val == nil {
+		s.ptr = weak.Pointer[[]byte]{}
+	} else {
+		s.ptr = weak.Make(val)
+	}
+}
+
+func (s *WeakBytesStore) Clear() {
+	s.ptr = weak.Pointer[[]byte]{}
+}
+
+type MemoryBytesStore struct {
+	val *[]byte
+}
+
+func (s *MemoryBytesStore) Get() *[]byte {
+	return s.val
+}
+
+func (s *MemoryBytesStore) Set(val *[]byte) {
+	s.val = val
+}
+
+func (s *MemoryBytesStore) Clear() {
+	s.val = nil
 }
 
 type LazyFileContent struct {
 	mu       sync.Mutex
-	data     *[]byte
+	store    BytesStore
 	generate func() (io.ReadCloser, error)
+}
+
+func NewLazyFileContent(store BytesStore, generate func() (io.ReadCloser, error)) *LazyFileContent {
+	return &LazyFileContent{
+		store:    store,
+		generate: generate,
+	}
 }
 
 func (fc *LazyFileContent) Data() (*[]byte, error) {
 	fc.mu.Lock()
 	defer fc.mu.Unlock()
 
-	if fc.data != nil {
-		return fc.data, nil
+	if val := fc.store.Get(); val != nil {
+		return val, nil
 	}
 
 	rc, err := fc.generate()
@@ -80,14 +86,14 @@ func (fc *LazyFileContent) Data() (*[]byte, error) {
 		return nil, err
 	}
 
-	fc.data = &b
-	return fc.data, nil
+	fc.store.Set(&b)
+	return &b, nil
 }
 
 func (fc *LazyFileContent) Close() error {
 	fc.mu.Lock()
 	defer fc.mu.Unlock()
-	fc.data = nil
+	fc.store.Clear()
 	return nil
 }
 
@@ -95,16 +101,25 @@ func (fc *LazyFileContent) SetGenerator(generate func() (io.ReadCloser, error)) 
 	fc.mu.Lock()
 	defer fc.mu.Unlock()
 	fc.generate = generate
-	fc.data = nil
+	fc.store.Clear()
 }
 
-type MemoryFileContent struct {
+type EagerFileContent struct {
 	mu       sync.Mutex
-	data     *[]byte
+	store    BytesStore
 	generate func() (io.ReadCloser, error)
 }
 
-func (fc *MemoryFileContent) load() error {
+func NewEagerFileContent(store BytesStore, generate func() (io.ReadCloser, error)) *EagerFileContent {
+	fc := &EagerFileContent{
+		store:    store,
+		generate: generate,
+	}
+	_ = fc.load()
+	return fc
+}
+
+func (fc *EagerFileContent) load() error {
 	rc, err := fc.generate()
 	if err != nil {
 		return err
@@ -116,32 +131,32 @@ func (fc *MemoryFileContent) load() error {
 		return err
 	}
 
-	fc.data = &b
+	fc.store.Set(&b)
 	return nil
 }
 
-func (fc *MemoryFileContent) Data() (*[]byte, error) {
+func (fc *EagerFileContent) Data() (*[]byte, error) {
 	fc.mu.Lock()
 	defer fc.mu.Unlock()
-	if fc.data == nil {
+	if fc.store.Get() == nil {
 		if err := fc.load(); err != nil {
 			return nil, err
 		}
 	}
-	return fc.data, nil
+	return fc.store.Get(), nil
 }
 
-func (fc *MemoryFileContent) Close() error {
+func (fc *EagerFileContent) Close() error {
 	fc.mu.Lock()
 	defer fc.mu.Unlock()
-	fc.data = nil
+	fc.store.Clear()
 	return nil
 }
 
-func (fc *MemoryFileContent) SetGenerator(generate func() (io.ReadCloser, error)) {
+func (fc *EagerFileContent) SetGenerator(generate func() (io.ReadCloser, error)) {
 	fc.mu.Lock()
 	defer fc.mu.Unlock()
 	fc.generate = generate
-	fc.data = nil
+	fc.store.Clear()
 	_ = fc.load() // eagerly load
 }
