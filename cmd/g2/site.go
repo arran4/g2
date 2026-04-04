@@ -249,32 +249,9 @@ func (cfg *MainArgConfig) cmdOverlay(args []string) error {
 
 	var allSites []*SiteData
 	var allSitesMu sync.Mutex
+	var lastLogTime time.Time
 
 	g, _ := errgroup.WithContext(context.Background())
-
-	tickerCtx, tickerCancel := context.WithCancel(context.Background())
-	defer tickerCancel()
-	go func() {
-		ticker := time.NewTicker(10 * time.Minute)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-tickerCtx.Done():
-				return
-			case <-ticker.C:
-				allSitesMu.Lock()
-				currentRepos := len(allSites)
-				var currentPackages int
-				for _, site := range allSites {
-					if site != nil {
-						currentPackages += site.PackageCount
-					}
-				}
-				allSitesMu.Unlock()
-				log.Printf("[PROGRESS] Currently processed %d repositories and %d total packages so far", currentRepos, currentPackages)
-			}
-		}
-	}()
 
 	for _, task := range tasks {
 		task := task
@@ -356,6 +333,18 @@ func (cfg *MainArgConfig) cmdOverlay(args []string) error {
 
 			allSitesMu.Lock()
 			allSites = append(allSites, siteData)
+			now := time.Now()
+			if lastLogTime.IsZero() || now.Sub(lastLogTime) >= 10*time.Minute {
+				lastLogTime = now
+				currentRepos := len(allSites)
+				var currentPackages int
+				for _, site := range allSites {
+					if site != nil {
+						currentPackages += site.PackageCount
+					}
+				}
+				log.Printf("[PROGRESS] Currently processed %d repositories and %d total packages so far", currentRepos, currentPackages)
+			}
 			allSitesMu.Unlock()
 			return nil
 		})
@@ -364,7 +353,6 @@ func (cfg *MainArgConfig) cmdOverlay(args []string) error {
 	if err := g.Wait(); err != nil {
 		return fmt.Errorf("fetching and parsing repos: %w", err)
 	}
-	tickerCancel()
 
 	sort.Slice(allSites, func(i, j int) bool {
 		return allSites[i].RepoName < allSites[j].RepoName
@@ -3931,6 +3919,7 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, 
 
 	var allSites []*SiteData
 	var allSitesMu sync.Mutex
+	var lastLogTime time.Time
 
 	g, _ := errgroup.WithContext(context.Background())
 	if concurrency > 0 {
@@ -3939,30 +3928,6 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, 
 	} else {
 		log.Printf("Starting concurrent remote repository processing with unbounded concurrency")
 	}
-
-	tickerCtx, tickerCancel := context.WithCancel(context.Background())
-	defer tickerCancel()
-	go func() {
-		ticker := time.NewTicker(10 * time.Minute)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-tickerCtx.Done():
-				return
-			case <-ticker.C:
-				allSitesMu.Lock()
-				currentRepos := len(allSites)
-				var currentPackages int
-				for _, site := range allSites {
-					if site != nil {
-						currentPackages += site.PackageCount
-					}
-				}
-				allSitesMu.Unlock()
-				log.Printf("[PROGRESS] Currently processed %d repositories and %d total packages so far", currentRepos, currentPackages)
-			}
-		}
-	}()
 
 	for _, repo := range repos.Repositories {
 		repo := repo // loop variable capture
@@ -4050,6 +4015,18 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, 
 
 			allSitesMu.Lock()
 			allSites = append(allSites, siteData)
+			now := time.Now()
+			if lastLogTime.IsZero() || now.Sub(lastLogTime) >= 10*time.Minute {
+				lastLogTime = now
+				currentRepos := len(allSites)
+				var currentPackages int
+				for _, site := range allSites {
+					if site != nil {
+						currentPackages += site.PackageCount
+					}
+				}
+				log.Printf("[PROGRESS] Currently processed %d repositories and %d total packages so far", currentRepos, currentPackages)
+			}
 			allSitesMu.Unlock()
 			return nil
 		})
@@ -4060,7 +4037,6 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, 
 		}
 		log.Printf("Warning: error during parallel repository fetching: %v", err)
 	}
-	tickerCancel()
 	// Sort the resulting sites alphabetically by RepoName for deterministic ordering
 	sort.Slice(allSites, func(i, j int) bool {
 		return allSites[i].RepoName < allSites[j].RepoName
