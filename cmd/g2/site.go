@@ -208,6 +208,7 @@ func (cfg *MainArgConfig) cmdOverlay(args []string) error {
 	persistentDir := fs.String("persistent-dir", "", "Directory to persistently store checked out repositories instead of a temporary directory")
 	includeGentoo := fs.Bool("include-gentoo", false, "Include the base Gentoo repository")
 	includeGuru := fs.Bool("include-guru", false, "Include the Guru repository")
+	reposConfOpt := fs.String("repos-conf", "", "Path to repos.conf file or directory")
 
 	if err := fs.Parse(args[2:]); err != nil {
 		return fmt.Errorf("parsing flags: %w", err)
@@ -244,6 +245,27 @@ func (cfg *MainArgConfig) cmdOverlay(args []string) error {
 	}
 	if *includeGuru {
 		tasks = append(tasks, repoTask{Name: "guru", Location: "https://github.com/gentoo-mirror/guru.git"})
+	}
+
+	if *reposConfOpt != "" {
+		rc, err := g2.ParseReposConf(*reposConfOpt)
+		if err != nil {
+			return fmt.Errorf("parsing repos.conf: %w", err)
+		}
+		for _, f := range rc.Files {
+			for _, s := range f.Sections {
+				if s.Name == "DEFAULT" || s.Disabled {
+					continue
+				}
+				loc := s.Get("location")
+				syncURI := s.Get("sync-uri")
+				if syncURI != "" {
+					tasks = append(tasks, repoTask{Name: s.Name, Location: syncURI})
+				} else if loc != "" {
+					tasks = append(tasks, repoTask{Name: s.Name, Location: loc})
+				}
+			}
+		}
 	}
 
 	var allSites []*SiteData
@@ -381,6 +403,7 @@ func (cfg *MainArgConfig) cmdOverlays(args []string) error {
 	retries := fs.Int("retries", 3, "Number of times to retry fetching a repository")
 	continueOnError := fs.Bool("continue-on-error", true, "Continue parsing other repositories even if fetching one fails")
 	persistentDir := fs.String("persistent-dir", "", "Directory to persistently store checked out repositories instead of a temporary directory")
+	reposConfOpt := fs.String("repos-conf", "", "Path to repos.conf file or directory")
 
 	if err := fs.Parse(args[2:]); err != nil {
 		return fmt.Errorf("parsing flags: %w", err)
@@ -390,10 +413,14 @@ func (cfg *MainArgConfig) cmdOverlays(args []string) error {
 		return fmt.Errorf("invalid recent-duration: %w", err)
 	}
 
-	if fs.NArg() == 0 {
-		return fmt.Errorf("missing location argument (url, file path, or - for stdin)")
+	if fs.NArg() == 0 && *reposConfOpt == "" {
+		return fmt.Errorf("missing location argument (url, file path, or - for stdin) and repos-conf is empty")
 	}
-	location := fs.Arg(0)
+
+	location := ""
+	if fs.NArg() > 0 {
+		location = fs.Arg(0)
+	}
 
 	if *clear {
 		if err := os.RemoveAll(*outDir); err != nil {
@@ -402,7 +429,7 @@ func (cfg *MainArgConfig) cmdOverlays(args []string) error {
 	}
 
 	log.Printf("Generating site (v%s) from remote repositories: %s into %s", version, location, *outDir)
-	return cfg.cmdSiteRemote(location, *outDir, recentDuration, recentDurationStr, *fastGit, *useZip, *concurrency, *retries, *continueOnError, *persistentDir)
+	return cfg.cmdSiteRemote(location, *outDir, recentDuration, recentDurationStr, *fastGit, *useZip, *concurrency, *retries, *continueOnError, *persistentDir, *reposConfOpt)
 }
 
 func parseLayoutConfFromFS(sysFS fs.FS, path string) (*g2.LayoutConf, error) {
@@ -3831,40 +3858,72 @@ func renderPage(path string, tmpl *template.Template, name string, data interfac
 	return nil
 }
 
-func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, recentDuration time.Duration, recentDurationStr string, fastGit bool, useZip bool, concurrency int, retries int, continueOnError bool, persistentDir string) error {
-	var data []byte
-	var err error
+func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, recentDuration time.Duration, recentDurationStr string, fastGit bool, useZip bool, concurrency int, retries int, continueOnError bool, persistentDir string, reposConfPath string) error {
+	var repos g2.Repositories
 
-	if repositoriesFile == "-" {
-		data, err = io.ReadAll(os.Stdin)
+	if reposConfPath != "" {
+		rc, err := g2.ParseReposConf(reposConfPath)
 		if err != nil {
-			return fmt.Errorf("reading repositories.xml from stdin: %w", err)
+			return fmt.Errorf("parsing repos.conf: %w", err)
 		}
-	} else if strings.HasPrefix(repositoriesFile, "http://") || strings.HasPrefix(repositoriesFile, "https://") {
-		// Convert github blob URL to raw URL to download the actual XML content, not the HTML page.
-		if strings.HasPrefix(repositoriesFile, "https://github.com/") && strings.Contains(repositoriesFile, "/blob/") {
-			repositoriesFile = strings.Replace(repositoriesFile, "https://github.com/", "https://raw.githubusercontent.com/", 1)
-			repositoriesFile = strings.Replace(repositoriesFile, "/blob/", "/", 1)
-		}
-		resp, err := http.Get(repositoriesFile)
-		if err != nil {
-			return fmt.Errorf("fetching repositories.xml: %w", err)
-		}
-		defer func() { _ = resp.Body.Close() }()
-		data, err = io.ReadAll(resp.Body)
-		if err != nil {
-			return fmt.Errorf("reading repositories.xml: %w", err)
-		}
-	} else {
-		data, err = os.ReadFile(repositoriesFile)
-		if err != nil {
-			return fmt.Errorf("reading repositories.xml file: %w", err)
+		for _, f := range rc.Files {
+			for _, s := range f.Sections {
+				if s.Name == "DEFAULT" || s.Disabled {
+					continue
+				}
+				loc := s.Get("location")
+				syncURI := s.Get("sync-uri")
+				if syncURI != "" {
+					repos.Repositories = append(repos.Repositories, g2.Repository{
+						Name: s.Name,
+						Sources: []g2.RepositorySource{{Type: "git", Text: syncURI}},
+					})
+				} else if loc != "" {
+					repos.Repositories = append(repos.Repositories, g2.Repository{
+						Name: s.Name,
+						Sources: []g2.RepositorySource{{Type: "git", Text: loc}},
+					})
+				}
+			}
 		}
 	}
 
-	var repos g2.Repositories
-	if err := xml.Unmarshal(data, &repos); err != nil {
-		return fmt.Errorf("parsing repositories.xml: %w", err)
+	if repositoriesFile != "" {
+		var data []byte
+		var err error
+
+		if repositoriesFile == "-" {
+			data, err = io.ReadAll(os.Stdin)
+			if err != nil {
+				return fmt.Errorf("reading repositories.xml from stdin: %w", err)
+			}
+		} else if strings.HasPrefix(repositoriesFile, "http://") || strings.HasPrefix(repositoriesFile, "https://") {
+			// Convert github blob URL to raw URL to download the actual XML content, not the HTML page.
+			if strings.HasPrefix(repositoriesFile, "https://github.com/") && strings.Contains(repositoriesFile, "/blob/") {
+				repositoriesFile = strings.Replace(repositoriesFile, "https://github.com/", "https://raw.githubusercontent.com/", 1)
+				repositoriesFile = strings.Replace(repositoriesFile, "/blob/", "/", 1)
+			}
+			resp, err := http.Get(repositoriesFile)
+			if err != nil {
+				return fmt.Errorf("fetching repositories.xml: %w", err)
+			}
+			defer func() { _ = resp.Body.Close() }()
+			data, err = io.ReadAll(resp.Body)
+			if err != nil {
+				return fmt.Errorf("reading repositories.xml: %w", err)
+			}
+		} else {
+			data, err = os.ReadFile(repositoriesFile)
+			if err != nil {
+				return fmt.Errorf("reading repositories.xml file: %w", err)
+			}
+		}
+
+		var fileRepos g2.Repositories
+		if err := xml.Unmarshal(data, &fileRepos); err != nil {
+			return fmt.Errorf("parsing repositories.xml: %w", err)
+		}
+		repos.Repositories = append(repos.Repositories, fileRepos.Repositories...)
 	}
 
 	// Create a temporary or persistent directory to clone repos into
@@ -3878,6 +3937,7 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, 
 		}
 		cleanup = func() {}
 	} else {
+		var err error
 		tmpDir, err = os.MkdirTemp("", "g2-sitegen-*")
 		if err != nil {
 			return fmt.Errorf("creating temp dir: %w", err)
