@@ -14,6 +14,7 @@ import (
 	"os"
 	path2 "path"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -25,6 +26,12 @@ import (
 	"github.com/arran4/g2/lints/ebuild"
 	"golang.org/x/sync/errgroup"
 )
+
+func getProcessMemUsage() uint64 {
+	var m runtime.MemStats
+	runtime.ReadMemStats(&m)
+	return m.Alloc
+}
 
 
 type SourceURL string
@@ -3889,6 +3896,11 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, 
 	var allSites []*SiteData
 	var allSitesMu sync.Mutex
 
+	var processedRepos int
+	var totalCategories int
+	var totalPackages int
+	var totalPackageVersions int
+
 	g, _ := errgroup.WithContext(context.Background())
 	if concurrency > 0 {
 		g.SetLimit(concurrency)
@@ -3934,20 +3946,11 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, 
 			}
 			checkoutTime := time.Since(t0)
 			freeSpace, err := getFreeSpace(repoPath)
-			freeMem, memErr := getFreeMemory()
-			usedMem, usedMemErr := getUsedMemory()
-			if err == nil && memErr == nil && usedMemErr == nil {
-				log.Printf("[DONE] Finished fetching repository %s in %s. Free space: %.2f MB. Free memory: %.2f MB. Used memory: %.2f MB", repo.Name, checkoutTime, float64(freeSpace)/(1024*1024), float64(freeMem)/(1024*1024), float64(usedMem)/(1024*1024))
-			} else if err == nil && memErr == nil {
-				log.Printf("[DONE] Finished fetching repository %s in %s. Free space: %.2f MB. Free memory: %.2f MB", repo.Name, checkoutTime, float64(freeSpace)/(1024*1024), float64(freeMem)/(1024*1024))
-			} else if err == nil {
-				log.Printf("[DONE] Finished fetching repository %s in %s. Free space: %.2f MB", repo.Name, checkoutTime, float64(freeSpace)/(1024*1024))
-			} else if memErr == nil && usedMemErr == nil {
-				log.Printf("[DONE] Finished fetching repository %s in %s. Free memory: %.2f MB. Used memory: %.2f MB", repo.Name, checkoutTime, float64(freeMem)/(1024*1024), float64(usedMem)/(1024*1024))
-			} else if memErr == nil {
-				log.Printf("[DONE] Finished fetching repository %s in %s. Free memory: %.2f MB", repo.Name, checkoutTime, float64(freeMem)/(1024*1024))
+			procMem := getProcessMemUsage()
+			if err == nil {
+				log.Printf("[DONE] Finished fetching repository %s in %s. Free space: %.2f MB. Process Memory: %.2f MB", repo.Name, checkoutTime, float64(freeSpace)/(1024*1024), float64(procMem)/(1024*1024))
 			} else {
-				log.Printf("[DONE] Finished fetching repository %s in %s", repo.Name, checkoutTime)
+				log.Printf("[DONE] Finished fetching repository %s in %s. Process Memory: %.2f MB", repo.Name, checkoutTime, float64(procMem)/(1024*1024))
 			}
 
 			log.Printf("[START] Parsing repository: %s", repo.Name)
@@ -3968,20 +3971,11 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, 
 			}
 			processTime := time.Since(t1)
 			freeSpaceAfter, err := getFreeSpace(repoPath)
-			freeMemAfter, memErrAfter := getFreeMemory()
-			usedMemAfter, usedMemErrAfter := getUsedMemory()
-			if err == nil && memErrAfter == nil && usedMemErrAfter == nil {
-				log.Printf("[DONE] Finished parsing repository %s in %s. Free space: %.2f MB. Free memory: %.2f MB. Used memory: %.2f MB", repo.Name, processTime, float64(freeSpaceAfter)/(1024*1024), float64(freeMemAfter)/(1024*1024), float64(usedMemAfter)/(1024*1024))
-			} else if err == nil && memErrAfter == nil {
-				log.Printf("[DONE] Finished parsing repository %s in %s. Free space: %.2f MB. Free memory: %.2f MB", repo.Name, processTime, float64(freeSpaceAfter)/(1024*1024), float64(freeMemAfter)/(1024*1024))
-			} else if err == nil {
-				log.Printf("[DONE] Finished parsing repository %s in %s. Free space: %.2f MB", repo.Name, processTime, float64(freeSpaceAfter)/(1024*1024))
-			} else if memErrAfter == nil && usedMemErrAfter == nil {
-				log.Printf("[DONE] Finished parsing repository %s in %s. Free memory: %.2f MB. Used memory: %.2f MB", repo.Name, processTime, float64(freeMemAfter)/(1024*1024), float64(usedMemAfter)/(1024*1024))
-			} else if memErrAfter == nil {
-				log.Printf("[DONE] Finished parsing repository %s in %s. Free memory: %.2f MB", repo.Name, processTime, float64(freeMemAfter)/(1024*1024))
+			procMemAfter := getProcessMemUsage()
+			if err == nil {
+				log.Printf("[DONE] Finished parsing repository %s in %s. Free space: %.2f MB. Process Memory: %.2f MB", repo.Name, processTime, float64(freeSpaceAfter)/(1024*1024), float64(procMemAfter)/(1024*1024))
 			} else {
-				log.Printf("[DONE] Finished parsing repository %s in %s", repo.Name, processTime)
+				log.Printf("[DONE] Finished parsing repository %s in %s. Process Memory: %.2f MB", repo.Name, processTime, float64(procMemAfter)/(1024*1024))
 			}
 
 			siteData.CheckoutTime = checkoutTime.String()
@@ -3990,6 +3984,25 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, 
 
 			allSitesMu.Lock()
 			allSites = append(allSites, siteData)
+			processedRepos++
+			totalCategories += len(siteData.Categories)
+
+			repoPackages := 0
+			repoPackageVersions := 0
+			for _, cat := range siteData.Categories {
+				repoPackages += len(cat.Packages)
+				for _, pkg := range cat.Packages {
+					repoPackageVersions += len(pkg.Versions)
+				}
+			}
+			totalPackages += repoPackages
+			totalPackageVersions += repoPackageVersions
+
+			if processedRepos%10 == 0 {
+				memUsage := getProcessMemUsage()
+				log.Printf("[PROGRESS] Processed %d repositories. Memory Usage: %.2f MB. Cumulative: Categories: %d, Packages: %d, Versions: %d",
+					processedRepos, float64(memUsage)/(1024*1024), totalCategories, totalPackages, totalPackageVersions)
+			}
 			allSitesMu.Unlock()
 			return nil
 		})
@@ -4004,6 +4017,16 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, 
 	sort.Slice(allSites, func(i, j int) bool {
 		return allSites[i].RepoName < allSites[j].RepoName
 	})
+
+	finalMemUsage := getProcessMemUsage()
+	log.Printf("--------------------------------------------------")
+	log.Printf("[FINAL SUMMARY] Repository Processing Complete")
+	log.Printf("Total Repositories:      %d", len(allSites))
+	log.Printf("Total Categories:        %d", totalCategories)
+	log.Printf("Total Packages:          %d", totalPackages)
+	log.Printf("Total Package Versions:  %d", totalPackageVersions)
+	log.Printf("Final Memory Usage:      %.2f MB", float64(finalMemUsage)/(1024*1024))
+	log.Printf("--------------------------------------------------")
 
 	log.Printf("Generating integrated site (v%s) for %d repos", version, len(allSites))
 	if err := generateSite(outDir, allSites, recentDuration, recentDurationStr, GenerationInfo{}); err != nil {
