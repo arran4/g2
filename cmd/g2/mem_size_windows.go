@@ -34,3 +34,13 @@ func getFreeMemory() (uint64, error) {
 	}
 	return mem.ullAvailPhys, nil
 }
+
+func getUsedMemory() (uint64, error) {
+	var mem memoryStatusEx
+	mem.dwLength = uint32(unsafe.Sizeof(mem))
+	ret, _, err := procGlobalMemoryStatusEx.Call(uintptr(unsafe.Pointer(&mem)))
+	if ret == 0 {
+		return 0, err
+	}
+	return mem.ullTotalPhys - mem.ullAvailPhys, nil
+}

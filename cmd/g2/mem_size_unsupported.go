@@ -10,3 +10,7 @@ import (
 func getFreeMemory() (uint64, error) {
 	return 0, errors.New("not implemented on this platform")
 }
+
+func getUsedMemory() (uint64, error) {
+	return 0, errors.New("not implemented on this platform")
+}

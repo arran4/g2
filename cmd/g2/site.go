@@ -3935,10 +3935,15 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, 
 			checkoutTime := time.Since(t0)
 			freeSpace, err := getFreeSpace(repoPath)
 			freeMem, memErr := getFreeMemory()
-			if err == nil && memErr == nil {
+			usedMem, usedMemErr := getUsedMemory()
+			if err == nil && memErr == nil && usedMemErr == nil {
+				log.Printf("[DONE] Finished fetching repository %s in %s. Free space: %.2f MB. Free memory: %.2f MB. Used memory: %.2f MB", repo.Name, checkoutTime, float64(freeSpace)/(1024*1024), float64(freeMem)/(1024*1024), float64(usedMem)/(1024*1024))
+			} else if err == nil && memErr == nil {
 				log.Printf("[DONE] Finished fetching repository %s in %s. Free space: %.2f MB. Free memory: %.2f MB", repo.Name, checkoutTime, float64(freeSpace)/(1024*1024), float64(freeMem)/(1024*1024))
 			} else if err == nil {
 				log.Printf("[DONE] Finished fetching repository %s in %s. Free space: %.2f MB", repo.Name, checkoutTime, float64(freeSpace)/(1024*1024))
+			} else if memErr == nil && usedMemErr == nil {
+				log.Printf("[DONE] Finished fetching repository %s in %s. Free memory: %.2f MB. Used memory: %.2f MB", repo.Name, checkoutTime, float64(freeMem)/(1024*1024), float64(usedMem)/(1024*1024))
 			} else if memErr == nil {
 				log.Printf("[DONE] Finished fetching repository %s in %s. Free memory: %.2f MB", repo.Name, checkoutTime, float64(freeMem)/(1024*1024))
 			} else {
@@ -3964,10 +3969,15 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, 
 			processTime := time.Since(t1)
 			freeSpaceAfter, err := getFreeSpace(repoPath)
 			freeMemAfter, memErrAfter := getFreeMemory()
-			if err == nil && memErrAfter == nil {
+			usedMemAfter, usedMemErrAfter := getUsedMemory()
+			if err == nil && memErrAfter == nil && usedMemErrAfter == nil {
+				log.Printf("[DONE] Finished parsing repository %s in %s. Free space: %.2f MB. Free memory: %.2f MB. Used memory: %.2f MB", repo.Name, processTime, float64(freeSpaceAfter)/(1024*1024), float64(freeMemAfter)/(1024*1024), float64(usedMemAfter)/(1024*1024))
+			} else if err == nil && memErrAfter == nil {
 				log.Printf("[DONE] Finished parsing repository %s in %s. Free space: %.2f MB. Free memory: %.2f MB", repo.Name, processTime, float64(freeSpaceAfter)/(1024*1024), float64(freeMemAfter)/(1024*1024))
 			} else if err == nil {
 				log.Printf("[DONE] Finished parsing repository %s in %s. Free space: %.2f MB", repo.Name, processTime, float64(freeSpaceAfter)/(1024*1024))
+			} else if memErrAfter == nil && usedMemErrAfter == nil {
+				log.Printf("[DONE] Finished parsing repository %s in %s. Free memory: %.2f MB. Used memory: %.2f MB", repo.Name, processTime, float64(freeMemAfter)/(1024*1024), float64(usedMemAfter)/(1024*1024))
 			} else if memErrAfter == nil {
 				log.Printf("[DONE] Finished parsing repository %s in %s. Free memory: %.2f MB", repo.Name, processTime, float64(freeMemAfter)/(1024*1024))
 			} else {
