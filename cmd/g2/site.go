@@ -14,6 +14,7 @@ import (
 	"os"
 	path2 "path"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -3934,10 +3935,12 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, 
 			}
 			checkoutTime := time.Since(t0)
 			freeSpace, err := getFreeSpace(repoPath)
+			var memStats runtime.MemStats
+			runtime.ReadMemStats(&memStats)
 			if err == nil {
-				log.Printf("[DONE] Finished fetching repository %s in %s. Free space: %.2f MB", repo.Name, checkoutTime, float64(freeSpace)/(1024*1024))
+				log.Printf("[DONE] Finished fetching repository %s in %s. Free space: %.2f MB, Total memory usage: %.2f MB", repo.Name, checkoutTime, float64(freeSpace)/(1024*1024), float64(memStats.Alloc)/(1024*1024))
 			} else {
-				log.Printf("[DONE] Finished fetching repository %s in %s", repo.Name, checkoutTime)
+				log.Printf("[DONE] Finished fetching repository %s in %s. Total memory usage: %.2f MB", repo.Name, checkoutTime, float64(memStats.Alloc)/(1024*1024))
 			}
 
 			log.Printf("[START] Parsing repository: %s", repo.Name)
@@ -3958,10 +3961,21 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, 
 			}
 			processTime := time.Since(t1)
 			freeSpaceAfter, err := getFreeSpace(repoPath)
+			var memStatsAfter runtime.MemStats
+			runtime.ReadMemStats(&memStatsAfter)
+			nodeCount := 0
+			if siteData != nil {
+				nodeCount = len(siteData.Categories) + siteData.PackageCount + len(siteData.Profiles) + len(siteData.News) + len(siteData.Moves) + len(siteData.DefinedEclasses)
+				for _, cat := range siteData.Categories {
+					for _, pkg := range cat.Packages {
+						nodeCount += len(pkg.Versions)
+					}
+				}
+			}
 			if err == nil {
-				log.Printf("[DONE] Finished parsing repository %s in %s. Free space: %.2f MB", repo.Name, processTime, float64(freeSpaceAfter)/(1024*1024))
+				log.Printf("[DONE] Finished parsing repository %s in %s. Free space: %.2f MB, Total memory usage: %.2f MB, Nodes: %d", repo.Name, processTime, float64(freeSpaceAfter)/(1024*1024), float64(memStatsAfter.Alloc)/(1024*1024), nodeCount)
 			} else {
-				log.Printf("[DONE] Finished parsing repository %s in %s", repo.Name, processTime)
+				log.Printf("[DONE] Finished parsing repository %s in %s. Total memory usage: %.2f MB, Nodes: %d", repo.Name, processTime, float64(memStatsAfter.Alloc)/(1024*1024), nodeCount)
 			}
 
 			siteData.CheckoutTime = checkoutTime.String()
