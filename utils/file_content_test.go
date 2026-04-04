@@ -1,4 +1,4 @@
-package g2
+package utils
 
 import (
 	"bytes"
