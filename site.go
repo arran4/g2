@@ -1,8 +1,5 @@
 package g2
 
-import (
-)
-
 type SiteData struct {
 	Title          string
 	RepoName       string
