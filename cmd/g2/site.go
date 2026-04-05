@@ -4037,19 +4037,65 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, 
 			}
 			checkoutTime := time.Since(t0)
 			freeSpace, err := getFreeSpace(repoPath)
+			appFreeSpace, appErr := getFreeSpace(".")
+			tmpFreeSpace, tmpErr := getFreeSpace(os.TempDir())
 			freeMem, memErr := getFreeMemory()
 			procMem := getProcessMemUsage()
 
 			var memStats runtime.MemStats
 			runtime.ReadMemStats(&memStats)
 
-			if err == nil && memErr == nil {
+			if err == nil && appErr == nil && tmpErr == nil && memErr == nil {
+				log.Printf(
+					"[DONE] Finished fetching repository %s in %s. Free space (Repo/App/Tmp): %.2f/%.2f/%.2f MB. Free memory: %.2f MB. Process Memory: %.2f MB. Go Alloc: %.2f MB",
+					repo.Name,
+					checkoutTime,
+					float64(freeSpace)/(1024*1024),
+					float64(appFreeSpace)/(1024*1024),
+					float64(tmpFreeSpace)/(1024*1024),
+					float64(freeMem)/(1024*1024),
+					float64(procMem)/(1024*1024),
+					float64(memStats.Alloc)/(1024*1024),
+				)
+			} else if err == nil && appErr == nil && memErr == nil {
+				log.Printf(
+					"[DONE] Finished fetching repository %s in %s. Free space (Repo/App): %.2f/%.2f MB. Free memory: %.2f MB. Process Memory: %.2f MB. Go Alloc: %.2f MB",
+					repo.Name,
+					checkoutTime,
+					float64(freeSpace)/(1024*1024),
+					float64(appFreeSpace)/(1024*1024),
+					float64(freeMem)/(1024*1024),
+					float64(procMem)/(1024*1024),
+					float64(memStats.Alloc)/(1024*1024),
+				)
+			} else if err == nil && memErr == nil {
 				log.Printf(
 					"[DONE] Finished fetching repository %s in %s. Free space: %.2f MB. Free memory: %.2f MB. Process Memory: %.2f MB. Go Alloc: %.2f MB",
 					repo.Name,
 					checkoutTime,
 					float64(freeSpace)/(1024*1024),
 					float64(freeMem)/(1024*1024),
+					float64(procMem)/(1024*1024),
+					float64(memStats.Alloc)/(1024*1024),
+				)
+			} else if err == nil && appErr == nil && tmpErr == nil {
+				log.Printf(
+					"[DONE] Finished fetching repository %s in %s. Free space (Repo/App/Tmp): %.2f/%.2f/%.2f MB. Process Memory: %.2f MB. Go Alloc: %.2f MB",
+					repo.Name,
+					checkoutTime,
+					float64(freeSpace)/(1024*1024),
+					float64(appFreeSpace)/(1024*1024),
+					float64(tmpFreeSpace)/(1024*1024),
+					float64(procMem)/(1024*1024),
+					float64(memStats.Alloc)/(1024*1024),
+				)
+			} else if err == nil && appErr == nil {
+				log.Printf(
+					"[DONE] Finished fetching repository %s in %s. Free space (Repo/App): %.2f/%.2f MB. Process Memory: %.2f MB. Go Alloc: %.2f MB",
+					repo.Name,
+					checkoutTime,
+					float64(freeSpace)/(1024*1024),
+					float64(appFreeSpace)/(1024*1024),
 					float64(procMem)/(1024*1024),
 					float64(memStats.Alloc)/(1024*1024),
 				)
@@ -4099,6 +4145,8 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, 
 			}
 			processTime := time.Since(t1)
 			freeSpaceAfter, err := getFreeSpace(repoPath)
+			appFreeSpaceAfter, appErrAfter := getFreeSpace(".")
+			tmpFreeSpaceAfter, tmpErrAfter := getFreeSpace(os.TempDir())
 			freeMemAfter, memErrAfter := getFreeMemory()
 			procMemAfter := getProcessMemUsage()
 
@@ -4115,13 +4163,61 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, 
 				}
 			}
 
-			if err == nil && memErrAfter == nil {
+			if err == nil && appErrAfter == nil && tmpErrAfter == nil && memErrAfter == nil {
+				log.Printf(
+					"[DONE] Finished parsing repository %s in %s. Free space (Repo/App/Tmp): %.2f/%.2f/%.2f MB. Free memory: %.2f MB. Process Memory: %.2f MB. Go Alloc: %.2f MB. Nodes: %d",
+					repo.Name,
+					processTime,
+					float64(freeSpaceAfter)/(1024*1024),
+					float64(appFreeSpaceAfter)/(1024*1024),
+					float64(tmpFreeSpaceAfter)/(1024*1024),
+					float64(freeMemAfter)/(1024*1024),
+					float64(procMemAfter)/(1024*1024),
+					float64(memStatsAfter.Alloc)/(1024*1024),
+					nodeCount,
+				)
+			} else if err == nil && appErrAfter == nil && memErrAfter == nil {
+				log.Printf(
+					"[DONE] Finished parsing repository %s in %s. Free space (Repo/App): %.2f/%.2f MB. Free memory: %.2f MB. Process Memory: %.2f MB. Go Alloc: %.2f MB. Nodes: %d",
+					repo.Name,
+					processTime,
+					float64(freeSpaceAfter)/(1024*1024),
+					float64(appFreeSpaceAfter)/(1024*1024),
+					float64(freeMemAfter)/(1024*1024),
+					float64(procMemAfter)/(1024*1024),
+					float64(memStatsAfter.Alloc)/(1024*1024),
+					nodeCount,
+				)
+			} else if err == nil && memErrAfter == nil {
 				log.Printf(
 					"[DONE] Finished parsing repository %s in %s. Free space: %.2f MB. Free memory: %.2f MB. Process Memory: %.2f MB. Go Alloc: %.2f MB. Nodes: %d",
 					repo.Name,
 					processTime,
 					float64(freeSpaceAfter)/(1024*1024),
 					float64(freeMemAfter)/(1024*1024),
+					float64(procMemAfter)/(1024*1024),
+					float64(memStatsAfter.Alloc)/(1024*1024),
+					nodeCount,
+				)
+			} else if err == nil && appErrAfter == nil && tmpErrAfter == nil {
+				log.Printf(
+					"[DONE] Finished parsing repository %s in %s. Free space (Repo/App/Tmp): %.2f/%.2f/%.2f MB. Process Memory: %.2f MB. Go Alloc: %.2f MB. Nodes: %d",
+					repo.Name,
+					processTime,
+					float64(freeSpaceAfter)/(1024*1024),
+					float64(appFreeSpaceAfter)/(1024*1024),
+					float64(tmpFreeSpaceAfter)/(1024*1024),
+					float64(procMemAfter)/(1024*1024),
+					float64(memStatsAfter.Alloc)/(1024*1024),
+					nodeCount,
+				)
+			} else if err == nil && appErrAfter == nil {
+				log.Printf(
+					"[DONE] Finished parsing repository %s in %s. Free space (Repo/App): %.2f/%.2f MB. Process Memory: %.2f MB. Go Alloc: %.2f MB. Nodes: %d",
+					repo.Name,
+					processTime,
+					float64(freeSpaceAfter)/(1024*1024),
+					float64(appFreeSpaceAfter)/(1024*1024),
 					float64(procMemAfter)/(1024*1024),
 					float64(memStatsAfter.Alloc)/(1024*1024),
 					nodeCount,
@@ -4217,6 +4313,8 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, 
 	})
 
 	finalMemUsage := getProcessMemUsage()
+	appFreeSpaceFinal, appErrFinal := getFreeSpace(".")
+	tmpFreeSpaceFinal, tmpErrFinal := getFreeSpace(os.TempDir())
 	log.Printf("--------------------------------------------------")
 	log.Printf("[FINAL SUMMARY] Repository Processing Complete")
 	log.Printf("Total Repositories:      %d", len(allSites))
@@ -4224,6 +4322,12 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, 
 	log.Printf("Total Packages:          %d", totalPackages)
 	log.Printf("Total Package Versions:  %d", totalPackageVersions)
 	log.Printf("Final Memory Usage:      %.2f MB", float64(finalMemUsage)/(1024*1024))
+	if appErrFinal == nil {
+		log.Printf("Final App Free Space:    %.2f MB", float64(appFreeSpaceFinal)/(1024*1024))
+	}
+	if tmpErrFinal == nil {
+		log.Printf("Final Tmp Free Space:    %.2f MB", float64(tmpFreeSpaceFinal)/(1024*1024))
+	}
 	log.Printf("--------------------------------------------------")
 
 	log.Printf("Generating integrated site (v%s) for %d repos", version, len(allSites))
