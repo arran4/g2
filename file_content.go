@@ -12,48 +12,28 @@ type FileContent interface {
 	String() string
 }
 
-type WeakFileContent struct {
-	weakPtr weak.Pointer[[]byte]
-	Loader  func() (io.ReadCloser, error)
-	mu      sync.Mutex
-}
-
-func (f *WeakFileContent) String() string {
-	b, err := f.Get()
-	if err != nil || b == nil {
-		return ""
-	}
-	return string(*b)
-}
-
-func (f *WeakFileContent) Get() (*[]byte, error) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-
-	if p := f.weakPtr.Value(); p != nil {
-		return p, nil
-	}
-
-	rc, err := f.Loader()
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = rc.Close() }()
-
-	b, err := io.ReadAll(rc)
-	if err != nil {
-		return nil, err
-	}
-
-	ptr := &b
-	f.weakPtr = weak.Make(ptr)
-	return ptr, nil
-}
+type UseWeakPointer bool
 
 type LazyFileContent struct {
+	weakPtr   weak.Pointer[[]byte]
 	strongPtr []byte
 	Loader    func() (io.ReadCloser, error)
+	useWeak   bool
 	mu        sync.Mutex
+}
+
+func NewLazyFileContent(loader func() (io.ReadCloser, error), opts ...any) *LazyFileContent {
+	l := &LazyFileContent{
+		Loader:  loader,
+		useWeak: true, // Default to weak
+	}
+	for _, opt := range opts {
+		switch o := opt.(type) {
+		case UseWeakPointer:
+			l.useWeak = bool(o)
+		}
+	}
+	return l
 }
 
 func (f *LazyFileContent) String() string {
@@ -68,7 +48,11 @@ func (f *LazyFileContent) Get() (*[]byte, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
-	if f.strongPtr != nil {
+	if f.useWeak {
+		if p := f.weakPtr.Value(); p != nil {
+			return p, nil
+		}
+	} else if f.strongPtr != nil {
 		return &f.strongPtr, nil
 	}
 
@@ -83,8 +67,14 @@ func (f *LazyFileContent) Get() (*[]byte, error) {
 		return nil, err
 	}
 
-	f.strongPtr = b
-	return &f.strongPtr, nil
+	if f.useWeak {
+		ptr := &b
+		f.weakPtr = weak.Make(ptr)
+		return ptr, nil
+	} else {
+		f.strongPtr = b
+		return &f.strongPtr, nil
+	}
 }
 
 type MmapFileContent struct {

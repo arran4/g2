@@ -1637,9 +1637,7 @@ func parseProfilesDirFS(sysFS fs.FS, repoDir string, entries []ProfileDescEntry,
 					return f, err
 				}
 				if isPersistent {
-					fc = &g2.WeakFileContent{
-						Loader: loader,
-					}
+					fc = g2.NewLazyFileContent(loader, g2.UseWeakPointer(true))
 				} else {
 					rc, err := loader()
 					var b []byte

@@ -226,7 +226,7 @@ func ParseEbuild(fsys fs.FS, path string, mode ParsingMode, opts ...any) (*Ebuil
 	}
 
 	if isPersistent {
-		e.RawText = &WeakFileContent{Loader: loader}
+		e.RawText = NewLazyFileContent(loader, UseWeakPointer(true))
 	} else {
 		rc, err := loader()
 		var b []byte
