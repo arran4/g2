@@ -121,9 +121,19 @@ func (cfg *MainArgConfig) cmdSiteServe(args []string) error {
 					}
 
 					freeSpace, err := getFreeSpace(repoPath)
+					appFreeSpace, appErr := getFreeSpace(".")
+					tmpFreeSpace, tmpErr := getFreeSpace(os.TempDir())
 					freeMem, memErr := getFreeMemory()
-					if err == nil && memErr == nil {
+					if err == nil && appErr == nil && tmpErr == nil && memErr == nil {
+						log.Printf("[DONE] Finished parsing repository %s. Free space (Repo/App/Tmp): %.2f/%.2f/%.2f MB. Free memory: %.2f MB", repoName, float64(freeSpace)/(1024*1024), float64(appFreeSpace)/(1024*1024), float64(tmpFreeSpace)/(1024*1024), float64(freeMem)/(1024*1024))
+					} else if err == nil && appErr == nil && memErr == nil {
+						log.Printf("[DONE] Finished parsing repository %s. Free space (Repo/App): %.2f/%.2f MB. Free memory: %.2f MB", repoName, float64(freeSpace)/(1024*1024), float64(appFreeSpace)/(1024*1024), float64(freeMem)/(1024*1024))
+					} else if err == nil && memErr == nil {
 						log.Printf("[DONE] Finished parsing repository %s. Free space: %.2f MB. Free memory: %.2f MB", repoName, float64(freeSpace)/(1024*1024), float64(freeMem)/(1024*1024))
+					} else if err == nil && appErr == nil && tmpErr == nil {
+						log.Printf("[DONE] Finished parsing repository %s. Free space (Repo/App/Tmp): %.2f/%.2f/%.2f MB", repoName, float64(freeSpace)/(1024*1024), float64(appFreeSpace)/(1024*1024), float64(tmpFreeSpace)/(1024*1024))
+					} else if err == nil && appErr == nil {
+						log.Printf("[DONE] Finished parsing repository %s. Free space (Repo/App): %.2f/%.2f MB", repoName, float64(freeSpace)/(1024*1024), float64(appFreeSpace)/(1024*1024))
 					} else if err == nil {
 						log.Printf("[DONE] Finished parsing repository %s. Free space: %.2f MB", repoName, float64(freeSpace)/(1024*1024))
 					} else if memErr == nil {
