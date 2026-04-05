@@ -508,7 +508,7 @@ func ResolveVariables(text string, variables map[string]string) string {
 	// Simple resolution: multiple passes until no change or limit reached
 	// To prevent memory exhaustion from self-referential or heavily nested variables,
 	// cap the maximum expanded length.
-	maxLen := 1024 * 1024 // 1MB limit for expanded strings
+	maxLen := 100 * 1024 // Reduce max len so we do not exceed OOM with massive concurrency strings
 
 	// 1. Sort keys by length descending to prevent $P from matching before $PN
 	var keys []string
@@ -519,6 +519,8 @@ func ResolveVariables(text string, variables map[string]string) string {
 		return len(keys[i]) > len(keys[j])
 	})
 
+	visited := make(map[string]bool)
+
 	for i := 0; i < 5; i++ { // Limit recursion depth
 		original := text
 
@@ -528,10 +530,17 @@ func ResolveVariables(text string, variables map[string]string) string {
 			varRef := fmt.Sprintf("$%s", key)
 			if strings.Contains(text, varRef) {
 				if strings.Contains(value, varRef) {
-					continue
+					value = strings.ReplaceAll(value, varRef, "")
 				}
-				text = strings.ReplaceAll(text, varRef, value)
+				if !visited[varRef] {
+					visited[varRef] = true
+					text = strings.ReplaceAll(text, varRef, value)
+				}
 			}
+		}
+
+		if len(text) > maxLen {
+			return text[:maxLen]
 		}
 
 		// 2. Replace all ${VAR...} substitutions
@@ -543,6 +552,15 @@ func ResolveVariables(text string, variables map[string]string) string {
 			k := parts[1]
 			op := parts[2]
 			v, ok := variables[k]
+
+			if visited[match] {
+				return ""
+			}
+			visited[match] = true
+
+			if strings.Contains(v, match) {
+				return ""
+			}
 
 			if op == "" {
 				if ok {
