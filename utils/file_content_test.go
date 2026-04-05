@@ -53,36 +53,48 @@ func testFileContentImpl(t *testing.T, fc FileContent, generateCallsPtr *int) {
 
 func TestFileContent_LazyWeak(t *testing.T) {
 	generateCalls := 0
-	fc := NewFileContent(func() (io.ReadCloser, error) {
+	fc := NewFileContent(WithGenerator(func() (io.ReadCloser, error) {
 		generateCalls++
 		return io.NopCloser(bytes.NewBufferString("hello world")), nil
-	}, UseWeakStorage(true), UseLazyLoading(true))
+	}), UseWeakStorage(true), UseLazyLoading(true))
 	testFileContentImpl(t, fc, &generateCalls)
 }
 
 func TestFileContent_LazyMemory(t *testing.T) {
 	generateCalls := 0
-	fc := NewFileContent(func() (io.ReadCloser, error) {
+	fc := NewFileContent(WithGenerator(func() (io.ReadCloser, error) {
 		generateCalls++
 		return io.NopCloser(bytes.NewBufferString("hello world")), nil
-	}, UseMemoryStorage(true), UseLazyLoading(true))
+	}), UseMemoryStorage(true), UseLazyLoading(true))
 	testFileContentImpl(t, fc, &generateCalls)
 }
 
 func TestFileContent_EagerWeak(t *testing.T) {
 	generateCalls := 0
-	fc := NewFileContent(func() (io.ReadCloser, error) {
+	fc := NewFileContent(WithGenerator(func() (io.ReadCloser, error) {
 		generateCalls++
 		return io.NopCloser(bytes.NewBufferString("hello world")), nil
-	}, UseWeakStorage(true), UseEagerLoading(true))
+	}), UseWeakStorage(true), UseEagerLoading(true))
 	testFileContentImpl(t, fc, &generateCalls)
 }
 
 func TestFileContent_EagerMemory(t *testing.T) {
 	generateCalls := 0
-	fc := NewFileContent(func() (io.ReadCloser, error) {
+	fc := NewFileContent(WithGenerator(func() (io.ReadCloser, error) {
 		generateCalls++
 		return io.NopCloser(bytes.NewBufferString("hello world")), nil
-	}, UseMemoryStorage(true), UseEagerLoading(true))
+	}), UseMemoryStorage(true), UseEagerLoading(true))
 	testFileContentImpl(t, fc, &generateCalls)
+}
+
+func TestFileContent_WithOptions(t *testing.T) {
+	fc := NewFileContent(WithBytes([]byte("hello bytes")))
+	if fc.String() != "hello bytes" {
+		t.Errorf("expected 'hello bytes', got '%s'", fc.String())
+	}
+
+	fc2 := NewFileContent(WithString("hello string"))
+	if fc2.String() != "hello string" {
+		t.Errorf("expected 'hello string', got '%s'", fc2.String())
+	}
 }

@@ -60,9 +60,14 @@ type UseMemoryStorage bool
 type UseLazyLoading bool
 type UseEagerLoading bool
 
+type WithGenerator func() (io.ReadCloser, error)
+type WithBytes []byte
+type WithString string
+
 type fileContentConfig struct {
-	store BytesStore
-	lazy  bool
+	store    BytesStore
+	lazy     bool
+	generate func() (io.ReadCloser, error)
 }
 
 type defaultFileContent struct {
@@ -72,7 +77,7 @@ type defaultFileContent struct {
 	generate func() (io.ReadCloser, error)
 }
 
-func NewFileContent(generate func() (io.ReadCloser, error), opts ...any) FileContent {
+func NewFileContent(opts ...any) FileContent {
 	cfg := fileContentConfig{
 		store: &MemoryBytesStore{},
 		lazy:  true,
@@ -96,13 +101,21 @@ func NewFileContent(generate func() (io.ReadCloser, error), opts ...any) FileCon
 			if o {
 				cfg.lazy = false
 			}
+		case WithGenerator:
+			cfg.generate = o
+		case WithBytes:
+			b := []byte(o)
+			cfg.store.Set(&b)
+		case WithString:
+			b := []byte(o)
+			cfg.store.Set(&b)
 		}
 	}
 
 	fc := &defaultFileContent{
 		store:    cfg.store,
 		lazy:     cfg.lazy,
-		generate: generate,
+		generate: cfg.generate,
 	}
 
 	if !fc.lazy {
@@ -113,6 +126,9 @@ func NewFileContent(generate func() (io.ReadCloser, error), opts ...any) FileCon
 }
 
 func (fc *defaultFileContent) load() (*[]byte, error) {
+	if fc.generate == nil {
+		return nil, nil // No generator provided, return nil or handle gracefully
+	}
 	rc, err := fc.generate()
 	if err != nil {
 		return nil, err
@@ -154,7 +170,7 @@ func (fc *defaultFileContent) Close() error {
 func (fc *defaultFileContent) String() string {
 	b, err := fc.Data()
 	if err != nil {
-		return err.Error()
+		return "" // Suppress error for templates
 	}
 	if b == nil {
 		return ""
