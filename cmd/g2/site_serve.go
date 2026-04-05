@@ -121,8 +121,13 @@ func (cfg *MainArgConfig) cmdSiteServe(args []string) error {
 					}
 
 					freeSpace, err := getFreeSpace(repoPath)
-					if err == nil {
+					freeMem, memErr := getFreeMemory()
+					if err == nil && memErr == nil {
+						log.Printf("[DONE] Finished parsing repository %s. Free space: %.2f MB. Free memory: %.2f MB", repoName, float64(freeSpace)/(1024*1024), float64(freeMem)/(1024*1024))
+					} else if err == nil {
 						log.Printf("[DONE] Finished parsing repository %s. Free space: %.2f MB", repoName, float64(freeSpace)/(1024*1024))
+					} else if memErr == nil {
+						log.Printf("[DONE] Finished parsing repository %s. Free memory: %.2f MB", repoName, float64(freeMem)/(1024*1024))
 					} else {
 						log.Printf("[DONE] Finished parsing repository %s", repoName)
 					}
@@ -131,7 +136,7 @@ func (cfg *MainArgConfig) cmdSiteServe(args []string) error {
 					sites = append(sites, siteData)
 					sitesMu.Unlock()
 					return nil
-				})
+        })
 			}
 		}
 

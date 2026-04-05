@@ -4036,35 +4036,55 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, 
 				return nil
 			}
 			checkoutTime := time.Since(t0)
-      freeSpace, err := getFreeSpace(repoPath)
-      procMem := getProcessMemUsage()
+			freeSpace, err := getFreeSpace(repoPath)
+			freeMem, memErr := getFreeMemory()
+			procMem := getProcessMemUsage()
 
-      var memStats runtime.MemStats
-      runtime.ReadMemStats(&memStats)
+			var memStats runtime.MemStats
+			runtime.ReadMemStats(&memStats)
 
-      if err == nil {
-        log.Printf(
-          "[DONE] Finished fetching repository %s in %s. Free space: %.2f MB. Process Memory: %.2f MB. Go Alloc: %.2f MB",
-          repo.Name,
-          checkoutTime,
-          float64(freeSpace)/(1024*1024),
-          float64(procMem)/(1024*1024),
-          float64(memStats.Alloc)/(1024*1024),
-        )
-      } else {
-        log.Printf(
-          "[DONE] Finished fetching repository %s in %s. Process Memory: %.2f MB. Go Alloc: %.2f MB",
-          repo.Name,
-          checkoutTime,
-          float64(procMem)/(1024*1024),
-          float64(memStats.Alloc)/(1024*1024),
-        )
-      }
+			if err == nil && memErr == nil {
+				log.Printf(
+					"[DONE] Finished fetching repository %s in %s. Free space: %.2f MB. Free memory: %.2f MB. Process Memory: %.2f MB. Go Alloc: %.2f MB",
+					repo.Name,
+					checkoutTime,
+					float64(freeSpace)/(1024*1024),
+					float64(freeMem)/(1024*1024),
+					float64(procMem)/(1024*1024),
+					float64(memStats.Alloc)/(1024*1024),
+				)
+			} else if err == nil {
+				log.Printf(
+					"[DONE] Finished fetching repository %s in %s. Free space: %.2f MB. Process Memory: %.2f MB. Go Alloc: %.2f MB",
+					repo.Name,
+					checkoutTime,
+					float64(freeSpace)/(1024*1024),
+					float64(procMem)/(1024*1024),
+					float64(memStats.Alloc)/(1024*1024),
+				)
+			} else if memErr == nil {
+				log.Printf(
+					"[DONE] Finished fetching repository %s in %s. Free memory: %.2f MB. Process Memory: %.2f MB. Go Alloc: %.2f MB",
+					repo.Name,
+					checkoutTime,
+					float64(freeMem)/(1024*1024),
+					float64(procMem)/(1024*1024),
+					float64(memStats.Alloc)/(1024*1024),
+				)
+			} else {
+				log.Printf(
+					"[DONE] Finished fetching repository %s in %s. Process Memory: %.2f MB. Go Alloc: %.2f MB",
+					repo.Name,
+					checkoutTime,
+					float64(procMem)/(1024*1024),
+					float64(memStats.Alloc)/(1024*1024),
+				)
+			}
 
-      log.Printf("[START] Parsing repository: %s", repo.Name)
-      
+			log.Printf("[START] Parsing repository: %s", repo.Name)
+
 			size, err := getDirSize(repoPath)
-			var gitSize string
+      var gitSize string
 			if err == nil {
 				gitSize = fmt.Sprintf("%.2f MB", float64(size)/(1024*1024))
 			}
@@ -4079,6 +4099,7 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, 
 			}
 			processTime := time.Since(t1)
 			freeSpaceAfter, err := getFreeSpace(repoPath)
+			freeMemAfter, memErrAfter := getFreeMemory()
 			procMemAfter := getProcessMemUsage()
 
 			var memStatsAfter runtime.MemStats
@@ -4094,12 +4115,33 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, 
 				}
 			}
 
-			if err == nil {
+			if err == nil && memErrAfter == nil {
+				log.Printf(
+					"[DONE] Finished parsing repository %s in %s. Free space: %.2f MB. Free memory: %.2f MB. Process Memory: %.2f MB. Go Alloc: %.2f MB. Nodes: %d",
+					repo.Name,
+					processTime,
+					float64(freeSpaceAfter)/(1024*1024),
+					float64(freeMemAfter)/(1024*1024),
+					float64(procMemAfter)/(1024*1024),
+					float64(memStatsAfter.Alloc)/(1024*1024),
+					nodeCount,
+				)
+			} else if err == nil {
 				log.Printf(
 					"[DONE] Finished parsing repository %s in %s. Free space: %.2f MB. Process Memory: %.2f MB. Go Alloc: %.2f MB. Nodes: %d",
 					repo.Name,
 					processTime,
 					float64(freeSpaceAfter)/(1024*1024),
+					float64(procMemAfter)/(1024*1024),
+					float64(memStatsAfter.Alloc)/(1024*1024),
+					nodeCount,
+				)
+			} else if memErrAfter == nil {
+				log.Printf(
+					"[DONE] Finished parsing repository %s in %s. Free memory: %.2f MB. Process Memory: %.2f MB. Go Alloc: %.2f MB. Nodes: %d",
+					repo.Name,
+					processTime,
+					float64(freeMemAfter)/(1024*1024),
 					float64(procMemAfter)/(1024*1024),
 					float64(memStatsAfter.Alloc)/(1024*1024),
 					nodeCount,
