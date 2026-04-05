@@ -27,6 +27,12 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
+func getProcessMemUsage() uint64 {
+	var m runtime.MemStats
+	runtime.ReadMemStats(&m)
+	return m.Alloc
+}
+
 
 type SourceURL string
 
@@ -209,6 +215,7 @@ func (cfg *MainArgConfig) cmdOverlay(args []string) error {
 	persistentDir := fs.String("persistent-dir", "", "Directory to persistently store checked out repositories instead of a temporary directory")
 	includeGentoo := fs.Bool("include-gentoo", false, "Include the base Gentoo repository")
 	includeGuru := fs.Bool("include-guru", false, "Include the Guru repository")
+	reposConfOpt := fs.String("repos-conf", "", "Path to repos.conf file or directory")
 
 	if err := fs.Parse(args[2:]); err != nil {
 		return fmt.Errorf("parsing flags: %w", err)
@@ -245,6 +252,27 @@ func (cfg *MainArgConfig) cmdOverlay(args []string) error {
 	}
 	if *includeGuru {
 		tasks = append(tasks, repoTask{Name: "guru", Location: "https://github.com/gentoo-mirror/guru.git"})
+	}
+
+	if *reposConfOpt != "" {
+		rc, err := g2.ParseReposConf(*reposConfOpt)
+		if err != nil {
+			return fmt.Errorf("parsing repos.conf: %w", err)
+		}
+		for _, f := range rc.Files {
+			for _, s := range f.Sections {
+				if s.Name == "DEFAULT" || s.Disabled {
+					continue
+				}
+				loc := s.Get("location")
+				syncURI := s.Get("sync-uri")
+				if syncURI != "" {
+					tasks = append(tasks, repoTask{Name: s.Name, Location: syncURI})
+				} else if loc != "" {
+					tasks = append(tasks, repoTask{Name: s.Name, Location: loc})
+				}
+			}
+		}
 	}
 
 	var allSites []*SiteData
@@ -395,6 +423,7 @@ func (cfg *MainArgConfig) cmdOverlays(args []string) error {
 	retries := fs.Int("retries", 3, "Number of times to retry fetching a repository")
 	continueOnError := fs.Bool("continue-on-error", true, "Continue parsing other repositories even if fetching one fails")
 	persistentDir := fs.String("persistent-dir", "", "Directory to persistently store checked out repositories instead of a temporary directory")
+	reposConfOpt := fs.String("repos-conf", "", "Path to repos.conf file or directory")
 
 	if err := fs.Parse(args[2:]); err != nil {
 		return fmt.Errorf("parsing flags: %w", err)
@@ -404,10 +433,14 @@ func (cfg *MainArgConfig) cmdOverlays(args []string) error {
 		return fmt.Errorf("invalid recent-duration: %w", err)
 	}
 
-	if fs.NArg() == 0 {
-		return fmt.Errorf("missing location argument (url, file path, or - for stdin)")
+	if fs.NArg() == 0 && *reposConfOpt == "" {
+		return fmt.Errorf("missing location argument (url, file path, or - for stdin) and repos-conf is empty")
 	}
-	location := fs.Arg(0)
+
+	location := ""
+	if fs.NArg() > 0 {
+		location = fs.Arg(0)
+	}
 
 	if *clear {
 		if err := os.RemoveAll(*outDir); err != nil {
@@ -416,7 +449,7 @@ func (cfg *MainArgConfig) cmdOverlays(args []string) error {
 	}
 
 	log.Printf("Generating site (v%s) from remote repositories: %s into %s", version, location, *outDir)
-	return cfg.cmdSiteRemote(location, *outDir, recentDuration, recentDurationStr, *fastGit, *useZip, *concurrency, *retries, *continueOnError, *persistentDir)
+	return cfg.cmdSiteRemote(location, *outDir, recentDuration, recentDurationStr, *fastGit, *useZip, *concurrency, *retries, *continueOnError, *persistentDir, *reposConfOpt)
 }
 
 func parseLayoutConfFromFS(sysFS fs.FS, path string) (*g2.LayoutConf, error) {
@@ -3862,40 +3895,72 @@ func renderPage(path string, tmpl *template.Template, name string, data interfac
 	return nil
 }
 
-func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, recentDuration time.Duration, recentDurationStr string, fastGit bool, useZip bool, concurrency int, retries int, continueOnError bool, persistentDir string) error {
-	var data []byte
-	var err error
+func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, recentDuration time.Duration, recentDurationStr string, fastGit bool, useZip bool, concurrency int, retries int, continueOnError bool, persistentDir string, reposConfPath string) error {
+	var repos g2.Repositories
 
-	if repositoriesFile == "-" {
-		data, err = io.ReadAll(os.Stdin)
+	if reposConfPath != "" {
+		rc, err := g2.ParseReposConf(reposConfPath)
 		if err != nil {
-			return fmt.Errorf("reading repositories.xml from stdin: %w", err)
+			return fmt.Errorf("parsing repos.conf: %w", err)
 		}
-	} else if strings.HasPrefix(repositoriesFile, "http://") || strings.HasPrefix(repositoriesFile, "https://") {
-		// Convert github blob URL to raw URL to download the actual XML content, not the HTML page.
-		if strings.HasPrefix(repositoriesFile, "https://github.com/") && strings.Contains(repositoriesFile, "/blob/") {
-			repositoriesFile = strings.Replace(repositoriesFile, "https://github.com/", "https://raw.githubusercontent.com/", 1)
-			repositoriesFile = strings.Replace(repositoriesFile, "/blob/", "/", 1)
-		}
-		resp, err := http.Get(repositoriesFile)
-		if err != nil {
-			return fmt.Errorf("fetching repositories.xml: %w", err)
-		}
-		defer func() { _ = resp.Body.Close() }()
-		data, err = io.ReadAll(resp.Body)
-		if err != nil {
-			return fmt.Errorf("reading repositories.xml: %w", err)
-		}
-	} else {
-		data, err = os.ReadFile(repositoriesFile)
-		if err != nil {
-			return fmt.Errorf("reading repositories.xml file: %w", err)
+		for _, f := range rc.Files {
+			for _, s := range f.Sections {
+				if s.Name == "DEFAULT" || s.Disabled {
+					continue
+				}
+				loc := s.Get("location")
+				syncURI := s.Get("sync-uri")
+				if syncURI != "" {
+					repos.Repositories = append(repos.Repositories, g2.Repository{
+						Name: s.Name,
+						Sources: []g2.RepositorySource{{Type: "git", Text: syncURI}},
+					})
+				} else if loc != "" {
+					repos.Repositories = append(repos.Repositories, g2.Repository{
+						Name: s.Name,
+						Sources: []g2.RepositorySource{{Type: "git", Text: loc}},
+					})
+				}
+			}
 		}
 	}
 
-	var repos g2.Repositories
-	if err := xml.Unmarshal(data, &repos); err != nil {
-		return fmt.Errorf("parsing repositories.xml: %w", err)
+	if repositoriesFile != "" {
+		var data []byte
+		var err error
+
+		if repositoriesFile == "-" {
+			data, err = io.ReadAll(os.Stdin)
+			if err != nil {
+				return fmt.Errorf("reading repositories.xml from stdin: %w", err)
+			}
+		} else if strings.HasPrefix(repositoriesFile, "http://") || strings.HasPrefix(repositoriesFile, "https://") {
+			// Convert github blob URL to raw URL to download the actual XML content, not the HTML page.
+			if strings.HasPrefix(repositoriesFile, "https://github.com/") && strings.Contains(repositoriesFile, "/blob/") {
+				repositoriesFile = strings.Replace(repositoriesFile, "https://github.com/", "https://raw.githubusercontent.com/", 1)
+				repositoriesFile = strings.Replace(repositoriesFile, "/blob/", "/", 1)
+			}
+			resp, err := http.Get(repositoriesFile)
+			if err != nil {
+				return fmt.Errorf("fetching repositories.xml: %w", err)
+			}
+			defer func() { _ = resp.Body.Close() }()
+			data, err = io.ReadAll(resp.Body)
+			if err != nil {
+				return fmt.Errorf("reading repositories.xml: %w", err)
+			}
+		} else {
+			data, err = os.ReadFile(repositoriesFile)
+			if err != nil {
+				return fmt.Errorf("reading repositories.xml file: %w", err)
+			}
+		}
+
+		var fileRepos g2.Repositories
+		if err := xml.Unmarshal(data, &fileRepos); err != nil {
+			return fmt.Errorf("parsing repositories.xml: %w", err)
+		}
+		repos.Repositories = append(repos.Repositories, fileRepos.Repositories...)
 	}
 
 	// Create a temporary or persistent directory to clone repos into
@@ -3909,6 +3974,7 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, 
 		}
 		cleanup = func() {}
 	} else {
+		var err error
 		tmpDir, err = os.MkdirTemp("", "g2-sitegen-*")
 		if err != nil {
 			return fmt.Errorf("creating temp dir: %w", err)
@@ -3920,6 +3986,11 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, 
 	var allSites []*SiteData
 	var allSitesMu sync.Mutex
 	var lastLogTime time.Time
+
+	var processedRepos int
+	var totalCategories int
+	var totalPackages int
+	var totalPackageVersions int
 
 	g, _ := errgroup.WithContext(context.Background())
 	if concurrency > 0 {
@@ -3965,17 +4036,33 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, 
 				return nil
 			}
 			checkoutTime := time.Since(t0)
-			freeSpace, err := getFreeSpace(repoPath)
-			var memStats runtime.MemStats
-			runtime.ReadMemStats(&memStats)
-			if err == nil {
-				log.Printf("[DONE] Finished fetching repository %s in %s. Free space: %.2f MB, Total memory usage: %.2f MB", repo.Name, checkoutTime, float64(freeSpace)/(1024*1024), float64(memStats.Alloc)/(1024*1024))
-			} else {
-				log.Printf("[DONE] Finished fetching repository %s in %s. Total memory usage: %.2f MB", repo.Name, checkoutTime, float64(memStats.Alloc)/(1024*1024))
-			}
+      freeSpace, err := getFreeSpace(repoPath)
+      procMem := getProcessMemUsage()
 
-			log.Printf("[START] Parsing repository: %s", repo.Name)
+      var memStats runtime.MemStats
+      runtime.ReadMemStats(&memStats)
 
+      if err == nil {
+        log.Printf(
+          "[DONE] Finished fetching repository %s in %s. Free space: %.2f MB. Process Memory: %.2f MB. Go Alloc: %.2f MB",
+          repo.Name,
+          checkoutTime,
+          float64(freeSpace)/(1024*1024),
+          float64(procMem)/(1024*1024),
+          float64(memStats.Alloc)/(1024*1024),
+        )
+      } else {
+        log.Printf(
+          "[DONE] Finished fetching repository %s in %s. Process Memory: %.2f MB. Go Alloc: %.2f MB",
+          repo.Name,
+          checkoutTime,
+          float64(procMem)/(1024*1024),
+          float64(memStats.Alloc)/(1024*1024),
+        )
+      }
+
+      log.Printf("[START] Parsing repository: %s", repo.Name)
+      
 			size, err := getDirSize(repoPath)
 			var gitSize string
 			if err == nil {
@@ -3992,8 +4079,11 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, 
 			}
 			processTime := time.Since(t1)
 			freeSpaceAfter, err := getFreeSpace(repoPath)
+			procMemAfter := getProcessMemUsage()
+
 			var memStatsAfter runtime.MemStats
 			runtime.ReadMemStats(&memStatsAfter)
+
 			nodeCount := 0
 			if siteData != nil {
 				nodeCount = len(siteData.Categories) + siteData.PackageCount + len(siteData.Profiles) + len(siteData.News) + len(siteData.Moves) + len(siteData.DefinedEclasses)
@@ -4003,18 +4093,48 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, 
 					}
 				}
 			}
+
 			if err == nil {
-				log.Printf("[DONE] Finished parsing repository %s in %s. Free space: %.2f MB, Total memory usage: %.2f MB, Nodes: %d", repo.Name, processTime, float64(freeSpaceAfter)/(1024*1024), float64(memStatsAfter.Alloc)/(1024*1024), nodeCount)
+				log.Printf(
+					"[DONE] Finished parsing repository %s in %s. Free space: %.2f MB. Process Memory: %.2f MB. Go Alloc: %.2f MB. Nodes: %d",
+					repo.Name,
+					processTime,
+					float64(freeSpaceAfter)/(1024*1024),
+					float64(procMemAfter)/(1024*1024),
+					float64(memStatsAfter.Alloc)/(1024*1024),
+					nodeCount,
+				)
 			} else {
-				log.Printf("[DONE] Finished parsing repository %s in %s. Total memory usage: %.2f MB, Nodes: %d", repo.Name, processTime, float64(memStatsAfter.Alloc)/(1024*1024), nodeCount)
+				log.Printf(
+					"[DONE] Finished parsing repository %s in %s. Process Memory: %.2f MB. Go Alloc: %.2f MB. Nodes: %d",
+					repo.Name,
+					processTime,
+					float64(procMemAfter)/(1024*1024),
+					float64(memStatsAfter.Alloc)/(1024*1024),
+					nodeCount,
+				)
 			}
 
 			siteData.CheckoutTime = checkoutTime.String()
 			siteData.ProcessTime = processTime.String()
 			siteData.GitSize = gitSize
-
 			allSitesMu.Lock()
 			allSites = append(allSites, siteData)
+
+			processedRepos++
+			totalCategories += len(siteData.Categories)
+
+			repoPackages := 0
+			repoPackageVersions := 0
+			for _, cat := range siteData.Categories {
+				repoPackages += len(cat.Packages)
+				for _, pkg := range cat.Packages {
+					repoPackageVersions += len(pkg.Versions)
+				}
+			}
+			totalPackages += repoPackages
+			totalPackageVersions += repoPackageVersions
+
 			now := time.Now()
 			if lastLogTime.IsZero() || now.Sub(lastLogTime) >= 10*time.Minute {
 				lastLogTime = now
@@ -4027,11 +4147,23 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, 
 				}
 				log.Printf("[PROGRESS] Currently processed %d repositories and %d total packages so far", currentRepos, currentPackages)
 			}
+
+			if processedRepos%10 == 0 {
+				memUsage := getProcessMemUsage()
+				log.Printf("[PROGRESS] Processed %d repositories. Memory Usage: %.2f MB. Cumulative: Categories: %d, Packages: %d, Versions: %d",
+					processedRepos,
+					float64(memUsage)/(1024*1024),
+					totalCategories,
+					totalPackages,
+					totalPackageVersions,
+				)
+			}
+
 			allSitesMu.Unlock()
 			return nil
 		})
 	}
-	if err := g.Wait(); err != nil {
+  if err := g.Wait(); err != nil {
 		if !continueOnError {
 			return fmt.Errorf("parallel repository fetching: %w", err)
 		}
@@ -4041,6 +4173,16 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, 
 	sort.Slice(allSites, func(i, j int) bool {
 		return allSites[i].RepoName < allSites[j].RepoName
 	})
+
+	finalMemUsage := getProcessMemUsage()
+	log.Printf("--------------------------------------------------")
+	log.Printf("[FINAL SUMMARY] Repository Processing Complete")
+	log.Printf("Total Repositories:      %d", len(allSites))
+	log.Printf("Total Categories:        %d", totalCategories)
+	log.Printf("Total Packages:          %d", totalPackages)
+	log.Printf("Total Package Versions:  %d", totalPackageVersions)
+	log.Printf("Final Memory Usage:      %.2f MB", float64(finalMemUsage)/(1024*1024))
+	log.Printf("--------------------------------------------------")
 
 	log.Printf("Generating integrated site (v%s) for %d repos", version, len(allSites))
 	if err := generateSite(outDir, allSites, recentDuration, recentDurationStr, GenerationInfo{}); err != nil {
