@@ -1,7 +1,7 @@
 
 <h2>Packages ({{.Repo.RepoName}})</h2>
 <ul>
-    {{range .Packages}}
+    {{range .RepoPackages}}
     <li>
         <a href="../categories/{{.Category}}/packages/{{.Name}}/">{{.Category}}/{{.Name}}</a>
         - Ebuilds: {{.EbuildCount}}{{if .HighestStableVersion}}, Stable: {{.HighestStableVersion}}{{end}}{{if .HighestTestingVersion}}, Testing: {{.HighestTestingVersion}}{{end}}

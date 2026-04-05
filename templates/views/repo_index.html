@@ -167,7 +167,7 @@
     {{if gt (len .Repo.Masked) 0}}
     <li><a href="masked/">Masked Packages ({{len .Repo.Masked}})</a></li>
     {{end}}
-    {{if .RecentNews}}
+    {{if .RecentRepoNews}}
     <li><a href="news/">News ({{len .Repo.News}})</a></li>
     {{end}}
 </ul>
@@ -179,10 +179,10 @@
 </ul>
 {{end}}
 
-{{if .RecentNews}}
+{{if .RecentRepoNews}}
 <h2>Recent News</h2>
 <ul>
-    {{range .RecentNews}}
+    {{range .RecentRepoNews}}
     <li><a href="news/archive/{{.DirName}}/">{{.Title}}</a> - {{.Posted.Format "Jan 02, 2006"}}</li>
     {{end}}
 </ul>

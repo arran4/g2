@@ -35,6 +35,8 @@ func (cfg *MainArgConfig) cmdEbuild(args []string) error {
 		fmt.Printf("\t\t %s \t\t %s\n", "check", "A lightweight structural validator for ebuild files (alias: lint)")
 		fmt.Printf("\t\t %s \t\t %s\n", "deps", "Extract and format dependency fields")
 		fmt.Printf("\t\t %s \t\t %s\n", "query", "Query specific fields from parsed output")
+		fmt.Printf("\t\t %s \t\t %s\n", "bump-version", "Rename ebuild to a new version and fix references")
+		fmt.Printf("\t\t %s \t\t %s\n", "tag", "Ebuild specific tag subcommand supporting version comparisons")
 	}
 
 	config := &CmdEbuildArgConfig{
@@ -81,10 +83,18 @@ func (cfg *MainArgConfig) cmdEbuild(args []string) error {
 	case "deps":
 		if err := config.cmdEbuildDeps(fs.Args()[1:]); err != nil {
 			return fmt.Errorf("ebuild deps: %w", err)
-    }
+		}
 	case "query":
 		if err := config.cmdEbuildQuery(fs.Args()[1:]); err != nil {
 			return fmt.Errorf("ebuild query: %w", err)
+		}
+	case "bump-version":
+		if err := config.cmdEbuildBumpVersion(fs.Args()[1:]); err != nil {
+			return fmt.Errorf("ebuild bump-version: %w", err)
+		}
+	case "tag":
+		if err := config.cmdEbuildTag(fs.Args()[1:]); err != nil {
+			return fmt.Errorf("ebuild tag: %w", err)
 		}
 	case "help", "-help", "--help":
 		fs.Usage()
@@ -455,7 +465,15 @@ func convertDepNodeToJSON(node g2.DepNode) *DepNodeJSON {
 	return nil
 }
 
-func (cfg *CmdEbuildArgConfig) cmdEbuildDeps(args []string) error {
+func (cfg *CmdEbuildArgConfig) cmdEbuildDeps(args []string, opts ...any) error {
+	var out io.Writer = os.Stdout
+	for _, opt := range opts {
+		switch o := opt.(type) {
+		case io.Writer:
+			out = o
+		}
+	}
+
 	fs := flag.NewFlagSet("deps", flag.ExitOnError)
 	flatten := fs.Bool("flatten", false, "Flatten dependency trees into a list")
 	atomsOnly := fs.Bool("atoms-only", false, "Extract only package atoms without operators (e.g. dev-libs/foo instead of >=dev-libs/foo-1.2.3)")
@@ -517,13 +535,13 @@ func (cfg *CmdEbuildArgConfig) cmdEbuildDeps(args []string) error {
 					fileDeps.Deps[field] = flatDeps
 				} else {
 					if *onePerLine {
-						fmt.Printf("### %s - %s\n", filename, field)
+						_, _ = fmt.Fprintf(out, "### %s - %s\n", filename, field)
 						for _, d := range flatDeps {
-							fmt.Println(d)
+							_, _ = fmt.Fprintln(out, d)
 						}
-						fmt.Println()
+						_, _ = fmt.Fprintln(out)
 					} else {
-						fmt.Printf("### %s - %s\n%s\n\n", filename, field, strings.Join(flatDeps, " "))
+						_, _ = fmt.Fprintf(out, "### %s - %s\n%s\n\n", filename, field, strings.Join(flatDeps, " "))
 					}
 				}
 			} else {
@@ -539,13 +557,13 @@ func (cfg *CmdEbuildArgConfig) cmdEbuildDeps(args []string) error {
 						// For raw string output, splitting by space is a naive approach,
 						// but since users requested one-per-line for standard format,
 						// printing evaluated/flattened is better, or splitting the raw string.
-						fmt.Printf("### %s - %s\n", filename, field)
+						_, _ = fmt.Fprintf(out, "### %s - %s\n", filename, field)
 						for _, token := range strings.Fields(val) {
-							fmt.Println(token)
+							_, _ = fmt.Fprintln(out, token)
 						}
-						fmt.Println()
+						_, _ = fmt.Fprintln(out)
 					} else {
-						fmt.Printf("### %s - %s\n%s\n\n", filename, field, val)
+						_, _ = fmt.Fprintf(out, "### %s - %s\n%s\n\n", filename, field, val)
 					}
 				}
 			}
@@ -557,11 +575,11 @@ func (cfg *CmdEbuildArgConfig) cmdEbuildDeps(args []string) error {
 	}
 
 	if *jsonOutput {
-		out, err := json.MarshalIndent(allFilesDeps, "", "\t")
+		outBytes, err := json.MarshalIndent(allFilesDeps, "", "\t")
 		if err != nil {
 			return fmt.Errorf("failed to marshal JSON: %w", err)
 		}
-		fmt.Println(string(out))
+		_, _ = fmt.Fprintln(out, string(outBytes))
 	}
 
 	return nil

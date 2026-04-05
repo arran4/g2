@@ -24,6 +24,9 @@ type PackageDeprecated struct {
 	Entries     []PackageDeprecatedEntry
 }
 
+// Match: # Michał Górny <mgorny@gentoo.org> (2025-11-25)
+var authorLineRegex = regexp.MustCompile(`^#\s*(.*?)\s*<(.*?)>\s*\((.*?)\)$`)
+
 func parsePackageDeprecatedReader(r io.Reader) ([]PackageDeprecated, error) {
 	var results []PackageDeprecated
 	scanner := bufio.NewScanner(r)
@@ -31,9 +34,6 @@ func parsePackageDeprecatedReader(r io.Reader) ([]PackageDeprecated, error) {
 	var currentReason []string
 	var currentAuthor, currentEmail, currentDate string
 	var currentEntries []PackageDeprecatedEntry
-
-	// Match: # Michał Górny <mgorny@gentoo.org> (2025-11-25)
-	authorLineRegex := regexp.MustCompile(`^#\s*(.*?)\s*<(.*?)>\s*\((.*?)\)$`)
 
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
@@ -172,15 +172,19 @@ func wrapText(text string, width int) []string {
 		return lines
 	}
 
-	currentLine := words[0]
+	var currentLine strings.Builder
+	currentLine.WriteString(words[0])
+
 	for _, word := range words[1:] {
-		if len(currentLine)+1+len(word) > width {
-			lines = append(lines, currentLine)
-			currentLine = word
+		if currentLine.Len()+1+len(word) > width {
+			lines = append(lines, currentLine.String())
+			currentLine.Reset()
+			currentLine.WriteString(word)
 		} else {
-			currentLine += " " + word
+			currentLine.WriteByte(' ')
+			currentLine.WriteString(word)
 		}
 	}
-	lines = append(lines, currentLine)
+	lines = append(lines, currentLine.String())
 	return lines
 }

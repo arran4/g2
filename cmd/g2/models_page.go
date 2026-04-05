@@ -17,37 +17,46 @@ type GenericPageContext struct {
 	// Additional data fields used by various templates
 	Repos                []*SiteData
 	GroupedRepos         []RepoGroup
-	Categories           interface{} // Can be []*AggCategory or []CategoryData
-	Packages             interface{} // Can be []*AggPackage or []PackageData
+	GlobalCategories     []*AggCategory
+	RepoCategories       []CategoryData
+	GlobalPackages       []*AggPackage
+	RepoPackages         []PackageData
 	Licenses             []*AggLicense
 	UseFlags             []*AggUseFlag
-	UseExpandDescs        map[string]*g2.UseExpandDesc
-	UseExpandDesc         *g2.UseExpandDesc
+	UseExpandDescs       map[string]*g2.UseExpandDesc
+	UseExpandDesc        *g2.UseExpandDesc
 	Projects             []*AggProject
 	Eclass               *AggEclass
 	Eclasses             []*AggEclass
-	Profiles             interface{} // Can be []*AggProfile or []ProfileData
+	GlobalProfiles       []*g2.AggProfile
+	RepoProfiles         []g2.ProfileData
 	Arches               []*AggArch
 	RecentDurationString string
-	RecentNews           interface{} // Can be []AggNewsItem or []g2.NewsItem
+	RecentGlobalNews     []AggNewsItem
+	RecentRepoNews       []g2.NewsItem
 	GlobalNews           []AggNewsItem
 	News                 []g2.NewsItem
-	NewsItem             interface{}
-	Category             map[string]interface{}
+	GlobalNewsItem       *AggNewsItem
+	RepoNewsItem         *g2.NewsItem
+	GlobalCategory       *AggCategory
+	RepoCategory         *CategoryData
 	OldName              string
 	NewName              string
 	NewURL               string
-	Package              interface{}
+	GlobalPackage        *AggPackage
+	RepoPackage          *PackageData
 	MovedToName          string
 	MovedToURL           string
 	ProfilePath          string
-	ProfileList          interface{} // Can be []AggProfileRepo
-	Profile              interface{}
+	ProfileList          []g2.AggProfileRepo
+	GlobalProfile        *g2.AggProfile
+	RepoProfile          *g2.ProfileData
 	FileName             string
 	FileContent          string
 	Arch                 *AggArch
-	UseFlag              interface{}
-	License              map[string]interface{}
+	GlobalUseFlag        *AggUseFlag
+	RepoUseFlag          *g2.UseFlag
+	License              *AggLicense
 	Project              *AggProject
 	Repo                 *SiteData
 	PackageCount         int
@@ -58,8 +67,14 @@ type GenericPageContext struct {
 	Authors              []g2.Author
 	ValidLicenses        map[string]bool
 	RepoName             string
-	Group                interface{}
-	VersionData          interface{}
+	Group                *RepoGroup
+	VersionData          *VersionData
 	FilteredManifest     []ManifestEntryData
-	Manifest             interface{}
+	Manifest             *ManifestEntryData
+
+	// Legacy generic interface overrides for TmplPkgs and map
+	Category map[string]interface{}
+	Package any
+	Packages any
+	UseFlag any
 }
