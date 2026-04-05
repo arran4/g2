@@ -55,12 +55,21 @@ type SourceURL string
 
 type FileContent interface {
 	Get() (*[]byte, error)
+	String() string
 }
 
 type WeakFileContent struct {
 	weakPtr weak.Pointer[[]byte]
 	loader  func() (io.ReadCloser, error)
 	mu      sync.Mutex
+}
+
+func (f *WeakFileContent) String() string {
+	b, err := f.Get()
+	if err != nil || b == nil {
+		return ""
+	}
+	return string(*b)
 }
 
 func (f *WeakFileContent) Get() (*[]byte, error) {
@@ -87,13 +96,21 @@ func (f *WeakFileContent) Get() (*[]byte, error) {
 	return ptr, nil
 }
 
-type StreamFileContent struct {
+type LazyFileContent struct {
 	strongPtr []byte
 	loader    func() (io.ReadCloser, error)
 	mu        sync.Mutex
 }
 
-func (f *StreamFileContent) Get() (*[]byte, error) {
+func (f *LazyFileContent) String() string {
+	b, err := f.Get()
+	if err != nil || b == nil {
+		return ""
+	}
+	return string(*b)
+}
+
+func (f *LazyFileContent) Get() (*[]byte, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
@@ -121,6 +138,14 @@ type MmapFileContent struct {
 	mu   sync.Mutex
 }
 
+func (m *MmapFileContent) String() string {
+	b, err := m.Get()
+	if err != nil || b == nil {
+		return ""
+	}
+	return string(*b)
+}
+
 func (m *MmapFileContent) Get() (*[]byte, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -129,6 +154,18 @@ func (m *MmapFileContent) Get() (*[]byte, error) {
 		return nil, err
 	}
 	return &b, nil
+}
+
+type MemoryFileContent struct {
+	content []byte
+}
+
+func (m *MemoryFileContent) Get() (*[]byte, error) {
+	return &m.content, nil
+}
+
+func (m *MemoryFileContent) String() string {
+	return string(m.content)
 }
 
 type ProfileData struct {
@@ -1716,18 +1753,15 @@ func parseProfilesDirFS(sysFS fs.FS, repoDir string, entries []ProfileDescEntry)
 				pData.Files[fname] = fc
 
 				if fname == "parent" {
-					b, err := fc.Get()
-					if err == nil {
-						lines := strings.Split(string(*b), "\n")
-						for _, line := range lines {
-							line = strings.TrimSpace(line)
-							if line == "" || strings.HasPrefix(line, "#") {
-								continue
-							}
-							parentRelPath := path2.Clean(path2.Join(relPath, line))
-							if !strings.HasPrefix(parentRelPath, "..") {
-								pData.Parents = append(pData.Parents, parentRelPath)
-							}
+					lines := strings.Split(fc.String(), "\n")
+					for _, line := range lines {
+						line = strings.TrimSpace(line)
+						if line == "" || strings.HasPrefix(line, "#") {
+							continue
+						}
+						parentRelPath := path2.Clean(path2.Join(relPath, line))
+						if !strings.HasPrefix(parentRelPath, "..") {
+							pData.Parents = append(pData.Parents, parentRelPath)
 						}
 					}
 				}
@@ -3382,11 +3416,7 @@ func generateRepoPages(outDir string, tmpl *template.Template, sites []*SiteData
 				}
 
 				for fName, fc := range p.Files {
-					b, err := fc.Get()
-					var fContent string
-					if err == nil {
-						fContent = string(*b)
-					}
+					fContent := fc.String()
 					if err := renderPage(filepath.Join(profDir, fName+".html"), tmpl, "repo_profile_file.html", GenericPageContext{
 						Title:       site.RepoName + " - Profile File: " + fName,
 						BaseURL:     relToRoot,
