@@ -116,6 +116,16 @@ func updatePersistentRepo(ctx context.Context, destDir string) error {
 	return nil
 }
 
+type WriteFS interface {
+	MkdirAll(path string, perm os.FileMode) error
+	Create(name string) (io.WriteCloser, error)
+}
+
+type osWriteFS struct{}
+
+func (osWriteFS) MkdirAll(path string, perm os.FileMode) error { return os.MkdirAll(path, perm) }
+func (osWriteFS) Create(name string) (io.WriteCloser, error)   { return os.Create(name) }
+
 func fetchRepoAttempt(ctx context.Context, gitUrl string, destDir string, useZip bool, persistent bool) error {
 	if persistent {
 		gitDir := filepath.Join(destDir, ".git")
@@ -146,7 +156,7 @@ func fetchRepoAttempt(ctx context.Context, gitUrl string, destDir string, useZip
 			if converter != nil {
 				zipUrl, err := converter(gitUrl)
 				if err == nil {
-					if err := downloadAndExtractZip(ctx, zipUrl, destDir); err == nil {
+					if err := downloadAndExtractZip(ctx, zipUrl, destDir, osWriteFS{}); err == nil {
 						return nil
 					}
 					// If zip fails, we fallback to git clone
@@ -162,7 +172,7 @@ func fetchRepoAttempt(ctx context.Context, gitUrl string, destDir string, useZip
 	return cmd.Run()
 }
 
-func downloadAndExtractZip(ctx context.Context, zipUrl string, destDir string) error {
+func downloadAndExtractZip(ctx context.Context, zipUrl string, destDir string, wfs WriteFS) error {
 	req, err := http.NewRequestWithContext(ctx, "GET", zipUrl, nil)
 	if err != nil {
 		return err
@@ -216,7 +226,7 @@ func downloadAndExtractZip(ctx context.Context, zipUrl string, destDir string) e
 		}
 	}
 
-	if err := os.MkdirAll(destDir, 0755); err != nil {
+	if err := wfs.MkdirAll(destDir, 0755); err != nil {
 		return err
 	}
 
@@ -229,12 +239,17 @@ func downloadAndExtractZip(ctx context.Context, zipUrl string, destDir string) e
 			relPath = strings.TrimPrefix(f.Name, rootPrefix)
 		}
 
-		targetPath := filepath.Clean(filepath.Join(destDir, relPath))
-		if !strings.HasPrefix(targetPath, filepath.Clean(destDir)+string(os.PathSeparator)) && targetPath != filepath.Clean(destDir) {
-			continue
+		localPath := filepath.FromSlash(relPath)
+		if localPath == "" {
+			continue // Root directory entry stripped by rootPrefix logic
+		}
+		if !filepath.IsLocal(localPath) {
+			return fmt.Errorf("zip slip vulnerability detected: invalid path %q", relPath)
 		}
 
-		if err := os.MkdirAll(filepath.Dir(targetPath), 0755); err != nil {
+		targetPath := filepath.Join(destDir, localPath)
+
+		if err := wfs.MkdirAll(filepath.Dir(targetPath), 0755); err != nil {
 			return err
 		}
 
@@ -243,7 +258,7 @@ func downloadAndExtractZip(ctx context.Context, zipUrl string, destDir string) e
 			return err
 		}
 
-		out, err := os.Create(targetPath)
+		out, err := wfs.Create(targetPath)
 		if err != nil {
 			_ = rc.Close()
 			return err
