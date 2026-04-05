@@ -1,45 +1,45 @@
-<h2><a href="../../">{{.Package.Category}}</a>/<a href="">{{.Package.Name}}</a> (<a href="../../../../">{{.Repo.RepoName}}</a>)</h2>
+<h2><a href="../../">{{.RepoPackage.Category}}</a>/<a href="">{{.RepoPackage.Name}}</a> (<a href="../../../../">{{.Repo.RepoName}}</a>)</h2>
 
 <div class="metadata-section">
     <h3>Search</h3>
     <form action="{{.BaseURL}}search/" method="get">
-        <input type="text" name="q" value="overlay:{{.Repo.RepoName}} category:{{.Package.Category}} {{.Package.Name}} " placeholder="Search packages, descriptions, use flags..." style="width: 80%; padding: 0.5rem;" />
+        <input type="text" name="q" value="overlay:{{.Repo.RepoName}} category:{{.RepoPackage.Category}} {{.RepoPackage.Name}} " placeholder="Search packages, descriptions, use flags..." style="width: 80%; padding: 0.5rem;" />
         <button type="submit" style="padding: 0.5rem;">Search</button>
     </form>
 </div>
 
-{{if .Package.Deprecated}}
+{{if .RepoPackage.Deprecated}}
 <div class="alert alert-danger" style="border-color: #ff4c4c; background-color: #ffe6e6;">
     <strong><a href="../../../deprecated/">Deprecated:</a></strong> This package is deprecated.
-    <p><em>Reason:</em> {{.Package.Deprecated.Reason}}</p>
-    <p><small>Deprecated by {{.Package.Deprecated.Author}} on {{.Package.Deprecated.Date}}</small></p>
+    <p><em>Reason:</em> {{.RepoPackage.Deprecated.Reason}}</p>
+    <p><small>Deprecated by {{.RepoPackage.Deprecated.Author}} on {{.RepoPackage.Deprecated.Date}}</small></p>
 </div>
 {{end}}
 
-{{if .Package.Masked}}
+{{if .RepoPackage.Masked}}
 <div class="alert alert-danger" style="border-color: #ff4c4c; background-color: #ffe6e6;">
     <strong><a href="../../../masked/">Masked:</a></strong> This package is masked.
-    <p><em>Reason:</em> {{.Package.Masked.Reason}}</p>
-    <p><small>Masked by {{.Package.Masked.Author}} on {{.Package.Masked.Date}}</small></p>
+    <p><em>Reason:</em> {{.RepoPackage.Masked.Reason}}</p>
+    <p><small>Masked by {{.RepoPackage.Masked.Author}} on {{.RepoPackage.Masked.Date}}</small></p>
 </div>
 {{end}}
 
-{{if .Package.IsInfoPkg}}
+{{if .RepoPackage.IsInfoPkg}}
 <div class="alert alert-info" style="border-color: #17a2b8; background-color: #d1ecf1;">
     <strong>Notice:</strong> This package has been listed as an informative package.
     <a href="{{.BaseURL}}repos/{{.Repo.RepoName}}/info_pkgs/">View the full list here</a>.
 </div>
 {{end}}
 
-{{if .Package.ReverseVirtuals}}
+{{if .RepoPackage.ReverseVirtuals}}
 <div class="alert alert-info">
     <strong>Notice:</strong> This package is in a virtual group:
-    {{range $index, $virtual := .Package.ReverseVirtuals}}{{if $index}}, {{end}}
+    {{range $index, $virtual := .RepoPackage.ReverseVirtuals}}{{if $index}}, {{end}}
     <a href="{{$.BaseURL}}packages/{{index (split $virtual "/") 0}}/{{index (split $virtual "/") 1}}/">{{$virtual}}</a>{{end}}
-    {{if gt (len .Package.Equivalents) 0}}
+    {{if gt (len .RepoPackage.Equivalents) 0}}
     <br/>
     Equivalents:
-    {{range $index, $eq := .Package.Equivalents}}{{if $index}}, {{end}}
+    {{range $index, $eq := .RepoPackage.Equivalents}}{{if $index}}, {{end}}
     <a href="{{$.BaseURL}}packages/{{index (split $eq "/") 0}}/{{index (split $eq "/") 1}}/">{{$eq}}</a>{{end}}
     {{end}}
 </div>
@@ -54,37 +54,37 @@
 <div class="metadata-section">
     <h3>Install</h3>
     <p>Install this package:</p>
-    <pre><code>emerge -a {{.Package.Category}}/{{.Package.Name}}</code></pre>
+    <pre><code>emerge -a {{.RepoPackage.Category}}/{{.RepoPackage.Name}}</code></pre>
     <p>If the package is masked, you can unmask it using the <code>autounmask</code> tool or standard <code>emerge</code> options:</p>
-    <pre><code>autounmask {{.Package.Category}}/{{.Package.Name}}</code></pre>
+    <pre><code>autounmask {{.RepoPackage.Category}}/{{.RepoPackage.Name}}</code></pre>
     <p>Or alternatively:</p>
-    <pre><code>emerge --autounmask-write -a {{.Package.Category}}/{{.Package.Name}}</code></pre>
+    <pre><code>emerge --autounmask-write -a {{.RepoPackage.Category}}/{{.RepoPackage.Name}}</code></pre>
 </div>
 
 <div class="metadata-section">
     <h3>Package Information</h3>
     <dl>
-        {{if .Package.DominantDescription}}
+        {{if .RepoPackage.DominantDescription}}
         <dt><strong>Description:</strong></dt>
-        <dd>{{.Package.DominantDescription}}</dd>
+        <dd>{{.RepoPackage.DominantDescription}}</dd>
         {{end}}
-        {{if .Package.DominantHomepage}}
+        {{if .RepoPackage.DominantHomepage}}
         <dt><strong>Homepage:</strong></dt>
-        <dd><a href="{{.Package.DominantHomepage}}">{{.Package.DominantHomepage}}</a></dd>
+        <dd><a href="{{.RepoPackage.DominantHomepage}}">{{.RepoPackage.DominantHomepage}}</a></dd>
         {{end}}
-        {{if .Package.DominantLicense}}
+        {{if .RepoPackage.DominantLicense}}
         <dt><strong>License:</strong></dt>
-        <dd>{{if and .Package.DominantLicense (index $.ValidLicenses .Package.DominantLicense)}}<a href="../../../../../../licenses/{{slugify .Package.DominantLicense}}/">{{.Package.DominantLicense}}</a>{{else}}{{.Package.DominantLicense}}{{end}}</dd>
+        <dd>{{if and .RepoPackage.DominantLicense (index $.ValidLicenses .RepoPackage.DominantLicense)}}<a href="../../../../../../licenses/{{slugify .RepoPackage.DominantLicense}}/">{{.RepoPackage.DominantLicense}}</a>{{else}}{{.RepoPackage.DominantLicense}}{{end}}</dd>
         {{end}}
     </dl>
 </div>
 
-{{if and (or (eq .Package.Category "virtual") (hasPrefix .Package.Category "virtual-")) .Package.VirtualDeps}}
+{{if and (or (eq .RepoPackage.Category "virtual") (hasPrefix .RepoPackage.Category "virtual-")) .RepoPackage.VirtualDeps}}
 <div class="metadata-section">
     <h3>Virtual Group Dependencies</h3>
     <p>This virtual package provides the following dependencies:</p>
     <ul>
-        {{range .Package.VirtualDeps}}
+        {{range .RepoPackage.VirtualDeps}}
         <li>
             <a href="{{$.BaseURL}}packages/{{.}}/">{{.}}</a>
         </li>
@@ -102,7 +102,7 @@
             <th>Keywords</th>
             <th>Slot</th>
         </tr>
-        {{range .Package.Versions}}
+        {{range .RepoPackage.Versions}}
         <tr>
             <td><a href="ebuild/{{.Version}}/">{{if .Ebuild.Vars.PV}}{{.Ebuild.Vars.PV}}{{else}}{{.Version}}{{end}}</a>{{if .EbuildRawURL}} <a href="{{.EbuildRawURL}}" style="font-size: 0.8em; font-weight: normal; color: #888;">(raw)</a>{{end}}</td>
             <td>{{.Ebuild.Vars.EAPI}}</td>
@@ -113,22 +113,22 @@
     </table>
 </div>
 
-{{if .Package.Metadata}}
+{{if .RepoPackage.Metadata}}
 <div class="metadata-section">
-    <h3>Metadata {{if .Package.MetadataRawURL}}<a href="{{.Package.MetadataRawURL}}" style="font-size: 0.8em; font-weight: normal; color: #888;">(raw)</a>{{end}}</h3>
-    {{if .Package.Metadata.LongDescription}}
+    <h3>Metadata {{if .RepoPackage.MetadataRawURL}}<a href="{{.RepoPackage.MetadataRawURL}}" style="font-size: 0.8em; font-weight: normal; color: #888;">(raw)</a>{{end}}</h3>
+    {{if .RepoPackage.Metadata.LongDescription}}
     <h4>Description</h4>
     <ul>
-    {{range .Package.Metadata.LongDescription}}
+    {{range .RepoPackage.Metadata.LongDescription}}
         <li>{{.Body}}</li>
     {{end}}
     </ul>
     {{end}}
 
-    {{if .Package.Metadata.Maintainers}}
+    {{if .RepoPackage.Metadata.Maintainers}}
     <h4>Maintainers</h4>
     <ul>
-    {{range .Package.Metadata.Maintainers}}
+    {{range .RepoPackage.Metadata.Maintainers}}
         <li>
             {{if .Name}}{{.Name}}{{else}}Unknown{{end}}
             (<a href="mailto:{{.Email}}">{{.Email}}</a>)
@@ -138,15 +138,15 @@
     </ul>
     {{end}}
 
-    {{if .Package.Metadata.Upstream}}
+    {{if .RepoPackage.Metadata.Upstream}}
     <h4>Upstream</h4>
     <ul>
-    {{if .Package.Metadata.Upstream.BugsTo}}<li>Bugs: <a href="{{.Package.Metadata.Upstream.BugsTo}}">{{.Package.Metadata.Upstream.BugsTo}}</a></li>{{end}}
-    {{if .Package.Metadata.Upstream.Changelog}}<li>Changelog: <a href="{{.Package.Metadata.Upstream.Changelog}}">{{.Package.Metadata.Upstream.Changelog}}</a></li>{{end}}
-    {{if .Package.Metadata.Upstream.RemoteID}}
+    {{if .RepoPackage.Metadata.Upstream.BugsTo}}<li>Bugs: <a href="{{.RepoPackage.Metadata.Upstream.BugsTo}}">{{.RepoPackage.Metadata.Upstream.BugsTo}}</a></li>{{end}}
+    {{if .RepoPackage.Metadata.Upstream.Changelog}}<li>Changelog: <a href="{{.RepoPackage.Metadata.Upstream.Changelog}}">{{.RepoPackage.Metadata.Upstream.Changelog}}</a></li>{{end}}
+    {{if .RepoPackage.Metadata.Upstream.RemoteID}}
     <li>Remote IDs:
         <ul>
-        {{range .Package.Metadata.Upstream.RemoteID}}
+        {{range .RepoPackage.Metadata.Upstream.RemoteID}}
             <li>{{.Type}}: {{if eq .Type "github"}}<a href="https://github.com/{{.Text}}">{{.Text}}</a>{{else if eq .Type "gitlab"}}<a href="https://gitlab.com/{{.Text}}">{{.Text}}</a>{{else}}{{.Text}}{{end}}</li>
         {{end}}
         </ul>
@@ -155,49 +155,49 @@
     </ul>
     {{end}}
 
-    {{if not .Package.MetadataRawURL}}
+    {{if not .RepoPackage.MetadataRawURL}}
     <details>
         <summary>Raw Metadata XML</summary>
-        <pre>{{.Package.Metadata}}</pre>
+        <pre>{{.RepoPackage.Metadata}}</pre>
     </details>
     {{end}}
 </div>
 {{else}}
 <div class="metadata-section">
-    <h3>Metadata {{if .Package.MetadataRawURL}}<a href="{{.Package.MetadataRawURL}}" style="font-size: 0.8em; font-weight: normal; color: #888;">(raw)</a>{{end}}</h3>
+    <h3>Metadata {{if .RepoPackage.MetadataRawURL}}<a href="{{.RepoPackage.MetadataRawURL}}" style="font-size: 0.8em; font-weight: normal; color: #888;">(raw)</a>{{end}}</h3>
     <p><em>No metadata available.</em></p>
 </div>
 {{end}}
 
-{{if .Package.LintWarnings}}
+{{if .RepoPackage.LintWarnings}}
 <div class="metadata-section" style="border-color: #ffcc00; background-color: #fff9e6;">
     <h3 style="color: #d99900;">Lint Warnings</h3>
     <ul>
-        {{range .Package.LintWarnings}}
+        {{range .RepoPackage.LintWarnings}}
         <li>{{.}}</li>
         {{end}}
     </ul>
 </div>
 {{end}}
 
-{{if .Package.PkgUseFlags}}
+{{if .RepoPackage.PkgUseFlags}}
 <div class="metadata-section">
     <h3>USE Flags</h3>
     <p>
         Manage flags for this package:
-        <code>euse -i &lt;flag&gt; -p {{.Package.Category}}/{{.Package.Name}}</code> |
-        <code>euse -E &lt;flag&gt; -p {{.Package.Category}}/{{.Package.Name}}</code> |
-        <code>euse -D &lt;flag&gt; -p {{.Package.Category}}/{{.Package.Name}}</code>
+        <code>euse -i &lt;flag&gt; -p {{.RepoPackage.Category}}/{{.RepoPackage.Name}}</code> |
+        <code>euse -E &lt;flag&gt; -p {{.RepoPackage.Category}}/{{.RepoPackage.Name}}</code> |
+        <code>euse -D &lt;flag&gt; -p {{.RepoPackage.Category}}/{{.RepoPackage.Name}}</code>
     </p>
     <table>
         <tr>
             <th>Flag</th>
             <th>Description</th>
-            {{range .Package.Versions}}
+            {{range .RepoPackage.Versions}}
             <th>{{if .Ebuild.Vars.PV}}{{.Ebuild.Vars.PV}}{{else}}{{.Version}}{{end}}</th>
             {{end}}
         </tr>
-        {{range $flag := .Package.PkgUseFlags}}
+        {{range $flag := .RepoPackage.PkgUseFlags}}
         <tr>
             <td><a href="../../../../uses/{{$flag.Name}}/">{{$flag.Name}}</a></td>
             <td>
@@ -206,7 +206,7 @@
                 <span title="Description not explicitly defined in this package's metadata.xml, use.local.desc, or global use.desc. Source: {{if $flag.Source}}{{$flag.Source}}{{else}}Unknown{{end}}" style="cursor: help;">⚠️</span>
                 {{end}}
             </td>
-            {{range $.Package.Versions}}
+            {{range $.RepoPackage.Versions}}
             {{$verName := .Version}}{{if .Ebuild.Vars.PV}}{{$verName = .Ebuild.Vars.PV}}{{end}}
             <td style="text-align: center;" title="Status of USE flag '{{$flag.Name}}' for version {{$verName}}">{{index $flag.Versions $verName}}</td>
             {{end}}
@@ -216,11 +216,11 @@
 </div>
 {{end}}
 
-{{if .Package.Files}}
+{{if .RepoPackage.Files}}
 <div class="metadata-section">
     <h3>Files</h3>
     <ul>
-        {{range .Package.Files}}
+        {{range .RepoPackage.Files}}
         <li>
             {{if .RawURL}}<a href="{{.RawURL}}">{{.Name}}</a>{{else}}{{.Name}}{{end}}
         </li>
@@ -229,7 +229,7 @@
 </div>
 {{end}}
 
-{{if .Package.ManifestData}}
+{{if .RepoPackage.ManifestData}}
 <div class="metadata-section">
     <h3>Manifest</h3>
     <table>
@@ -239,7 +239,7 @@
             <th>Size</th>
             <th>Versions</th>
         </tr>
-        {{range .Package.ManifestData}}
+        {{range .RepoPackage.ManifestData}}
         {{if .Versions}}
         <tr>
             <td>{{.Entry.Type}}</td>
@@ -254,14 +254,13 @@
     </table>
     <details>
         <summary>Unmatched Entries</summary>
-        <!-- TODO: add to lint, and create a subcommand manifest clean, manifest verify, manifest verify -download etc -->
         <table>
             <tr>
                 <th>Type</th>
                 <th>File</th>
                 <th>Size</th>
             </tr>
-            {{range .Package.ManifestData}}
+            {{range .RepoPackage.ManifestData}}
             {{if not .Versions}}
             <tr>
                 <td>{{.Entry.Type}}</td>

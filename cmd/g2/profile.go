@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"text/tabwriter"
+
+	"github.com/arran4/g2"
 )
 
 func ProfileCommand(args []string) error {
@@ -32,7 +34,7 @@ func profileListCommand(args []string) error {
 	_ = fs.Parse(args)
 
 	profilesDescBytes, err := os.ReadFile(filepath.Join(*repoDir, "profiles", "profiles.desc"))
-	var profilesDescEntries []ProfileDescEntry
+	var profilesDescEntries []g2.ProfileDescEntry
 	if err == nil {
 		profilesDescEntries = parseProfilesDesc(string(profilesDescBytes))
 	}
@@ -71,7 +73,7 @@ func profileDescribeCommand(args []string) error {
 	profilePath := positionals[0]
 
 	profilesDescBytes, err := os.ReadFile(filepath.Join(*repoDir, "profiles", "profiles.desc"))
-	var profilesDescEntries []ProfileDescEntry
+	var profilesDescEntries []g2.ProfileDescEntry
 	if err == nil {
 		profilesDescEntries = parseProfilesDesc(string(profilesDescBytes))
 	}
@@ -81,7 +83,7 @@ func profileDescribeCommand(args []string) error {
 		return fmt.Errorf("failed to parse profiles: %w", err)
 	}
 
-	var targetProfile *ProfileData
+		var targetProfile *g2.ProfileData
 	for i, p := range profilesData {
 		if p.Path == profilePath {
 			targetProfile = &profilesData[i]

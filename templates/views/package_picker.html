@@ -1,5 +1,5 @@
 
-<h2>Package: {{.Package.Category}}/{{.Package.Name}}</h2>
+<h2>Package: {{.RepoPackage.Category}}/{{.RepoPackage.Name}}</h2>
 {{if .MovedToName}}
 <div class="alert alert-warning">
     <strong>Notice:</strong> Older versions of this package were moved to <a href="{{.MovedToURL}}">{{.MovedToName}}</a>.
@@ -7,7 +7,7 @@
 {{end}}
 <p>This package is available in multiple overlays. Please select one:</p>
 <ul>
-    {{range .Package.ReposList}}
-    <li><a href="{{$.BaseURL}}repos/{{.RepoName}}/categories/{{$.Package.Category}}/packages/{{$.Package.Name}}/">{{.RepoName}}</a></li>
+    {{range .RepoPackage.ReposList}}
+    <li><a href="{{$.BaseURL}}repos/{{.RepoName}}/categories/{{$.RepoPackage.Category}}/packages/{{$.RepoPackage.Name}}/">{{.RepoName}}</a></li>
     {{end}}
 </ul>

@@ -14,11 +14,11 @@
         {{if gt (len .Repos) 0}}
         <li><a href="overlays/">Overlays ({{len .Repos}})</a></li>
         {{end}}
-        {{if gt (len .Categories) 0}}
-        <li><a href="categories/">Categories ({{len .Categories}})</a></li>
+        {{if gt (len .GlobalCategories) 0}}
+        <li><a href="categories/">Categories ({{len .GlobalCategories}})</a></li>
         {{end}}
-        {{if gt (len .Packages) 0}}
-        <li><a href="packages/">Packages ({{len .Packages}})</a></li>
+        {{if gt (len .GlobalPackages) 0}}
+        <li><a href="packages/">Packages ({{len .GlobalPackages}})</a></li>
         {{end}}
         {{if and .Licenses (gt (len .Licenses) 0)}}
         <li><a href="licenses/">Licenses ({{len .Licenses}})</a></li>
@@ -32,19 +32,21 @@
     {{if gt (len .Eclasses) 0}}
         <li><a href="eclasses/">Eclasses ({{len .Eclasses}})</a></li>
     {{end}}
-        {{if and .Profiles (gt (len .Profiles) 0)}}
+        {{if and .GlobalProfiles (gt (len .GlobalProfiles) 0)}}
         <li><a href="profiles/">Profiles</a></li>
         {{end}}
+        {{if and .Arches (gt (len .Arches) 0)}}
         <li><a href="arches/">Architectures</a></li>
+        {{end}}
         {{if and .GlobalNews (gt (len .GlobalNews) 0)}}
         <li><a href="news/">News ({{len .GlobalNews}})</a></li>
         {{end}}
     </ul>
 </div>
-{{if .RecentNews}}
+{{if .RecentGlobalNews}}
 <h2>Recent News</h2>
 <ul>
-    {{range .RecentNews}}
+    {{range .RecentGlobalNews}}
     <li><a href="news/archive/{{.DirName}}/">{{.Title}}</a> - {{.Posted.Format "Jan 02, 2006"}} {{if .RepoName}}({{.RepoName}}){{end}}</li>
     {{end}}
 </ul>

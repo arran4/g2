@@ -505,104 +505,118 @@ var varExpansionRegex = regexp.MustCompile(`\$\{([a-zA-Z0-9_]+)([^}]*)\}`)
 
 // ResolveVariables replaces ${VAR} and $VAR in the text with values from variables map.
 func ResolveVariables(text string, variables map[string]string) string {
+	if !strings.Contains(text, "$") {
+		return text
+	}
+
 	// Simple resolution: multiple passes until no change or limit reached
 	// To prevent memory exhaustion from self-referential or heavily nested variables,
 	// cap the maximum expanded length.
 	maxLen := 1024 * 1024 // 1MB limit for expanded strings
 
-	// 1. Sort keys by length descending to prevent $P from matching before $PN
 	var keys []string
-	for k := range variables {
-		keys = append(keys, k)
-	}
-	sort.Slice(keys, func(i, j int) bool {
-		return len(keys[i]) > len(keys[j])
-	})
+	var varRefs []string
 
 	for i := 0; i < 5; i++ { // Limit recursion depth
 		original := text
 
-		// 1. Replace all simple $VAR substitutions
-		for _, key := range keys {
-			value := variables[key]
-			varRef := fmt.Sprintf("$%s", key)
-			if strings.Contains(text, varRef) {
-				if strings.Contains(value, varRef) {
-					continue
+		if strings.Contains(text, "$") {
+			// 1. Replace all simple $VAR substitutions
+			if keys == nil {
+				for k := range variables {
+					keys = append(keys, k)
 				}
-				text = strings.ReplaceAll(text, varRef, value)
+				sort.Slice(keys, func(i, j int) bool {
+					return len(keys[i]) > len(keys[j])
+				})
+				for _, k := range keys {
+					varRefs = append(varRefs, "$"+k)
+				}
+			}
+
+			for j, key := range keys {
+				value := variables[key]
+				varRef := varRefs[j]
+				if strings.Contains(text, varRef) {
+					if strings.Contains(value, varRef) {
+						continue
+					}
+					text = strings.ReplaceAll(text, varRef, value)
+				}
+			}
+
+			// 2. Replace all ${VAR...} substitutions
+			if strings.Contains(text, "${") {
+				text = varExpansionRegex.ReplaceAllStringFunc(text, func(match string) string {
+					parts := varExpansionRegex.FindStringSubmatch(match)
+					if len(parts) != 3 {
+						return match
+					}
+					k := parts[1]
+					op := parts[2]
+					v, ok := variables[k]
+
+					if op == "" {
+						if ok {
+							return v
+						}
+						return ""
+					}
+					if strings.HasPrefix(op, ":-") || strings.HasPrefix(op, "-") {
+						defVal := strings.TrimPrefix(strings.TrimPrefix(op, ":-"), "-")
+						if v != "" {
+							return v
+						}
+						return defVal
+					}
+					if strings.HasPrefix(op, "//") {
+						replParts := strings.SplitN(op[2:], "/", 2)
+						if len(replParts) == 2 {
+							return strings.ReplaceAll(v, replParts[0], replParts[1])
+						}
+						return strings.ReplaceAll(v, replParts[0], "")
+					}
+					if strings.HasPrefix(op, "/") {
+						replParts := strings.SplitN(op[1:], "/", 2)
+						if len(replParts) == 2 {
+							return strings.Replace(v, replParts[0], replParts[1], 1)
+						}
+						return strings.Replace(v, replParts[0], "", 1)
+					}
+					if strings.HasPrefix(op, "##") {
+						prefix := op[2:]
+						if strings.HasPrefix(v, prefix) {
+							return v[len(prefix):]
+						}
+						return v
+					}
+					if strings.HasPrefix(op, "#") {
+						prefix := op[1:]
+						if strings.HasPrefix(v, prefix) {
+							return v[len(prefix):]
+						}
+						return v
+					}
+					if strings.HasPrefix(op, "%%") {
+						suffix := op[2:]
+						if strings.HasSuffix(v, suffix) {
+							return v[:len(v)-len(suffix)]
+						}
+						return v
+					}
+					if strings.HasPrefix(op, "%") {
+						suffix := op[1:]
+						if strings.HasSuffix(v, suffix) {
+							return v[:len(v)-len(suffix)]
+						}
+						return v
+					}
+
+					// Unknown operation
+					return match
+				})
 			}
 		}
-
-		// 2. Replace all ${VAR...} substitutions
-		text = varExpansionRegex.ReplaceAllStringFunc(text, func(match string) string {
-			parts := varExpansionRegex.FindStringSubmatch(match)
-			if len(parts) != 3 {
-				return match
-			}
-			k := parts[1]
-			op := parts[2]
-			v, ok := variables[k]
-
-			if op == "" {
-				if ok {
-					return v
-				}
-				return ""
-			}
-			if strings.HasPrefix(op, ":-") || strings.HasPrefix(op, "-") {
-				defVal := strings.TrimPrefix(strings.TrimPrefix(op, ":-"), "-")
-				if v != "" {
-					return v
-				}
-				return defVal
-			}
-			if strings.HasPrefix(op, "//") {
-				replParts := strings.SplitN(op[2:], "/", 2)
-				if len(replParts) == 2 {
-					return strings.ReplaceAll(v, replParts[0], replParts[1])
-				}
-				return strings.ReplaceAll(v, replParts[0], "")
-			}
-			if strings.HasPrefix(op, "/") {
-				replParts := strings.SplitN(op[1:], "/", 2)
-				if len(replParts) == 2 {
-					return strings.Replace(v, replParts[0], replParts[1], 1)
-				}
-				return strings.Replace(v, replParts[0], "", 1)
-			}
-			if strings.HasPrefix(op, "##") {
-				prefix := op[2:]
-				if strings.HasPrefix(v, prefix) {
-					return v[len(prefix):]
-				}
-				return v
-			}
-			if strings.HasPrefix(op, "#") {
-				prefix := op[1:]
-				if strings.HasPrefix(v, prefix) {
-					return v[len(prefix):]
-				}
-				return v
-			}
-			if strings.HasPrefix(op, "%%") {
-				suffix := op[2:]
-				if strings.HasSuffix(v, suffix) {
-					return v[:len(v)-len(suffix)]
-				}
-				return v
-			}
-			if strings.HasPrefix(op, "%") {
-				suffix := op[1:]
-				if strings.HasSuffix(v, suffix) {
-					return v[:len(v)-len(suffix)]
-				}
-				return v
-			}
-
-			// Unknown operation
-			return match
-		})
 
 		if len(text) > maxLen {
 			return text[:maxLen]
@@ -977,16 +991,15 @@ func CompareVersions(v1, v2 string) int {
 	return strings.Compare(v1, v2)
 }
 
+var (
+	reRevisionMatch = regexp.MustCompile(`-r(\d+)$`)
+	reDigitMatch    = regexp.MustCompile(`(\d+)`)
+)
+
 // PadVersionTokens produces a sortable string representation of a gentoo version.
 func PadVersionTokens(v string) string {
-	parseGentooVersion := func(v string) string {
-		v = regexp.MustCompile(`-r(\d+)$`).ReplaceAllString(v, "+r$1")
-		return v
-	}
-
-	v = parseGentooVersion(v)
-	re := regexp.MustCompile(`(\d+)`)
-	return re.ReplaceAllStringFunc(v, func(s string) string {
+	v = reRevisionMatch.ReplaceAllString(v, "+r$1")
+	return reDigitMatch.ReplaceAllStringFunc(v, func(s string) string {
 		return fmt.Sprintf("%010s", s)
 	})
 }
@@ -1058,6 +1071,9 @@ func ParsePackageAtom(dep string) PackageAtom {
 // ExtractPackageNameFromDep strips version, slot, and USE flags from a package string
 // using the AST parser PackageAtom to satisfy architectural requirements.
 func ExtractPackageNameFromDep(dep string) string {
+	if !strings.ContainsAny(dep, "><=~![:") && !strings.Contains(dep, "/*") && !strings.ContainsAny(dep, "0123456789") {
+		return dep
+	}
 	atom := ParsePackageAtom(dep)
 	if atom.Category != "" {
 		return atom.Category + "/" + atom.Name

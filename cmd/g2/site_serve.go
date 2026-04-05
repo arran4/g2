@@ -15,6 +15,8 @@ import (
 	"sync"
 
 	"golang.org/x/sync/errgroup"
+
+	"github.com/arran4/g2"
 )
 
 func (cfg *MainArgConfig) cmdSite(args []string) error {
@@ -35,6 +37,7 @@ func (cfg *MainArgConfig) cmdSiteServe(args []string) error {
 	fs := flag.NewFlagSet("site serve", flag.ExitOnError)
 	port := fs.Int("port", 8080, "Port to run the site server on")
 	concurrency := fs.Int("concurrency", 4, "Maximum number of concurrent repository fetches/parses")
+	reposConfOpt := fs.String("repos-conf", "", "Path to repos.conf file or directory")
 
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -45,7 +48,7 @@ func (cfg *MainArgConfig) cmdSiteServe(args []string) error {
 		location = fs.Arg(0)
 	}
 
-	// Determine if location is a single overlay or we need to fall back to /var/db/repos
+	// Determine if location is a single overlay or we need to fall back to repos.conf / /var/db/repos
 	var sites []*SiteData
 
 	if isOverlayDir(location) {
@@ -56,12 +59,43 @@ func (cfg *MainArgConfig) cmdSiteServe(args []string) error {
 		}
 		sites = append(sites, siteData)
 	} else {
-		dbReposPath := "/var/db/repos"
-		log.Printf("Location %s is not an overlay, checking %s", location, dbReposPath)
+		var repoPaths []string
+		var repoNames []string
 
-		entries, err := os.ReadDir(dbReposPath)
-		if err != nil {
-			return fmt.Errorf("could not read %s: %w", dbReposPath, err)
+		if *reposConfOpt != "" {
+			rc, err := g2.ParseReposConf(*reposConfOpt)
+			if err != nil {
+				return fmt.Errorf("parsing repos.conf: %w", err)
+			}
+			for _, f := range rc.Files {
+				for _, s := range f.Sections {
+					if s.Name == "DEFAULT" || s.Disabled {
+						continue
+					}
+					loc := s.Get("location")
+					if loc != "" {
+						repoPaths = append(repoPaths, loc)
+						repoNames = append(repoNames, s.Name)
+					}
+				}
+			}
+			log.Printf("Location %s is not an overlay, checking %d repos from %s", location, len(repoPaths), *reposConfOpt)
+		} else {
+			dbReposPath := "/var/db/repos"
+			log.Printf("Location %s is not an overlay, checking %s", location, dbReposPath)
+
+			entries, err := os.ReadDir(dbReposPath)
+			if err == nil {
+				for _, entry := range entries {
+					if !entry.IsDir() {
+						continue
+					}
+					repoPaths = append(repoPaths, filepath.Join(dbReposPath, entry.Name()))
+					repoNames = append(repoNames, entry.Name())
+				}
+			} else {
+				return fmt.Errorf("could not read %s: %w", dbReposPath, err)
+			}
 		}
 
 		var sitesMu sync.Mutex
@@ -73,39 +107,36 @@ func (cfg *MainArgConfig) cmdSiteServe(args []string) error {
 			log.Printf("Starting concurrent repository processing with unbounded concurrency")
 		}
 
-		for _, entry := range entries {
-			if !entry.IsDir() {
-				continue
-			}
-			entry := entry
-			repoPath := filepath.Join(dbReposPath, entry.Name())
+		for i, repoPath := range repoPaths {
+			repoPath := repoPath
+			repoName := repoNames[i]
 
 			if isOverlayDir(repoPath) {
 				g.Go(func() error {
-					log.Printf("[START] Parsing repository %s", entry.Name())
-					siteData, err := parseRepo(os.DirFS(repoPath), ".", entry.Name(), false, nil)
+					log.Printf("[START] Parsing repository %s", repoName)
+					siteData, err := parseRepo(os.DirFS(repoPath), ".", repoName, false, nil)
 					if err != nil {
-						log.Printf("Warning: failed to parse repo %s: %v", entry.Name(), err)
+						log.Printf("Warning: failed to parse repo %s: %v", repoName, err)
 						return nil // Don't fail entire group
 					}
 
 					freeSpace, err := getFreeSpace(repoPath)
 					freeMem, memErr := getFreeMemory()
 					if err == nil && memErr == nil {
-						log.Printf("[DONE] Finished parsing repository %s. Free space: %.2f MB. Free memory: %.2f MB", entry.Name(), float64(freeSpace)/(1024*1024), float64(freeMem)/(1024*1024))
+						log.Printf("[DONE] Finished parsing repository %s. Free space: %.2f MB. Free memory: %.2f MB", repoName, float64(freeSpace)/(1024*1024), float64(freeMem)/(1024*1024))
 					} else if err == nil {
-						log.Printf("[DONE] Finished parsing repository %s. Free space: %.2f MB", entry.Name(), float64(freeSpace)/(1024*1024))
+						log.Printf("[DONE] Finished parsing repository %s. Free space: %.2f MB", repoName, float64(freeSpace)/(1024*1024))
 					} else if memErr == nil {
-						log.Printf("[DONE] Finished parsing repository %s. Free memory: %.2f MB", entry.Name(), float64(freeMem)/(1024*1024))
+						log.Printf("[DONE] Finished parsing repository %s. Free memory: %.2f MB", repoName, float64(freeMem)/(1024*1024))
 					} else {
-						log.Printf("[DONE] Finished parsing repository %s", entry.Name())
+						log.Printf("[DONE] Finished parsing repository %s", repoName)
 					}
 
 					sitesMu.Lock()
 					sites = append(sites, siteData)
 					sitesMu.Unlock()
 					return nil
-				})
+        })
 			}
 		}
 
@@ -118,7 +149,7 @@ func (cfg *MainArgConfig) cmdSiteServe(args []string) error {
 		})
 
 		if len(sites) == 0 {
-			return fmt.Errorf("no valid repositories found in %s", dbReposPath)
+			return fmt.Errorf("no valid repositories found from given configuration or default path")
 		}
 	}
 
@@ -220,6 +251,8 @@ func newSiteServer(sites []*SiteData, genInfo GenerationInfo) (*SiteServer, erro
 	aggLicenses := make(map[string]*AggLicense)
 	aggProjects := make(map[string]*AggProject)
 
+	catPkgMap := make(map[string]map[string]*AggPackage)
+
 	for _, site := range sites {
 		if site.Projects != nil {
 			for i := range site.Projects.Projects {
@@ -232,7 +265,8 @@ func newSiteServer(sites []*SiteData, genInfo GenerationInfo) (*SiteServer, erro
 		server.RepoMap[site.RepoName] = site
 		for _, cat := range site.Categories {
 			if _, ok := aggCategories[cat.Name]; !ok {
-				aggCategories[cat.Name] = &AggCategory{Name: cat.Name, Packages: make(map[string]*AggPackage)}
+				aggCategories[cat.Name] = &AggCategory{Name: cat.Name}
+				catPkgMap[cat.Name] = make(map[string]*AggPackage)
 			}
 			for _, pkg := range cat.Packages {
 				pkgKey := cat.Name + "/" + pkg.Name
@@ -249,7 +283,7 @@ func newSiteServer(sites []*SiteData, genInfo GenerationInfo) (*SiteServer, erro
 				if aggPackages[pkgKey].DominantLicense == "" {
 					aggPackages[pkgKey].DominantLicense = pkg.DominantLicense
 				}
-				aggCategories[cat.Name].Packages[pkg.Name] = aggPackages[pkgKey]
+				catPkgMap[cat.Name][pkg.Name] = aggPackages[pkgKey]
 
 				if pkg.Metadata != nil {
 					for _, maint := range pkg.Metadata.Maintainers {
@@ -316,6 +350,15 @@ func newSiteServer(sites []*SiteData, genInfo GenerationInfo) (*SiteServer, erro
 		}
 	}
 
+	for catName, pkgs := range catPkgMap {
+		var sortedPkgs []*AggPackage
+		for _, p := range pkgs {
+			sortedPkgs = append(sortedPkgs, p)
+		}
+		sort.Slice(sortedPkgs, func(i, j int) bool { return sortedPkgs[i].Name < sortedPkgs[j].Name })
+		aggCategories[catName].Packages = sortedPkgs
+	}
+
 	for _, c := range aggCategories {
 		server.AggCategories = append(server.AggCategories, c)
 	}
@@ -362,16 +405,27 @@ func newSiteServer(sites []*SiteData, genInfo GenerationInfo) (*SiteServer, erro
 func (s *SiteServer) renderPageHTTP(w http.ResponseWriter, name string, data map[string]interface{}) {
 	log.Printf("Serving page using template %s", name)
 	var buf bytes.Buffer
+	if err := s.tmpl.ExecuteTemplate(&buf, "layout_header.html", data); err != nil {
+		errWrapped := fmt.Errorf("executing header template for %s: %w", name, err)
+		log.Printf("Error: %v", errWrapped)
+		http.Error(w, errWrapped.Error(), http.StatusInternalServerError)
+		return
+	}
 	if err := s.tmpl.ExecuteTemplate(&buf, name, data); err != nil {
 		errWrapped := fmt.Errorf("executing template %s: %w", name, err)
 		log.Printf("Error: %v", errWrapped)
 		http.Error(w, errWrapped.Error(), http.StatusInternalServerError)
 		return
 	}
+	if err := s.tmpl.ExecuteTemplate(&buf, "layout_footer.html", data); err != nil {
+		errWrapped := fmt.Errorf("executing footer template for %s: %w", name, err)
+		log.Printf("Error: %v", errWrapped)
+		http.Error(w, errWrapped.Error(), http.StatusInternalServerError)
+		return
+	}
 
-	data["Content"] = template.HTML(buf.String())
-	if err := s.tmpl.ExecuteTemplate(w, "layout.html", data); err != nil {
-		log.Printf("Error rendering layout template for %s: %v", name, err)
+	if _, err := w.Write(buf.Bytes()); err != nil {
+		log.Printf("Error writing response for %s: %v", name, err)
 	}
 }
 
@@ -442,12 +496,6 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 
-			var catPkgs []*AggPackage
-			for _, p := range cat.Packages {
-				catPkgs = append(catPkgs, p)
-			}
-			sort.Slice(catPkgs, func(i, j int) bool { return catPkgs[i].Name < catPkgs[j].Name })
-
 			type TmplPkg struct {
 				Name                  string
 				ReposList             []*SiteData
@@ -460,7 +508,7 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				ReverseVirtuals       []string
 			}
 			var tmplPkgs []TmplPkg
-			for _, p := range catPkgs {
+			for _, p := range cat.Packages {
 				var allVersions []VersionData
 				for _, r := range p.Repos {
 					for _, c := range r.Categories {
@@ -583,21 +631,11 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 
-			type TmplPkg struct {
-				Name      string
-				Category  string
-				ReposList []*SiteData
-			}
-			var tmplPkgs []TmplPkg
-			for _, p := range lic.Packages {
-				tmplPkgs = append(tmplPkgs, TmplPkg{Name: p.Name, Category: p.Category, ReposList: mapToList(p.Repos)})
-			}
-
 			s.renderPageHTTP(w, "license.html", map[string]interface{}{
 				"Title":       "License: " + lic.Name,
 				"BaseURL":     baseURL,
 				"Breadcrumbs": []Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: "Licenses", URL: "../"}, {Name: lic.Name}},
-				"License":     map[string]interface{}{"Name": lic.Name, "Packages": tmplPkgs, "Text": lic.Text, "Aliases": lic.Aliases},
+				"License":     lic,
 				"Version":     version,
 				"GenInfo":     s.GenInfo,
 			})
@@ -992,10 +1030,10 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 							profilePath = remaining
 						}
 
-						var targetProfile *ProfileData
-						for _, p := range site.Profiles {
+						var targetProfile *g2.ProfileData
+						for i, p := range site.Profiles {
 							if p.Path == profilePath {
-								targetProfile = &p
+								targetProfile = &site.Profiles[i]
 								break
 							}
 						}

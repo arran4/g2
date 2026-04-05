@@ -152,6 +152,8 @@ g2 ebuild <subcommand>
 * `sh-parse-to-json <ebuild_file>`: Parse an ebuild using the shell parser and output JSON.
 * `as-json <ebuild_file>`: Parse an ebuild using the native parser and output JSON.
 * `explain <ebuild_file>`: Output a human-readable summary of an ebuild.
+* `check <ebuild_file>`: A lightweight structural validator for ebuild files (alias: lint).
+* `deps <ebuild_file>`: Extract and format dependency fields.
 * `query <ebuild_file> --key <key> [--format lines]`: Query specific fields from a parsed ebuild.
 
 **Example Usage:**
@@ -369,6 +371,59 @@ g2 package <subcommand>
 * `index-repositories`: Index multiple repositories from an xml file.
 * `index`: Index local repositories.
 * `update`: Update the local index from a remote zip file.
+* `deprecated`: Commands relating to deprecated packages.
+* `masked`: Commands relating to masked packages.
+
+### `eclass`
+
+Commands relating to eclasses.
+
+**Usage:**
+
+```bash
+g2 eclass <subcommand>
+```
+
+**Subcommands:**
+
+* `list`: List available eclasses.
+* `install`: Install an eclass from gentoo stable.
+* `explain`: Human-readable summary output of an eclass.
+* `remove`: Remove an eclass.
+
+### `arch`
+
+Commands relating to architectures.
+
+**Usage:**
+
+```bash
+g2 arch <subcommand> [options]
+```
+
+**Subcommands:**
+
+* `list-add`: Add or edit an architecture in arch.list.
+* `list-remove`: Remove an architecture from arch.list.
+* `list-ls`: List all architectures in arch.list.
+* `desc-add`: Add or edit an architecture in arches.desc.
+* `desc-remove`: Remove an architecture from arches.desc.
+* `desc-ls`: List all architectures in arches.desc.
+
+### `profile`
+
+Commands relating to profiles.
+
+**Usage:**
+
+```bash
+g2 profile <subcommand>
+```
+
+**Subcommands:**
+
+* `list`: List profiles.
+* `describe`: Describe a profile.
 
 
 ## GitHub Action

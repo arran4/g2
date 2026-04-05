@@ -1,20 +1,39 @@
 <h2>{{.Title}}</h2>
 
 <article class="news-article">
+    {{if .GlobalNewsItem}}
     <div class="news-meta">
-        <span class="news-date">Posted: {{.NewsItem.Posted.Format "2006-01-02"}}</span>
-        {{if .NewsItem.Author}}<span class="news-author"> by {{.NewsItem.Author}}</span>{{end}}
-        {{if .NewsItem.Revision}}<span class="news-revision"> | Revision: {{.NewsItem.Revision}}</span>{{end}}
-        {{if or .NewsItem.NewsItemFormat .NewsItem.Translator .NewsItem.DisplayIfInstalled .NewsItem.DisplayIfKeyword .NewsItem.DisplayIfProfile}}
+        <span class="news-date">Posted: {{.GlobalNewsItem.Posted.Format "2006-01-02"}}</span>
+        {{if .GlobalNewsItem.Author}}<span class="news-author"> by {{.GlobalNewsItem.Author}}</span>{{end}}
+        {{if .GlobalNewsItem.Revision}}<span class="news-revision"> | Revision: {{.GlobalNewsItem.Revision}}</span>{{end}}
+        {{if or .GlobalNewsItem.NewsItemFormat .GlobalNewsItem.Translator .GlobalNewsItem.DisplayIfInstalled .GlobalNewsItem.DisplayIfKeyword .GlobalNewsItem.DisplayIfProfile}}
         <dl class="news-headers" style="margin-top: 10px; padding: 10px; background: #f9f9f9; border: 1px solid #ddd; border-radius: 4px;">
-            {{if .NewsItem.NewsItemFormat}}<dt>Format:</dt><dd>{{.NewsItem.NewsItemFormat}}</dd>{{end}}
-            {{range .NewsItem.Translator}}<dt>Translator:</dt><dd>{{.}}</dd>{{end}}
-            {{range .NewsItem.DisplayIfInstalled}}<dt>Display if installed:</dt><dd>{{.}}</dd>{{end}}
-            {{range .NewsItem.DisplayIfKeyword}}<dt>Display if keyword:</dt><dd>{{.}}</dd>{{end}}
-            {{range .NewsItem.DisplayIfProfile}}<dt>Display if profile:</dt><dd>{{.}}</dd>{{end}}
+            {{if .GlobalNewsItem.NewsItemFormat}}<dt>Format:</dt><dd>{{.GlobalNewsItem.NewsItemFormat}}</dd>{{end}}
+            {{range .GlobalNewsItem.Translator}}<dt>Translator:</dt><dd>{{.}}</dd>{{end}}
+            {{range .GlobalNewsItem.DisplayIfInstalled}}<dt>Display if installed:</dt><dd>{{.}}</dd>{{end}}
+            {{range .GlobalNewsItem.DisplayIfKeyword}}<dt>Display if keyword:</dt><dd>{{.}}</dd>{{end}}
+            {{range .GlobalNewsItem.DisplayIfProfile}}<dt>Display if profile:</dt><dd>{{.}}</dd>{{end}}
         </dl>
         {{end}}
     </div>
 
-    <div class="news-body" style="margin-top: 1em;">{{.NewsItem.ToHTMLTemplate}}</div>
+    <div class="news-body" style="margin-top: 1em;">{{.GlobalNewsItem.ToHTMLTemplate}}</div>
+    {{else if .RepoNewsItem}}
+    <div class="news-meta">
+        <span class="news-date">Posted: {{.RepoNewsItem.Posted.Format "2006-01-02"}}</span>
+        {{if .RepoNewsItem.Author}}<span class="news-author"> by {{.RepoNewsItem.Author}}</span>{{end}}
+        {{if .RepoNewsItem.Revision}}<span class="news-revision"> | Revision: {{.RepoNewsItem.Revision}}</span>{{end}}
+        {{if or .RepoNewsItem.NewsItemFormat .RepoNewsItem.Translator .RepoNewsItem.DisplayIfInstalled .RepoNewsItem.DisplayIfKeyword .RepoNewsItem.DisplayIfProfile}}
+        <dl class="news-headers" style="margin-top: 10px; padding: 10px; background: #f9f9f9; border: 1px solid #ddd; border-radius: 4px;">
+            {{if .RepoNewsItem.NewsItemFormat}}<dt>Format:</dt><dd>{{.RepoNewsItem.NewsItemFormat}}</dd>{{end}}
+            {{range .RepoNewsItem.Translator}}<dt>Translator:</dt><dd>{{.}}</dd>{{end}}
+            {{range .RepoNewsItem.DisplayIfInstalled}}<dt>Display if installed:</dt><dd>{{.}}</dd>{{end}}
+            {{range .RepoNewsItem.DisplayIfKeyword}}<dt>Display if keyword:</dt><dd>{{.}}</dd>{{end}}
+            {{range .RepoNewsItem.DisplayIfProfile}}<dt>Display if profile:</dt><dd>{{.}}</dd>{{end}}
+        </dl>
+        {{end}}
+    </div>
+
+    <div class="news-body" style="margin-top: 1em;">{{.RepoNewsItem.ToHTMLTemplate}}</div>
+    {{end}}
 </article>

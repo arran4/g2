@@ -478,6 +478,7 @@ func (cfg *CmdPackageArgConfig) cmdIndex(args []string) error {
 	outZip := fs.String("out-zip", "", "Zip file to write the search index")
 	fs.StringVar(outZip, "z", "", "Zip file to write the search index (shorthand)")
 	repoFilter := fs.String("repo-filter", "", "Comma separated list of repos to filter by")
+	reposConfOpt := fs.String("repos-conf", "", "Path to repos.conf file or directory")
 
 	fs.Usage = func() {
 		fmt.Printf("Usage:\n")
@@ -501,24 +502,47 @@ func (cfg *CmdPackageArgConfig) cmdIndex(args []string) error {
 		}
 	}
 
-	reposDir := "/var/db/repos"
-	log.Printf("Indexing repositories from: %s", reposDir)
-
-	entries, err := os.ReadDir(reposDir)
-	if err != nil {
-		return fmt.Errorf("reading repos directory %s: %w", reposDir, err)
-	}
-
 	var overlayPaths []string
-	for _, entry := range entries {
-		if !entry.IsDir() {
-			continue
+
+	if *reposConfOpt != "" {
+		rc, err := g2.ParseReposConf(*reposConfOpt)
+		if err != nil {
+			return fmt.Errorf("parsing repos.conf: %w", err)
 		}
-		repoName := entry.Name()
-		if allowRepos != nil && !allowRepos[repoName] {
-			continue
+		for _, f := range rc.Files {
+			for _, s := range f.Sections {
+				if s.Name == "DEFAULT" || s.Disabled {
+					continue
+				}
+				if allowRepos != nil && !allowRepos[s.Name] {
+					continue
+				}
+				loc := s.Get("location")
+				if loc != "" {
+					overlayPaths = append(overlayPaths, loc)
+				}
+			}
 		}
-		overlayPaths = append(overlayPaths, fmt.Sprintf("%s/%s", reposDir, repoName))
+		log.Printf("Indexing %d repositories from repos.conf %s", len(overlayPaths), *reposConfOpt)
+	} else {
+		reposDir := "/var/db/repos"
+		log.Printf("Indexing repositories from: %s", reposDir)
+
+		entries, err := os.ReadDir(reposDir)
+		if err != nil {
+			return fmt.Errorf("reading repos directory %s: %w", reposDir, err)
+		}
+
+		for _, entry := range entries {
+			if !entry.IsDir() {
+				continue
+			}
+			repoName := entry.Name()
+			if allowRepos != nil && !allowRepos[repoName] {
+				continue
+			}
+			overlayPaths = append(overlayPaths, fmt.Sprintf("%s/%s", reposDir, repoName))
+		}
 	}
 
 	var sites []*SiteData
