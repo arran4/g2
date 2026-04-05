@@ -1,6 +1,8 @@
 package g2
 
 import (
+	"io"
+
 	"bufio"
 	"bytes"
 	"context"
@@ -45,7 +47,7 @@ type Ebuild struct {
 	Functions     map[string]AST
 	SrcUri        []URIEntry
 	Mode          ParsingMode
-	RawText       string
+	RawText       FileContent
 	ParseWarnings []string
 
 	orderOverride []string
@@ -191,7 +193,7 @@ func (e *Ebuild) String() string {
 }
 
 // ParseEbuild parses an ebuild file with the specified mode.
-func ParseEbuild(fsys fs.FS, path string, mode ParsingMode) (*Ebuild, error) {
+func ParseEbuild(fsys fs.FS, path string, mode ParsingMode, opts ...any) (*Ebuild, error) {
 	e := &Ebuild{
 		Path: path,
 		Vars: make(map[string]string),
@@ -208,12 +210,38 @@ func ParseEbuild(fsys fs.FS, path string, mode ParsingMode) (*Ebuild, error) {
 		return e, nil
 	}
 
-	contentBytes, err := fs.ReadFile(fsys, path)
-	if err != nil {
+	// Since we need it for parser right now, we can read it directly but save it via FileContent to allow caching or streaming logic if desired.
+	// But actually, we want to allow the caller to specify if it should be retained lazily.
+	// Ebuild parser receives `fsys` and `path`.
+	// For ebuilds we can just create a WeakFileContent and `.Get()` it for the parser.
+	isPersistent := true
+	for _, opt := range opts {
+		if b, ok := opt.(bool); ok {
+			isPersistent = b
+		}
+	}
+
+	loader := func() (io.ReadCloser, error) {
+		return fsys.Open(path)
+	}
+
+	if isPersistent {
+		e.RawText = &WeakFileContent{Loader: loader}
+	} else {
+		rc, err := loader()
+		var b []byte
+		if err == nil {
+			b, _ = io.ReadAll(rc)
+			_ = rc.Close()
+		}
+		e.RawText = &MemoryFileContent{Content: b}
+	}
+
+	contentBytes, err := e.RawText.Get()
+	if err != nil || contentBytes == nil {
 		return nil, fmt.Errorf("reading file %s: %w", path, err)
 	}
-	content := string(contentBytes)
-	e.RawText = content
+	content := string(*contentBytes)
 
 	if mode >= ParseVariables {
 		// Use the recursive descent parser

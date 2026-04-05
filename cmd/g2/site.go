@@ -20,7 +20,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-	"weak"
 
 	"github.com/arran4/g2"
 	"github.com/arran4/g2/lints"
@@ -52,121 +51,7 @@ type ProfileDescEntry struct {
 }
 
 type SourceURL string
-
-type FileContent interface {
-	Get() (*[]byte, error)
-	String() string
-}
-
-type WeakFileContent struct {
-	weakPtr weak.Pointer[[]byte]
-	loader  func() (io.ReadCloser, error)
-	mu      sync.Mutex
-}
-
-func (f *WeakFileContent) String() string {
-	b, err := f.Get()
-	if err != nil || b == nil {
-		return ""
-	}
-	return string(*b)
-}
-
-func (f *WeakFileContent) Get() (*[]byte, error) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-
-	if p := f.weakPtr.Value(); p != nil {
-		return p, nil
-	}
-
-	rc, err := f.loader()
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = rc.Close() }()
-
-	b, err := io.ReadAll(rc)
-	if err != nil {
-		return nil, err
-	}
-
-	ptr := &b
-	f.weakPtr = weak.Make(ptr)
-	return ptr, nil
-}
-
-type LazyFileContent struct {
-	strongPtr []byte
-	loader    func() (io.ReadCloser, error)
-	mu        sync.Mutex
-}
-
-func (f *LazyFileContent) String() string {
-	b, err := f.Get()
-	if err != nil || b == nil {
-		return ""
-	}
-	return string(*b)
-}
-
-func (f *LazyFileContent) Get() (*[]byte, error) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-
-	if f.strongPtr != nil {
-		return &f.strongPtr, nil
-	}
-
-	rc, err := f.loader()
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = rc.Close() }()
-
-	b, err := io.ReadAll(rc)
-	if err != nil {
-		return nil, err
-	}
-
-	f.strongPtr = b
-	return &f.strongPtr, nil
-}
-
-type MmapFileContent struct {
-	path string
-	mu   sync.Mutex
-}
-
-func (m *MmapFileContent) String() string {
-	b, err := m.Get()
-	if err != nil || b == nil {
-		return ""
-	}
-	return string(*b)
-}
-
-func (m *MmapFileContent) Get() (*[]byte, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	b, err := os.ReadFile(m.path)
-	if err != nil {
-		return nil, err
-	}
-	return &b, nil
-}
-
-type MemoryFileContent struct {
-	content []byte
-}
-
-func (m *MemoryFileContent) Get() (*[]byte, error) {
-	return &m.content, nil
-}
-
-func (m *MemoryFileContent) String() string {
-	return string(m.content)
-}
+type IsPersistent bool
 
 type ProfileData struct {
 	Path     string
@@ -175,7 +60,7 @@ type ProfileData struct {
 	DescStat string
 	Parents  []string
 	Children []string
-	Files    map[string]FileContent // Maps filename to its content
+	Files    map[string]g2.FileContent // Maps filename to its content
 }
 
 type EclassData struct {
@@ -446,7 +331,8 @@ func (cfg *MainArgConfig) cmdOverlay(args []string) error {
 				}
 
 				t1 := time.Now()
-				siteData, err = parseRepo(os.DirFS(parseLocation), ".", task.Name, *fastGit, nil, SourceURL(task.Location))
+				isPersistent := (*persistentDir != "")
+				siteData, err = parseRepo(os.DirFS(parseLocation), ".", task.Name, *fastGit, nil, SourceURL(task.Location), IsPersistent(isPersistent))
 				if err != nil {
 					return fmt.Errorf("parsing repo %s: %w", task.Name, err)
 				}
@@ -468,7 +354,8 @@ func (cfg *MainArgConfig) cmdOverlay(args []string) error {
 				}
 
 				t1 := time.Now()
-				siteData, err = parseRepo(os.DirFS(parseLocation), ".", task.Name, *fastGit, nil, SourceURL(task.Location))
+				isPersistent := (*persistentDir != "")
+				siteData, err = parseRepo(os.DirFS(parseLocation), ".", task.Name, *fastGit, nil, SourceURL(task.Location), IsPersistent(isPersistent))
 				if err != nil {
 					return fmt.Errorf("parsing repo %s: %w", task.Name, err)
 				}
@@ -767,10 +654,13 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool, r
 	var repoName string
 	var remoteURL string
 
+	isPersistent := true // default to true
 	for _, opt := range opts {
 		switch o := opt.(type) {
 		case SourceURL:
 			remoteURL = string(o)
+		case IsPersistent:
+			isPersistent = bool(o)
 		}
 	}
 
@@ -1029,7 +919,7 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool, r
 		profilesDescEntries = parseProfilesDesc(string(profilesDescBytes))
 	}
 
-	profilesData, err := parseProfilesDirFS(sysFS, repoDir, profilesDescEntries)
+	profilesData, err := parseProfilesDirFS(sysFS, repoDir, profilesDescEntries, isPersistent)
 	if err != nil {
 		log.Printf("Warning: failed to parse profiles dir: %v", err)
 	}
@@ -1152,7 +1042,7 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool, r
 					log.Printf("Warning: subfs ebuild %s: %v", ebuildPath, err)
 					continue
 				}
-				ebuild, err := g2.ParseEbuild(subFS, file.Name(), g2.ParseFull)
+				ebuild, err := g2.ParseEbuild(subFS, file.Name(), g2.ParseFull, isPersistent)
 				if err != nil {
 					log.Printf("Warning: parsing ebuild %s: %v", ebuildPath, err)
 					continue
@@ -1495,7 +1385,7 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool, r
 		if err == nil {
 			for _, e := range entries {
 				if !e.IsDir() && strings.HasSuffix(e.Name(), ".eclass") {
-					ebuild, err := g2.ParseEbuild(sysFS, filepath.ToSlash(filepath.Join(eclassDir, e.Name())), g2.ParseFull)
+					ebuild, err := g2.ParseEbuild(sysFS, filepath.ToSlash(filepath.Join(eclassDir, e.Name())), g2.ParseFull, isPersistent)
 					if err == nil {
 						site.Eclasses = append(site.Eclasses, ebuild)
 					} else {
@@ -1687,10 +1577,10 @@ func buildManifestData(manifest *g2.Manifest, versions []VersionData, thirdParty
 }
 
 func parseProfilesDir(repoDir string, entries []ProfileDescEntry) ([]ProfileData, error) {
-	return parseProfilesDirFS(os.DirFS(repoDir), ".", entries)
+	return parseProfilesDirFS(os.DirFS(repoDir), ".", entries, true)
 }
 
-func parseProfilesDirFS(sysFS fs.FS, repoDir string, entries []ProfileDescEntry) ([]ProfileData, error) {
+func parseProfilesDirFS(sysFS fs.FS, repoDir string, entries []ProfileDescEntry, isPersistent bool) ([]ProfileData, error) {
 	profilesDir := path2.Join(repoDir, "profiles")
 
 	if info, err := fs.Stat(sysFS, profilesDir); err != nil || !info.IsDir() {
@@ -1720,7 +1610,7 @@ func parseProfilesDirFS(sysFS fs.FS, repoDir string, entries []ProfileDescEntry)
 
 		pData := &ProfileData{
 			Path:  relPath,
-			Files: make(map[string]FileContent),
+			Files: make(map[string]g2.FileContent),
 		}
 
 		if desc, ok := descMap[relPath]; ok {
@@ -1741,14 +1631,28 @@ func parseProfilesDirFS(sysFS fs.FS, repoDir string, entries []ProfileDescEntry)
 			filePath := path2.Join(path, fname)
 			info, err := fs.Stat(sysFS, filePath)
 			if err == nil && !info.IsDir() {
-				fc := &WeakFileContent{
-					loader: func() (io.ReadCloser, error) {
-						f, err := sysFS.Open(filePath)
-						return f, err
-					},
+				var fc g2.FileContent
+				loader := func() (io.ReadCloser, error) {
+					f, err := sysFS.Open(filePath)
+					return f, err
+				}
+				if isPersistent {
+					fc = &g2.WeakFileContent{
+						Loader: loader,
+					}
+				} else {
+					rc, err := loader()
+					var b []byte
+					if err == nil {
+						b, _ = io.ReadAll(rc)
+						_ = rc.Close()
+					}
+					fc = &g2.MemoryFileContent{
+						Content: b,
+					}
 				}
 				if pData.Files == nil {
-					pData.Files = make(map[string]FileContent)
+					pData.Files = make(map[string]g2.FileContent)
 				}
 				pData.Files[fname] = fc
 
@@ -2133,7 +2037,7 @@ type AggProfile struct {
 	DescArch string
 	DescStat string
 	Repos    []AggProfileRepo
-	Files    map[string]FileContent // Maps filename to its content
+	Files    map[string]g2.FileContent // Maps filename to its content
 }
 
 type AggEclass struct {
@@ -3983,7 +3887,8 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, 
 			repoCopy := repo
 
 			t1 := time.Now()
-			siteData, err := parseRepo(os.DirFS(repoPath), ".", repo.Name, fastGit, &repoCopy, SourceURL(gitUrl))
+			isPersistent := (persistentDir != "")
+			siteData, err := parseRepo(os.DirFS(repoPath), ".", repo.Name, fastGit, &repoCopy, SourceURL(gitUrl), IsPersistent(isPersistent))
 			if err != nil {
 				log.Printf("Failed to parse repo %s: %v", repo.Name, err)
 				return nil
