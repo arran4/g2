@@ -45,6 +45,10 @@ func testFileContentImpl(t *testing.T, fc FileContent, generateCallsPtr *int) {
 	if err != nil {
 		t.Errorf("expected no error from Close, got %v", err)
 	}
+
+	if fc.String() != "new world" {
+		t.Errorf("expected 'new world' from String(), got '%s'", fc.String())
+	}
 }
 
 func TestFileContent_LazyWeak(t *testing.T) {

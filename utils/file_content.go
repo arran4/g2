@@ -10,6 +10,7 @@ type FileContent interface {
 	Data() (*[]byte, error)
 	Close() error
 	SetGenerator(func() (io.ReadCloser, error))
+	String() string
 }
 
 type BytesStore interface {
@@ -148,6 +149,17 @@ func (fc *defaultFileContent) Close() error {
 	defer fc.mu.Unlock()
 	fc.store.Clear()
 	return nil
+}
+
+func (fc *defaultFileContent) String() string {
+	b, err := fc.Data()
+	if err != nil {
+		return err.Error()
+	}
+	if b == nil {
+		return ""
+	}
+	return string(*b)
 }
 
 func (fc *defaultFileContent) SetGenerator(generate func() (io.ReadCloser, error)) {
