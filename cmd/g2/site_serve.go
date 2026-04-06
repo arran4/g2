@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 	"sync"
@@ -141,6 +142,18 @@ func (cfg *MainArgConfig) cmdSiteServe(args []string) error {
 					} else {
 						log.Printf("[DONE] Finished parsing repository %s", repoName)
 					}
+
+						if *concurrency == 1 {
+							var memStats runtime.MemStats
+							runtime.ReadMemStats(&memStats)
+							log.Printf("[STATS] Heap Objects: %d, Alloc: %.2f MB, Total Alloc: %.2f MB, Sys: %.2f MB, NumGC: %d",
+								memStats.HeapObjects,
+								float64(memStats.Alloc)/(1024*1024),
+								float64(memStats.TotalAlloc)/(1024*1024),
+								float64(memStats.Sys)/(1024*1024),
+								memStats.NumGC,
+							)
+						}
 
 					sitesMu.Lock()
 					sites = append(sites, siteData)

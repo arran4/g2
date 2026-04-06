@@ -4253,6 +4253,16 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, 
 				)
 			}
 
+			if concurrency == 1 {
+				log.Printf("[STATS] Heap Objects: %d, Alloc: %.2f MB, Total Alloc: %.2f MB, Sys: %.2f MB, NumGC: %d",
+					memStatsAfter.HeapObjects,
+					float64(memStatsAfter.Alloc)/(1024*1024),
+					float64(memStatsAfter.TotalAlloc)/(1024*1024),
+					float64(memStatsAfter.Sys)/(1024*1024),
+					memStatsAfter.NumGC,
+				)
+			}
+
 			siteData.CheckoutTime = checkoutTime.String()
 			siteData.ProcessTime = processTime.String()
 			siteData.GitSize = gitSize
