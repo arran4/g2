@@ -4254,6 +4254,36 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, 
 			}
 
 			if concurrency == 1 {
+				numCategories := len(siteData.Categories)
+				numPackages := siteData.PackageCount
+				numVersions := 0
+				numLicenses := 0
+				uniqueLicenses := make(map[string]bool)
+				for _, cat := range siteData.Categories {
+					for _, pkg := range cat.Packages {
+						numVersions += len(pkg.Versions)
+						for _, v := range pkg.Versions {
+							if v.Ebuild != nil && v.Ebuild.Vars != nil {
+								licStr := v.Ebuild.Vars["LICENSE"]
+								if licStr != "" {
+									lics := g2.ParseLicense(licStr)
+									for _, l := range lics {
+										if l != "" {
+											uniqueLicenses[l] = true
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+				numLicenses = len(uniqueLicenses)
+				numEclasses := len(siteData.DefinedEclasses)
+				numProfiles := len(siteData.Profiles)
+				numNews := len(siteData.News)
+
+				log.Printf("[STATS] Domain Objects - Repos: 1, Categories: %d, Packages: %d, Ebuilds: %d, Profiles: %d, Eclasses: %d, News: %d, Licenses: %d", numCategories, numPackages, numVersions, numProfiles, numEclasses, numNews, numLicenses)
+
 				log.Printf("[STATS] Heap Objects: %d, Alloc: %.2f MB, Total Alloc: %.2f MB, Sys: %.2f MB, NumGC: %d",
 					memStatsAfter.HeapObjects,
 					float64(memStatsAfter.Alloc)/(1024*1024),
