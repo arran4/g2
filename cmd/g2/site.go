@@ -176,6 +176,14 @@ type VersionData struct {
 
 // End model TODO check
 
+func getDefaultCacheDir() string {
+	cacheDir, err := os.UserCacheDir()
+	if err != nil || cacheDir == "" {
+		return filepath.Join(os.TempDir(), "g2-cache")
+	}
+	return filepath.Join(cacheDir, "g2")
+}
+
 func (cfg *MainArgConfig) cmdOverlay(args []string) error {
 	ebuild.SkipForSiteGen = true
 	if len(args) < 1 {
@@ -212,7 +220,8 @@ func (cfg *MainArgConfig) cmdOverlay(args []string) error {
 	recentDurOpt := fs.String("recent-duration", "3mo", "Duration to consider an update 'recent' (e.g. 3mo, 14d, 72h)")
 	fastGit := fs.Bool("fast-git-modtime", false, "Use fast (O(1)) but potentially less reliable go-git file log lookup")
 	useZip := fs.Bool("use-zip", false, "Download zip archives instead of git clone when supported")
-	persistentDir := fs.String("persistent-dir", "", "Directory to persistently store checked out repositories instead of a temporary directory")
+	mode := fs.String("mode", "persistent", "Clone mode: 'persistent' or 'temp'")
+	persistentDir := fs.String("persistent-dir", getDefaultCacheDir(), "Directory to persistently store checked out repositories instead of a temporary directory")
 	tempDir := fs.String("temp-dir", "", "Directory to use for temporary files instead of the default")
 	includeGentoo := fs.Bool("include-gentoo", false, "Include the base Gentoo repository")
 	includeGuru := fs.Bool("include-guru", false, "Include the Guru repository")
@@ -294,7 +303,7 @@ func (cfg *MainArgConfig) cmdOverlay(args []string) error {
 				var tmpDir string
 				var err error
 
-				if *persistentDir != "" {
+				if *mode == "persistent" {
 					tmpDir = filepath.Join(*persistentDir, task.Name)
 					if err := os.MkdirAll(tmpDir, 0755); err != nil {
 						return fmt.Errorf("creating persistent dir for %s: %w", task.Name, err)
@@ -314,7 +323,7 @@ func (cfg *MainArgConfig) cmdOverlay(args []string) error {
 				defer cancel()
 
 				t0 := time.Now()
-				if err := FetchRepo(ctx, task.Location, tmpDir, *useZip, *persistentDir != "", 0); err != nil {
+				if err := FetchRepo(ctx, task.Location, tmpDir, *useZip, *mode == "persistent", 0); err != nil {
 					return fmt.Errorf("cloning repository %s: %w", task.Name, err)
 				}
 				checkoutTime := time.Since(t0)
@@ -423,7 +432,8 @@ func (cfg *MainArgConfig) cmdOverlays(args []string) error {
 	concurrency := fs.Int("concurrency", 4, "Maximum number of concurrent repository fetches/parses")
 	retries := fs.Int("retries", 3, "Number of times to retry fetching a repository")
 	continueOnError := fs.Bool("continue-on-error", true, "Continue parsing other repositories even if fetching one fails")
-	persistentDir := fs.String("persistent-dir", "", "Directory to persistently store checked out repositories instead of a temporary directory")
+	mode := fs.String("mode", "persistent", "Clone mode: 'persistent' or 'temp'")
+	persistentDir := fs.String("persistent-dir", getDefaultCacheDir(), "Directory to persistently store checked out repositories instead of a temporary directory")
 	tempDir := fs.String("temp-dir", "", "Directory to use for temporary files instead of the default")
 	reposConfOpt := fs.String("repos-conf", "", "Path to repos.conf file or directory")
 
@@ -451,7 +461,7 @@ func (cfg *MainArgConfig) cmdOverlays(args []string) error {
 	}
 
 	log.Printf("Generating site (v%s) from remote repositories: %s into %s", version, location, *outDir)
-	return cfg.cmdSiteRemote(location, *outDir, recentDuration, recentDurationStr, *fastGit, *useZip, *concurrency, *retries, *continueOnError, *persistentDir, *reposConfOpt, *tempDir)
+	return cfg.cmdSiteRemote(location, *outDir, recentDuration, recentDurationStr, *fastGit, *useZip, *concurrency, *retries, *continueOnError, *persistentDir, *reposConfOpt, *tempDir, *mode)
 }
 
 func parseLayoutConfFromFS(sysFS fs.FS, path string) (*g2.LayoutConf, error) {
@@ -3897,7 +3907,7 @@ func renderPage(path string, tmpl *template.Template, name string, data interfac
 	return nil
 }
 
-func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, recentDuration time.Duration, recentDurationStr string, fastGit bool, useZip bool, concurrency int, retries int, continueOnError bool, persistentDir string, reposConfPath string, tempDir string) error {
+func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, recentDuration time.Duration, recentDurationStr string, fastGit bool, useZip bool, concurrency int, retries int, continueOnError bool, persistentDir string, reposConfPath string, tempDir string, mode string) error {
 	var repos g2.Repositories
 
 	if reposConfPath != "" {
@@ -3969,7 +3979,7 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, 
 	var tmpDir string
 	var cleanup func()
 
-	if persistentDir != "" {
+	if mode == "persistent" {
 		tmpDir = persistentDir
 		if err := os.MkdirAll(tmpDir, 0755); err != nil {
 			return fmt.Errorf("creating persistent dir: %w", err)
@@ -4030,7 +4040,7 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, 
 			defer cancel()
 
 			t0 := time.Now()
-			if err := FetchRepo(ctx, gitUrl, repoPath, useZip, persistentDir != "", retries); err != nil {
+			if err := FetchRepo(ctx, gitUrl, repoPath, useZip, mode == "persistent", retries); err != nil {
 				log.Printf("Failed to fetch %s: %v", repo.Name, err)
 				if !continueOnError {
 					return fmt.Errorf("fetching %s: %w", repo.Name, err)
