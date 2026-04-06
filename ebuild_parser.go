@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"strings"
 	"unicode"
 )
@@ -528,7 +527,6 @@ func (p *EbuildParser) consumeFunctionBody() (string, error) {
 	if r != '{' {
 		if r == '(' {
 			msg := "expected '{' for function body but found '(', treating as subshell body"
-			log.Printf("Warning: parsing ebuild variables: %s", msg)
 			p.Warnings = append(p.Warnings, msg)
 			opener = '('
 			closer = ')'
