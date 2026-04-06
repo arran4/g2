@@ -13,14 +13,14 @@
 
 <h2>Categories</h2>
 <ul>
-    {{range .Categories}}
+    {{range .GlobalCategories}}
     <li><a href="categories/{{.Name}}/">{{.Name}}</a></li>
     {{end}}
 </ul>
 
 <h2>All Packages</h2>
 <ul>
-    {{range .AllPackages}}
+    {{range .GlobalPackages}}
     <li><a href="packages/{{.Name}}/">{{.Category}}/{{.Name}}</a></li>
     {{end}}
 </ul>

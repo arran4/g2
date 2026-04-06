@@ -1724,6 +1724,11 @@ type AggPackage struct {
 	ReverseVirtuals     []string
 	VirtualDeps         []string
 }
+
+func (a *AggPackage) ReposList() []*SiteData {
+	return mapToList(a.Repos)
+}
+
 type AggProject struct {
 	Project  *g2.Project
 	Packages []*AggPackage
