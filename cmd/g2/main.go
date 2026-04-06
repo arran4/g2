@@ -7,12 +7,49 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"runtime/debug"
+	"strconv"
 	"strings"
 	"net/http"
 	_ "net/http/pprof"
 )
 
 var version = "dev"
+
+func parseMemoryLimit(limit string) (int64, error) {
+	limit = strings.TrimSpace(strings.ToUpper(limit))
+	var multiplier int64 = 1
+
+	if strings.HasSuffix(limit, "GB") || strings.HasSuffix(limit, "G") {
+		multiplier = 1024 * 1024 * 1024
+		limit = strings.TrimRight(limit, "GB")
+	} else if strings.HasSuffix(limit, "GIB") {
+		multiplier = 1024 * 1024 * 1024
+		limit = strings.TrimRight(limit, "GIB")
+	} else if strings.HasSuffix(limit, "MB") || strings.HasSuffix(limit, "M") {
+		multiplier = 1024 * 1024
+		limit = strings.TrimRight(limit, "MB")
+	} else if strings.HasSuffix(limit, "MIB") {
+		multiplier = 1024 * 1024
+		limit = strings.TrimRight(limit, "MIB")
+	} else if strings.HasSuffix(limit, "KB") || strings.HasSuffix(limit, "K") {
+		multiplier = 1024
+		limit = strings.TrimRight(limit, "KB")
+	} else if strings.HasSuffix(limit, "KIB") {
+		multiplier = 1024
+		limit = strings.TrimRight(limit, "KIB")
+	} else if strings.HasSuffix(limit, "B") {
+		multiplier = 1
+		limit = strings.TrimRight(limit, "B")
+	}
+
+	val, err := strconv.ParseInt(limit, 10, 64)
+	if err != nil {
+		return 0, err
+	}
+
+	return val * multiplier, nil
+}
 
 type MainArgConfig struct {
 	Args []string
@@ -23,6 +60,7 @@ func main() {
 		log.Println(http.ListenAndServe("localhost:6060", nil))
 	}()
 	fs := flag.NewFlagSet("", flag.ExitOnError)
+	maxMemFlag := fs.String("max-mem", "", "Maximum memory to use, e.g. 10GB, 500MB")
 	cfg := &MainArgConfig{
 		Args: []string{os.Args[0]},
 	}
@@ -46,112 +84,122 @@ func main() {
 		fmt.Printf("\t\t %s \t\t %s\n", "profile", "commands relating to profiles")
 		fmt.Printf("\t\t %s \t\t %s\n", "repos-conf", "commands relating to repos.conf")
 	}
-	if err := fs.Parse(os.Args); err != nil {
+	if err := fs.Parse(os.Args[1:]); err != nil {
 		log.Printf("Flag parse error: %s", err)
 		os.Exit(-1)
 		return
 	}
-	if fs.NArg() <= 1 {
+
+	if *maxMemFlag != "" {
+		limit, err := parseMemoryLimit(*maxMemFlag)
+		if err != nil {
+			log.Printf("Invalid max-mem value: %s", err)
+			os.Exit(-1)
+		}
+		debug.SetMemoryLimit(limit)
+	}
+
+	if fs.NArg() < 1 {
 		log.Printf("Please specify an argument, try -help for help")
 		os.Exit(-1)
 		return
 	}
 
-	cmd := fs.Arg(1)
+	cmd := fs.Arg(0)
 	cfg.Args = append(cfg.Args, cmd)
 	switch cmd {
 	case "arch":
-		if err := cfg.cmdArch(fs.Args()[2:]); err != nil {
+		if err := cfg.cmdArch(fs.Args()[1:]); err != nil {
 			log.Printf("arch error: %s", err)
 			os.Exit(-1)
 			return
 		}
 	case "profile":
-		if err := ProfileCommand(fs.Args()[2:]); err != nil {
+		if err := ProfileCommand(fs.Args()[1:]); err != nil {
 			log.Printf("profile error: %s", err)
 			os.Exit(-1)
 			return
 		}
 	case "repos-conf":
-		if err := cfg.cmdReposConf(fs.Args()[2:]); err != nil {
+		if err := cfg.cmdReposConf(fs.Args()[1:]); err != nil {
 			log.Printf("repos-conf error: %s", err)
 			os.Exit(-1)
 			return
 		}
 	case "manifest":
-		if err := cfg.cmdManifest(fs.Args()[2:]); err != nil {
+		if err := cfg.cmdManifest(fs.Args()[1:]); err != nil {
 			log.Printf("generate error: %s", err)
 			os.Exit(-1)
 			return
 		}
 	case "layout-conf":
-		if err := cfg.cmdLayoutConf(fs.Args()[2:]); err != nil {
+		if err := cfg.cmdLayoutConf(fs.Args()[1:]); err != nil {
 			log.Printf("layout-conf error: %s", err)
 			os.Exit(-1)
 			return
 		}
 	case "metadata":
-		if err := cfg.cmdMetadata(fs.Args()[2:]); err != nil {
+		if err := cfg.cmdMetadata(fs.Args()[1:]); err != nil {
 			log.Printf("metadata error: %s", err)
 			os.Exit(-1)
 			return
 		}
 	case "ebuild":
-		if err := cfg.cmdEbuild(fs.Args()[2:]); err != nil {
+		if err := cfg.cmdEbuild(fs.Args()[1:]); err != nil {
 			log.Printf("ebuild error: %s", err)
 			os.Exit(-1)
 			return
 		}
 	case "overlay":
-		if err := cfg.cmdOverlay(fs.Args()[2:]); err != nil {
+		if err := cfg.cmdOverlay(fs.Args()[1:]); err != nil {
 			log.Printf("overlay error: %s", err)
 			os.Exit(-1)
 			return
 		}
 	case "overlays":
-		if err := cfg.cmdOverlays(fs.Args()[2:]); err != nil {
+		if err := cfg.cmdOverlays(fs.Args()[1:]); err != nil {
 			log.Printf("overlays error: %s", err)
 			os.Exit(-1)
 			return
 		}
 	case "lint":
-		if err := cfg.cmdLint(fs.Args()[2:]); err != nil {
+		if err := cfg.cmdLint(fs.Args()[1:]); err != nil {
 			log.Printf("lint error: %s", err)
 			os.Exit(-1)
 			return
 		}
 	case "use":
-		if err := cfg.cmdUse(fs.Args()[2:]); err != nil {
+		if err := cfg.cmdUse(fs.Args()[1:]); err != nil {
 			log.Printf("use error: %s", err)
 			os.Exit(-1)
 			return
 		}
 	case "site":
-		if err := cfg.cmdSite(fs.Args()[2:]); err != nil {
+		if err := cfg.cmdSite(fs.Args()[1:]); err != nil {
 			log.Printf("site error: %s", err)
 			os.Exit(-1)
 			return
 		}
 	case "cache":
-		if err := cfg.cmdCache(fs.Args()[2:]); err != nil {
+		if err := cfg.cmdCache(fs.Args()[1:]); err != nil {
 			log.Printf("cache error: %s", err)
 			os.Exit(-1)
 			return
 		}
 	case "pkg-desc-index":
-		if err := cfg.cmdPkgDescIndex(fs.Args()[2:]); err != nil {
+		if err := cfg.cmdPkgDescIndex(fs.Args()[1:]); err != nil {
 			log.Printf("pkg-desc-index error: %s", err)
 			os.Exit(-1)
 			return
 		}
 	case "package":
-		if err := cfg.cmdPackage(fs.Args()[2:]); err != nil {
+		if err := cfg.cmdPackage(fs.Args()[1:]); err != nil {
 			log.Printf("package error: %s", err)
 			os.Exit(-1)
 			return
 		}
 	case "eclass":
-		if err := cfg.cmdEclass(fs.Args()[2:]); err != nil {
+		if err := cfg.cmdEclass(fs.Args()[1:]); err != nil {
 			log.Printf("eclass error: %s", err)
 			os.Exit(-1)
 			return
