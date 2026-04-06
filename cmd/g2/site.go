@@ -213,6 +213,7 @@ func (cfg *MainArgConfig) cmdOverlay(args []string) error {
 	fastGit := fs.Bool("fast-git-modtime", false, "Use fast (O(1)) but potentially less reliable go-git file log lookup")
 	useZip := fs.Bool("use-zip", false, "Download zip archives instead of git clone when supported")
 	persistentDir := fs.String("persistent-dir", "", "Directory to persistently store checked out repositories instead of a temporary directory")
+	tempDir := fs.String("temp-dir", "", "Directory to use for temporary files instead of the default")
 	includeGentoo := fs.Bool("include-gentoo", false, "Include the base Gentoo repository")
 	includeGuru := fs.Bool("include-guru", false, "Include the Guru repository")
 	reposConfOpt := fs.String("repos-conf", "", "Path to repos.conf file or directory")
@@ -300,7 +301,7 @@ func (cfg *MainArgConfig) cmdOverlay(args []string) error {
 					}
 					cleanup = func() {}
 				} else {
-					tmpDir, err = os.MkdirTemp("", "g2-overlay-"+task.Name+"-*")
+					tmpDir, err = os.MkdirTemp(*tempDir, "g2-overlay-"+task.Name+"-*")
 					if err != nil {
 						return fmt.Errorf("creating temp dir for %s: %w", task.Name, err)
 					}
@@ -423,6 +424,7 @@ func (cfg *MainArgConfig) cmdOverlays(args []string) error {
 	retries := fs.Int("retries", 3, "Number of times to retry fetching a repository")
 	continueOnError := fs.Bool("continue-on-error", true, "Continue parsing other repositories even if fetching one fails")
 	persistentDir := fs.String("persistent-dir", "", "Directory to persistently store checked out repositories instead of a temporary directory")
+	tempDir := fs.String("temp-dir", "", "Directory to use for temporary files instead of the default")
 	reposConfOpt := fs.String("repos-conf", "", "Path to repos.conf file or directory")
 
 	if err := fs.Parse(args[2:]); err != nil {
@@ -449,7 +451,7 @@ func (cfg *MainArgConfig) cmdOverlays(args []string) error {
 	}
 
 	log.Printf("Generating site (v%s) from remote repositories: %s into %s", version, location, *outDir)
-	return cfg.cmdSiteRemote(location, *outDir, recentDuration, recentDurationStr, *fastGit, *useZip, *concurrency, *retries, *continueOnError, *persistentDir, *reposConfOpt)
+	return cfg.cmdSiteRemote(location, *outDir, recentDuration, recentDurationStr, *fastGit, *useZip, *concurrency, *retries, *continueOnError, *persistentDir, *reposConfOpt, *tempDir)
 }
 
 func parseLayoutConfFromFS(sysFS fs.FS, path string) (*g2.LayoutConf, error) {
@@ -3895,7 +3897,7 @@ func renderPage(path string, tmpl *template.Template, name string, data interfac
 	return nil
 }
 
-func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, recentDuration time.Duration, recentDurationStr string, fastGit bool, useZip bool, concurrency int, retries int, continueOnError bool, persistentDir string, reposConfPath string) error {
+func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, recentDuration time.Duration, recentDurationStr string, fastGit bool, useZip bool, concurrency int, retries int, continueOnError bool, persistentDir string, reposConfPath string, tempDir string) error {
 	var repos g2.Repositories
 
 	if reposConfPath != "" {
@@ -3975,7 +3977,7 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, 
 		cleanup = func() {}
 	} else {
 		var err error
-		tmpDir, err = os.MkdirTemp("", "g2-sitegen-*")
+		tmpDir, err = os.MkdirTemp(tempDir, "g2-sitegen-*")
 		if err != nil {
 			return fmt.Errorf("creating temp dir: %w", err)
 		}
@@ -4038,7 +4040,11 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, 
 			checkoutTime := time.Since(t0)
 			freeSpace, err := getFreeSpace(repoPath)
 			appFreeSpace, appErr := getFreeSpace(".")
-			tmpFreeSpace, tmpErr := getFreeSpace(os.TempDir())
+			actualTempDir := tempDir
+			if actualTempDir == "" {
+				actualTempDir = os.TempDir()
+			}
+			tmpFreeSpace, tmpErr := getFreeSpace(actualTempDir)
 			freeMem, memErr := getFreeMemory()
 			procMem := getProcessMemUsage()
 
@@ -4146,7 +4152,11 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, 
 			processTime := time.Since(t1)
 			freeSpaceAfter, err := getFreeSpace(repoPath)
 			appFreeSpaceAfter, appErrAfter := getFreeSpace(".")
-			tmpFreeSpaceAfter, tmpErrAfter := getFreeSpace(os.TempDir())
+			actualTempDirAfter := tempDir
+			if actualTempDirAfter == "" {
+				actualTempDirAfter = os.TempDir()
+			}
+			tmpFreeSpaceAfter, tmpErrAfter := getFreeSpace(actualTempDirAfter)
 			freeMemAfter, memErrAfter := getFreeMemory()
 			procMemAfter := getProcessMemUsage()
 
@@ -4314,7 +4324,11 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, 
 
 	finalMemUsage := getProcessMemUsage()
 	appFreeSpaceFinal, appErrFinal := getFreeSpace(".")
-	tmpFreeSpaceFinal, tmpErrFinal := getFreeSpace(os.TempDir())
+	actualTempDirFinal := tempDir
+	if actualTempDirFinal == "" {
+		actualTempDirFinal = os.TempDir()
+	}
+	tmpFreeSpaceFinal, tmpErrFinal := getFreeSpace(actualTempDirFinal)
 	log.Printf("--------------------------------------------------")
 	log.Printf("[FINAL SUMMARY] Repository Processing Complete")
 	log.Printf("Total Repositories:      %d", len(allSites))
