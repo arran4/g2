@@ -424,6 +424,7 @@ func (cfg *MainArgConfig) cmdOverlays(args []string) error {
 	continueOnError := fs.Bool("continue-on-error", true, "Continue parsing other repositories even if fetching one fails")
 	persistentDir := fs.String("persistent-dir", "", "Directory to persistently store checked out repositories instead of a temporary directory")
 	reposConfOpt := fs.String("repos-conf", "", "Path to repos.conf file or directory")
+	mode := fs.String("mode", "standard", "Processing mode: 'standard' or 'pipeline'")
 
 	if err := fs.Parse(args[2:]); err != nil {
 		return fmt.Errorf("parsing flags: %w", err)
@@ -449,7 +450,7 @@ func (cfg *MainArgConfig) cmdOverlays(args []string) error {
 	}
 
 	log.Printf("Generating site (v%s) from remote repositories: %s into %s", version, location, *outDir)
-	return cfg.cmdSiteRemote(location, *outDir, recentDuration, recentDurationStr, *fastGit, *useZip, *concurrency, *retries, *continueOnError, *persistentDir, *reposConfOpt)
+	return cfg.cmdSiteRemote(location, *outDir, recentDuration, recentDurationStr, *fastGit, *useZip, *concurrency, *retries, *continueOnError, *persistentDir, *reposConfOpt, *mode)
 }
 
 func parseLayoutConfFromFS(sysFS fs.FS, path string) (*g2.LayoutConf, error) {
@@ -3907,7 +3908,7 @@ func renderPage(path string, tmpl *template.Template, name string, data interfac
 	return nil
 }
 
-func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, recentDuration time.Duration, recentDurationStr string, fastGit bool, useZip bool, concurrency int, retries int, continueOnError bool, persistentDir string, reposConfPath string) error {
+func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, recentDuration time.Duration, recentDurationStr string, fastGit bool, useZip bool, concurrency int, retries int, continueOnError bool, persistentDir string, reposConfPath string, mode string) error {
 	var repos g2.Repositories
 
 	if reposConfPath != "" {
@@ -4004,320 +4005,426 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, 
 	var totalPackages int
 	var totalPackageVersions int
 
-	g, _ := errgroup.WithContext(context.Background())
-	if concurrency > 0 {
-		g.SetLimit(concurrency)
-		log.Printf("Starting concurrent remote repository processing with %d concurrency limit", concurrency)
+	if mode == "pipeline" {
+		log.Printf("Starting pipelined remote repository processing")
+		type fetchTask struct {
+			repo   g2.Repository
+			gitUrl string
+		}
+		type parseTask struct {
+			repo         g2.Repository
+			gitUrl       string
+			repoPath     string
+			checkoutTime time.Duration
+		}
+		type cleanTask struct {
+			repoPath string
+		}
+
+		limit := concurrency
+		if limit <= 0 {
+			limit = 10
+		}
+
+		fetchCh := make(chan fetchTask, limit)
+		parseCh := make(chan parseTask, limit)
+		cleanCh := make(chan cleanTask, limit)
+
+		var fetchWg sync.WaitGroup
+		var parseWg sync.WaitGroup
+		var cleanWg sync.WaitGroup
+
+		var pipelineErr error
+		var pipelineErrMu sync.Mutex
+
+		setErr := func(err error) {
+			pipelineErrMu.Lock()
+			if pipelineErr == nil {
+				pipelineErr = err
+			}
+			pipelineErrMu.Unlock()
+		}
+
+		// Clean workers
+		for i := 0; i < limit; i++ {
+			cleanWg.Add(1)
+			go func() {
+				defer cleanWg.Done()
+				for task := range cleanCh {
+					_ = os.RemoveAll(task.repoPath)
+				}
+			}()
+		}
+
+		// Parse workers
+		for i := 0; i < limit; i++ {
+			parseWg.Add(1)
+			go func() {
+				defer parseWg.Done()
+				for task := range parseCh {
+					log.Printf("[START] Parsing repository: %s", task.repo.Name)
+
+					size, err := getDirSize(task.repoPath)
+					var gitSize string
+					if err == nil {
+						gitSize = fmt.Sprintf("%.2f MB", float64(size)/(1024*1024))
+					}
+
+					repoCopy := task.repo
+
+					t1 := time.Now()
+					siteData, err := parseRepo(os.DirFS(task.repoPath), ".", task.repo.Name, fastGit, &repoCopy, SourceURL(task.gitUrl))
+
+					cleanCh <- cleanTask{repoPath: task.repoPath}
+
+					if err != nil {
+						log.Printf("Failed to parse repo %s: %v", task.repo.Name, err)
+						continue
+					}
+					processTime := time.Since(t1)
+					nodeCount := 0
+					if siteData != nil {
+						nodeCount = len(siteData.Categories) + siteData.PackageCount + len(siteData.Profiles) + len(siteData.News) + len(siteData.Moves) + len(siteData.DefinedEclasses)
+						for _, cat := range siteData.Categories {
+							for _, pkg := range cat.Packages {
+								nodeCount += len(pkg.Versions)
+							}
+						}
+					}
+					logParseStats(task.repo.Name, processTime, task.repoPath, nodeCount)
+
+					if concurrency == 1 {
+						numCategories := len(siteData.Categories)
+						numPackages := siteData.PackageCount
+						numVersions := 0
+						numLicenses := 0
+						uniqueLicenses := make(map[string]bool)
+						for _, cat := range siteData.Categories {
+							for _, pkg := range cat.Packages {
+								numVersions += len(pkg.Versions)
+								for _, v := range pkg.Versions {
+									if v.Ebuild != nil && v.Ebuild.Vars != nil {
+										licStr := v.Ebuild.Vars["LICENSE"]
+										if licStr != "" {
+											lics := g2.ParseLicense(licStr)
+											for _, l := range lics {
+												if l != "" {
+													uniqueLicenses[l] = true
+												}
+											}
+										}
+									}
+								}
+							}
+						}
+						numLicenses = len(uniqueLicenses)
+						numEclasses := len(siteData.DefinedEclasses)
+						numProfiles := len(siteData.Profiles)
+						numNews := len(siteData.News)
+
+						log.Printf("[STATS] Domain Objects - Repos: 1, Categories: %d, Packages: %d, Ebuilds: %d, Profiles: %d, Eclasses: %d, News: %d, Licenses: %d", numCategories, numPackages, numVersions, numProfiles, numEclasses, numNews, numLicenses)
+
+						var memStatsAfter runtime.MemStats
+						runtime.ReadMemStats(&memStatsAfter)
+						log.Printf("[STATS] Heap Objects: %d, Alloc: %.2f MB, Total Alloc: %.2f MB, Sys: %.2f MB, NumGC: %d",
+							memStatsAfter.HeapObjects,
+							float64(memStatsAfter.Alloc)/(1024*1024),
+							float64(memStatsAfter.TotalAlloc)/(1024*1024),
+							float64(memStatsAfter.Sys)/(1024*1024),
+							memStatsAfter.NumGC,
+						)
+					}
+
+					siteData.CheckoutTime = task.checkoutTime.String()
+					siteData.ProcessTime = processTime.String()
+					siteData.GitSize = gitSize
+					allSitesMu.Lock()
+					allSites = append(allSites, siteData)
+
+					processedRepos++
+					totalCategories += len(siteData.Categories)
+
+					repoPackages := 0
+					repoPackageVersions := 0
+					for _, cat := range siteData.Categories {
+						repoPackages += len(cat.Packages)
+						for _, pkg := range cat.Packages {
+							repoPackageVersions += len(pkg.Versions)
+						}
+					}
+					totalPackages += repoPackages
+					totalPackageVersions += repoPackageVersions
+
+					now := time.Now()
+					if lastLogTime.IsZero() || now.Sub(lastLogTime) >= 10*time.Minute {
+						lastLogTime = now
+						currentRepos := len(allSites)
+						var currentPackages int
+						for _, site := range allSites {
+							if site != nil {
+								currentPackages += site.PackageCount
+							}
+						}
+						log.Printf("[PROGRESS] Currently processed %d repositories and %d total packages so far", currentRepos, currentPackages)
+					}
+
+					if processedRepos%10 == 0 {
+						memUsage := getProcessMemUsage()
+						log.Printf("[PROGRESS] Processed %d repositories. Memory Usage: %.2f MB. Cumulative: Categories: %d, Packages: %d, Versions: %d",
+							processedRepos,
+							float64(memUsage)/(1024*1024),
+							totalCategories,
+							totalPackages,
+							totalPackageVersions,
+						)
+					}
+
+					allSitesMu.Unlock()
+				}
+			}()
+		}
+
+		// Fetch workers
+		for i := 0; i < limit; i++ {
+			fetchWg.Add(1)
+			go func() {
+				defer fetchWg.Done()
+				for task := range fetchCh {
+					log.Printf("[START] Fetching remote repository: %s (%s)", task.repo.Name, task.gitUrl)
+
+					repoPath := filepath.Join(tmpDir, task.repo.Name)
+
+					ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+
+					t0 := time.Now()
+					err := FetchRepo(ctx, task.gitUrl, repoPath, useZip, persistentDir != "", retries)
+					cancel()
+
+					if err != nil {
+						log.Printf("Failed to fetch %s: %v", task.repo.Name, err)
+						if !continueOnError {
+							setErr(fmt.Errorf("fetching %s: %w", task.repo.Name, err))
+						}
+						_ = os.RemoveAll(repoPath)
+						continue
+					}
+					checkoutTime := time.Since(t0)
+					logFetchStats(task.repo.Name, checkoutTime, repoPath)
+
+					parseCh <- parseTask{
+						repo:         task.repo,
+						gitUrl:       task.gitUrl,
+						repoPath:     repoPath,
+						checkoutTime: checkoutTime,
+					}
+				}
+			}()
+		}
+
+		for _, repo := range repos.Repositories {
+			if len(repo.Sources) == 0 {
+				continue
+			}
+
+			var gitUrl string
+			for _, src := range repo.Sources {
+				if src.Type == "git" && strings.HasPrefix(src.Text, "http") {
+					gitUrl = src.Text
+					break
+				}
+			}
+
+			if gitUrl == "" {
+				continue
+			}
+
+			fetchCh <- fetchTask{
+				repo:   repo,
+				gitUrl: gitUrl,
+			}
+		}
+
+		close(fetchCh)
+		fetchWg.Wait()
+		close(parseCh)
+		parseWg.Wait()
+		close(cleanCh)
+		cleanWg.Wait()
+
+		if pipelineErr != nil {
+			return pipelineErr
+		}
 	} else {
-		log.Printf("Starting concurrent remote repository processing with unbounded concurrency")
-	}
-
-	for _, repo := range repos.Repositories {
-		repo := repo // loop variable capture
-		if len(repo.Sources) == 0 {
-			continue
+		g, _ := errgroup.WithContext(context.Background())
+		if concurrency > 0 {
+			g.SetLimit(concurrency)
+			log.Printf("Starting concurrent remote repository processing with %d concurrency limit", concurrency)
+		} else {
+			log.Printf("Starting concurrent remote repository processing with unbounded concurrency")
 		}
 
-		var gitUrl string
-		for _, src := range repo.Sources {
-			if src.Type == "git" && strings.HasPrefix(src.Text, "http") {
-				gitUrl = src.Text
-				break
+		for _, repo := range repos.Repositories {
+			repo := repo // loop variable capture
+			if len(repo.Sources) == 0 {
+				continue
 			}
-		}
 
-		if gitUrl == "" {
-			continue // skip non-http git repos for this tool
-		}
-
-		g.Go(func() error {
-			log.Printf("[START] Fetching remote repository: %s (%s)", repo.Name, gitUrl)
-
-			repoPath := filepath.Join(tmpDir, repo.Name)
-			defer func() { _ = os.RemoveAll(repoPath) }()
-
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
-			defer cancel()
-
-			t0 := time.Now()
-			if err := FetchRepo(ctx, gitUrl, repoPath, useZip, persistentDir != "", retries); err != nil {
-				log.Printf("Failed to fetch %s: %v", repo.Name, err)
-				if !continueOnError {
-					return fmt.Errorf("fetching %s: %w", repo.Name, err)
+			var gitUrl string
+			for _, src := range repo.Sources {
+				if src.Type == "git" && strings.HasPrefix(src.Text, "http") {
+					gitUrl = src.Text
+					break
 				}
-				return nil
-			}
-			checkoutTime := time.Since(t0)
-			freeSpace, err := getFreeSpace(repoPath)
-			appFreeSpace, appErr := getFreeSpace(".")
-			tmpFreeSpace, tmpErr := getFreeSpace(os.TempDir())
-			freeMem, memErr := getFreeMemory()
-			procMem := getProcessMemUsage()
-
-			var memStats runtime.MemStats
-			runtime.ReadMemStats(&memStats)
-
-			if err == nil && appErr == nil && tmpErr == nil && memErr == nil {
-				log.Printf(
-					"[DONE] Finished fetching repository %s in %s. Free space (Repo/App/Tmp): %.2f/%.2f/%.2f MB. Free memory: %.2f MB. Process Memory: %.2f MB. Go Alloc: %.2f MB",
-					repo.Name,
-					checkoutTime,
-					float64(freeSpace)/(1024*1024),
-					float64(appFreeSpace)/(1024*1024),
-					float64(tmpFreeSpace)/(1024*1024),
-					float64(freeMem)/(1024*1024),
-					float64(procMem)/(1024*1024),
-					float64(memStats.Alloc)/(1024*1024),
-				)
-			} else if err == nil && appErr == nil && memErr == nil {
-				log.Printf(
-					"[DONE] Finished fetching repository %s in %s. Free space (Repo/App): %.2f/%.2f MB. Free memory: %.2f MB. Process Memory: %.2f MB. Go Alloc: %.2f MB",
-					repo.Name,
-					checkoutTime,
-					float64(freeSpace)/(1024*1024),
-					float64(appFreeSpace)/(1024*1024),
-					float64(freeMem)/(1024*1024),
-					float64(procMem)/(1024*1024),
-					float64(memStats.Alloc)/(1024*1024),
-				)
-			} else if err == nil && memErr == nil {
-				log.Printf(
-					"[DONE] Finished fetching repository %s in %s. Free space: %.2f MB. Free memory: %.2f MB. Process Memory: %.2f MB. Go Alloc: %.2f MB",
-					repo.Name,
-					checkoutTime,
-					float64(freeSpace)/(1024*1024),
-					float64(freeMem)/(1024*1024),
-					float64(procMem)/(1024*1024),
-					float64(memStats.Alloc)/(1024*1024),
-				)
-			} else if err == nil && appErr == nil && tmpErr == nil {
-				log.Printf(
-					"[DONE] Finished fetching repository %s in %s. Free space (Repo/App/Tmp): %.2f/%.2f/%.2f MB. Process Memory: %.2f MB. Go Alloc: %.2f MB",
-					repo.Name,
-					checkoutTime,
-					float64(freeSpace)/(1024*1024),
-					float64(appFreeSpace)/(1024*1024),
-					float64(tmpFreeSpace)/(1024*1024),
-					float64(procMem)/(1024*1024),
-					float64(memStats.Alloc)/(1024*1024),
-				)
-			} else if err == nil && appErr == nil {
-				log.Printf(
-					"[DONE] Finished fetching repository %s in %s. Free space (Repo/App): %.2f/%.2f MB. Process Memory: %.2f MB. Go Alloc: %.2f MB",
-					repo.Name,
-					checkoutTime,
-					float64(freeSpace)/(1024*1024),
-					float64(appFreeSpace)/(1024*1024),
-					float64(procMem)/(1024*1024),
-					float64(memStats.Alloc)/(1024*1024),
-				)
-			} else if err == nil {
-				log.Printf(
-					"[DONE] Finished fetching repository %s in %s. Free space: %.2f MB. Process Memory: %.2f MB. Go Alloc: %.2f MB",
-					repo.Name,
-					checkoutTime,
-					float64(freeSpace)/(1024*1024),
-					float64(procMem)/(1024*1024),
-					float64(memStats.Alloc)/(1024*1024),
-				)
-			} else if memErr == nil {
-				log.Printf(
-					"[DONE] Finished fetching repository %s in %s. Free memory: %.2f MB. Process Memory: %.2f MB. Go Alloc: %.2f MB",
-					repo.Name,
-					checkoutTime,
-					float64(freeMem)/(1024*1024),
-					float64(procMem)/(1024*1024),
-					float64(memStats.Alloc)/(1024*1024),
-				)
-			} else {
-				log.Printf(
-					"[DONE] Finished fetching repository %s in %s. Process Memory: %.2f MB. Go Alloc: %.2f MB",
-					repo.Name,
-					checkoutTime,
-					float64(procMem)/(1024*1024),
-					float64(memStats.Alloc)/(1024*1024),
-				)
 			}
 
-			log.Printf("[START] Parsing repository: %s", repo.Name)
-
-			size, err := getDirSize(repoPath)
-      var gitSize string
-			if err == nil {
-				gitSize = fmt.Sprintf("%.2f MB", float64(size)/(1024*1024))
+			if gitUrl == "" {
+				continue // skip non-http git repos for this tool
 			}
 
-			repoCopy := repo
+			g.Go(func() error {
+				log.Printf("[START] Fetching remote repository: %s (%s)", repo.Name, gitUrl)
 
-			t1 := time.Now()
-			siteData, err := parseRepo(os.DirFS(repoPath), ".", repo.Name, fastGit, &repoCopy, SourceURL(gitUrl))
-			if err != nil {
-				log.Printf("Failed to parse repo %s: %v", repo.Name, err)
-				return nil
-			}
-			processTime := time.Since(t1)
-			freeSpaceAfter, err := getFreeSpace(repoPath)
-			appFreeSpaceAfter, appErrAfter := getFreeSpace(".")
-			tmpFreeSpaceAfter, tmpErrAfter := getFreeSpace(os.TempDir())
-			freeMemAfter, memErrAfter := getFreeMemory()
-			procMemAfter := getProcessMemUsage()
+				repoPath := filepath.Join(tmpDir, repo.Name)
+				defer func() { _ = os.RemoveAll(repoPath) }()
 
-			var memStatsAfter runtime.MemStats
-			runtime.ReadMemStats(&memStatsAfter)
+				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+				defer cancel()
 
-			nodeCount := 0
-			if siteData != nil {
-				nodeCount = len(siteData.Categories) + siteData.PackageCount + len(siteData.Profiles) + len(siteData.News) + len(siteData.Moves) + len(siteData.DefinedEclasses)
+				t0 := time.Now()
+				if err := FetchRepo(ctx, gitUrl, repoPath, useZip, persistentDir != "", retries); err != nil {
+					log.Printf("Failed to fetch %s: %v", repo.Name, err)
+					if !continueOnError {
+						return fmt.Errorf("fetching %s: %w", repo.Name, err)
+					}
+					return nil
+				}
+				checkoutTime := time.Since(t0)
+				logFetchStats(repo.Name, checkoutTime, repoPath)
+
+				log.Printf("[START] Parsing repository: %s", repo.Name)
+
+				size, err := getDirSize(repoPath)
+				var gitSize string
+				if err == nil {
+					gitSize = fmt.Sprintf("%.2f MB", float64(size)/(1024*1024))
+				}
+
+				repoCopy := repo
+
+				t1 := time.Now()
+				siteData, err := parseRepo(os.DirFS(repoPath), ".", repo.Name, fastGit, &repoCopy, SourceURL(gitUrl))
+				if err != nil {
+					log.Printf("Failed to parse repo %s: %v", repo.Name, err)
+					return nil
+				}
+				processTime := time.Since(t1)
+				nodeCount := 0
+				if siteData != nil {
+					nodeCount = len(siteData.Categories) + siteData.PackageCount + len(siteData.Profiles) + len(siteData.News) + len(siteData.Moves) + len(siteData.DefinedEclasses)
+					for _, cat := range siteData.Categories {
+						for _, pkg := range cat.Packages {
+							nodeCount += len(pkg.Versions)
+						}
+					}
+				}
+				logParseStats(repo.Name, processTime, repoPath, nodeCount)
+
+				if concurrency == 1 {
+					numCategories := len(siteData.Categories)
+					numPackages := siteData.PackageCount
+					numVersions := 0
+					numLicenses := 0
+					uniqueLicenses := make(map[string]bool)
+					for _, cat := range siteData.Categories {
+						for _, pkg := range cat.Packages {
+							numVersions += len(pkg.Versions)
+							for _, v := range pkg.Versions {
+								if v.Ebuild != nil && v.Ebuild.Vars != nil {
+									licStr := v.Ebuild.Vars["LICENSE"]
+									if licStr != "" {
+										lics := g2.ParseLicense(licStr)
+										for _, l := range lics {
+											if l != "" {
+												uniqueLicenses[l] = true
+											}
+										}
+									}
+								}
+							}
+						}
+					}
+					numLicenses = len(uniqueLicenses)
+					numEclasses := len(siteData.DefinedEclasses)
+					numProfiles := len(siteData.Profiles)
+					numNews := len(siteData.News)
+
+					log.Printf("[STATS] Domain Objects - Repos: 1, Categories: %d, Packages: %d, Ebuilds: %d, Profiles: %d, Eclasses: %d, News: %d, Licenses: %d", numCategories, numPackages, numVersions, numProfiles, numEclasses, numNews, numLicenses)
+
+					var memStatsAfter runtime.MemStats
+					runtime.ReadMemStats(&memStatsAfter)
+					log.Printf("[STATS] Heap Objects: %d, Alloc: %.2f MB, Total Alloc: %.2f MB, Sys: %.2f MB, NumGC: %d",
+						memStatsAfter.HeapObjects,
+						float64(memStatsAfter.Alloc)/(1024*1024),
+						float64(memStatsAfter.TotalAlloc)/(1024*1024),
+						float64(memStatsAfter.Sys)/(1024*1024),
+						memStatsAfter.NumGC,
+					)
+				}
+
+				siteData.CheckoutTime = checkoutTime.String()
+				siteData.ProcessTime = processTime.String()
+				siteData.GitSize = gitSize
+				allSitesMu.Lock()
+				allSites = append(allSites, siteData)
+
+				processedRepos++
+				totalCategories += len(siteData.Categories)
+
+				repoPackages := 0
+				repoPackageVersions := 0
 				for _, cat := range siteData.Categories {
+					repoPackages += len(cat.Packages)
 					for _, pkg := range cat.Packages {
-						nodeCount += len(pkg.Versions)
+						repoPackageVersions += len(pkg.Versions)
 					}
 				}
-			}
+				totalPackages += repoPackages
+				totalPackageVersions += repoPackageVersions
 
-			if err == nil && appErrAfter == nil && tmpErrAfter == nil && memErrAfter == nil {
-				log.Printf(
-					"[DONE] Finished parsing repository %s in %s. Free space (Repo/App/Tmp): %.2f/%.2f/%.2f MB. Free memory: %.2f MB. Process Memory: %.2f MB. Go Alloc: %.2f MB. Nodes: %d",
-					repo.Name,
-					processTime,
-					float64(freeSpaceAfter)/(1024*1024),
-					float64(appFreeSpaceAfter)/(1024*1024),
-					float64(tmpFreeSpaceAfter)/(1024*1024),
-					float64(freeMemAfter)/(1024*1024),
-					float64(procMemAfter)/(1024*1024),
-					float64(memStatsAfter.Alloc)/(1024*1024),
-					nodeCount,
-				)
-			} else if err == nil && appErrAfter == nil && memErrAfter == nil {
-				log.Printf(
-					"[DONE] Finished parsing repository %s in %s. Free space (Repo/App): %.2f/%.2f MB. Free memory: %.2f MB. Process Memory: %.2f MB. Go Alloc: %.2f MB. Nodes: %d",
-					repo.Name,
-					processTime,
-					float64(freeSpaceAfter)/(1024*1024),
-					float64(appFreeSpaceAfter)/(1024*1024),
-					float64(freeMemAfter)/(1024*1024),
-					float64(procMemAfter)/(1024*1024),
-					float64(memStatsAfter.Alloc)/(1024*1024),
-					nodeCount,
-				)
-			} else if err == nil && memErrAfter == nil {
-				log.Printf(
-					"[DONE] Finished parsing repository %s in %s. Free space: %.2f MB. Free memory: %.2f MB. Process Memory: %.2f MB. Go Alloc: %.2f MB. Nodes: %d",
-					repo.Name,
-					processTime,
-					float64(freeSpaceAfter)/(1024*1024),
-					float64(freeMemAfter)/(1024*1024),
-					float64(procMemAfter)/(1024*1024),
-					float64(memStatsAfter.Alloc)/(1024*1024),
-					nodeCount,
-				)
-			} else if err == nil && appErrAfter == nil && tmpErrAfter == nil {
-				log.Printf(
-					"[DONE] Finished parsing repository %s in %s. Free space (Repo/App/Tmp): %.2f/%.2f/%.2f MB. Process Memory: %.2f MB. Go Alloc: %.2f MB. Nodes: %d",
-					repo.Name,
-					processTime,
-					float64(freeSpaceAfter)/(1024*1024),
-					float64(appFreeSpaceAfter)/(1024*1024),
-					float64(tmpFreeSpaceAfter)/(1024*1024),
-					float64(procMemAfter)/(1024*1024),
-					float64(memStatsAfter.Alloc)/(1024*1024),
-					nodeCount,
-				)
-			} else if err == nil && appErrAfter == nil {
-				log.Printf(
-					"[DONE] Finished parsing repository %s in %s. Free space (Repo/App): %.2f/%.2f MB. Process Memory: %.2f MB. Go Alloc: %.2f MB. Nodes: %d",
-					repo.Name,
-					processTime,
-					float64(freeSpaceAfter)/(1024*1024),
-					float64(appFreeSpaceAfter)/(1024*1024),
-					float64(procMemAfter)/(1024*1024),
-					float64(memStatsAfter.Alloc)/(1024*1024),
-					nodeCount,
-				)
-			} else if err == nil {
-				log.Printf(
-					"[DONE] Finished parsing repository %s in %s. Free space: %.2f MB. Process Memory: %.2f MB. Go Alloc: %.2f MB. Nodes: %d",
-					repo.Name,
-					processTime,
-					float64(freeSpaceAfter)/(1024*1024),
-					float64(procMemAfter)/(1024*1024),
-					float64(memStatsAfter.Alloc)/(1024*1024),
-					nodeCount,
-				)
-			} else if memErrAfter == nil {
-				log.Printf(
-					"[DONE] Finished parsing repository %s in %s. Free memory: %.2f MB. Process Memory: %.2f MB. Go Alloc: %.2f MB. Nodes: %d",
-					repo.Name,
-					processTime,
-					float64(freeMemAfter)/(1024*1024),
-					float64(procMemAfter)/(1024*1024),
-					float64(memStatsAfter.Alloc)/(1024*1024),
-					nodeCount,
-				)
-			} else {
-				log.Printf(
-					"[DONE] Finished parsing repository %s in %s. Process Memory: %.2f MB. Go Alloc: %.2f MB. Nodes: %d",
-					repo.Name,
-					processTime,
-					float64(procMemAfter)/(1024*1024),
-					float64(memStatsAfter.Alloc)/(1024*1024),
-					nodeCount,
-				)
-			}
-
-			siteData.CheckoutTime = checkoutTime.String()
-			siteData.ProcessTime = processTime.String()
-			siteData.GitSize = gitSize
-			allSitesMu.Lock()
-			allSites = append(allSites, siteData)
-
-			processedRepos++
-			totalCategories += len(siteData.Categories)
-
-			repoPackages := 0
-			repoPackageVersions := 0
-			for _, cat := range siteData.Categories {
-				repoPackages += len(cat.Packages)
-				for _, pkg := range cat.Packages {
-					repoPackageVersions += len(pkg.Versions)
-				}
-			}
-			totalPackages += repoPackages
-			totalPackageVersions += repoPackageVersions
-
-			now := time.Now()
-			if lastLogTime.IsZero() || now.Sub(lastLogTime) >= 10*time.Minute {
-				lastLogTime = now
-				currentRepos := len(allSites)
-				var currentPackages int
-				for _, site := range allSites {
-					if site != nil {
-						currentPackages += site.PackageCount
+				now := time.Now()
+				if lastLogTime.IsZero() || now.Sub(lastLogTime) >= 10*time.Minute {
+					lastLogTime = now
+					currentRepos := len(allSites)
+					var currentPackages int
+					for _, site := range allSites {
+						if site != nil {
+							currentPackages += site.PackageCount
+						}
 					}
+					log.Printf("[PROGRESS] Currently processed %d repositories and %d total packages so far", currentRepos, currentPackages)
 				}
-				log.Printf("[PROGRESS] Currently processed %d repositories and %d total packages so far", currentRepos, currentPackages)
-			}
 
-			if processedRepos%10 == 0 {
-				memUsage := getProcessMemUsage()
-				log.Printf("[PROGRESS] Processed %d repositories. Memory Usage: %.2f MB. Cumulative: Categories: %d, Packages: %d, Versions: %d",
-					processedRepos,
-					float64(memUsage)/(1024*1024),
-					totalCategories,
-					totalPackages,
-					totalPackageVersions,
-				)
-			}
+				if processedRepos%10 == 0 {
+					memUsage := getProcessMemUsage()
+					log.Printf("[PROGRESS] Processed %d repositories. Memory Usage: %.2f MB. Cumulative: Categories: %d, Packages: %d, Versions: %d",
+						processedRepos,
+						float64(memUsage)/(1024*1024),
+						totalCategories,
+						totalPackages,
+						totalPackageVersions,
+					)
+				}
 
-			allSitesMu.Unlock()
-			return nil
-		})
-	}
-  if err := g.Wait(); err != nil {
-		if !continueOnError {
-			return fmt.Errorf("parallel repository fetching: %w", err)
+				allSitesMu.Unlock()
+				return nil
+			})
 		}
-		log.Printf("Warning: error during parallel repository fetching: %v", err)
+		if err := g.Wait(); err != nil {
+			if !continueOnError {
+				return fmt.Errorf("parallel repository fetching: %w", err)
+			}
+			log.Printf("Warning: error during parallel repository fetching: %v", err)
+		}
 	}
 	// Sort the resulting sites alphabetically by RepoName for deterministic ordering
 	sort.Slice(allSites, func(i, j int) bool {
