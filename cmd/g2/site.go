@@ -323,7 +323,7 @@ func (cfg *MainArgConfig) cmdOverlay(args []string) error {
 				defer cancel()
 
 				t0 := time.Now()
-				if err := FetchRepo(ctx, task.Location, tmpDir, *useZip, *workMode == "persistent", 0); err != nil {
+				if err := FetchRepo(ctx, task.Location, tmpDir, *useZip, *workMode, 0); err != nil {
 					return fmt.Errorf("cloning repository %s: %w", task.Name, err)
 				}
 				checkoutTime := time.Since(t0)
@@ -4040,7 +4040,7 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, 
 			defer cancel()
 
 			t0 := time.Now()
-			if err := FetchRepo(ctx, gitUrl, repoPath, useZip, workMode == "persistent", retries); err != nil {
+			if err := FetchRepo(ctx, gitUrl, repoPath, useZip, workMode, retries); err != nil {
 				log.Printf("Failed to fetch %s: %v", repo.Name, err)
 				if !continueOnError {
 					return fmt.Errorf("fetching %s: %w", repo.Name, err)
