@@ -273,8 +273,6 @@ func (p *EbuildParser) Parse() (ParsedEbuild, error) {
 				} else {
 					if _, exists := result.Variables[ident]; !exists {
 						result.Order = append(result.Order, ident)
-					} else {
-						result.Warnings = append(result.Warnings, fmt.Sprintf("Duplicate assignment for variable '%s'", ident))
 					}
 					result.Variables[ident] = val
 				}
