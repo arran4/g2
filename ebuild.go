@@ -1,6 +1,7 @@
 package g2
 
 import (
+	utils "github.com/arran4/go-weak-content"
 	"bufio"
 	"bytes"
 	"context"
@@ -12,6 +13,8 @@ import (
 	"strconv"
 	"strings"
 )
+
+var EnableWeakEbuildContent = false
 
 type URIEntry struct {
 	URL      string
@@ -40,13 +43,13 @@ func (m ParsingMode) String() string {
 }
 
 type Ebuild struct {
-	Path          string
-	Vars          map[string]string
-	Functions     map[string]AST
-	SrcUri        []URIEntry
-	Mode          ParsingMode
-	RawText       string
-	ParseWarnings []string
+	Path             string
+	Vars             map[string]string
+	FunctionsContent utils.Content[map[string]AST]
+	SrcUri           []URIEntry
+	Mode             ParsingMode
+	RawTextContent   utils.Content[string]
+	ParseWarnings    []string
 
 	orderOverride []string
 	EbuildHeader  string
@@ -106,7 +109,13 @@ func (e *Ebuild) String() string {
 		if addedFuncs[k] {
 			return
 		}
-		val, ok := e.Functions[k]
+
+		funcs, _ := e.FunctionsContent.Data()
+		if funcs == nil {
+			return
+		}
+
+		val, ok := (*funcs)[k]
 		if !ok {
 			return
 		}
@@ -124,7 +133,13 @@ func (e *Ebuild) String() string {
 
 	// 1. Process items in the exact order they appeared in the original source
 	for _, name := range e.orderOverride {
-		if _, isFunc := e.Functions[name]; isFunc {
+		funcs, _ := e.FunctionsContent.Data()
+		isFunc := false
+		if funcs != nil {
+			_, isFunc = (*funcs)[name]
+		}
+
+		if isFunc {
 			addFunc(name)
 		} else if _, isVar := e.Vars[name]; isVar {
 			addVar(name)
@@ -145,9 +160,12 @@ func (e *Ebuild) String() string {
 
 	// 3. Add remaining functions alphabetically
 	var remainingFuncs []string
-	for k := range e.Functions {
-		if !addedFuncs[k] {
-			remainingFuncs = append(remainingFuncs, k)
+	funcs, _ := e.FunctionsContent.Data()
+	if funcs != nil {
+		for k := range *funcs {
+			if !addedFuncs[k] {
+				remainingFuncs = append(remainingFuncs, k)
+			}
 		}
 	}
 	sort.Strings(remainingFuncs)
@@ -204,6 +222,41 @@ func ParseEbuild(fsys fs.FS, path string, mode ParsingMode) (*Ebuild, error) {
 		e.Vars[k] = v
 	}
 
+	rawTextGen := func() (*string, error) {
+		cb, err := fs.ReadFile(fsys, path)
+		if err != nil {
+			return nil, err
+		}
+		s := string(cb)
+		return &s, nil
+	}
+
+	funcsGen := func() (*map[string]AST, error) {
+		cb, err := fs.ReadFile(fsys, path)
+		if err != nil {
+			return nil, err
+		}
+		p := NewEbuildParser(context.Background(), strings.NewReader(string(cb)))
+		pe, err := p.Parse()
+		if err != nil {
+			return nil, err
+		}
+		f := make(map[string]AST)
+		for k, v := range pe.Functions {
+			f[k] = v
+		}
+		return &f, nil
+	}
+
+	e.RawTextContent = utils.NewContent[string](
+		utils.WithGenerator[string](rawTextGen),
+		utils.UseWeakStorage[string](EnableWeakEbuildContent),
+	)
+	e.FunctionsContent = utils.NewContent[map[string]AST](
+		utils.WithGenerator[map[string]AST](funcsGen),
+		utils.UseWeakStorage[map[string]AST](EnableWeakEbuildContent),
+	)
+
 	if mode == ParseMetadataOnly {
 		return e, nil
 	}
@@ -213,7 +266,13 @@ func ParseEbuild(fsys fs.FS, path string, mode ParsingMode) (*Ebuild, error) {
 		return nil, fmt.Errorf("reading file %s: %w", path, err)
 	}
 	content := string(contentBytes)
-	e.RawText = content
+
+	// Fast-track load the eager values since we already needed to read the file
+	e.RawTextContent = utils.NewContent[string](
+		utils.WithGenerator[string](rawTextGen),
+		utils.WithValue[string](content),
+		utils.UseWeakStorage[string](EnableWeakEbuildContent),
+	)
 
 	if mode >= ParseVariables {
 		// Use the recursive descent parser
@@ -232,10 +291,17 @@ func ParseEbuild(fsys fs.FS, path string, mode ParsingMode) (*Ebuild, error) {
 			e.Vars[k] = v
 		}
 
-		e.Functions = make(map[string]AST)
+		funcs := make(map[string]AST)
 		for k, v := range parsedEbuild.Functions {
-			e.Functions[k] = v
+			funcs[k] = v
 		}
+
+		e.FunctionsContent = utils.NewContent[map[string]AST](
+			utils.WithGenerator[map[string]AST](funcsGen),
+			utils.WithValue[map[string]AST](funcs),
+			utils.UseWeakStorage[map[string]AST](EnableWeakEbuildContent),
+		)
+
 		e.orderOverride = parsedEbuild.Order
 		e.EbuildHeader = parsedEbuild.EbuildHeader
 		// Resolve all values now that all vars are added

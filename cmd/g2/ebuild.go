@@ -378,13 +378,14 @@ func (cfg *CmdEbuildArgConfig) cmdEbuildExplain(args []string, opts ...any) erro
 	_, _ = fmt.Fprintln(out)
 
 	_, _ = fmt.Fprintf(out, "=== Phases Overridden ===\n")
-	if len(ebuild.Functions) > 0 {
-		var funcs []string
-		for f := range ebuild.Functions {
-			funcs = append(funcs, f)
+	funcs, _ := ebuild.FunctionsContent.Data()
+	if funcs != nil && len(*funcs) > 0 {
+		var funcNames []string
+		for f := range *funcs {
+			funcNames = append(funcNames, f)
 		}
-		sort.Strings(funcs)
-		for _, f := range funcs {
+		sort.Strings(funcNames)
+		for _, f := range funcNames {
 			_, _ = fmt.Fprintln(out, f)
 		}
 	} else {

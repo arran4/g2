@@ -212,6 +212,7 @@ func (cfg *MainArgConfig) cmdOverlay(args []string) error {
 	recentDurOpt := fs.String("recent-duration", "3mo", "Duration to consider an update 'recent' (e.g. 3mo, 14d, 72h)")
 	fastGit := fs.Bool("fast-git-modtime", false, "Use fast (O(1)) but potentially less reliable go-git file log lookup")
 	useZip := fs.Bool("use-zip", false, "Download zip archives instead of git clone when supported")
+	weakContent := fs.Bool("weak-content", false, "Use weak storage to save memory when parsing ebuilds")
 	persistentDir := fs.String("persistent-dir", "", "Directory to persistently store checked out repositories instead of a temporary directory")
 	includeGentoo := fs.Bool("include-gentoo", false, "Include the base Gentoo repository")
 	includeGuru := fs.Bool("include-guru", false, "Include the Guru repository")
@@ -220,6 +221,7 @@ func (cfg *MainArgConfig) cmdOverlay(args []string) error {
 	if err := fs.Parse(args[2:]); err != nil {
 		return fmt.Errorf("parsing flags: %w", err)
 	}
+	g2.EnableWeakEbuildContent = *weakContent
 	recentDuration, recentDurationStr, err := parseDuration(*recentDurOpt)
 	if err != nil {
 		return fmt.Errorf("invalid recent-duration: %w", err)
@@ -424,11 +426,13 @@ func (cfg *MainArgConfig) cmdOverlays(args []string) error {
 	continueOnError := fs.Bool("continue-on-error", true, "Continue parsing other repositories even if fetching one fails")
 	persistentDir := fs.String("persistent-dir", "", "Directory to persistently store checked out repositories instead of a temporary directory")
 	reposConfOpt := fs.String("repos-conf", "", "Path to repos.conf file or directory")
+	weakContent := fs.Bool("weak-content", false, "Use weak storage to save memory when parsing ebuilds")
 	mode := fs.String("mode", "standard", "Processing mode: 'standard' or 'pipeline'")
 
 	if err := fs.Parse(args[2:]); err != nil {
 		return fmt.Errorf("parsing flags: %w", err)
 	}
+	g2.EnableWeakEbuildContent = *weakContent
 	recentDuration, recentDurationStr, err := parseDuration(*recentDurOpt)
 	if err != nil {
 		return fmt.Errorf("invalid recent-duration: %w", err)

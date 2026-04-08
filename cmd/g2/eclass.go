@@ -163,15 +163,18 @@ func (cfg *CmdEclassArgConfig) cmdEclassExplain(args []string) error {
 	}
 
 	fmt.Println("\nFunctions:")
-	for k, v := range ebuild.Functions {
-		fmt.Printf("  %s() {\n", k)
-		lines := strings.Split(v.Value, "\n")
-		for _, line := range lines {
-			if strings.TrimSpace(line) != "" {
-				fmt.Printf("    %s\n", line)
+	funcs, _ := ebuild.FunctionsContent.Data()
+	if funcs != nil {
+		for k, v := range *funcs {
+			fmt.Printf("  %s() {\n", k)
+			lines := strings.Split(v.Value, "\n")
+			for _, line := range lines {
+				if strings.TrimSpace(line) != "" {
+					fmt.Printf("    %s\n", line)
+				}
 			}
+			fmt.Println("  }")
 		}
-		fmt.Printf("  }\n")
 	}
 
 	if len(ebuild.ParseWarnings) > 0 {

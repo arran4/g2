@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"testing"
     "github.com/arran4/g2"
+	utils "github.com/arran4/go-weak-content"
 )
 
 func TestAllTemplatesRender(t *testing.T) {
@@ -40,9 +41,25 @@ func TestAllTemplatesRender(t *testing.T) {
             data.Manifest = &ManifestEntryData{
                 Entry: &g2.ManifestEntry{},
             }
+            rawTextGen := func() (*string, error) {
+                s := ""
+                return &s, nil
+            }
+            funcsGen := func() (*map[string]g2.AST, error) {
+                f := make(map[string]g2.AST)
+                return &f, nil
+            }
             data.VersionData = &VersionData{
                 Ebuild: &g2.Ebuild{
                     Vars: map[string]string{},
+                    RawTextContent: utils.NewContent[string](
+                        utils.WithGenerator[string](rawTextGen),
+                        utils.WithValue[string](""),
+                    ),
+                    FunctionsContent: utils.NewContent[map[string]g2.AST](
+                        utils.WithGenerator[map[string]g2.AST](funcsGen),
+                        utils.WithValue[map[string]g2.AST](make(map[string]g2.AST)),
+                    ),
                 },
             }
             data.Eclass = &AggEclass{}
