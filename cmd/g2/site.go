@@ -1048,12 +1048,12 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool, r
 				ebuildPath := filepath.Join(pkgPath, file.Name())
 				ebuild, err := g2.ParseEbuild(sysFS, filepath.ToSlash(ebuildPath), g2.ParseFull)
 				if err != nil {
-					log.Printf("Warning: parsing ebuild %s in repo %s: %v", ebuildPath, repoInfo.Name, err)
+					log.Printf("Warning: parsing ebuild %s in repo %s: %v", ebuildPath, repoName, err)
 					continue
 				}
 
 				for _, w := range ebuild.ParseWarnings {
-					log.Printf("Warning: parsing ebuild %s in repo %s: %v", ebuildPath, repoInfo.Name, w)
+					log.Printf("Warning: parsing ebuild %s in repo %s: %v", ebuildPath, repoName, w)
 				}
 
 				version := ""
@@ -1397,10 +1397,10 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool, r
 					if err == nil {
 						site.Eclasses = append(site.Eclasses, ebuild)
 						for _, w := range ebuild.ParseWarnings {
-							log.Printf("Warning: parsing eclass %s in repo %s: %v", e.Name(), repoInfo.Name, w)
+							log.Printf("Warning: parsing eclass %s in repo %s: %v", e.Name(), repoName, w)
 						}
 					} else {
-						log.Printf("Warning: failed to parse eclass %s in repo %s: %v", e.Name(), repoInfo.Name, err)
+						log.Printf("Warning: failed to parse eclass %s in repo %s: %v", e.Name(), repoName, err)
 					}
 				}
 			}
