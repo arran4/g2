@@ -389,6 +389,16 @@ func TestResolveVariables(t *testing.T) {
 			},
 			want: "hello world fallback",
 		},
+		{
+			name: "Bash conditionals are treated as literal strings",
+			// Proves that bash conditional logic is NOT evaluated, only variables within them are substituted.
+			text: "if [[ $A == \"foo\" ]]; then echo $B; fi",
+			variables: map[string]string{
+				"A": "foo",
+				"B": "bar",
+			},
+			want: "if [[ foo == \"foo\" ]]; then echo bar; fi",
+		},
 	}
 
 	for _, tt := range tests {
