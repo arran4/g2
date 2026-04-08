@@ -276,15 +276,6 @@ func TestResolveVariables(t *testing.T) {
 			variables: map[string]string{
 				"a": "a$a",
 			},
-			// The new resolveBash replaces $a recursively, creating a larger string.
-			// But we don't have infinite loops because mvdan.cc/sh expands recursively up to a limit or natively prevents it if not directly evaluated recursively the same way.
-			// Actually `sh` expansion evaluates `a$a` where $a is evaluated again?
-			// Wait, bash doesn't recursively evaluate variable contents by default.
-			// If a="a$a", and we eval "echo $a", it outputs "a$a", because bash evaluates $a to "a$a" and stops.
-			// Our previous loop did 5 passes, so it became aaaaa$a.
-			// Since we want to emulate expected bash behavior, it should just be "a$a" but because of our 5 passes outside resolveBash, it expands 5 times!
-			// If we do 5 passes in ResolveVariables, "a" -> "a$a" -> "aa$a" etc.
-			// So it evaluates to "aaaaa$a".
 			want: "aaaaa$a",
 		},
 		{
@@ -294,14 +285,6 @@ func TestResolveVariables(t *testing.T) {
 				"A": "$B",
 				"B": "$A",
 			},
-			// In bash, echo $A -> $B. And that's it.
-			// But with our 5 passes in ResolveVariables:
-			// pass 1: $A -> $B
-			// pass 2: $B -> $A
-			// pass 3: $A -> $B
-			// pass 4: $B -> $A
-			// pass 5: $A -> $B
-			// So we get $B instead of $A.
 			want: "$B",
 		},
 		{
