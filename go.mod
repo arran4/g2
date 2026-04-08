@@ -2,7 +2,7 @@ module github.com/arran4/g2
 
 go 1.24.0
 
-toolchain go1.24.1
+toolchain go1.24.3
 
 require (
 	github.com/go-git/go-git/v5 v5.17.1
@@ -32,6 +32,7 @@ require (
 )
 
 require (
+	github.com/arran4/go-weak-content v0.0.1
 	golang.org/x/sync v0.19.0
 	golang.org/x/sys v0.39.0
 )

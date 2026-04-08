@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	utils "github.com/arran4/go-weak-content"
 	"context"
 	"encoding/json"
 	"encoding/xml"
@@ -122,11 +123,7 @@ type CategoryData struct {
 	Packages []PackageData
 }
 
-type FileData struct {
-	Name   string
-	Path   string
-	RawURL string
-}
+type FileData = g2.FileData
 
 type ManifestEntryData struct {
 	Entry        *g2.ManifestEntry
@@ -1210,9 +1207,22 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool, r
 				if err == nil {
 					for _, fe := range fileEntries {
 						if !fe.IsDir() {
+							filePath := filepath.Join(filesDirPath, fe.Name())
 							fd := FileData{
 								Name: fe.Name(),
-								Path: filepath.Join(filesDirPath, fe.Name()),
+								Path: filePath,
+								Content: utils.NewContent(utils.WithGenerator(func() (*[]byte, error) {
+									f, err := sysFS.Open(filepath.ToSlash(filePath))
+									if err != nil {
+										return nil, err
+									}
+									defer func() { _ = f.Close() }()
+									b, err := io.ReadAll(f)
+									if err != nil {
+										return nil, err
+									}
+									return &b, nil
+								}), utils.UseWeakStorage[[]byte](true), utils.UseLazyLoading[[]byte](true)),
 							}
 							if remoteURL != "" {
 								relPath, _ := filepath.Rel(repoDir, fd.Path)

@@ -1,5 +1,11 @@
 package g2
 
+import (
+	utils "github.com/arran4/go-weak-content"
+)
+
+type FileContent = utils.Content[[]byte]
+
 type SiteData struct {
 	Title          string
 	RepoName       string
@@ -25,9 +31,10 @@ type CategoryData struct {
 }
 
 type FileData struct {
-	Name   string
-	Path   string
-	RawURL string
+	Name    string
+	Path    string
+	RawURL  string
+	Content FileContent
 }
 
 type PackageData struct {
