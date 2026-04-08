@@ -1,6 +1,9 @@
 package main
 
-import "strings"
+import (
+	"github.com/arran4/g2"
+	"strings"
+)
 
 type PageNode struct {
 	Parent *PageNode
@@ -33,8 +36,8 @@ func (n *PageNode) BaseURL() string {
 	return res
 }
 
-func (n *PageNode) Breadcrumbs() []Breadcrumb {
-	var crumbs []Breadcrumb
+func (n *PageNode) Breadcrumbs() []g2.Breadcrumb {
+	var crumbs []g2.Breadcrumb
 	curr := n
 
 	for curr != nil {
@@ -58,9 +61,19 @@ func (n *PageNode) Breadcrumbs() []Breadcrumb {
 			}
 		}
 
-		crumbs = append([]Breadcrumb{{Name: curr.Name, URL: url}}, crumbs...)
+		crumbs = append([]g2.Breadcrumb{{Name: curr.Name, URL: url}}, crumbs...)
 		curr = curr.Parent
 	}
 
 	return crumbs
+}
+
+func (n *PageNode) Context(title string, version string, genInfo GenerationInfo) GenericPageContext {
+	return GenericPageContext{
+		Title:       title,
+		BaseURL:     n.BaseURL(),
+		Breadcrumbs: n.Breadcrumbs(),
+		Version:     version,
+		GenInfo:     genInfo,
+	}
 }

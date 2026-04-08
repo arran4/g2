@@ -1,6 +1,7 @@
 package main
 
 import (
+	"reflect"
 	"fmt"
 	"html/template"
 	"net/url"
@@ -19,7 +20,13 @@ func getTemplateFuncMap() template.FuncMap {
 		"split":               strings.Split,
 		"formatKeywords":      formatKeywordsFunc,
 		"hasPrefix":           strings.HasPrefix,
-		"groupIUSEFlags":      groupIUSEFlagsFunc,
+				"groupIUSEFlags":      groupIUSEFlagsFunc,
+		"len_or_zero": func(v any) int {
+			if v == nil { return 0 }
+			val := reflect.ValueOf(v)
+			if val.Kind() == reflect.Slice || val.Kind() == reflect.Map || val.Kind() == reflect.String || val.Kind() == reflect.Array { return val.Len() }
+			return 0
+		},
 	}
 }
 

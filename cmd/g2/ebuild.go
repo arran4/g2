@@ -584,7 +584,7 @@ func (cfg *CmdEbuildArgConfig) cmdEbuildDeps(args []string, opts ...any) error {
 
 	return nil
 }
-    
+
 func (cfg *CmdEbuildArgConfig) cmdEbuildAsJson(args []string) error {
 	fs := flag.NewFlagSet("as-json", flag.ExitOnError)
 	if err := fs.Parse(args); err != nil {
@@ -752,9 +752,8 @@ func (cfg *CmdEbuildArgConfig) cmdEbuildCheck(args []string) error {
 	if *format == "text" {
 		fmt.Println("Check passed successfully.")
 	}
-  return nil
+	return nil
 }
-
 
 func (cfg *CmdEbuildArgConfig) cmdEbuildQuery(args []string) error {
 	fs := flag.NewFlagSet("query", flag.ExitOnError)

@@ -11,8 +11,8 @@ import (
 	"strings"
 	"testing"
 
-	"io"
 	"golang.org/x/tools/txtar"
+	"io"
 )
 
 type memWriteFS struct {
@@ -24,6 +24,7 @@ func (m *memWriteFS) MkdirAll(path string, perm os.FileMode) error {
 }
 
 type nopCloser struct{ io.Writer }
+
 func (nopCloser) Close() error { return nil }
 
 func (m *memWriteFS) Create(name string) (io.WriteCloser, error) {

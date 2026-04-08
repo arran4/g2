@@ -1,0 +1,401 @@
+		if isIgnoredDir(name) {
+			continue
+		}
+
+		if len(supportedCategories) > 0 && !supportedCategories[name] && name != "virtual" && !strings.HasPrefix(name, "virtual-") {
+			continue
+		}
+
+		catData := CategoryData{Name: name}
+		catPath := filepath.Join(repoDir, name)
+
+		inRepo := len(supportedCategories) == 0 || supportedCategories[name]
+		mainCats := g2.FetchMainGentooCategories()
+		inMain := len(mainCats) == 0 || mainCats[name]
+
+		pkgEntries, err := fs.ReadDir(sysFS, filepath.ToSlash(catPath))
+		if err != nil {
+			log.Printf("Warning: reading category dir %s: %v", catPath, err)
+			continue
+		}
+
+		for _, pkgEntry := range pkgEntries {
+			if !pkgEntry.IsDir() {
+				continue
+			}
+			pkgName := pkgEntry.Name()
+			if strings.HasPrefix(pkgName, ".") {
+				continue
+			}
+
+			pkgPath := filepath.Join(catPath, pkgName)
+			pkgData := PackageData{
+				Name:     pkgName,
+				Category: name,
+			}
+
+			// Read ebuilds
+			files, err := fs.ReadDir(sysFS, filepath.ToSlash(pkgPath))
+			if err != nil {
+				log.Printf("Warning: reading package dir %s: %v", pkgPath, err)
+				continue
+			}
+
+			for _, file := range files {
+				if file.IsDir() || !strings.HasSuffix(file.Name(), ".ebuild") {
+					continue
+				}
+
+				ebuildPath := filepath.Join(pkgPath, file.Name())
+				ebuild, err := g2.ParseEbuild(sysFS, filepath.ToSlash(ebuildPath), g2.ParseFull)
+				if err != nil {
+					log.Printf("Warning: parsing ebuild %s in repo %s: %v", ebuildPath, repoName, err)
+					continue
+				}
+
+				for _, w := range ebuild.ParseWarnings {
+					log.Printf("Warning: parsing ebuild %s in repo %s: %v", ebuildPath, repoName, w)
+				}
+
+				version := ""
+				if ebuild.Vars != nil {
+					version = ebuild.Vars["PV"]
+				}
+				if version == "" {
+					// Fallback from filename
+					vars := g2.ParseEbuildVariables(file.Name())
+					if vars != nil {
+						version = vars["PV"]
+					}
+				}
+
+				var ebuildRawURL string
+				relPath, _ := filepath.Rel(repoDir, ebuildPath)
+				if remoteURL != "" {
+					commitHash, _ := getFileCommit(repoDir, relPath)
+					if commitHash != "" {
+						ebuildRawURL = generateGitHubRawURL(remoteURL, commitHash, relPath)
+					}
+				}
+
+				modTime := getFileModTime(repoDir, relPath, fastGit)
+				if modTime.After(pkgData.ModTime) {
+					pkgData.ModTime = modTime
+				}
+
+				vd := VersionData{
+					Version:      version,
+					Ebuild:       ebuild,
+					EbuildRawURL: ebuildRawURL,
+					ModTime:      modTime,
+				}
+
+				if site.SlotMoves != nil {
+					slot := ebuild.Vars["SLOT"]
+					if slot != "" {
+						for _, sm := range site.SlotMoves {
+							if sm.Package == name+"/"+pkgName && sm.Old == slot {
+								vd.MovedToSlot = sm.New
+								break
+							}
+						}
+					}
+				}
+
+				pkgData.Versions = append(pkgData.Versions, vd)
+			}
+
+			if len(pkgData.Versions) == 0 {
+				continue // No ebuilds, skip package
+			}
+
+			pkgData.HighestStableVersion, pkgData.HighestTestingVersion, pkgData.EbuildCount = getHighestVersionsAndCount(pkgData.Versions, site)
+
+			// Sort versions descending
+			// Read metadata.xml
+			metaPath := filepath.Join(pkgPath, "metadata.xml")
+			metadata, err := parseMetadataFromFS(sysFS, filepath.ToSlash(metaPath))
+			if err == nil {
+				if pkgMd, ok := metadata.(*g2.PkgMetadata); ok {
+					pkgData.Metadata = pkgMd
+				} else {
+					pkgData.MetadataError = fmt.Errorf("metadata.xml is not a pkgmetadata")
+				}
+			} else {
+				pkgData.MetadataError = err
+			}
+
+			// Compute dominant information
+			var highestUnmasked *g2.Ebuild
+			var highestMasked *g2.Ebuild
+			for _, v := range pkgData.Versions {
+				if v.Ebuild == nil || v.Ebuild.Vars == nil {
+					continue
+				}
+				keywords := v.Ebuild.Vars["KEYWORDS"]
+				parts := strings.Fields(keywords)
+
+				isMasked := true
+				for _, p := range parts {
+					if !strings.HasPrefix(p, "-") && !strings.HasPrefix(p, "~") {
+						isMasked = false
+						break
+					}
+				}
+				if !isMasked {
+					if highestUnmasked == nil || g2.CompareVersions(v.Version, highestUnmasked.Vars["PV"]) > 0 {
+						highestUnmasked = v.Ebuild
+					}
+				} else {
+					if highestMasked == nil || g2.CompareVersions(v.Version, highestMasked.Vars["PV"]) > 0 {
+						highestMasked = v.Ebuild
+					}
+				}
+			}
+
+			targetEbuild := highestUnmasked
+			if targetEbuild == nil {
+				targetEbuild = highestMasked
+			}
+			if targetEbuild == nil && len(pkgData.Versions) > 0 {
+				for _, v := range pkgData.Versions {
+					if v.Ebuild != nil && v.Ebuild.Vars != nil {
+						targetEbuild = v.Ebuild
+						break
+					}
+				}
+			}
+
+			if pkgData.Metadata != nil && len(pkgData.Metadata.LongDescription) > 0 {
+				pkgData.DominantDescription = pkgData.Metadata.LongDescription[0].Body
+			} else if targetEbuild != nil {
+				pkgData.DominantDescription = targetEbuild.Vars["DESCRIPTION"]
+			}
+
+			if targetEbuild != nil {
+				pkgData.DominantHomepage = targetEbuild.Vars["HOMEPAGE"]
+				pkgData.DominantLicense = targetEbuild.Vars["LICENSE"]
+			}
+
+			sort.Slice(pkgData.Versions, func(i, j int) bool {
+				return pkgData.Versions[i].Version > pkgData.Versions[j].Version
+			})
+
+			if remoteURL != "" {
+				relPath, _ := filepath.Rel(repoDir, metaPath)
+				commitHash, _ := getFileCommit(repoDir, relPath)
+				if commitHash != "" {
+					pkgData.MetadataRawURL = generateGitHubRawURL(remoteURL, commitHash, relPath)
+				}
+			}
+
+			// Set ApplicableMirrors for each version
+			for i, v := range pkgData.Versions {
+				if v.Ebuild != nil {
+					applicableMirrors := make(map[string][]string)
+					for _, uri := range v.Ebuild.SrcUri {
+						if strings.HasPrefix(uri.URL, "mirror://") {
+							parts := strings.SplitN(uri.URL[len("mirror://"):], "/", 2)
+							if len(parts) > 0 {
+								mirrorName := parts[0]
+								if mirrors, ok := site.ThirdPartyMirrors[mirrorName]; ok {
+									applicableMirrors[mirrorName] = mirrors
+								}
+							}
+						}
+					}
+					if len(applicableMirrors) > 0 {
+						pkgData.Versions[i].ApplicableMirrors = applicableMirrors
+					}
+				}
+			}
+
+			// Read Manifest
+			manifestPath := filepath.Join(pkgPath, "Manifest")
+			manifest, err := parseManifestFromFS(sysFS, filepath.ToSlash(manifestPath))
+			if err == nil {
+				pkgData.Manifest = manifest
+				pkgData.ManifestData = buildManifestData(manifest, pkgData.Versions, site.ThirdPartyMirrors)
+			}
+
+			// Read files/ directory
+			filesDirPath := filepath.Join(pkgPath, "files")
+			if info, err := fs.Stat(sysFS, filepath.ToSlash(filesDirPath)); err == nil && info.IsDir() {
+				fileEntries, err := fs.ReadDir(sysFS, filepath.ToSlash(filesDirPath))
+				if err == nil {
+					for _, fe := range fileEntries {
+						if !fe.IsDir() {
+							fd := FileData{
+								Name: fe.Name(),
+								Path: filepath.Join(filesDirPath, fe.Name()),
+							}
+							if remoteURL != "" {
+								relPath, _ := filepath.Rel(repoDir, fd.Path)
+								commitHash, _ := getFileCommit(repoDir, relPath)
+								if commitHash != "" {
+									fd.RawURL = generateGitHubRawURL(remoteURL, commitHash, relPath)
+								}
+							}
+							pkgData.Files = append(pkgData.Files, fd)
+						}
+					}
+				}
+			}
+
+			g2PkgData := g2.PackageData{
+				Name:          pkgData.Name,
+				Category:      pkgData.Category,
+				Metadata:      pkgData.Metadata,
+				MetadataError: pkgData.MetadataError,
+				Manifest:      pkgData.Manifest,
+			}
+
+			// Assign deprecation data
+			pkgStr := pkgData.Category + "/" + pkgData.Name
+			for i := range site.Deprecated {
+				for _, entry := range site.Deprecated[i].Entries {
+					depPkg := entry.Package
+					// Handle versions and operators in deprecation package strings (e.g. >=dev-python/autobahn-21)
+					// A simple check is if it contains the category/name
+					if strings.Contains(depPkg, pkgStr) {
+						pkgData.Deprecated = &site.Deprecated[i]
+						break
+					}
+				}
+			}
+
+			for i := range site.Masked {
+				for _, entry := range site.Masked[i].Entries {
+					maskPkg := entry.Package
+					if strings.Contains(maskPkg, pkgStr) {
+						pkgData.Masked = &site.Masked[i]
+						break
+					}
+				}
+			}
+
+			for i, v := range pkgData.Versions {
+				for j := range site.Deprecated {
+					// Add deprecation note if the package string matches.
+					// We match if it contains "category/name" which works for versioned atoms too.
+					for _, entry := range site.Deprecated[j].Entries {
+						if strings.Contains(entry.Package, pkgStr) {
+							pkgData.Versions[i].Deprecated = &site.Deprecated[j]
+							break
+						}
+					}
+				}
+				for j := range site.Masked {
+					for _, entry := range site.Masked[j].Entries {
+						if strings.Contains(entry.Package, pkgStr) {
+							pkgData.Versions[i].Masked = &site.Masked[j]
+							break
+						}
+					}
+				}
+
+				g2PkgData.Versions = append(g2PkgData.Versions, g2.VersionData{
+					Version:      v.Version,
+					Ebuild:       v.Ebuild,
+					EbuildRawURL: v.EbuildRawURL,
+					Deprecated:   pkgData.Versions[i].Deprecated,
+					Masked:       pkgData.Versions[i].Masked,
+				})
+			}
+
+			// Add InfoPkg status at the package level
+			for j := range site.InfoPkgs {
+				// We want to exact match the package string (e.g. "app-shells/bash")
+				// with either the full atom or the atom without its slot part (":0").
+				atom := site.InfoPkgs[j].PackageAtom
+				baseAtom := atom
+				if idx := strings.Index(atom, ":"); idx != -1 {
+					baseAtom = atom[:idx]
+				}
+				if baseAtom == pkgStr {
+					pkgData.IsInfoPkg = true
+					break
+				}
+			}
+
+			pkgData.LintWarnings = lints.PerformLinting(repoDir, &g2PkgData)
+
+			if len(supportedCategories) > 0 && !inRepo {
+				if inMain {
+					pkgData.LintWarnings = append(pkgData.LintWarnings, fmt.Sprintf("Warning: category '%s' is not listed in repo's profiles/categories", name))
+				} else {
+					pkgData.LintWarnings = append(pkgData.LintWarnings, fmt.Sprintf("Error: category '%s' is not listed in repo's profiles/categories or the main gentoo categories list", name))
+				}
+			} else if len(mainCats) > 0 && !inMain {
+				pkgData.LintWarnings = append(pkgData.LintWarnings, fmt.Sprintf("Note: category '%s' is not in the main gentoo categories list", name))
+			}
+
+			catData.Packages = append(catData.Packages, pkgData)
+		}
+
+		if len(catData.Packages) > 0 {
+			if len(supportedCategories) > 0 && !inRepo {
+				if inMain {
+					log.Printf("Warning: category '%s' is not listed in repo's profiles/categories", name)
+				} else {
+					log.Printf("Error: category '%s' is not listed in repo's profiles/categories or the main gentoo categories list", name)
+				}
+			} else if len(mainCats) > 0 && !inMain {
+				log.Printf("Note: category '%s' is not in the main gentoo categories list", name)
+			}
+
+			// Sort packages by name
+			sort.Slice(catData.Packages, func(i, j int) bool {
+				return catData.Packages[i].Name < catData.Packages[j].Name
+			})
+			site.Categories = append(site.Categories, catData)
+		}
+	}
+
+	// Sort categories by name
+	sort.Slice(site.Categories, func(i, j int) bool {
+		return site.Categories[i].Name < site.Categories[j].Name
+	})
+
+	// Finalize ResolvedDepsJSON for each version
+	for i := range site.Categories {
+		for j := range site.Categories[i].Packages {
+			for k := range site.Categories[i].Packages[j].Versions {
+				ver := &site.Categories[i].Packages[j].Versions[k]
+				if ver.Ebuild != nil && ver.Ebuild.Vars != nil {
+					depsMap := map[string][]ResolvedDepNode{}
+
+					types := []string{"DEPEND", "RDEPEND", "BDEPEND", "PDEPEND", "REQUIRED_USE", "LICENSE"}
+					for _, depType := range types {
+						depStr := ver.Ebuild.Vars[depType]
+						if depStr != "" {
+							tree := g2.ParseDepTree(depStr)
+							var nodes []ResolvedDepNode
+							for _, n := range tree.Nodes {
+								nodes = append(nodes, resolveDependencies(n, site))
+							}
+							depsMap[depType] = nodes
+						}
+					}
+
+					jsonData, _ := json.Marshal(depsMap)
+					ver.ResolvedDepsJSON = string(jsonData)
+				}
+			}
+		}
+	}
+
+	extractVirtualDeps(site)
+
+	// Parse Eclasses
+	eclassDir = filepath.Join(repoDir, "eclass")
+	if info, err := fs.Stat(sysFS, filepath.ToSlash(eclassDir)); err == nil && info.IsDir() {
+		entries, err := fs.ReadDir(sysFS, filepath.ToSlash(eclassDir))
+		if err == nil {
+			for _, e := range entries {
+				if !e.IsDir() && strings.HasSuffix(e.Name(), ".eclass") {
+					ebuild, err := g2.ParseEbuild(sysFS, filepath.ToSlash(filepath.Join(eclassDir, e.Name())), g2.ParseFull)
+					if err == nil {
+						site.Eclasses = append(site.Eclasses, ebuild)
+						for _, w := range ebuild.ParseWarnings {
+							log.Printf("Warning: parsing eclass %s in repo %s: %v", e.Name(), repoName, w)
