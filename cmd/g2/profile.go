@@ -83,7 +83,7 @@ func profileDescribeCommand(args []string) error {
 		return fmt.Errorf("failed to parse profiles: %w", err)
 	}
 
-		var targetProfile *g2.ProfileData
+	var targetProfile *g2.ProfileData
 	for i, p := range profilesData {
 		if p.Path == profilePath {
 			targetProfile = &profilesData[i]

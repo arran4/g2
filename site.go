@@ -1,11 +1,45 @@
 package g2
 
+import "time"
+
 type SiteData struct {
-	Title          string
-	RepoName       string
-	RemoteURL      string
-	Categories     []CategoryData
-	LicenseMapping map[string][]string
+	Title             string
+	RepoName          string
+	RemoteURL         string
+	Repository        *Repository
+	EAPI              string
+	Projects          *Projects
+	Categories        []CategoryData
+	Profiles          []ProfileData
+	DefinedEclasses   []EclassData
+	AggEclasses       any // To break cycle, keep CLI specific type as any or redefine
+	Authors           []Author
+	AuthorsURL        string
+	Moves             []PackageMove
+	SlotMoves         []PackageSlotMove
+	News              []NewsItem
+	LayoutConf        *LayoutConf
+	LicenseMapping    map[string][]string
+	QAPolicy          *QAPolicy
+	UseDesc           *UseDesc
+	UseLocalDesc      *UseLocalDesc
+	UseExpandDescs    map[string]*UseExpandDesc
+	ValidUseExpands   map[string]bool
+	ArchList          *ArchList
+	ArchesDesc        *ArchesDesc
+	InfoPkgs          []InfoPkg
+	Masked            []PackageMasked
+	Deprecated        []PackageDeprecated
+	ParsedEclasses    []*Ebuild
+	Eclasses          []*Ebuild
+	PackageCount      int
+	AggUseFlags       any // To break cycle
+	ThirdPartyMirrors map[string][]string
+	InfoVars          []string
+	GitSize           string
+	CheckoutTime      string
+	ProcessTime       string
+	SourceURL         string
 }
 
 type LicenseData struct {
@@ -61,22 +95,41 @@ type FileData struct {
 }
 
 type PackageData struct {
-	Name          string
-	Category      string
-	Versions      []VersionData
-	Metadata      *PkgMetadata
-	MetadataError error
-	Manifest      *Manifest
-	Files         []FileData
+	Name                  string
+	Category              string
+	Versions              []VersionData
+	Metadata              *PkgMetadata
+	MetadataError         error
+	Manifest              *Manifest
+	ManifestData          []ManifestEntryData
+	Files                 []FileData
+	HighestStableVersion  any
+	HighestTestingVersion any
+	EbuildCount           int
+	DominantDescription   string
+	DominantHomepage      string
+	DominantLicense       string
 
 	// Git info
 	MetadataRawURL string
+	ModTime        time.Time // Changed from time.Time to break cycle or keep as int64 if needed, wait time is standard
+
+	// Processed Uses (per package)
+	PkgUseFlags []PkgUseFlag
 
 	// Lint Info
 	LintWarnings []string
 
-	Masked *PackageMasked
+	// Deprecation
+	Masked     *PackageMasked
 	Deprecated *PackageDeprecated
+
+	// InfoPkg matching
+	IsInfoPkg bool
+
+	ReverseVirtuals []string
+	Equivalents     []string
+	VirtualDeps     []string
 }
 
 type VersionData struct {
@@ -85,10 +138,34 @@ type VersionData struct {
 
 	// Git info
 	EbuildRawURL string
+	ModTime      time.Time
 
 	// Deprecation
 	Deprecated *PackageDeprecated
+	Masked     *PackageMasked
 
-	// Masked
-	Masked *PackageMasked
+	// Moves
+	MovedToSlot string
+
+	ResolvedDepsJSON string
+	// Mirrors
+	ApplicableMirrors map[string][]string
+}
+
+type EclassData struct {
+	Name string
+}
+
+type PkgUseFlag struct {
+	Name     string
+	Desc     string
+	Source   string
+	Versions map[string]string // Version -> Unicode symbol representing state
+}
+
+type ManifestEntryData struct {
+	Entry        *ManifestEntry
+	Versions     []string
+	URLs         []string
+	ResolvedURLs []string
 }

@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"github.com/arran4/g2"
 	"log"
+	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"path/filepath"
 	"strings"
-	"net/http"
-	_ "net/http/pprof"
 )
 
 var version = "dev"

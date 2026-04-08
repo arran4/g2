@@ -2,7 +2,7 @@ package main
 
 import (
 	"context"
-	"encoding/json"
+
 	"encoding/xml"
 	"flag"
 	"fmt"
@@ -22,7 +22,7 @@ import (
 	"time"
 
 	"github.com/arran4/g2"
-	"github.com/arran4/g2/lints"
+
 	"github.com/arran4/g2/lints/ebuild"
 	"golang.org/x/sync/errgroup"
 )
@@ -33,145 +33,10 @@ func getProcessMemUsage() uint64 {
 	return m.Alloc
 }
 
-
 type SourceURL string
 
 type EclassData struct {
 	Name string
-}
-
-type SiteData struct {
-	Title             string
-	RepoName          string
-	RemoteURL         string
-	Repository        *g2.Repository
-	EAPI              string
-	Projects          *g2.Projects
-	Categories        []CategoryData
-	Profiles          []g2.ProfileData
-	DefinedEclasses   []EclassData
-	AggEclasses       []*AggEclass
-	Authors           []g2.Author
-	AuthorsURL        string
-	Moves             []g2.PackageMove
-	SlotMoves         []g2.PackageSlotMove
-	News              []g2.NewsItem
-	LayoutConf        *g2.LayoutConf
-	LicenseMapping    map[string][]string
-	QAPolicy          *g2.QAPolicy
-	UseDesc           *g2.UseDesc
-	UseLocalDesc      *g2.UseLocalDesc
-	UseExpandDescs    map[string]*g2.UseExpandDesc
-	ValidUseExpands   map[string]bool
-	ArchList          *g2.ArchList
-	ArchesDesc        *g2.ArchesDesc
-	InfoPkgs          []g2.InfoPkg
-	Masked            []g2.PackageMasked
-	Deprecated        []g2.PackageDeprecated
-	ParsedEclasses    []*g2.Ebuild
-	Eclasses          []*g2.Ebuild
-	PackageCount      int
-	AggUseFlags       []*AggUseFlag
-	ThirdPartyMirrors map[string][]string
-	InfoVars          []string
-	GitSize           string
-	CheckoutTime      string
-	ProcessTime       string
-	SourceURL         string
-}
-
-type LicenseData struct {
-	Name     string
-	Count    int
-	Packages []PackageData
-}
-
-type Breadcrumb struct {
-	Name string
-	URL  string
-}
-
-type CategoryData struct {
-	Name     string
-	Packages []PackageData
-}
-
-type FileData struct {
-	Name   string
-	Path   string
-	RawURL string
-}
-
-type ManifestEntryData struct {
-	Entry        *g2.ManifestEntry
-	Versions     []string
-	URLs         []string
-	ResolvedURLs []string
-}
-
-type PackageData struct {
-	Name                  string
-	Category              string
-	Versions              []VersionData
-	Metadata              *g2.PkgMetadata
-	MetadataError         error
-	Manifest              *g2.Manifest
-	ManifestData          []ManifestEntryData
-	Files                 []FileData
-	HighestStableVersion  template.HTML
-	HighestTestingVersion template.HTML
-	EbuildCount           int
-	DominantDescription   string
-	DominantHomepage      string
-	DominantLicense       string
-
-	// Git info
-	MetadataRawURL string
-	ModTime        time.Time
-
-	// Processed Uses (per package)
-	PkgUseFlags []PkgUseFlag
-
-	// Lint Info
-	LintWarnings []string
-
-	// Deprecation
-	Masked     *g2.PackageMasked
-	Deprecated *g2.PackageDeprecated
-
-	// InfoPkg matching
-	IsInfoPkg bool
-
-	ReverseVirtuals []string
-	Equivalents     []string
-	VirtualDeps     []string
-}
-
-type PkgUseFlag struct {
-	Name     string
-	Desc     string
-	Source   string
-	Versions map[string]string // Version -> Unicode symbol representing state
-}
-
-type VersionData struct {
-	Version string
-	Ebuild  *g2.Ebuild
-
-	// Git info
-	EbuildRawURL string
-	ModTime      time.Time
-
-	// Deprecation
-	Deprecated *g2.PackageDeprecated
-	Masked     *g2.PackageMasked
-
-	// Moves
-	MovedToSlot string
-
-	ResolvedDepsJSON string
-	// Mirrors
-	ApplicableMirrors map[string][]string
 }
 
 // End model TODO check
@@ -275,7 +140,7 @@ func (cfg *MainArgConfig) cmdOverlay(args []string) error {
 		}
 	}
 
-	var allSites []*SiteData
+	var allSites []*g2.SiteData
 	var allSitesMu sync.Mutex
 	var lastLogTime time.Time
 
@@ -287,7 +152,7 @@ func (cfg *MainArgConfig) cmdOverlay(args []string) error {
 			isRemote := strings.HasPrefix(task.Location, "http://") || strings.HasPrefix(task.Location, "https://") || strings.HasPrefix(task.Location, "git://")
 			var parseLocation string
 			var cleanup func()
-			var siteData *SiteData
+			var siteData *g2.SiteData
 
 			if isRemote {
 				var tmpDir string
@@ -480,7 +345,7 @@ func parseManifestFromFS(sysFS fs.FS, path string) (*g2.Manifest, error) {
 	return g2.ParseManifestFromReader(file)
 }
 
-func getHighestVersionsAndCount(versions []VersionData, site *SiteData) (template.HTML, template.HTML, int) {
+func getHighestVersionsAndCount(versions []g2.VersionData, site *g2.SiteData) (template.HTML, template.HTML, int) {
 	// Parse KEYWORDS and group versions
 
 	stableMap := make(map[string]string)
@@ -573,7 +438,7 @@ type ResolvedDepNode struct {
 	Children  []ResolvedDepNode `json:"children,omitempty"`
 }
 
-func resolveDependencies(node g2.DepNode, site *SiteData) ResolvedDepNode {
+func resolveDependencies(node g2.DepNode, site *g2.SiteData) ResolvedDepNode {
 	switch n := node.(type) {
 	case g2.DepString:
 		raw := string(n)
@@ -661,7 +526,7 @@ func sanitizeFilename(s string) string {
 	return res
 }
 
-func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool, repoInfo *g2.Repository, opts ...any) (*SiteData, error) {
+func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool, repoInfo *g2.Repository, opts ...any) (*g2.SiteData, error) {
 	title := defaultTitle
 	var repoName string
 	var remoteURL string
@@ -673,43 +538,7 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool, r
 		}
 	}
 
-	isUselessURL := func(u string) bool {
-		u = strings.TrimSpace(u)
-		return u == "" || u == "." || u == ".." || u == "./" || u == "../"
-	}
-
-	originalRemoteURL := remoteURL
-
-	// Implement fallback layers for remoteURL
-	if isUselessURL(remoteURL) {
-		remoteURL = ""
-
-		// 1. Git origin URL
-		gitURL, err := getGitOriginURL(repoDir)
-		if err == nil && !isUselessURL(gitURL) {
-			remoteURL = gitURL
-		}
-
-		// 2. RepoInfo Sources
-		if remoteURL == "" && repoInfo != nil && len(repoInfo.Sources) > 0 {
-			for _, src := range repoInfo.Sources {
-				if !isUselessURL(src.Text) {
-					remoteURL = src.Text
-					break
-				}
-			}
-		}
-
-		// 3. RepoInfo Homepage
-		if remoteURL == "" && repoInfo != nil && !isUselessURL(repoInfo.Homepage) {
-			remoteURL = repoInfo.Homepage
-		}
-
-		// 4. Fallback to original
-		if remoteURL == "" {
-			remoteURL = originalRemoteURL
-		}
-	}
+	remoteURL = resolveRemoteURL(repoDir, repoInfo, remoteURL)
 
 	repoNameBytes, err := fs.ReadFile(sysFS, filepath.ToSlash(filepath.Join(repoDir, "profiles", "repo_name")))
 	if err == nil && len(repoNameBytes) > 0 {
@@ -725,143 +554,18 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool, r
 		eapi = strings.TrimSpace(string(eapiBytes))
 	}
 
-	layoutConfPath := filepath.Join(repoDir, "metadata", "layout.conf")
-	var lc *g2.LayoutConf
-	if f, err := sysFS.Open(filepath.ToSlash(layoutConfPath)); err == nil {
-		_ = f.Close()
-		lc, err = parseLayoutConfFromFS(sysFS, filepath.ToSlash(layoutConfPath))
-		if err != nil {
-			log.Printf("Warning: failed to parse layout.conf: %v", err)
-			lc = nil
-		}
+	site := &g2.SiteData{
+		Title:           title,
+		RepoName:        repoName,
+		RemoteURL:       remoteURL,
+		SourceURL:       remoteURL,
+		Repository:      repoInfo,
+		EAPI:            eapi,
+		ValidUseExpands: make(map[string]bool),
+		PackageCount:    0,
 	}
 
-	var licenseGroups map[string][]string
-	licenseGroupsPath := filepath.Join(repoDir, "profiles", "license_groups")
-	if f, err := sysFS.Open(filepath.ToSlash(licenseGroupsPath)); err == nil {
-		groups, err := g2.ParseLicenseGroups(f)
-		_ = f.Close()
-		if err != nil {
-			log.Printf("Warning: failed to parse license_groups: %v", err)
-		} else {
-			// ParseLicenseGroups returns group -> licenses, we need license -> groups mapping
-			licenseMapping := make(map[string][]string)
-			for group, licenses := range groups {
-				for _, lic := range licenses {
-					licenseMapping[lic] = append(licenseMapping[lic], group)
-				}
-			}
-			licenseGroups = licenseMapping
-		}
-	}
-	qaPolicyPath := filepath.Join(repoDir, "metadata", "qa-policy.conf")
-	var qa *g2.QAPolicy
-	if f, err := sysFS.Open(filepath.ToSlash(qaPolicyPath)); err == nil {
-		defer func() { _ = f.Close() }()
-		qa, err = g2.ParseQAPolicyFromReader(f)
-		if err != nil {
-			log.Printf("Warning: failed to parse qa-policy.conf: %v", err)
-			qa = nil
-		}
-	}
-
-	var useDesc *g2.UseDesc
-	if f, err := sysFS.Open(filepath.ToSlash(filepath.Join(repoDir, "profiles", "use.desc"))); err == nil {
-		defer func() { _ = f.Close() }()
-		if ud, err := g2.ParseUseDesc(f); err == nil {
-			useDesc = ud
-		}
-	}
-
-	var useExpandDescs map[string]*g2.UseExpandDesc
-	if descs, err := g2.ParseUseExpandDescFS(sysFS, filepath.ToSlash(filepath.Join(repoDir, "profiles", "desc"))); err == nil {
-		useExpandDescs = descs
-	} else if !os.IsNotExist(err) {
-		log.Printf("Warning: failed to parse use expand desc: %v", err)
-	}
-	var useLocalDesc *g2.UseLocalDesc
-	if f, err := sysFS.Open(filepath.ToSlash(filepath.Join(repoDir, "profiles", "use.local.desc"))); err == nil {
-		defer func() { _ = f.Close() }()
-		if uld, err := g2.ParseUseLocalDesc(f); err == nil {
-			useLocalDesc = uld
-		}
-	}
-	var archList *g2.ArchList
-	if f, err := sysFS.Open(filepath.ToSlash(filepath.Join(repoDir, "profiles", "arch.list"))); err == nil {
-		defer func() { _ = f.Close() }()
-		if al, err := g2.ParseArchList(f); err == nil {
-			archList = al
-		}
-	}
-
-	var archesDesc *g2.ArchesDesc
-	if f, err := sysFS.Open(filepath.ToSlash(filepath.Join(repoDir, "profiles", "arches.desc"))); err == nil {
-		defer func() { _ = f.Close() }()
-		if ad, err := g2.ParseArchesDesc(f); err == nil {
-			archesDesc = ad
-		}
-	}
-
-	packageDeprecatedPath := filepath.Join(repoDir, "profiles", "package.deprecated")
-	var deprecated []g2.PackageDeprecated
-	if parsedDeprecated, err := g2.ParsePackageDeprecatedFS(sysFS, filepath.ToSlash(packageDeprecatedPath)); err == nil {
-		deprecated = parsedDeprecated
-	} else if !os.IsNotExist(err) {
-		log.Printf("Warning: failed to parse package.deprecated: %v", err)
-	}
-
-	packageMaskPath := filepath.Join(repoDir, "profiles", "package.mask")
-	var masked []g2.PackageMasked
-	if parsedMasked, err := g2.ParsePackageMaskedFS(sysFS, filepath.ToSlash(packageMaskPath)); err == nil {
-		masked = parsedMasked
-	} else if !os.IsNotExist(err) {
-		log.Printf("Warning: failed to parse package.mask: %v", err)
-	}
-
-	var thirdPartyMirrors map[string][]string
-	if tm, err := g2.ParseThirdPartyMirrorsFS(sysFS, filepath.ToSlash(filepath.Join(repoDir, "profiles", "thirdpartymirrors"))); err == nil {
-		thirdPartyMirrors = tm
-	} else if !os.IsNotExist(err) {
-		log.Printf("Warning: failed to parse thirdpartymirrors: %v", err)
-	}
-	infoVarsPath := filepath.Join(repoDir, "profiles", "info_vars")
-	var infoVars []string
-	if parsedInfoVars, err := g2.ParseInfoVarsFS(sysFS, filepath.ToSlash(infoVarsPath)); err == nil {
-		infoVars = parsedInfoVars
-	} else if !os.IsNotExist(err) {
-		log.Printf("Warning: failed to parse info_vars: %v", err)
-	}
-	infoPkgsPath := filepath.Join(repoDir, "profiles", "info_pkgs")
-	var infoPkgs []g2.InfoPkg
-	if parsedInfoPkgs, err := g2.ParseInfoPkgsFS(sysFS, filepath.ToSlash(infoPkgsPath)); err == nil {
-		infoPkgs = parsedInfoPkgs
-	} else if !os.IsNotExist(err) {
-		log.Printf("Warning: failed to parse info_pkgs: %v", err)
-	}
-
-	site := &SiteData{
-		Title:             title,
-		RepoName:          repoName,
-		RemoteURL:         remoteURL,
-		SourceURL:         remoteURL,
-		Repository:        repoInfo,
-		EAPI:              eapi,
-		LayoutConf:        lc,
-		LicenseMapping:    licenseGroups,
-		QAPolicy:          qa,
-		UseDesc:           useDesc,
-		UseLocalDesc:      useLocalDesc,
-		UseExpandDescs:    useExpandDescs,
-		ValidUseExpands:   make(map[string]bool),
-		ArchList:          archList,
-		ArchesDesc:        archesDesc,
-		ThirdPartyMirrors: thirdPartyMirrors,
-		Deprecated:        deprecated,
-		Masked:            masked,
-		InfoVars:          infoVars,
-		InfoPkgs:          infoPkgs,
-		PackageCount:      0,
-	}
+	parseRepoProfilesDir(sysFS, repoDir, site)
 
 	if site.UseExpandDescs != nil {
 		for prefix := range site.UseExpandDescs {
@@ -869,58 +573,8 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool, r
 		}
 	}
 
-	// Calculate PackageCount correctly after parsing all categories
-	defer func() {
-		count := 0
-		for _, cat := range site.Categories {
-			count += len(cat.Packages)
-		}
-		site.PackageCount = count
-	}()
-
-	// Parse News
-	newsDir := filepath.Join(repoDir, "metadata", "news")
-	if entries, err := fs.ReadDir(sysFS, filepath.ToSlash(newsDir)); err == nil {
-		for _, entry := range entries {
-			if !entry.IsDir() {
-				continue
-			}
-			dirName := entry.Name()
-			txtFile := filepath.Join(newsDir, dirName, dirName+".en.txt")
-
-			content, err := fs.ReadFile(sysFS, filepath.ToSlash(txtFile))
-			if err != nil {
-				continue
-			}
-
-			item := g2.ParseNewsItem(string(content))
-			item.DirName = dirName
-			item.FileName = dirName + ".en.txt"
-
-			site.News = append(site.News, item)
-		}
-
-		// Sort news descending by posted date
-		sort.Slice(site.News, func(i, j int) bool {
-			return site.News[i].Posted.After(site.News[j].Posted)
-		})
-	}
-
-	authorsFile, err := os.Open(filepath.Join(repoDir, "metadata", "AUTHORS"))
-	if err == nil {
-		if authors, err := g2.ParseAuthors(authorsFile); err == nil {
-			site.Authors = authors
-			if remoteURL != "" {
-				commitHash, err := getFileCommit(repoDir, "metadata/AUTHORS")
-				if err == nil && commitHash != "" {
-					site.AuthorsURL = generateGitHubRawURL(remoteURL, commitHash, "metadata/AUTHORS")
-				}
-			}
-		} else {
-			log.Printf("Warning: failed to parse metadata/AUTHORS: %v", err)
-		}
-		_ = authorsFile.Close()
-	}
+	parseRepoNews(sysFS, repoDir, site)
+	parseRepoAuthors(repoDir, site, remoteURL)
 
 	var profilesDescEntries []g2.ProfileDescEntry
 	profilesDescBytes, err := fs.ReadFile(sysFS, filepath.ToSlash(filepath.Join(repoDir, "profiles", "profiles.desc")))
@@ -940,7 +594,7 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool, r
 		for _, eclassEntry := range eclassEntries {
 			if !eclassEntry.IsDir() && strings.HasSuffix(eclassEntry.Name(), ".eclass") {
 				eclassName := strings.TrimSuffix(eclassEntry.Name(), ".eclass")
-				site.DefinedEclasses = append(site.DefinedEclasses, EclassData{
+				site.DefinedEclasses = append(site.DefinedEclasses, g2.EclassData{
 					Name: eclassName,
 				})
 			}
@@ -948,18 +602,6 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool, r
 		sort.Slice(site.DefinedEclasses, func(i, j int) bool {
 			return site.DefinedEclasses[i].Name < site.DefinedEclasses[j].Name
 		})
-	}
-
-	supportedCategories := make(map[string]bool)
-	categoriesBytes, err := fs.ReadFile(sysFS, filepath.ToSlash(filepath.Join(repoDir, "profiles", "categories")))
-	if err == nil {
-		lines := strings.Split(string(categoriesBytes), "\n")
-		for _, line := range lines {
-			cat := strings.TrimSpace(line)
-			if cat != "" && !strings.HasPrefix(cat, "#") {
-				supportedCategories[cat] = true
-			}
-		}
 	}
 
 	updates, err := g2.ParseUpdatesDirFS(sysFS, filepath.ToSlash(filepath.Join(repoDir, "profiles", "updates")))
@@ -974,7 +616,6 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool, r
 	pf, err := sysFS.Open(filepath.ToSlash(filepath.Join(repoDir, "metadata", "projects.xml")))
 	if err != nil {
 		if fastGit {
-			// fastGit uses an actual os path underneath when overlay is given
 			pf, err = os.Open(filepath.Join(repoDir, "metadata", "projects.xml"))
 		}
 	}
@@ -987,433 +628,23 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool, r
 		_ = pf.Close()
 	}
 
-	entries, err := fs.ReadDir(sysFS, filepath.ToSlash(repoDir))
-	if err != nil {
-		return nil, fmt.Errorf("reading repo dir: %w", err)
-	}
-
-	for _, entry := range entries {
-		if !entry.IsDir() {
-			continue
-		}
-		name := entry.Name()
-		if isIgnoredDir(name) {
-			continue
-		}
-
-		if len(supportedCategories) > 0 && !supportedCategories[name] && name != "virtual" && !strings.HasPrefix(name, "virtual-") {
-			continue
-		}
-
-		catData := CategoryData{Name: name}
-		catPath := filepath.Join(repoDir, name)
-
-		inRepo := len(supportedCategories) == 0 || supportedCategories[name]
-		mainCats := g2.FetchMainGentooCategories()
-		inMain := len(mainCats) == 0 || mainCats[name]
-
-		pkgEntries, err := fs.ReadDir(sysFS, filepath.ToSlash(catPath))
-		if err != nil {
-			log.Printf("Warning: reading category dir %s: %v", catPath, err)
-			continue
-		}
-
-		for _, pkgEntry := range pkgEntries {
-			if !pkgEntry.IsDir() {
-				continue
-			}
-			pkgName := pkgEntry.Name()
-			if strings.HasPrefix(pkgName, ".") {
-				continue
-			}
-
-			pkgPath := filepath.Join(catPath, pkgName)
-			pkgData := PackageData{
-				Name:     pkgName,
-				Category: name,
-			}
-
-			// Read ebuilds
-			files, err := fs.ReadDir(sysFS, filepath.ToSlash(pkgPath))
-			if err != nil {
-				log.Printf("Warning: reading package dir %s: %v", pkgPath, err)
-				continue
-			}
-
-			for _, file := range files {
-				if file.IsDir() || !strings.HasSuffix(file.Name(), ".ebuild") {
-					continue
-				}
-
-				ebuildPath := filepath.Join(pkgPath, file.Name())
-				ebuild, err := g2.ParseEbuild(sysFS, filepath.ToSlash(ebuildPath), g2.ParseFull)
-				if err != nil {
-					log.Printf("Warning: parsing ebuild %s in repo %s: %v", ebuildPath, repoName, err)
-					continue
-				}
-
-				for _, w := range ebuild.ParseWarnings {
-					log.Printf("Warning: parsing ebuild %s in repo %s: %v", ebuildPath, repoName, w)
-				}
-
-				version := ""
-				if ebuild.Vars != nil {
-					version = ebuild.Vars["PV"]
-				}
-				if version == "" {
-					// Fallback from filename
-					vars := g2.ParseEbuildVariables(file.Name())
-					if vars != nil {
-						version = vars["PV"]
-					}
-				}
-
-				var ebuildRawURL string
-				relPath, _ := filepath.Rel(repoDir, ebuildPath)
-				if remoteURL != "" {
-					commitHash, _ := getFileCommit(repoDir, relPath)
-					if commitHash != "" {
-						ebuildRawURL = generateGitHubRawURL(remoteURL, commitHash, relPath)
-					}
-				}
-
-				modTime := getFileModTime(repoDir, relPath, fastGit)
-				if modTime.After(pkgData.ModTime) {
-					pkgData.ModTime = modTime
-				}
-
-				vd := VersionData{
-					Version:      version,
-					Ebuild:       ebuild,
-					EbuildRawURL: ebuildRawURL,
-					ModTime:      modTime,
-				}
-
-				if site.SlotMoves != nil {
-					slot := ebuild.Vars["SLOT"]
-					if slot != "" {
-						for _, sm := range site.SlotMoves {
-							if sm.Package == name+"/"+pkgName && sm.Old == slot {
-								vd.MovedToSlot = sm.New
-								break
-							}
-						}
-					}
-				}
-
-				pkgData.Versions = append(pkgData.Versions, vd)
-			}
-
-			if len(pkgData.Versions) == 0 {
-				continue // No ebuilds, skip package
-			}
-
-			pkgData.HighestStableVersion, pkgData.HighestTestingVersion, pkgData.EbuildCount = getHighestVersionsAndCount(pkgData.Versions, site)
-
-			// Sort versions descending
-			// Read metadata.xml
-			metaPath := filepath.Join(pkgPath, "metadata.xml")
-			metadata, err := parseMetadataFromFS(sysFS, filepath.ToSlash(metaPath))
-			if err == nil {
-				if pkgMd, ok := metadata.(*g2.PkgMetadata); ok {
-					pkgData.Metadata = pkgMd
-				} else {
-					pkgData.MetadataError = fmt.Errorf("metadata.xml is not a pkgmetadata")
-				}
-			} else {
-				pkgData.MetadataError = err
-			}
-
-			// Compute dominant information
-			var highestUnmasked *g2.Ebuild
-			var highestMasked *g2.Ebuild
-			for _, v := range pkgData.Versions {
-				if v.Ebuild == nil || v.Ebuild.Vars == nil {
-					continue
-				}
-				keywords := v.Ebuild.Vars["KEYWORDS"]
-				parts := strings.Fields(keywords)
-
-				isMasked := true
-				for _, p := range parts {
-					if !strings.HasPrefix(p, "-") && !strings.HasPrefix(p, "~") {
-						isMasked = false
-						break
-					}
-				}
-				if !isMasked {
-					if highestUnmasked == nil || g2.CompareVersions(v.Version, highestUnmasked.Vars["PV"]) > 0 {
-						highestUnmasked = v.Ebuild
-					}
-				} else {
-					if highestMasked == nil || g2.CompareVersions(v.Version, highestMasked.Vars["PV"]) > 0 {
-						highestMasked = v.Ebuild
-					}
-				}
-			}
-
-			targetEbuild := highestUnmasked
-			if targetEbuild == nil {
-				targetEbuild = highestMasked
-			}
-			if targetEbuild == nil && len(pkgData.Versions) > 0 {
-				for _, v := range pkgData.Versions {
-					if v.Ebuild != nil && v.Ebuild.Vars != nil {
-						targetEbuild = v.Ebuild
-						break
-					}
-				}
-			}
-
-			if pkgData.Metadata != nil && len(pkgData.Metadata.LongDescription) > 0 {
-				pkgData.DominantDescription = pkgData.Metadata.LongDescription[0].Body
-			} else if targetEbuild != nil {
-				pkgData.DominantDescription = targetEbuild.Vars["DESCRIPTION"]
-			}
-
-			if targetEbuild != nil {
-				pkgData.DominantHomepage = targetEbuild.Vars["HOMEPAGE"]
-				pkgData.DominantLicense = targetEbuild.Vars["LICENSE"]
-			}
-
-			sort.Slice(pkgData.Versions, func(i, j int) bool {
-				return pkgData.Versions[i].Version > pkgData.Versions[j].Version
-			})
-
-			if remoteURL != "" {
-				relPath, _ := filepath.Rel(repoDir, metaPath)
-				commitHash, _ := getFileCommit(repoDir, relPath)
-				if commitHash != "" {
-					pkgData.MetadataRawURL = generateGitHubRawURL(remoteURL, commitHash, relPath)
-				}
-			}
-
-			// Set ApplicableMirrors for each version
-			for i, v := range pkgData.Versions {
-				if v.Ebuild != nil {
-					applicableMirrors := make(map[string][]string)
-					for _, uri := range v.Ebuild.SrcUri {
-						if strings.HasPrefix(uri.URL, "mirror://") {
-							parts := strings.SplitN(uri.URL[len("mirror://"):], "/", 2)
-							if len(parts) > 0 {
-								mirrorName := parts[0]
-								if mirrors, ok := site.ThirdPartyMirrors[mirrorName]; ok {
-									applicableMirrors[mirrorName] = mirrors
-								}
-							}
-						}
-					}
-					if len(applicableMirrors) > 0 {
-						pkgData.Versions[i].ApplicableMirrors = applicableMirrors
-					}
-				}
-			}
-
-			// Read Manifest
-			manifestPath := filepath.Join(pkgPath, "Manifest")
-			manifest, err := parseManifestFromFS(sysFS, filepath.ToSlash(manifestPath))
-			if err == nil {
-				pkgData.Manifest = manifest
-				pkgData.ManifestData = buildManifestData(manifest, pkgData.Versions, site.ThirdPartyMirrors)
-			}
-
-			// Read files/ directory
-			filesDirPath := filepath.Join(pkgPath, "files")
-			if info, err := fs.Stat(sysFS, filepath.ToSlash(filesDirPath)); err == nil && info.IsDir() {
-				fileEntries, err := fs.ReadDir(sysFS, filepath.ToSlash(filesDirPath))
-				if err == nil {
-					for _, fe := range fileEntries {
-						if !fe.IsDir() {
-							fd := FileData{
-								Name: fe.Name(),
-								Path: filepath.Join(filesDirPath, fe.Name()),
-							}
-							if remoteURL != "" {
-								relPath, _ := filepath.Rel(repoDir, fd.Path)
-								commitHash, _ := getFileCommit(repoDir, relPath)
-								if commitHash != "" {
-									fd.RawURL = generateGitHubRawURL(remoteURL, commitHash, relPath)
-								}
-							}
-							pkgData.Files = append(pkgData.Files, fd)
-						}
-					}
-				}
-			}
-
-			g2PkgData := g2.PackageData{
-				Name:          pkgData.Name,
-				Category:      pkgData.Category,
-				Metadata:      pkgData.Metadata,
-				MetadataError: pkgData.MetadataError,
-				Manifest:      pkgData.Manifest,
-			}
-
-			// Assign deprecation data
-			pkgStr := pkgData.Category + "/" + pkgData.Name
-			for i := range site.Deprecated {
-				for _, entry := range site.Deprecated[i].Entries {
-					depPkg := entry.Package
-					// Handle versions and operators in deprecation package strings (e.g. >=dev-python/autobahn-21)
-					// A simple check is if it contains the category/name
-					if strings.Contains(depPkg, pkgStr) {
-						pkgData.Deprecated = &site.Deprecated[i]
-						break
-					}
-				}
-			}
-
-			for i := range site.Masked {
-				for _, entry := range site.Masked[i].Entries {
-					maskPkg := entry.Package
-					if strings.Contains(maskPkg, pkgStr) {
-						pkgData.Masked = &site.Masked[i]
-						break
-					}
-				}
-			}
-
-			for i, v := range pkgData.Versions {
-				for j := range site.Deprecated {
-					// Add deprecation note if the package string matches.
-					// We match if it contains "category/name" which works for versioned atoms too.
-					for _, entry := range site.Deprecated[j].Entries {
-						if strings.Contains(entry.Package, pkgStr) {
-							pkgData.Versions[i].Deprecated = &site.Deprecated[j]
-							break
-						}
-					}
-				}
-				for j := range site.Masked {
-					for _, entry := range site.Masked[j].Entries {
-						if strings.Contains(entry.Package, pkgStr) {
-							pkgData.Versions[i].Masked = &site.Masked[j]
-							break
-						}
-					}
-				}
-
-				g2PkgData.Versions = append(g2PkgData.Versions, g2.VersionData{
-					Version:      v.Version,
-					Ebuild:       v.Ebuild,
-					EbuildRawURL: v.EbuildRawURL,
-					Deprecated:   pkgData.Versions[i].Deprecated,
-					Masked:       pkgData.Versions[i].Masked,
-				})
-			}
-
-			// Add InfoPkg status at the package level
-			for j := range site.InfoPkgs {
-				// We want to exact match the package string (e.g. "app-shells/bash")
-				// with either the full atom or the atom without its slot part (":0").
-				atom := site.InfoPkgs[j].PackageAtom
-				baseAtom := atom
-				if idx := strings.Index(atom, ":"); idx != -1 {
-					baseAtom = atom[:idx]
-				}
-				if baseAtom == pkgStr {
-					pkgData.IsInfoPkg = true
-					break
-				}
-			}
-
-			pkgData.LintWarnings = lints.PerformLinting(repoDir, &g2PkgData)
-
-			if len(supportedCategories) > 0 && !inRepo {
-				if inMain {
-					pkgData.LintWarnings = append(pkgData.LintWarnings, fmt.Sprintf("Warning: category '%s' is not listed in repo's profiles/categories", name))
-				} else {
-					pkgData.LintWarnings = append(pkgData.LintWarnings, fmt.Sprintf("Error: category '%s' is not listed in repo's profiles/categories or the main gentoo categories list", name))
-				}
-			} else if len(mainCats) > 0 && !inMain {
-				pkgData.LintWarnings = append(pkgData.LintWarnings, fmt.Sprintf("Note: category '%s' is not in the main gentoo categories list", name))
-			}
-
-			catData.Packages = append(catData.Packages, pkgData)
-		}
-
-		if len(catData.Packages) > 0 {
-			if len(supportedCategories) > 0 && !inRepo {
-				if inMain {
-					log.Printf("Warning: category '%s' is not listed in repo's profiles/categories", name)
-				} else {
-					log.Printf("Error: category '%s' is not listed in repo's profiles/categories or the main gentoo categories list", name)
-				}
-			} else if len(mainCats) > 0 && !inMain {
-				log.Printf("Note: category '%s' is not in the main gentoo categories list", name)
-			}
-
-			// Sort packages by name
-			sort.Slice(catData.Packages, func(i, j int) bool {
-				return catData.Packages[i].Name < catData.Packages[j].Name
-			})
-			site.Categories = append(site.Categories, catData)
-		}
-	}
-
-	// Sort categories by name
-	sort.Slice(site.Categories, func(i, j int) bool {
-		return site.Categories[i].Name < site.Categories[j].Name
-	})
-
-	// Finalize ResolvedDepsJSON for each version
-	for i := range site.Categories {
-		for j := range site.Categories[i].Packages {
-			for k := range site.Categories[i].Packages[j].Versions {
-				ver := &site.Categories[i].Packages[j].Versions[k]
-				if ver.Ebuild != nil && ver.Ebuild.Vars != nil {
-					depsMap := map[string][]ResolvedDepNode{}
-
-					types := []string{"DEPEND", "RDEPEND", "BDEPEND", "PDEPEND", "REQUIRED_USE", "LICENSE"}
-					for _, depType := range types {
-						depStr := ver.Ebuild.Vars[depType]
-						if depStr != "" {
-							tree := g2.ParseDepTree(depStr)
-							var nodes []ResolvedDepNode
-							for _, n := range tree.Nodes {
-								nodes = append(nodes, resolveDependencies(n, site))
-							}
-							depsMap[depType] = nodes
-						}
-					}
-
-					jsonData, _ := json.Marshal(depsMap)
-					ver.ResolvedDepsJSON = string(jsonData)
-				}
-			}
-		}
+	if err := parseRepoCategoriesAndPackages(sysFS, repoDir, repoName, fastGit, remoteURL, site); err != nil {
+		return nil, err
 	}
 
 	extractVirtualDeps(site)
+	parseRepoEclasses(sysFS, repoDir, site)
 
-	// Parse Eclasses
-	eclassDir = filepath.Join(repoDir, "eclass")
-	if info, err := fs.Stat(sysFS, filepath.ToSlash(eclassDir)); err == nil && info.IsDir() {
-		entries, err := fs.ReadDir(sysFS, filepath.ToSlash(eclassDir))
-		if err == nil {
-			for _, e := range entries {
-				if !e.IsDir() && strings.HasSuffix(e.Name(), ".eclass") {
-					ebuild, err := g2.ParseEbuild(sysFS, filepath.ToSlash(filepath.Join(eclassDir, e.Name())), g2.ParseFull)
-					if err == nil {
-						site.Eclasses = append(site.Eclasses, ebuild)
-						for _, w := range ebuild.ParseWarnings {
-							log.Printf("Warning: parsing eclass %s in repo %s: %v", e.Name(), repoName, w)
-						}
-					} else {
-						log.Printf("Warning: failed to parse eclass %s in repo %s: %v", e.Name(), repoName, err)
-					}
-				}
-			}
-		}
+	count := 0
+	for _, cat := range site.Categories {
+		count += len(cat.Packages)
 	}
-	sort.Slice(site.Eclasses, func(i, j int) bool {
-		return site.Eclasses[i].Vars["PN"] < site.Eclasses[j].Vars["PN"]
-	})
+	site.PackageCount = count
 
 	return site, nil
 }
 
-func extractVirtualDeps(site *SiteData) {
+func extractVirtualDeps(site *g2.SiteData) {
 	for i := range site.Categories {
 		if site.Categories[i].Name != "virtual" && !strings.HasPrefix(site.Categories[i].Name, "virtual-") {
 			continue
@@ -1516,10 +747,10 @@ func extractDepNodes(nodes []g2.DepNode, depsMap map[string]bool) {
 	}
 }
 
-func buildManifestData(manifest *g2.Manifest, versions []VersionData, thirdPartyMirrors map[string][]string) []ManifestEntryData {
-	var manifestData []ManifestEntryData
+func buildManifestData(manifest *g2.Manifest, versions []g2.VersionData, thirdPartyMirrors map[string][]string) []g2.ManifestEntryData {
+	var manifestData []g2.ManifestEntryData
 	for _, entry := range manifest.Entries {
-		md := ManifestEntryData{
+		md := g2.ManifestEntryData{
 			Entry: entry,
 		}
 
@@ -1725,7 +956,7 @@ type AggCategory struct {
 type AggPackage struct {
 	Name                string
 	Category            string
-	Repos               map[string]*SiteData
+	Repos               map[string]*g2.SiteData
 	DominantDescription string
 	DominantHomepage    string
 	DominantLicense     string
@@ -1733,7 +964,7 @@ type AggPackage struct {
 	VirtualDeps         []string
 }
 
-func (a *AggPackage) ReposList() []*SiteData {
+func (a *AggPackage) ReposList() []*g2.SiteData {
 	return mapToList(a.Repos)
 }
 
@@ -1760,7 +991,7 @@ type AggUseFlag struct {
 	Warnings      []string
 }
 
-func getRepoEclasses(site *SiteData, aggPackages map[string]*AggPackage) []*AggEclass {
+func getRepoEclasses(site *g2.SiteData, aggPackages map[string]*AggPackage) []*AggEclass {
 	eclassMap := make(map[string]*AggEclass)
 	seenPackages := make(map[string]map[string]bool)
 
@@ -1768,7 +999,7 @@ func getRepoEclasses(site *SiteData, aggPackages map[string]*AggPackage) []*AggE
 		if _, ok := eclassMap[eclass.Name]; !ok {
 			eclassMap[eclass.Name] = &AggEclass{
 				Name:  eclass.Name,
-				Repos: make(map[string]*SiteData),
+				Repos: make(map[string]*g2.SiteData),
 			}
 			seenPackages[eclass.Name] = make(map[string]bool)
 		}
@@ -1788,7 +1019,7 @@ func getRepoEclasses(site *SiteData, aggPackages map[string]*AggPackage) []*AggE
 							if _, ok := eclassMap[ec]; !ok {
 								eclassMap[ec] = &AggEclass{
 									Name:  ec,
-									Repos: make(map[string]*SiteData),
+									Repos: make(map[string]*g2.SiteData),
 								}
 								eclassMap[ec].Repos[site.RepoName] = site
 								seenPackages[ec] = make(map[string]bool)
@@ -1820,7 +1051,7 @@ func getRepoEclasses(site *SiteData, aggPackages map[string]*AggPackage) []*AggE
 	return sortedEclasses
 }
 
-func getRepoUseFlags(site *SiteData, aggPackages map[string]*AggPackage) []*AggUseFlag {
+func getRepoUseFlags(site *g2.SiteData, aggPackages map[string]*AggPackage) []*AggUseFlag {
 	aggUseFlags := make(map[string]*AggUseFlag)
 
 	for _, cat := range site.Categories {
@@ -2015,7 +1246,7 @@ func parseDuration(s string) (time.Duration, string, error) {
 
 type AggEclass struct {
 	Name     string
-	Repos    map[string]*SiteData
+	Repos    map[string]*g2.SiteData
 	Packages []*AggPackage
 }
 
@@ -2032,13 +1263,13 @@ type AggNewsItem struct {
 type AggArch struct {
 	Name   string
 	Status string
-	Repos  []*SiteData
+	Repos  []*g2.SiteData
 }
 
 type RepoGroup struct {
 	Quality string
 	Status  string
-	Repos   []*SiteData
+	Repos   []*g2.SiteData
 }
 
 type AggregatedData struct {
@@ -2060,7 +1291,7 @@ type AggregatedData struct {
 	GroupedRepos    []RepoGroup
 }
 
-func aggregateGroupedRepos(sites []*SiteData) map[string]*RepoGroup {
+func aggregateGroupedRepos(sites []*g2.SiteData) map[string]*RepoGroup {
 	groupedReposMap := make(map[string]*RepoGroup)
 	for _, site := range sites {
 		quality := "experimental"
@@ -2086,7 +1317,7 @@ func aggregateGroupedRepos(sites []*SiteData) map[string]*RepoGroup {
 	return groupedReposMap
 }
 
-func aggregateUseExpandDescs(sites []*SiteData) map[string]*g2.UseExpandDesc {
+func aggregateUseExpandDescs(sites []*g2.SiteData) map[string]*g2.UseExpandDesc {
 	aggUseExpandDescs := make(map[string]*g2.UseExpandDesc)
 	for _, site := range sites {
 		if site.UseExpandDescs != nil {
@@ -2100,7 +1331,7 @@ func aggregateUseExpandDescs(sites []*SiteData) map[string]*g2.UseExpandDesc {
 	return aggUseExpandDescs
 }
 
-func aggregateProjects(sites []*SiteData) map[string]*AggProject {
+func aggregateProjects(sites []*g2.SiteData) map[string]*AggProject {
 	aggProjects := make(map[string]*AggProject)
 	for _, site := range sites {
 		if site.Projects != nil {
@@ -2115,7 +1346,7 @@ func aggregateProjects(sites []*SiteData) map[string]*AggProject {
 	return aggProjects
 }
 
-func aggregateProfiles(sites []*SiteData) map[string]*g2.AggProfile {
+func aggregateProfiles(sites []*g2.SiteData) map[string]*g2.AggProfile {
 	aggProfiles := make(map[string]*g2.AggProfile)
 	for _, site := range sites {
 		for _, p := range site.Profiles {
@@ -2138,7 +1369,7 @@ func aggregateProfiles(sites []*SiteData) map[string]*g2.AggProfile {
 	return aggProfiles
 }
 
-func aggregateGlobalNews(sites []*SiteData) []AggNewsItem {
+func aggregateGlobalNews(sites []*g2.SiteData) []AggNewsItem {
 	var globalNews []AggNewsItem
 	for _, site := range sites {
 		for _, news := range site.News {
@@ -2151,7 +1382,7 @@ func aggregateGlobalNews(sites []*SiteData) []AggNewsItem {
 	return globalNews
 }
 
-func aggregateArches(sites []*SiteData) map[string]*AggArch {
+func aggregateArches(sites []*g2.SiteData) map[string]*AggArch {
 	aggArches := make(map[string]*AggArch)
 	for _, site := range sites {
 		if site.ArchList != nil {
@@ -2187,7 +1418,7 @@ func aggregateArches(sites []*SiteData) map[string]*AggArch {
 	return aggArches
 }
 
-func aggregateMoves(sites []*SiteData) map[string]*AggPackageMove {
+func aggregateMoves(sites []*g2.SiteData) map[string]*AggPackageMove {
 	aggMoves := make(map[string]*AggPackageMove)
 	for _, site := range sites {
 		for _, move := range site.Moves {
@@ -2199,14 +1430,14 @@ func aggregateMoves(sites []*SiteData) map[string]*AggPackageMove {
 	return aggMoves
 }
 
-func aggregateEclasses(sites []*SiteData) map[string]*AggEclass {
+func aggregateEclasses(sites []*g2.SiteData) map[string]*AggEclass {
 	aggEclasses := make(map[string]*AggEclass)
 	for _, site := range sites {
-		for _, eclass := range site.AggEclasses {
+		for _, eclass := range site.AggEclasses.([]*AggEclass) {
 			if _, ok := aggEclasses[eclass.Name]; !ok {
 				aggEclasses[eclass.Name] = &AggEclass{
 					Name:  eclass.Name,
-					Repos: make(map[string]*SiteData),
+					Repos: make(map[string]*g2.SiteData),
 				}
 			}
 			for rName, rData := range eclass.Repos {
@@ -2216,7 +1447,7 @@ func aggregateEclasses(sites []*SiteData) map[string]*AggEclass {
 				foundPkg := false
 				for _, existingPkg := range aggEclasses[eclass.Name].Packages {
 					if existingPkg.Name == pkg.Name && existingPkg.Category == pkg.Category {
-						newRepos := make(map[string]*SiteData)
+						newRepos := make(map[string]*g2.SiteData)
 						for k, v := range existingPkg.Repos {
 							newRepos[k] = v
 						}
@@ -2230,7 +1461,7 @@ func aggregateEclasses(sites []*SiteData) map[string]*AggEclass {
 				}
 				if !foundPkg {
 					newPkg := *pkg
-					newRepos := make(map[string]*SiteData)
+					newRepos := make(map[string]*g2.SiteData)
 					for k, v := range pkg.Repos {
 						newRepos[k] = v
 					}
@@ -2243,7 +1474,7 @@ func aggregateEclasses(sites []*SiteData) map[string]*AggEclass {
 	return aggEclasses
 }
 
-func aggregatePackagesAndCategories(sites []*SiteData, aggProjects map[string]*AggProject) (map[string]*AggCategory, map[string]*AggPackage, map[string]*AggLicense, int) {
+func aggregatePackagesAndCategories(sites []*g2.SiteData, aggProjects map[string]*AggProject) (map[string]*AggCategory, map[string]*AggPackage, map[string]*AggLicense, int) {
 	aggCategories := make(map[string]*AggCategory)
 	aggPackages := make(map[string]*AggPackage)
 	aggLicenses := make(map[string]*AggLicense)
@@ -2260,7 +1491,7 @@ func aggregatePackagesAndCategories(sites []*SiteData, aggProjects map[string]*A
 			for _, pkg := range cat.Packages {
 				pkgKey := cat.Name + "/" + pkg.Name
 				if _, ok := aggPackages[pkgKey]; !ok {
-					aggPackages[pkgKey] = &AggPackage{Name: pkg.Name, Category: cat.Name, Repos: make(map[string]*SiteData)}
+					aggPackages[pkgKey] = &AggPackage{Name: pkg.Name, Category: cat.Name, Repos: make(map[string]*g2.SiteData)}
 					totalPackages++
 				}
 				aggPackages[pkgKey].Repos[site.RepoName] = site
@@ -2406,7 +1637,7 @@ func sortPackages(aggPackages map[string]*AggPackage) []*AggPackage {
 	return sortedPackages
 }
 
-func aggregateValidUseExpands(sites []*SiteData) map[string]bool {
+func aggregateValidUseExpands(sites []*g2.SiteData) map[string]bool {
 	validUseExpands := make(map[string]bool)
 	for _, site := range sites {
 		for prefix := range site.ValidUseExpands {
@@ -2507,7 +1738,7 @@ func sortGroupedRepos(groupedReposMap map[string]*RepoGroup) []RepoGroup {
 	return sortedGroupedRepos
 }
 
-func prepareAggregatedData(sites []*SiteData) *AggregatedData {
+func prepareAggregatedData(sites []*g2.SiteData) *AggregatedData {
 	groupedReposMap := aggregateGroupedRepos(sites)
 	aggUseExpandDescs := aggregateUseExpandDescs(sites)
 	aggProjects := aggregateProjects(sites)
@@ -2551,1341 +1782,6 @@ func prepareAggregatedData(sites []*SiteData) *AggregatedData {
 	}
 }
 
-func generateGlobalPages(outDir string, tmpl *template.Template, sites []*SiteData, data *AggregatedData, title, version, recentDurationStr string, genInfo GenerationInfo) error {
-	// Generate Help Page
-	if err := os.MkdirAll(filepath.Join(outDir, "help"), 0755); err != nil {
-		return err
-	}
-	rootNode := &PageNode{Name: title, Path: ""}
-
-	helpNode := &PageNode{Parent: rootNode, Name: "Help", Path: "help"}
-	if err := renderPage(filepath.Join(outDir, "help", "index.html"), tmpl, "help.html", GenericPageContext{
-		Title:       "Help & Legend",
-		BaseURL:     helpNode.BaseURL(),
-		Breadcrumbs: helpNode.Breadcrumbs(),
-		Version:     version,
-		GenInfo:     genInfo,
-	}); err != nil {
-		return fmt.Errorf("rendering page: %w", err)
-	}
-
-	// Generate Stats Page
-	if err := os.MkdirAll(filepath.Join(outDir, "stats"), 0755); err != nil {
-		return err
-	}
-	statsNode := &PageNode{Parent: rootNode, Name: "Statistics", Path: "stats"}
-	if err := renderPage(filepath.Join(outDir, "stats", "index.html"), tmpl, "stats.html", GenericPageContext{
-		Title:       "Generation Statistics",
-		BaseURL:     statsNode.BaseURL(),
-		Breadcrumbs: statsNode.Breadcrumbs(),
-		Version:     version,
-		GenInfo:     genInfo,
-	}); err != nil {
-		return fmt.Errorf("rendering page: %w", err)
-	}
-
-	// 1. Root Dashboard
-	if err := renderPage(filepath.Join(outDir, "index.html"), tmpl, "dashboard.html", GenericPageContext{
-		Title:                title,
-		BaseURL:              "",
-		Repos:                sites,
-		GroupedRepos:         data.GroupedRepos,
-		GlobalCategories:           data.Categories,
-		GlobalPackages:             data.Packages,
-		Licenses:             data.Licenses,
-		UseFlags:             data.UseFlags,
-		Projects:             data.Projects,
-		GlobalProfiles:             data.Profiles,
-		Arches:               data.Arches,
-		Version:              version,
-		GenInfo:              genInfo,
-		RecentDurationString: recentDurationStr,
-		RecentGlobalNews:           data.RecentNews,
-		GlobalNews:           data.GlobalNews,
-	}); err != nil {
-		return fmt.Errorf("rendering page: %w", err)
-	}
-
-	// 1b. Global News Dashboard
-	if len(data.GlobalNews) > 0 {
-		if err := os.MkdirAll(filepath.Join(outDir, "news"), 0755); err != nil {
-			return fmt.Errorf("creating directory: %w", err)
-		}
-		if err := renderPage(filepath.Join(outDir, "news", "index.html"), tmpl, "news_dashboard.html", GenericPageContext{
-			Title:       "News Dashboard",
-			BaseURL:     "../",
-			Breadcrumbs: []Breadcrumb{{Name: title, URL: "../"}, {Name: "News"}},
-			RecentGlobalNews:  data.RecentNews,
-			Version:     version,
-			GenInfo:     genInfo,
-		}); err != nil {
-			return fmt.Errorf("rendering page: %w", err)
-		}
-
-		// Global News Archive
-		if err := os.MkdirAll(filepath.Join(outDir, "news", "archive"), 0755); err != nil {
-			return fmt.Errorf("creating directory: %w", err)
-		}
-		if err := renderPage(filepath.Join(outDir, "news", "archive", "index.html"), tmpl, "news_archive.html", GenericPageContext{
-			Title:       "News Archive",
-			BaseURL:     "../../",
-			Breadcrumbs: []Breadcrumb{{Name: title, URL: "../../"}, {Name: "News", URL: "../"}, {Name: "Archive"}},
-			GlobalNews:  data.GlobalNews,
-			Version:     version,
-			GenInfo:     genInfo,
-		}); err != nil {
-			return fmt.Errorf("rendering page: %w", err)
-		}
-
-		// Global News Articles
-		for _, n := range data.GlobalNews {
-			newsDir := filepath.Join(outDir, "news", "archive", n.DirName)
-			if err := os.MkdirAll(newsDir, 0755); err != nil {
-				return fmt.Errorf("creating directory %s: %w", newsDir, err)
-			}
-			if err := renderPage(filepath.Join(newsDir, "index.html"), tmpl, "news_article.html", GenericPageContext{
-				Title:       n.Title,
-				BaseURL:     "../../../",
-				Breadcrumbs: []Breadcrumb{{Name: title, URL: "../../../"}, {Name: "News", URL: "../../"}, {Name: "Archive", URL: "../"}, {Name: n.Title}},
-				GlobalNewsItem:    &n,
-				Version:     version,
-				GenInfo:     genInfo,
-			}); err != nil {
-				return fmt.Errorf("rendering page: %w", err)
-			}
-
-		}
-	}
-
-	// 2. Overlays List
-	if err := os.MkdirAll(filepath.Join(outDir, "overlays"), 0755); err != nil {
-		return fmt.Errorf("creating directory: %w", err)
-	}
-	if err := renderPage(filepath.Join(outDir, "overlays", "index.html"), tmpl, "overlays.html", GenericPageContext{
-		Title:       "Overlays",
-		BaseURL:     "../",
-		Breadcrumbs: []Breadcrumb{{Name: title, URL: "../"}, {Name: "Overlays"}},
-		Repos:       sites,
-		Version:     version,
-		GenInfo:     genInfo,
-	}); err != nil {
-		return fmt.Errorf("rendering page: %w", err)
-	}
-
-	return nil
-}
-
-func generateCategoryPages(outDir string, tmpl *template.Template, data *AggregatedData, title, version string, genInfo GenerationInfo) error {
-	// 3. Global Categories
-	if err := os.MkdirAll(filepath.Join(outDir, "categories"), 0755); err != nil {
-		return fmt.Errorf("creating directory: %w", err)
-	}
-	if err := renderPage(filepath.Join(outDir, "categories", "index.html"), tmpl, "categories.html", GenericPageContext{
-		Title:       "Categories",
-		BaseURL:     "../",
-		Breadcrumbs: []Breadcrumb{{Name: title, URL: "../"}, {Name: "Categories"}},
-		GlobalCategories:  data.Categories,
-		Version:     version,
-		GenInfo:     genInfo,
-	}); err != nil {
-		return fmt.Errorf("rendering page: %w", err)
-	}
-
-	for _, cat := range data.Categories {
-		catDirName := sanitizeFilename(cat.Name)
-		if catDirName == "" {
-			continue
-		}
-		// NOTE: Sanitize modifies directory generation, but not template linkages,
-		// but since null-bytes shouldn't be in valid names anyway, this prevents the filesystem crash.
-		catDir := filepath.Join(outDir, "categories", catDirName)
-		if err := os.MkdirAll(catDir, 0755); err != nil {
-			return fmt.Errorf("creating directory %s: %w", catDir, err)
-		}
-
-		type TmplPkg struct {
-			Name                  string
-			ReposList             []*SiteData
-			EbuildCount           int
-			HighestStableVersion  template.HTML
-			HighestTestingVersion template.HTML
-			DominantDescription   string
-			DominantHomepage      string
-			DominantLicense       string
-			ReverseVirtuals       []string
-		}
-		var tmplPkgs []TmplPkg
-		for _, p := range cat.Packages {
-			var allVersions []VersionData
-			for _, r := range p.Repos {
-				for _, c := range r.Categories {
-					if c.Name == cat.Name {
-						for _, pkgData := range c.Packages {
-							if pkgData.Name == p.Name {
-								allVersions = append(allVersions, pkgData.Versions...)
-							}
-						}
-					}
-				}
-			}
-			hs, ht, count := getHighestVersionsAndCount(allVersions, nil)
-			tmplPkgs = append(tmplPkgs, TmplPkg{Name: p.Name, ReposList: mapToList(p.Repos), EbuildCount: count, HighestStableVersion: hs, HighestTestingVersion: ht, DominantDescription: p.DominantDescription, DominantHomepage: p.DominantHomepage, DominantLicense: p.DominantLicense, ReverseVirtuals: p.ReverseVirtuals})
-		}
-
-		if err := renderPage(filepath.Join(catDir, "index.html"), tmpl, "category.html", GenericPageContext{
-			Title:       "Category: " + cat.Name,
-			BaseURL:     "../../",
-			Breadcrumbs: []Breadcrumb{{Name: title, URL: "../../"}, {Name: "Categories", URL: "../"}, {Name: cat.Name}},
-			Category:    map[string]interface{}{"Name": cat.Name, "Packages": tmplPkgs},
-			Version:     version,
-			GenInfo:     genInfo,
-		}); err != nil {
-			return fmt.Errorf("rendering page: %w", err)
-		}
-	}
-	return nil
-}
-
-func generatePackagePages(outDir string, tmpl *template.Template, data *AggregatedData, title, version string, genInfo GenerationInfo) error {
-	// Global Moved Packages Pages
-	for oldPath, move := range data.Moves {
-		parts := strings.Split(oldPath, "/")
-		if len(parts) != 2 {
-			continue
-		}
-		oldCat, oldName := parts[0], parts[1]
-
-		pkgExists := false
-		for _, p := range data.Packages {
-			if p.Category == oldCat && p.Name == oldName {
-				pkgExists = true
-				break
-			}
-		}
-		if pkgExists {
-			continue // skip if a package now exists at this location
-		}
-
-		newParts := strings.Split(move.New, "/")
-		if len(newParts) != 2 {
-			continue
-		}
-
-		pkgDir := filepath.Join(outDir, "packages", oldCat, oldName)
-		if err := os.MkdirAll(pkgDir, 0755); err != nil {
-			return fmt.Errorf("creating directory %s: %w", pkgDir, err)
-		}
-
-		if err := renderPage(filepath.Join(pkgDir, "index.html"), tmpl, "moved_package.html", GenericPageContext{
-			Title:       "Package Moved: " + oldCat + "/" + oldName,
-			BaseURL:     "../../../",
-			Breadcrumbs: []Breadcrumb{{Name: title, URL: "../../../"}, {Name: "Packages", URL: "../../"}, {Name: oldCat, URL: "../../../categories/" + oldCat + "/"}, {Name: oldName}},
-			OldName:     oldCat + "/" + oldName,
-			NewName:     move.New,
-			NewURL:      "../../" + newParts[0] + "/" + newParts[1] + "/",
-			Version:     version,
-			GenInfo:     genInfo,
-		}); err != nil {
-			return fmt.Errorf("rendering page: %w", err)
-		}
-	}
-
-	// 4. Global Packages
-	if err := os.MkdirAll(filepath.Join(outDir, "packages"), 0755); err != nil {
-		return fmt.Errorf("creating directory: %w", err)
-	}
-	if err := renderPage(filepath.Join(outDir, "packages", "index.html"), tmpl, "packages.html", GenericPageContext{
-		Title:       "Packages",
-		BaseURL:     "../",
-		Breadcrumbs: []Breadcrumb{{Name: title, URL: "../"}, {Name: "Packages"}},
-		GlobalPackages:    data.Packages,
-		Version:     version,
-		GenInfo:     genInfo,
-	}); err != nil {
-		return fmt.Errorf("rendering page: %w", err)
-	}
-
-	for _, pkg := range data.Packages {
-		pkgDir := filepath.Join(outDir, "packages", pkg.Category, pkg.Name)
-		if err := os.MkdirAll(pkgDir, 0755); err != nil {
-			return fmt.Errorf("creating directory %s: %w", pkgDir, err)
-		}
-
-		reposList := mapToList(pkg.Repos)
-
-		if len(reposList) == 1 {
-			targetURL := fmt.Sprintf("../../../repos/%s/categories/%s/packages/%s/", reposList[0].RepoName, pkg.Category, pkg.Name)
-			redirectHTML := fmt.Sprintf(`<!DOCTYPE html><html><head><meta http-equiv="refresh" content="0; url=%s"></head><body><a href="%s">Redirecting...</a></body></html>`, targetURL, targetURL)
-			if err := os.WriteFile(filepath.Join(pkgDir, "index.html"), []byte(redirectHTML), 0644); err != nil {
-				return fmt.Errorf("rendering page: %w", err)
-			}
-		} else {
-			var movedToName, movedToURL string
-			if move, ok := data.Moves[pkg.Category+"/"+pkg.Name]; ok {
-				newParts := strings.Split(move.New, "/")
-				if len(newParts) == 2 {
-					movedToName = move.New
-					movedToURL = "../../" + newParts[0] + "/" + newParts[1] + "/"
-				}
-			}
-
-			if err := renderPage(filepath.Join(pkgDir, "index.html"), tmpl, "package_picker.html", GenericPageContext{
-				Title:       "Package: " + pkg.Category + "/" + pkg.Name,
-				BaseURL:     "../../../",
-				Breadcrumbs: []Breadcrumb{{Name: title, URL: "../../../"}, {Name: "Packages", URL: "../../"}, {Name: pkg.Category, URL: "../../../categories/" + pkg.Category + "/"}, {Name: pkg.Name}},
-				GlobalPackage:     pkg,
-				MovedToName: movedToName,
-				MovedToURL:  movedToURL,
-				Version:     version,
-				GenInfo:     genInfo,
-			}); err != nil {
-				return fmt.Errorf("rendering page: %w", err)
-			}
-
-		}
-	}
-	return nil
-}
-
-func generateOtherGlobalPages(outDir string, tmpl *template.Template, data *AggregatedData, title, version string, genInfo GenerationInfo) error {
-	// Arches
-	if err := os.MkdirAll(filepath.Join(outDir, "arches"), 0755); err != nil {
-		return fmt.Errorf("creating directory: %w", err)
-	}
-	if err := renderPage(filepath.Join(outDir, "arches", "index.html"), tmpl, "arches.html", GenericPageContext{
-		Title:       "Architectures",
-		BaseURL:     "../",
-		Breadcrumbs: []Breadcrumb{{Name: title, URL: "../"}, {Name: "Architectures"}},
-		Arches:      data.Arches,
-		Version:     version,
-		GenInfo:     genInfo,
-	}); err != nil {
-		return fmt.Errorf("rendering page: %w", err)
-	}
-
-	for _, a := range data.Arches {
-		archDir := filepath.Join(outDir, "arches", a.Name)
-		if err := os.MkdirAll(archDir, 0755); err != nil {
-			return fmt.Errorf("creating directory %s: %w", archDir, err)
-		}
-
-		if err := renderPage(filepath.Join(archDir, "index.html"), tmpl, "arch.html", GenericPageContext{
-			Title:       "Architecture: " + a.Name,
-			BaseURL:     "../../",
-			Breadcrumbs: []Breadcrumb{{Name: title, URL: "../../"}, {Name: "Architectures", URL: "../../arches/"}, {Name: a.Name}},
-			Arch:        a,
-			Version:     version,
-			GenInfo:     genInfo,
-		}); err != nil {
-			return fmt.Errorf("rendering page: %w", err)
-		}
-	}
-
-	// Profiles
-	if len(data.Profiles) > 0 {
-		if err := os.MkdirAll(filepath.Join(outDir, "profiles"), 0755); err != nil {
-			return fmt.Errorf("creating directory: %w", err)
-		}
-		if err := renderPage(filepath.Join(outDir, "profiles", "index.html"), tmpl, "profiles.html", GenericPageContext{
-			Title:       "Profiles",
-			BaseURL:     "../",
-			Breadcrumbs: []Breadcrumb{{Name: title, URL: "../"}, {Name: "Profiles"}},
-			GlobalProfiles:    data.Profiles,
-			Version:     version,
-			GenInfo:     genInfo,
-		}); err != nil {
-			return fmt.Errorf("rendering page: %w", err)
-		}
-
-		for _, p := range data.Profiles {
-			profDir := filepath.Join(outDir, "profiles", p.Path)
-			if err := os.MkdirAll(profDir, 0755); err != nil {
-				return fmt.Errorf("creating directory %s: %w", profDir, err)
-			}
-
-			relToRoot := "../../" + strings.Repeat("../", strings.Count(p.Path, "/"))
-
-			if err := renderPage(filepath.Join(profDir, "index.html"), tmpl, "profile.html", GenericPageContext{
-				Title:       "Profile: " + p.Path,
-				BaseURL:     relToRoot,
-				Breadcrumbs: []Breadcrumb{{Name: title, URL: relToRoot}, {Name: "Profiles", URL: relToRoot + "profiles/"}, {Name: p.Path}},
-				ProfilePath: p.Path,
-				ProfileList: p.Repos,
-				Version:     version,
-				GenInfo:     genInfo,
-			}); err != nil {
-				return fmt.Errorf("rendering page: %w", err)
-			}
-		}
-
-	}
-
-	// 5. Global Licenses
-	if err := os.MkdirAll(filepath.Join(outDir, "licenses"), 0755); err != nil {
-		return fmt.Errorf("creating directory: %w", err)
-	}
-	if err := os.MkdirAll(filepath.Join(outDir, "uses"), 0755); err != nil {
-		return fmt.Errorf("creating directory: %w", err)
-	}
-	if err := renderPage(filepath.Join(outDir, "uses", "index.html"), tmpl, "uses.html", GenericPageContext{
-		Title:       "USE Flags",
-		BaseURL:     "../",
-		Breadcrumbs: []Breadcrumb{{Name: title, URL: "../"}, {Name: "USE Flags"}},
-		UseFlags:    data.UseFlags,
-		Version:     version,
-		GenInfo:     genInfo,
-	}); err != nil {
-		return err
-	}
-
-	for _, f := range data.UseFlags {
-		safeName := strings.ReplaceAll(f.Name, "/", "_")
-		useDir := filepath.Join(outDir, "uses", safeName)
-		if err := os.MkdirAll(useDir, 0755); err != nil {
-			return fmt.Errorf("creating directory %s: %w", useDir, err)
-		}
-
-		if err := renderPage(filepath.Join(useDir, "index.html"), tmpl, "use.html", GenericPageContext{
-			Title:       "USE Flag: " + f.Name,
-			BaseURL:     "../../",
-			Breadcrumbs: []Breadcrumb{{Name: title, URL: "../../"}, {Name: "USE Flags", URL: "../"}, {Name: f.Name}},
-			GlobalUseFlag:     f,
-			Version:     version,
-			GenInfo:     genInfo,
-		}); err != nil {
-			return err
-		}
-	}
-
-	if len(data.UseExpandDescs) > 0 {
-		if err := os.MkdirAll(filepath.Join(outDir, "uses_expand"), 0755); err != nil {
-			return fmt.Errorf("creating directory: %w", err)
-		}
-		if err := renderPage(filepath.Join(outDir, "uses_expand", "index.html"), tmpl, "use_expands.html", GenericPageContext{
-			Title:          "USE_EXPAND Flags",
-			BaseURL:        "../",
-			Breadcrumbs:    []Breadcrumb{{Name: title, URL: "../"}, {Name: "USE_EXPAND Flags"}},
-			UseExpandDescs: data.UseExpandDescs,
-			Version:        version,
-			GenInfo:        genInfo,
-		}); err != nil {
-			return fmt.Errorf("rendering page: %w", err)
-		}
-		for prefix, desc := range data.UseExpandDescs {
-			useExpandDir := filepath.Join(outDir, "uses_expand", prefix)
-			if err := os.MkdirAll(useExpandDir, 0755); err != nil {
-				return fmt.Errorf("creating directory %s: %w", useExpandDir, err)
-			}
-			if err := renderPage(filepath.Join(useExpandDir, "index.html"), tmpl, "use_expand.html", GenericPageContext{
-				Title:         "USE_EXPAND: " + prefix,
-				BaseURL:       "../../",
-				Breadcrumbs:   []Breadcrumb{{Name: title, URL: "../../"}, {Name: "USE_EXPAND Flags", URL: "../"}, {Name: prefix}},
-				UseExpandDesc: desc,
-				Version:       version,
-				GenInfo:       genInfo,
-			}); err != nil {
-				return fmt.Errorf("rendering page: %w", err)
-			}
-		}
-	}
-	if err := renderPage(filepath.Join(outDir, "licenses", "index.html"), tmpl, "licenses.html", GenericPageContext{
-		Title:       "Licenses",
-		BaseURL:     "../",
-		Breadcrumbs: []Breadcrumb{{Name: title, URL: "../"}, {Name: "Licenses"}},
-		Licenses:    data.Licenses,
-		Version:     version,
-		GenInfo:     genInfo,
-	}); err != nil {
-		return fmt.Errorf("rendering page: %w", err)
-	}
-
-	for _, lic := range data.Licenses {
-		licDirName := sanitizeFilename(lic.Name)
-		if licDirName == "" {
-			continue // Skip licenses that sanitize down to nothing
-		}
-		licDir := filepath.Join(outDir, "licenses", licDirName)
-		if err := os.MkdirAll(licDir, 0755); err != nil {
-			return fmt.Errorf("creating directory %s: %w", licDir, err)
-		}
-
-		if err := renderPage(filepath.Join(licDir, "index.html"), tmpl, "license.html", GenericPageContext{
-			Title:       "License: " + lic.Name,
-			BaseURL:     "../../",
-			Breadcrumbs: []Breadcrumb{{Name: title, URL: "../../"}, {Name: "Licenses", URL: "../"}, {Name: lic.Name}},
-			License:     lic,
-			Version:     version,
-			GenInfo:     genInfo,
-		}); err != nil {
-			return fmt.Errorf("rendering page: %w", err)
-		}
-	}
-
-	// 5b. Global Projects
-	if len(data.Projects) > 0 {
-		if err := os.MkdirAll(filepath.Join(outDir, "projects"), 0755); err != nil {
-			return fmt.Errorf("creating directory: %w", err)
-		}
-		if err := renderPage(filepath.Join(outDir, "projects", "index.html"), tmpl, "projects.html", GenericPageContext{
-			Title:       "Projects",
-			BaseURL:     "../",
-			Breadcrumbs: []Breadcrumb{{Name: title, URL: "../"}, {Name: "Projects"}},
-			Projects:    data.Projects,
-			Version:     version,
-			GenInfo:     genInfo,
-		}); err != nil {
-			return fmt.Errorf("rendering page: %w", err)
-		}
-
-		for _, proj := range data.Projects {
-			projDirName := sanitizeFilename(proj.Project.Email)
-			if projDirName == "" {
-				continue
-			}
-			projDir := filepath.Join(outDir, "projects", projDirName)
-			if err := os.MkdirAll(projDir, 0755); err != nil {
-				return fmt.Errorf("creating directory %s: %w", projDir, err)
-			}
-
-			type TmplPkg struct {
-				Name      string
-				Category  string
-				ReposList []*SiteData
-			}
-			var tmplPkgs []TmplPkg
-			for _, p := range proj.Packages {
-				tmplPkgs = append(tmplPkgs, TmplPkg{Name: p.Name, Category: p.Category, ReposList: mapToList(p.Repos)})
-			}
-
-			if err := renderPage(filepath.Join(projDir, "index.html"), tmpl, "project.html", GenericPageContext{
-				Title:       "Project: " + proj.Project.Name,
-				BaseURL:     "../../",
-				Breadcrumbs: []Breadcrumb{{Name: title, URL: "../../"}, {Name: "Projects", URL: "../"}, {Name: proj.Project.Name}},
-				Project:     proj,
-			Packages:     tmplPkgs, // Legacy any for TmplPkgs
-				Version:     version,
-				GenInfo:     genInfo,
-			}); err != nil {
-				return fmt.Errorf("rendering page: %w", err)
-			}
-		}
-
-	}
-
-	return nil
-}
-
-func generateRepoPages(outDir string, tmpl *template.Template, sites []*SiteData, data *AggregatedData, title, version, recentDurationStr string, genInfo GenerationInfo) error {
-	// 6. Repo-Specific Pages
-
-	if err := os.MkdirAll(filepath.Join(outDir, "repos"), 0755); err != nil {
-		return fmt.Errorf("creating directory repos/: %w", err)
-	}
-
-	if err := os.MkdirAll(filepath.Join(outDir, "repos", "all"), 0755); err != nil {
-		return fmt.Errorf("creating directory repos/all: %w", err)
-	}
-	if err := renderPage(filepath.Join(outDir, "repos", "all", "index.html"), tmpl, "overlays.html", GenericPageContext{
-		Title:       "All Overlays",
-		BaseURL:     "../../",
-		Breadcrumbs: []Breadcrumb{{Name: title, URL: "../../"}, {Name: "All Overlays"}},
-		Repos:       sites,
-		Version:     version,
-		GenInfo:     genInfo,
-	}); err != nil {
-		return fmt.Errorf("rendering page: %w", err)
-	}
-
-	if err := generateRepoGroupPages(outDir, tmpl, data, title, version, genInfo); err != nil {
-		return err
-	}
-
-	for _, site := range sites {
-		repoDir := filepath.Join(outDir, "repos", site.RepoName)
-		if err := os.MkdirAll(repoDir, 0755); err != nil {
-			return fmt.Errorf("creating directory %s: %w", repoDir, err)
-		}
-
-		if err := generateRepoUseFlagsPages(repoDir, tmpl, site, title, version, genInfo); err != nil {
-			return err
-		}
-
-		if err := generateRepoUseExpandsPages(repoDir, tmpl, site, title, version, genInfo); err != nil {
-			return err
-		}
-
-		if err := generateRepoDeprecatedMaskedInfoPages(repoDir, tmpl, site, title); err != nil {
-			return err
-		}
-
-		if err := generateRepoMovedPackagesPages(repoDir, tmpl, site, title, version, genInfo); err != nil {
-			return err
-		}
-
-		cutoffDate := time.Now().AddDate(0, -3, 0)
-		var repoRecentNews []g2.NewsItem
-		for _, n := range site.News {
-			if n.Posted.After(cutoffDate) {
-				repoRecentNews = append(repoRecentNews, n)
-			} else {
-				break
-			}
-		}
-		if len(repoRecentNews) == 0 && len(site.News) > 0 {
-			for i := 0; i < len(site.News) && i < 3; i++ {
-				repoRecentNews = append(repoRecentNews, site.News[i])
-			}
-		}
-
-		if err := generateRepoIndexAndStatsPages(repoDir, tmpl, site, data, title, version, recentDurationStr, genInfo, repoRecentNews); err != nil {
-			return err
-		}
-
-		if err := generateRepoProfilesPages(repoDir, tmpl, site, title, version, genInfo); err != nil {
-			return err
-		}
-
-		if err := generateRepoNewsPages(repoDir, tmpl, site, title, version, genInfo, repoRecentNews); err != nil {
-			return err
-		}
-
-		if err := generateRepoCategoriesPages(repoDir, tmpl, site, title, version, genInfo); err != nil {
-			return err
-		}
-
-		if err := generateRepoAuthorsPages(repoDir, tmpl, site, title, version, genInfo); err != nil {
-			return err
-		}
-
-		if err := generateRepoPackagesPages(repoDir, tmpl, site, data, title, version, genInfo); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func generateRepoGroupPages(outDir string, tmpl *template.Template, data *AggregatedData, title, version string, genInfo GenerationInfo) error {
-	for _, group := range data.GroupedRepos {
-		groupDirName := group.Quality + "-" + group.Status
-		groupDir := filepath.Join(outDir, "repos", groupDirName)
-		if err := os.MkdirAll(groupDir, 0755); err != nil {
-			return fmt.Errorf("creating directory %s: %w", groupDir, err)
-		}
-		if err := renderPage(filepath.Join(groupDir, "index.html"), tmpl, "repo_group.html", GenericPageContext{
-			Title:       "Overlays: " + group.Quality + " - " + group.Status,
-			BaseURL:     "../../",
-			Breadcrumbs: []Breadcrumb{{Name: title, URL: "../../"}, {Name: "Overlays: " + group.Quality + " - " + group.Status}},
-			Group:       &group,
-			Version:     version,
-			GenInfo:     genInfo,
-		}); err != nil {
-			return fmt.Errorf("rendering page: %w", err)
-		}
-	}
-	return nil
-}
-
-func generateRepoUseFlagsPages(repoDir string, tmpl *template.Template, site *SiteData, title, version string, genInfo GenerationInfo) error {
-	if len(site.AggUseFlags) > 0 {
-		if err := os.MkdirAll(filepath.Join(repoDir, "uses"), 0755); err != nil {
-			return fmt.Errorf("creating directory: %w", err)
-		}
-		if err := renderPage(filepath.Join(repoDir, "uses", "index.html"), tmpl, "uses.html", GenericPageContext{
-			Title:       site.RepoName + " - USE Flags",
-			BaseURL:     "../../../",
-			Breadcrumbs: []Breadcrumb{{Name: title, URL: "../../../"}, {Name: site.RepoName, URL: "../"}, {Name: "USE Flags"}},
-			UseFlags:    site.AggUseFlags,
-			Version:     version,
-			GenInfo:     genInfo,
-		}); err != nil {
-			return fmt.Errorf("rendering page: %w", err)
-		}
-
-		for _, f := range site.AggUseFlags {
-			safeName := strings.ReplaceAll(f.Name, "/", "_")
-			useDir := filepath.Join(repoDir, "uses", safeName)
-			if err := os.MkdirAll(useDir, 0755); err != nil {
-				return fmt.Errorf("creating directory %s: %w", useDir, err)
-			}
-
-			if err := renderPage(filepath.Join(useDir, "index.html"), tmpl, "use.html", GenericPageContext{
-				Title:       "USE Flag: " + f.Name,
-				BaseURL:     "../../../../",
-				Breadcrumbs: []Breadcrumb{{Name: title, URL: "../../../../"}, {Name: site.RepoName, URL: "../../"}, {Name: "USE Flags", URL: "../"}, {Name: f.Name}},
-				GlobalUseFlag:     f,
-				Version:     version,
-				GenInfo:     genInfo,
-			}); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
-}
-
-func generateRepoUseExpandsPages(repoDir string, tmpl *template.Template, site *SiteData, title, version string, genInfo GenerationInfo) error {
-	if len(site.UseExpandDescs) > 0 {
-		if err := os.MkdirAll(filepath.Join(repoDir, "uses_expand"), 0755); err != nil {
-			return fmt.Errorf("creating directory: %w", err)
-		}
-		if err := renderPage(filepath.Join(repoDir, "uses_expand", "index.html"), tmpl, "repo_use_expands.html", GenericPageContext{
-			Title:       site.RepoName + " - USE_EXPAND Flags",
-			BaseURL:     "../../../",
-			Breadcrumbs: []Breadcrumb{{Name: title, URL: "../../../"}, {Name: site.RepoName, URL: "../"}, {Name: "USE_EXPAND Flags"}},
-			Repo:        site,
-			Version:     version,
-			GenInfo:     genInfo,
-		}); err != nil {
-			return fmt.Errorf("rendering page: %w", err)
-		}
-		for prefix, desc := range site.UseExpandDescs {
-			useExpandDir := filepath.Join(repoDir, "uses_expand", prefix)
-			if err := os.MkdirAll(useExpandDir, 0755); err != nil {
-				return fmt.Errorf("creating directory %s: %w", useExpandDir, err)
-			}
-			if err := renderPage(filepath.Join(useExpandDir, "index.html"), tmpl, "repo_use_expand.html", GenericPageContext{
-				Title:         site.RepoName + " - USE_EXPAND: " + prefix,
-				BaseURL:       "../../../../",
-				Breadcrumbs:   []Breadcrumb{{Name: title, URL: "../../../../"}, {Name: site.RepoName, URL: "../../"}, {Name: "USE_EXPAND Flags", URL: "../"}, {Name: prefix}},
-				Repo:          site,
-				UseExpandDesc: desc,
-				Version:       version,
-				GenInfo:       genInfo,
-			}); err != nil {
-				return fmt.Errorf("rendering page: %w", err)
-			}
-		}
-	}
-	return nil
-}
-
-func generateRepoDeprecatedMaskedInfoPages(repoDir string, tmpl *template.Template, site *SiteData, title string) error {
-	if len(site.Deprecated) > 0 {
-		if err := os.MkdirAll(filepath.Join(repoDir, "deprecated"), 0755); err != nil {
-			return fmt.Errorf("creating directory: %w", err)
-		}
-		if err := renderPage(filepath.Join(repoDir, "deprecated", "index.html"), tmpl, "repo_deprecated.html", GenericPageContext{
-			Title:       site.RepoName + " - Deprecated",
-			BaseURL:     "../../../",
-			Breadcrumbs: []Breadcrumb{{Name: title, URL: "../../../"}, {Name: site.RepoName, URL: "../"}, {Name: "Deprecated Packages"}},
-			Repo:        site,
-		}); err != nil {
-			return fmt.Errorf("rendering page: %w", err)
-		}
-	}
-
-	if len(site.Masked) > 0 {
-		if err := os.MkdirAll(filepath.Join(repoDir, "masked"), 0755); err != nil {
-			return fmt.Errorf("creating directory: %w", err)
-		}
-		if err := renderPage(filepath.Join(repoDir, "masked", "index.html"), tmpl, "repo_masked.html", GenericPageContext{
-			Title:       site.RepoName + " - Masked",
-			BaseURL:     "../../../",
-			Breadcrumbs: []Breadcrumb{{Name: title, URL: "../../../"}, {Name: site.RepoName, URL: "../"}, {Name: "Masked Packages"}},
-			Repo:        site,
-		}); err != nil {
-			return fmt.Errorf("rendering page: %w", err)
-		}
-	}
-
-	if len(site.InfoVars) > 0 {
-		if err := os.MkdirAll(filepath.Join(repoDir, "info_vars"), 0755); err != nil {
-			return fmt.Errorf("creating directory: %w", err)
-		}
-		if err := renderPage(filepath.Join(repoDir, "info_vars", "index.html"), tmpl, "repo_info_vars.html", GenericPageContext{
-			Title:       site.RepoName + " - Info Vars",
-			BaseURL:     "../../../",
-			Breadcrumbs: []Breadcrumb{{Name: title, URL: "../../../"}, {Name: site.RepoName, URL: "../"}, {Name: "Info Vars"}},
-			Repo:        site,
-		}); err != nil {
-			return fmt.Errorf("rendering page: %w", err)
-		}
-	}
-	if len(site.InfoPkgs) > 0 {
-		if err := os.MkdirAll(filepath.Join(repoDir, "info_pkgs"), 0755); err != nil {
-			return fmt.Errorf("creating directory: %w", err)
-		}
-		if err := renderPage(filepath.Join(repoDir, "info_pkgs", "index.html"), tmpl, "repo_info_pkgs.html", GenericPageContext{
-			Title:       site.RepoName + " - Info Packages",
-			BaseURL:     "../../../",
-			Breadcrumbs: []Breadcrumb{{Name: title, URL: "../../../"}, {Name: site.RepoName, URL: "../"}, {Name: "Info Packages"}},
-			Repo:        site,
-		}); err != nil {
-			return fmt.Errorf("rendering page: %w", err)
-		}
-	}
-	return nil
-}
-
-func generateRepoMovedPackagesPages(repoDir string, tmpl *template.Template, site *SiteData, title, version string, genInfo GenerationInfo) error {
-	for _, move := range site.Moves {
-		parts := strings.Split(move.Old, "/")
-		if len(parts) != 2 {
-			continue
-		}
-		oldCat, oldName := parts[0], parts[1]
-
-		// Check if package exists in this repo currently
-		pkgExists := false
-		for _, cat := range site.Categories {
-			if cat.Name == oldCat {
-				for _, pkg := range cat.Packages {
-					if pkg.Name == oldName {
-						pkgExists = true
-						break
-					}
-				}
-			}
-			if pkgExists {
-				break
-			}
-		}
-		if pkgExists {
-			continue
-		}
-
-		newParts := strings.Split(move.New, "/")
-		if len(newParts) != 2 {
-			continue
-		}
-
-		pkgDir := filepath.Join(repoDir, "categories", oldCat, "packages", oldName)
-		if err := os.MkdirAll(pkgDir, 0755); err != nil {
-			return fmt.Errorf("creating directory %s: %w", pkgDir, err)
-		}
-
-		if err := renderPage(filepath.Join(pkgDir, "index.html"), tmpl, "moved_package.html", GenericPageContext{
-			Title:       fmt.Sprintf("%s - %s/%s (Moved)", site.RepoName, oldCat, oldName),
-			BaseURL:     "../../../../../../",
-			Breadcrumbs: []Breadcrumb{{Name: title, URL: "../../../../../../"}, {Name: site.RepoName, URL: "../../../../"}, {Name: "Categories", URL: "../../../"}, {Name: oldCat, URL: "../../"}, {Name: oldName}},
-			Repo:        site,
-			OldName:     oldCat + "/" + oldName,
-			NewName:     move.New,
-			NewURL:      "../../../" + newParts[0] + "/packages/" + newParts[1] + "/",
-			Version:     version,
-			GenInfo:     genInfo,
-		}); err != nil {
-			return fmt.Errorf("rendering page: %w", err)
-		}
-	}
-	return nil
-}
-
-func generateRepoIndexAndStatsPages(repoDir string, tmpl *template.Template, site *SiteData, data *AggregatedData, title, version, recentDurationStr string, genInfo GenerationInfo, repoRecentNews []g2.NewsItem) error {
-	if err := renderPage(filepath.Join(repoDir, "index.html"), tmpl, "repo_index.html", GenericPageContext{
-		Title:                 site.RepoName,
-		BaseURL:               "../../",
-		Breadcrumbs:           []Breadcrumb{{Name: title, URL: "../../"}, {Name: "Overlays", URL: "../../overlays/"}, {Name: site.RepoName}},
-		Repo:                  site,
-		PackageCount:          site.PackageCount,
-		Version:               version,
-		GenInfo:               genInfo,
-		RecentDurationString:  recentDurationStr,
-		RecentRepoNews:            repoRecentNews,
-		GlobalCategoriesCount: len(data.Categories),
-		GlobalPackagesCount:   data.TotalPackages,
-		GlobalLicensesCount:   len(data.Licenses),
-		GlobalProfilesCount:   len(data.Profiles),
-	}); err != nil {
-		return fmt.Errorf("rendering page: %w", err)
-	}
-
-	if err := os.MkdirAll(filepath.Join(repoDir, "stats"), 0755); err != nil {
-		return fmt.Errorf("creating directory: %w", err)
-	}
-	if err := renderPage(filepath.Join(repoDir, "stats", "index.html"), tmpl, "repo_stats.html", GenericPageContext{
-		Title:       site.RepoName + " - Statistics",
-		BaseURL:     "../../../",
-		Breadcrumbs: []Breadcrumb{{Name: title, URL: "../../../"}, {Name: "Overlays", URL: "../../../overlays/"}, {Name: site.RepoName, URL: "../"}, {Name: "Statistics"}},
-		Repo:        site,
-		Version:     version,
-		GenInfo:     genInfo,
-	}); err != nil {
-		return fmt.Errorf("rendering page: %w", err)
-	}
-	return nil
-}
-
-func generateRepoProfilesPages(repoDir string, tmpl *template.Template, site *SiteData, title, version string, genInfo GenerationInfo) error {
-	if len(site.Profiles) > 0 {
-		if err := os.MkdirAll(filepath.Join(repoDir, "profiles"), 0755); err != nil {
-			return fmt.Errorf("creating directory: %w", err)
-		}
-		if err := renderPage(filepath.Join(repoDir, "profiles", "index.html"), tmpl, "repo_profiles.html", GenericPageContext{
-			Title:       site.RepoName + " - Profiles",
-			BaseURL:     "../../../",
-			Breadcrumbs: []Breadcrumb{{Name: title, URL: "../../../"}, {Name: site.RepoName, URL: "../"}, {Name: "Profiles"}},
-			Repo:        site,
-			Version:     version,
-			GenInfo:     genInfo,
-		}); err != nil {
-			return fmt.Errorf("rendering page: %w", err)
-		}
-
-		for _, p := range site.Profiles {
-			profDir := filepath.Join(repoDir, "profiles", p.Path)
-			if err := os.MkdirAll(profDir, 0755); err != nil {
-				return fmt.Errorf("creating directory %s: %w", profDir, err)
-			}
-
-			relToRoot := "../../../../" + strings.Repeat("../", strings.Count(p.Path, "/"))
-
-			if err := renderPage(filepath.Join(profDir, "index.html"), tmpl, "repo_profile.html", GenericPageContext{
-				Title:       site.RepoName + " - Profile: " + p.Path,
-				BaseURL:     relToRoot,
-				Breadcrumbs: []Breadcrumb{{Name: title, URL: relToRoot}, {Name: site.RepoName, URL: relToRoot + "repos/" + site.RepoName + "/"}, {Name: "Profiles", URL: relToRoot + "repos/" + site.RepoName + "/profiles/"}, {Name: p.Path}},
-				RepoName:    site.RepoName,
-				ProfilePath: p.Path,
-				RepoProfile:     &p,
-				Version:     version,
-				GenInfo:     genInfo,
-			}); err != nil {
-				return fmt.Errorf("rendering page: %w", err)
-			}
-
-			for fName, fContent := range p.Files {
-				if err := renderPage(filepath.Join(profDir, fName+".html"), tmpl, "repo_profile_file.html", GenericPageContext{
-					Title:       site.RepoName + " - Profile File: " + fName,
-					BaseURL:     relToRoot,
-					Breadcrumbs: []Breadcrumb{{Name: title, URL: relToRoot}, {Name: site.RepoName, URL: relToRoot + "repos/" + site.RepoName + "/"}, {Name: "Profiles", URL: relToRoot + "repos/" + site.RepoName + "/profiles/"}, {Name: p.Path, URL: "index.html"}, {Name: fName}},
-					RepoName:    site.RepoName,
-					ProfilePath: p.Path,
-					RepoProfile:     &p,
-					FileName:    fName,
-					FileContent: fContent,
-					Version:     version,
-					GenInfo:     genInfo,
-				}); err != nil {
-					return fmt.Errorf("rendering page: %w", err)
-				}
-			}
-		}
-	}
-	return nil
-}
-
-func generateRepoNewsPages(repoDir string, tmpl *template.Template, site *SiteData, title, version string, genInfo GenerationInfo, repoRecentNews []g2.NewsItem) error {
-	if len(site.News) > 0 {
-		if err := os.MkdirAll(filepath.Join(repoDir, "news"), 0755); err != nil {
-			return fmt.Errorf("creating directory: %w", err)
-		}
-		if err := renderPage(filepath.Join(repoDir, "news", "index.html"), tmpl, "news_dashboard.html", GenericPageContext{
-			Title:       site.RepoName + " - News Dashboard",
-			BaseURL:     "../../../",
-			Breadcrumbs: []Breadcrumb{{Name: title, URL: "../../../"}, {Name: "Overlays", URL: "../../../overlays/"}, {Name: site.RepoName, URL: "../"}, {Name: "News"}},
-			RecentRepoNews:  repoRecentNews,
-			Version:     version,
-			GenInfo:     genInfo,
-		}); err != nil {
-			return fmt.Errorf("rendering page: %w", err)
-		}
-
-		// Repo News Archive
-		if err := os.MkdirAll(filepath.Join(repoDir, "news", "archive"), 0755); err != nil {
-			return fmt.Errorf("creating directory: %w", err)
-		}
-		if err := renderPage(filepath.Join(repoDir, "news", "archive", "index.html"), tmpl, "news_archive.html", GenericPageContext{
-			Title:       site.RepoName + " - News Archive",
-			BaseURL:     "../../../../",
-			Breadcrumbs: []Breadcrumb{{Name: title, URL: "../../../../"}, {Name: "Overlays", URL: "../../../../overlays/"}, {Name: site.RepoName, URL: "../../"}, {Name: "News", URL: "../"}, {Name: "Archive"}},
-			News:        site.News,
-			Version:     version,
-			GenInfo:     genInfo,
-		}); err != nil {
-			return fmt.Errorf("rendering page: %w", err)
-		}
-
-		// Repo News Articles
-		for _, n := range site.News {
-			newsDir := filepath.Join(repoDir, "news", "archive", n.DirName)
-			if err := os.MkdirAll(newsDir, 0755); err != nil {
-				return fmt.Errorf("creating directory %s: %w", newsDir, err)
-			}
-			if err := renderPage(filepath.Join(newsDir, "index.html"), tmpl, "news_article.html", GenericPageContext{
-				Title:       n.Title,
-				BaseURL:     "../../../../../",
-				Breadcrumbs: []Breadcrumb{{Name: title, URL: "../../../../../"}, {Name: "Overlays", URL: "../../../../../overlays/"}, {Name: site.RepoName, URL: "../../../"}, {Name: "News", URL: "../../"}, {Name: "Archive", URL: "../"}, {Name: n.Title}},
-				RepoNewsItem:    &n,
-				Version:     version,
-				GenInfo:     genInfo,
-			}); err != nil {
-				return fmt.Errorf("rendering page: %w", err)
-			}
-		}
-	}
-	return nil
-}
-
-func generateRepoCategoriesPages(repoDir string, tmpl *template.Template, site *SiteData, title, version string, genInfo GenerationInfo) error {
-	if err := os.MkdirAll(filepath.Join(repoDir, "categories"), 0755); err != nil {
-		return fmt.Errorf("creating directory: %w", err)
-	}
-	if err := renderPage(filepath.Join(repoDir, "categories", "index.html"), tmpl, "categories.html", GenericPageContext{
-		Title:       site.RepoName + " - Categories",
-		BaseURL:     "../../../",
-		Breadcrumbs: []Breadcrumb{{Name: title, URL: "../../../"}, {Name: site.RepoName, URL: "../"}, {Name: "Categories"}},
-		RepoCategories:  site.Categories,
-		Version:     version,
-		GenInfo:     genInfo,
-	}); err != nil {
-		return fmt.Errorf("rendering page: %w", err)
-	}
-
-	for _, cat := range site.Categories {
-		catDirName := sanitizeFilename(cat.Name)
-		if catDirName == "" {
-			continue
-		}
-		catDir := filepath.Join(repoDir, "categories", catDirName)
-		if err := os.MkdirAll(catDir, 0755); err != nil {
-			return fmt.Errorf("creating directory %s: %w", catDir, err)
-		}
-
-		type TmplPkg struct {
-			Name                  string
-			ReposList             []*SiteData
-			EbuildCount           int
-			HighestStableVersion  template.HTML
-			HighestTestingVersion template.HTML
-			DominantDescription   string
-			DominantHomepage      string
-			DominantLicense       string
-			ReverseVirtuals       []string
-		}
-		var tmplPkgs []TmplPkg
-		for _, p := range cat.Packages {
-			tmplPkgs = append(tmplPkgs, TmplPkg{Name: p.Name, ReposList: []*SiteData{site}, EbuildCount: p.EbuildCount, HighestStableVersion: p.HighestStableVersion, HighestTestingVersion: p.HighestTestingVersion, DominantDescription: p.DominantDescription, DominantHomepage: p.DominantHomepage, DominantLicense: p.DominantLicense, ReverseVirtuals: p.ReverseVirtuals})
-		}
-
-		if err := renderPage(filepath.Join(catDir, "index.html"), tmpl, "category.html", GenericPageContext{
-			Title:       "Category: " + cat.Name,
-			BaseURL:     "../../../../",
-			Breadcrumbs: []Breadcrumb{{Name: title, URL: "../../../../"}, {Name: site.RepoName, URL: "../../"}, {Name: "Categories", URL: "../"}, {Name: cat.Name}},
-			Category:    map[string]interface{}{"Name": cat.Name, "Packages": tmplPkgs},
-			Version:     version,
-			GenInfo:     genInfo,
-		}); err != nil {
-			return fmt.Errorf("rendering page: %w", err)
-		}
-	}
-	return nil
-}
-
-func generateRepoAuthorsPages(repoDir string, tmpl *template.Template, site *SiteData, title, version string, genInfo GenerationInfo) error {
-	if len(site.Authors) > 0 {
-		if err := os.MkdirAll(filepath.Join(repoDir, "authors"), 0755); err != nil {
-			return fmt.Errorf("creating directory: %w", err)
-		}
-		if err := renderPage(filepath.Join(repoDir, "authors", "index.html"), tmpl, "authors.html", GenericPageContext{
-			Title:       site.RepoName + " - Authors",
-			BaseURL:     "../../../",
-			Breadcrumbs: []Breadcrumb{{Name: title, URL: "../../../"}, {Name: site.RepoName, URL: "../"}, {Name: "Authors"}},
-			Authors:     site.Authors,
-			Repo:        site,
-			Version:     version,
-			GenInfo:     genInfo,
-		}); err != nil {
-			return fmt.Errorf("rendering page: %w", err)
-		}
-	}
-	return nil
-}
-
-func generateRepoPackagesPages(repoDir string, tmpl *template.Template, site *SiteData, data *AggregatedData, title, version string, genInfo GenerationInfo) error {
-	if err := os.MkdirAll(filepath.Join(repoDir, "packages"), 0755); err != nil {
-		return fmt.Errorf("creating directory: %w", err)
-	}
-	var repoPkgs []PackageData
-	for _, c := range site.Categories {
-		repoPkgs = append(repoPkgs, c.Packages...)
-	}
-	sort.Slice(repoPkgs, func(i, j int) bool {
-		if repoPkgs[i].Category == repoPkgs[j].Category {
-			return repoPkgs[i].Name < repoPkgs[j].Name
-		}
-		return repoPkgs[i].Category < repoPkgs[j].Category
-	})
-
-	if err := renderPage(filepath.Join(repoDir, "packages", "index.html"), tmpl, "repo_packages.html", GenericPageContext{
-		Title:       site.RepoName + " - Packages",
-		BaseURL:     "../../../",
-		Breadcrumbs: []Breadcrumb{{Name: title, URL: "../../../"}, {Name: site.RepoName, URL: "../"}, {Name: "Packages"}},
-		RepoPackages:    repoPkgs,
-		Repo:        site,
-		Version:     version,
-		GenInfo:     genInfo,
-	}); err != nil {
-		return fmt.Errorf("rendering page: %w", err)
-	}
-
-	aggPackagesMap := make(map[string]*AggPackage)
-	for _, p := range data.Packages {
-		aggPackagesMap[p.Category+"/"+p.Name] = p
-	}
-	repoUseFlags := getRepoUseFlags(site, aggPackagesMap)
-
-	if len(site.AggEclasses) > 0 {
-		if err := os.MkdirAll(filepath.Join(repoDir, "eclasses"), 0755); err != nil {
-			return fmt.Errorf("creating directory: %w", err)
-		}
-		if err := renderPage(filepath.Join(repoDir, "eclasses", "index.html"), tmpl, "repo_eclasses.html", GenericPageContext{
-			Title:       site.RepoName + " - Eclasses",
-			BaseURL:     "../../../",
-			Breadcrumbs: []Breadcrumb{{Name: title, URL: "../../../"}, {Name: site.RepoName, URL: "../"}, {Name: "Eclasses"}},
-			Eclasses:    site.AggEclasses,
-			Repo:        site,
-			Version:     version,
-			GenInfo:     genInfo,
-		}); err != nil {
-			return err
-		}
-
-		for _, ec := range site.AggEclasses {
-			safeName := sanitizeFilename(ec.Name)
-			if safeName == "" {
-				continue
-			}
-			ecDir := filepath.Join(repoDir, "eclasses", safeName)
-			if err := os.MkdirAll(ecDir, 0755); err != nil {
-				return fmt.Errorf("creating directory %s: %w", ecDir, err)
-			}
-
-			if err := renderPage(filepath.Join(ecDir, "index.html"), tmpl, "repo_eclass.html", GenericPageContext{
-				Title:       site.RepoName + " - Eclass: " + ec.Name,
-				BaseURL:     "../../../../",
-				Breadcrumbs: []Breadcrumb{{Name: title, URL: "../../../../"}, {Name: site.RepoName, URL: "../../"}, {Name: "Eclasses", URL: "../"}, {Name: ec.Name}},
-				Eclass:      ec,
-				Repo:        site,
-				Version:     version,
-				GenInfo:     genInfo,
-			}); err != nil {
-				return err
-			}
-		}
-	}
-
-	if err := os.MkdirAll(filepath.Join(repoDir, "uses"), 0755); err != nil {
-		return fmt.Errorf("creating directory: %w", err)
-	}
-	if err := renderPage(filepath.Join(repoDir, "uses", "index.html"), tmpl, "repo_uses.html", GenericPageContext{
-		Title:       site.RepoName + " - USE Flags",
-		BaseURL:     "../../../",
-		Breadcrumbs: []Breadcrumb{{Name: title, URL: "../../../"}, {Name: site.RepoName, URL: "../"}, {Name: "USE Flags"}},
-		UseFlags:    repoUseFlags,
-		Repo:        site,
-		Version:     version,
-		GenInfo:     genInfo,
-	}); err != nil {
-		return err
-	}
-
-	for _, f := range repoUseFlags {
-		safeName := strings.ReplaceAll(f.Name, "/", "_")
-		useDir := filepath.Join(repoDir, "uses", safeName)
-		if err := os.MkdirAll(useDir, 0755); err != nil {
-			return fmt.Errorf("creating directory %s: %w", useDir, err)
-		}
-
-		if err := renderPage(filepath.Join(useDir, "index.html"), tmpl, "repo_use.html", GenericPageContext{
-			Title:       site.RepoName + " - USE Flag: " + f.Name,
-			BaseURL:     "../../../../",
-			Breadcrumbs: []Breadcrumb{{Name: title, URL: "../../../../"}, {Name: site.RepoName, URL: "../../"}, {Name: "USE Flags", URL: "../"}, {Name: f.Name}},
-			GlobalUseFlag:     f,
-			Repo:        site,
-			Version:     version,
-			GenInfo:     genInfo,
-		}); err != nil {
-			return err
-		}
-	}
-
-	for _, pkg := range repoPkgs {
-		pkgDir := filepath.Join(repoDir, "categories", pkg.Category, "packages", pkg.Name)
-		if err := os.MkdirAll(pkgDir, 0755); err != nil {
-			return fmt.Errorf("creating directory %s: %w", pkgDir, err)
-		}
-
-		var movedToName, movedToURL string
-		for _, move := range site.Moves {
-			if move.Old == pkg.Category+"/"+pkg.Name {
-				newParts := strings.Split(move.New, "/")
-				if len(newParts) == 2 {
-					movedToName = move.New
-					movedToURL = "../../../" + newParts[0] + "/packages/" + newParts[1] + "/"
-				}
-				break
-			}
-		}
-
-		if err := renderPage(filepath.Join(pkgDir, "index.html"), tmpl, "repo_package.html", GenericPageContext{
-			Title:         fmt.Sprintf("%s - %s/%s", site.RepoName, pkg.Category, pkg.Name),
-			BaseURL:       "../../../../../../",
-			Breadcrumbs:   []Breadcrumb{{Name: title, URL: "../../../../../../"}, {Name: site.RepoName, URL: "../../../../"}, {Name: "Categories", URL: "../../../"}, {Name: pkg.Category, URL: "../../"}, {Name: pkg.Name}},
-			Repo:          site,
-			RepoPackage:       &pkg,
-			MovedToName:   movedToName,
-			MovedToURL:    movedToURL,
-			Version:       version,
-			GenInfo:       genInfo,
-			ValidLicenses: data.ValidLicenses,
-		}); err != nil {
-			return fmt.Errorf("rendering page: %w", err)
-		}
-
-		for _, md := range pkg.ManifestData {
-			if len(md.Versions) > 0 {
-				mdDir := filepath.Join(pkgDir, "manifest", md.Entry.Filename)
-				if err := os.MkdirAll(mdDir, 0755); err != nil {
-					return fmt.Errorf("creating directory %s: %w", mdDir, err)
-				}
-
-				if err := renderPage(filepath.Join(mdDir, "index.html"), tmpl, "repo_package_manifest.html", GenericPageContext{
-					Title:       fmt.Sprintf("%s - %s/%s - Manifest: %s", site.RepoName, pkg.Category, pkg.Name, md.Entry.Filename),
-					BaseURL:     "../../../../../../../../",
-					Breadcrumbs: []Breadcrumb{{Name: title, URL: "../../../../../../../../"}, {Name: site.RepoName, URL: "../../../../../../"}, {Name: "Categories", URL: "../../../../../"}, {Name: pkg.Category, URL: "../../../../"}, {Name: pkg.Name, URL: "../../"}, {Name: "Manifest"}, {Name: md.Entry.Filename}},
-					Repo:        site,
-					RepoPackage:     &pkg,
-					Manifest:    &md,
-					Version:     version,
-					GenInfo:     genInfo,
-				}); err != nil {
-					return fmt.Errorf("rendering page: %w", err)
-				}
-			}
-		}
-		for _, v := range pkg.Versions {
-			versionStr := v.Version
-			if v.Ebuild != nil && v.Ebuild.Vars != nil && v.Ebuild.Vars["PV"] != "" {
-				versionStr = v.Ebuild.Vars["PV"]
-			}
-
-			ebuildDir := filepath.Join(pkgDir, "ebuild", versionStr)
-			if err := os.MkdirAll(ebuildDir, 0755); err != nil {
-				return fmt.Errorf("creating directory %s: %w", ebuildDir, err)
-			}
-
-			var filteredManifest []ManifestEntryData
-			if pkg.Manifest != nil {
-				for _, md := range pkg.ManifestData {
-					for _, mv := range md.Versions {
-						if mv == v.Version || mv == versionStr {
-							filteredManifest = append(filteredManifest, md)
-							break
-						}
-					}
-				}
-			}
-
-			if err := renderPage(filepath.Join(ebuildDir, "index.html"), tmpl, "ebuild_details.html", GenericPageContext{
-				Title:            fmt.Sprintf("%s - %s/%s-%s", site.RepoName, pkg.Category, pkg.Name, versionStr),
-				BaseURL:          "../../../../../../../../",
-				Breadcrumbs:      []Breadcrumb{{Name: title, URL: "../../../../../../../../"}, {Name: site.RepoName, URL: "../../../../../../"}, {Name: "Categories", URL: "../../../../../"}, {Name: pkg.Category, URL: "../../../../"}, {Name: "Packages", URL: "../../../"}, {Name: pkg.Name, URL: "../../"}, {Name: "Ebuild", URL: "../"}, {Name: versionStr}},
-				Repo:             site,
-				RepoPackage:          &pkg,
-				VersionData:      &v,
-				FilteredManifest: filteredManifest,
-				Version:          version,
-				GenInfo:          genInfo,
-				ValidLicenses:    data.ValidLicenses,
-			}); err != nil {
-				return fmt.Errorf("rendering page: %w", err)
-			}
-		}
-	}
-	return nil
-}
-
-func generateSite(outDir string, sites []*SiteData, recentDuration time.Duration, recentDurationStr string, genInfo GenerationInfo) error {
-	log.Printf("Starting site generation (v%s) with %d repos to %s", version, len(sites), outDir)
-	if err := os.MkdirAll(outDir, 0755); err != nil {
-		return err
-	}
-
-	for _, site := range sites {
-		populatePkgUseFlags(site)
-	}
-
-	// Generate search index
-	if err := generateSearchIndex(outDir, sites); err != nil {
-		log.Printf("Warning: failed to generate search index: %v", err)
-	}
-
-	tmpl, err := GetSiteTemplates()
-	if err != nil {
-		return fmt.Errorf("loading templates: %w", err)
-	}
-
-	for _, site := range sites {
-		aggPackagesMap := make(map[string]*AggPackage)
-		for _, cat := range site.Categories {
-			for _, pkg := range cat.Packages {
-				pkgKey := cat.Name + "/" + pkg.Name
-				aggPackagesMap[pkgKey] = &AggPackage{
-					Name:                pkg.Name,
-					Category:            cat.Name,
-					Repos:               map[string]*SiteData{site.RepoName: site},
-					DominantDescription: pkg.DominantDescription,
-					DominantHomepage:    pkg.DominantHomepage,
-					DominantLicense:     pkg.DominantLicense,
-					ReverseVirtuals:     pkg.ReverseVirtuals,
-					VirtualDeps:         pkg.VirtualDeps,
-				}
-			}
-		}
-		site.AggEclasses = getRepoEclasses(site, aggPackagesMap)
-	}
-
-	// Prepare Immutable Render Context
-	data := prepareAggregatedData(sites)
-
-	// Title
-	title := "Gentoo Packages"
-	if len(sites) == 1 {
-		title = sites[0].Title
-	}
-
-	// Render Phases
-	if err := generateGlobalPages(outDir, tmpl, sites, data, title, version, recentDurationStr, genInfo); err != nil {
-		return err
-	}
-
-	if err := generateCategoryPages(outDir, tmpl, data, title, version, genInfo); err != nil {
-		return err
-	}
-
-	if err := generatePackagePages(outDir, tmpl, data, title, version, genInfo); err != nil {
-		return err
-	}
-
-	if err := generateOtherGlobalPages(outDir, tmpl, data, title, version, genInfo); err != nil {
-		return err
-	}
-
-	if err := generateRepoPages(outDir, tmpl, sites, data, title, version, recentDurationStr, genInfo); err != nil {
-		return err
-	}
-
-	totalNodes := len(data.Categories) + data.TotalPackages + len(data.Profiles) + len(data.GlobalNews) + len(data.Moves) + len(data.Eclasses)
-	for _, pkg := range data.Packages {
-		for _, repoSite := range pkg.Repos {
-			for _, cat := range repoSite.Categories {
-				if cat.Name == pkg.Category {
-					for _, repoPkg := range cat.Packages {
-						if repoPkg.Name == pkg.Name {
-							totalNodes += len(repoPkg.Versions)
-						}
-					}
-				}
-			}
-		}
-	}
-
-	log.Printf("[DONE] Site generation complete. Total nodes generated: %d", totalNodes)
-
-	return nil
-}
-
 func renderPage(path string, tmpl *template.Template, name string, data interface{}) error {
 	log.Printf("Rendering page %s using template %s", path, name)
 
@@ -3925,12 +1821,12 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, 
 				syncURI := s.Get("sync-uri")
 				if syncURI != "" {
 					repos.Repositories = append(repos.Repositories, g2.Repository{
-						Name: s.Name,
+						Name:    s.Name,
 						Sources: []g2.RepositorySource{{Type: "git", Text: syncURI}},
 					})
 				} else if loc != "" {
 					repos.Repositories = append(repos.Repositories, g2.Repository{
-						Name: s.Name,
+						Name:    s.Name,
 						Sources: []g2.RepositorySource{{Type: "git", Text: loc}},
 					})
 				}
@@ -3996,7 +1892,7 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, 
 	}
 	defer cleanup()
 
-	var allSites []*SiteData
+	var allSites []*g2.SiteData
 	var allSitesMu sync.Mutex
 	var lastLogTime time.Time
 
@@ -4458,8 +2354,8 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, 
 	return nil
 }
 
-func mapToList(m map[string]*SiteData) []*SiteData {
-	var l []*SiteData
+func mapToList(m map[string]*g2.SiteData) []*g2.SiteData {
+	var l []*g2.SiteData
 	for _, v := range m {
 		l = append(l, v)
 	}

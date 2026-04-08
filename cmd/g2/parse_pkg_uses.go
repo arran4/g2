@@ -2,13 +2,14 @@ package main
 
 import (
 	"fmt"
+	"github.com/arran4/g2"
 	"sort"
 	"strings"
 )
 
-// AggregateUseFlags processes a list of SiteData and updates an aggregate map of UseFlags,
-// and returns the sorted global UseFlags list. It also aggregates per-repo USE flags inside SiteData.
-func AggregateUseFlags(sites []*SiteData, aggPackages map[string]*AggPackage) ([]*AggUseFlag, map[string]*AggUseFlag) {
+// AggregateUseFlags processes a list of g2.SiteData and updates an aggregate map of UseFlags,
+// and returns the sorted global UseFlags list. It also aggregates per-repo USE flags inside g2.SiteData.
+func AggregateUseFlags(sites []*g2.SiteData, aggPackages map[string]*AggPackage) ([]*AggUseFlag, map[string]*AggUseFlag) {
 	globalAggUseFlags := make(map[string]*AggUseFlag)
 
 	for _, site := range sites {
@@ -313,7 +314,7 @@ func AggregateUseFlags(sites []*SiteData, aggPackages map[string]*AggPackage) ([
 	return sortedUseFlags, globalAggUseFlags
 }
 
-func populatePkgUseFlags(site *SiteData) {
+func populatePkgUseFlags(site *g2.SiteData) {
 	globalDescs := make(map[string]string)
 	if site.UseDesc != nil {
 		globalDescs = site.UseDesc.Flags
@@ -401,7 +402,7 @@ func populatePkgUseFlags(site *SiteData) {
 			pkg := &site.Categories[i].Packages[j]
 			pkgKey := pkg.Category + "/" + pkg.Name
 
-			flagsMap := make(map[string]*PkgUseFlag)
+			flagsMap := make(map[string]*g2.PkgUseFlag)
 
 			for _, ver := range pkg.Versions {
 				vName := ver.Version
@@ -415,8 +416,8 @@ func populatePkgUseFlags(site *SiteData) {
 						parsed := parseIUSEFlagsFunc(iuse)
 						for _, f := range parsed {
 							if _, ok := flagsMap[f.Name]; !ok {
-								flagsMap[f.Name] = &PkgUseFlag{
-									Name: f.Name,
+								flagsMap[f.Name] = &g2.PkgUseFlag{
+									Name:     f.Name,
 									Versions: make(map[string]string),
 								}
 							}
@@ -435,7 +436,7 @@ func populatePkgUseFlags(site *SiteData) {
 				}
 			}
 
-			var pkgFlags []PkgUseFlag
+			var pkgFlags []g2.PkgUseFlag
 			for name, flag := range flagsMap {
 				desc := ""
 				source := ""
