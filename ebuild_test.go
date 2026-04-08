@@ -391,6 +391,9 @@ func TestResolveVariables(t *testing.T) {
 		},
 		{
 			name: "Bash conditionals are treated as literal strings",
+			// TODO: ResolveVariables currently does not evaluate bash conditionals (like if/else),
+			// it treats them as literal strings and only performs variable substitution.
+			// This is a known limitation that needs to be addressed for full bash compliance.
 			// Proves that bash conditional logic is NOT evaluated, only variables within them are substituted.
 			text: "if [[ $A == \"foo\" ]]; then echo $B; fi",
 			variables: map[string]string{
