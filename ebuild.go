@@ -507,7 +507,7 @@ func ResolveVariables(text string, variables map[string]string) string {
 
 	for i := 0; i < 5; i++ { // Limit recursion depth
 		original := text
-		text = resolveBash(text, variables)
+		text = resolveBash(context.Background(), text, variables)
 
 		if len(text) > maxLen {
 			return text[:maxLen]

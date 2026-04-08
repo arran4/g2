@@ -12,7 +12,7 @@ import (
 )
 
 // resolveBash replaces ${VAR} and evaluates bash code in text using mvdan.cc/sh.
-func resolveBash(text string, variables map[string]string) string {
+func resolveBash(ctx context.Context, text string, variables map[string]string, opts ...interp.RunnerOption) string {
 	if !strings.Contains(text, "$") && !strings.Contains(text, "if ") && !strings.Contains(text, "case ") && !strings.Contains(text, "for ") && !strings.Contains(text, "while ") && !strings.Contains(text, "&&") && !strings.Contains(text, "||") && !strings.Contains(text, "elif ") {
 		return text
 	}
@@ -29,21 +29,25 @@ func resolveBash(text string, variables map[string]string) string {
 	file, err := parser.Parse(strings.NewReader(text), "")
 	if err == nil && len(file.Stmts) > 0 {
 		var buf bytes.Buffer
-		runner, err := interp.New(
+
+		runnerOpts := []interp.RunnerOption{
 			interp.Env(environ),
 			interp.StdIO(nil, &buf, nil),
 			interp.ExecHandlers(func(next interp.ExecHandlerFunc) interp.ExecHandlerFunc {
-				return func(ctx context.Context, args []string) error {
+				return func(execCtx context.Context, args []string) error {
 					if len(args) > 0 && args[0] == "echo" {
-						return next(ctx, args)
+						return next(execCtx, args)
 					}
 					// Deny all other external commands
 					return fmt.Errorf("external command execution denied: %s", args[0])
 				}
 			}),
-		)
+		}
+		runnerOpts = append(runnerOpts, opts...)
+
+		runner, err := interp.New(runnerOpts...)
 		if err == nil {
-			err = runner.Run(context.Background(), file)
+			err = runner.Run(ctx, file)
 			if err == nil {
 				// if there was output, return the output instead of text
 				out := buf.String()
