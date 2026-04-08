@@ -45,7 +45,7 @@ type PackageData struct {
 	// Lint Info
 	LintWarnings []string
 
-	Masked *PackageMasked
+	Masked     *PackageMasked
 	Deprecated *PackageDeprecated
 }
 

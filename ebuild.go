@@ -1,6 +1,8 @@
 package g2
 
 import (
+	"github.com/arran4/go-weak-content"
+
 	"io"
 
 	"bufio"
@@ -47,7 +49,7 @@ type Ebuild struct {
 	Functions     map[string]AST
 	SrcUri        []URIEntry
 	Mode          ParsingMode
-	RawText       FileContent
+	RawText       utils.Content[[]byte]
 	ParseWarnings []string
 
 	orderOverride []string
@@ -226,18 +228,40 @@ func ParseEbuild(fsys fs.FS, path string, mode ParsingMode, opts ...any) (*Ebuil
 	}
 
 	if isPersistent {
-		e.RawText = NewLazyFileContent(loader, UseWeakPointer(true))
+		e.RawText = utils.NewContent(
+			utils.UseLazyLoading[[]byte](true),
+			utils.UseWeakStorage[[]byte](true),
+			utils.WithGenerator(func() (*[]byte, error) {
+				rc, err := loader()
+				if err != nil {
+					return nil, err
+				}
+				defer rc.Close()
+				b, err := io.ReadAll(rc)
+				if err != nil {
+					return nil, err
+				}
+				return &b, nil
+			}),
+		)
 	} else {
 		rc, err := loader()
-		var b []byte
-		if err == nil {
-			b, _ = io.ReadAll(rc)
-			_ = rc.Close()
+		if err != nil {
+			return nil, fmt.Errorf("reading file %s: %w", path, err)
 		}
-		e.RawText = &MemoryFileContent{Content: b}
+		b, err := io.ReadAll(rc)
+		_ = rc.Close()
+		if err != nil {
+			return nil, fmt.Errorf("reading file %s: %w", path, err)
+		}
+		e.RawText = utils.NewContent(
+			utils.UseEagerLoading[[]byte](true),
+			utils.UseMemoryStorage[[]byte](true),
+			utils.WithValue(b),
+		)
 	}
 
-	contentBytes, err := e.RawText.Get()
+	contentBytes, err := e.RawText.Data()
 	if err != nil || contentBytes == nil {
 		return nil, fmt.Errorf("reading file %s: %w", path, err)
 	}

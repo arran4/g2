@@ -1,6 +1,8 @@
 package main
 
 import (
+	"github.com/arran4/go-weak-content"
+
 	"bytes"
 	"context"
 	"encoding/json"
@@ -60,7 +62,7 @@ type ProfileData struct {
 	DescStat string
 	Parents  []string
 	Children []string
-	Files    map[string]g2.FileContent // Maps filename to its content
+	Files    map[string]utils.Content[[]byte] // Maps filename to its content
 }
 
 type EclassData struct {
@@ -1610,7 +1612,7 @@ func parseProfilesDirFS(sysFS fs.FS, repoDir string, entries []ProfileDescEntry,
 
 		pData := &ProfileData{
 			Path:  relPath,
-			Files: make(map[string]g2.FileContent),
+			Files: make(map[string]utils.Content[[]byte]),
 		}
 
 		if desc, ok := descMap[relPath]; ok {
@@ -1631,26 +1633,46 @@ func parseProfilesDirFS(sysFS fs.FS, repoDir string, entries []ProfileDescEntry,
 			filePath := path2.Join(path, fname)
 			info, err := fs.Stat(sysFS, filePath)
 			if err == nil && !info.IsDir() {
-				var fc g2.FileContent
+				var fc utils.Content[[]byte]
 				loader := func() (io.ReadCloser, error) {
 					f, err := sysFS.Open(filePath)
 					return f, err
 				}
 				if isPersistent {
-					fc = g2.NewLazyFileContent(loader, g2.UseWeakPointer(true))
+					fc = utils.NewContent(
+						utils.UseLazyLoading[[]byte](true),
+						utils.UseWeakStorage[[]byte](true),
+						utils.WithGenerator(func() (*[]byte, error) {
+							rc, err := loader()
+							if err != nil {
+								return nil, err
+							}
+							defer rc.Close()
+							b, err := io.ReadAll(rc)
+							if err != nil {
+								return nil, err
+							}
+							return &b, nil
+						}),
+					)
 				} else {
 					rc, err := loader()
-					var b []byte
-					if err == nil {
-						b, _ = io.ReadAll(rc)
-						_ = rc.Close()
+					if err != nil {
+						continue // Skip adding the file if loader fails
 					}
-					fc = &g2.MemoryFileContent{
-						Content: b,
+					b, err := io.ReadAll(rc)
+					_ = rc.Close()
+					if err != nil {
+						continue // Skip adding the file if ReadAll fails
 					}
+					fc = utils.NewContent(
+						utils.UseEagerLoading[[]byte](true),
+						utils.UseMemoryStorage[[]byte](true),
+						utils.WithValue(b),
+					)
 				}
 				if pData.Files == nil {
-					pData.Files = make(map[string]g2.FileContent)
+					pData.Files = make(map[string]utils.Content[[]byte])
 				}
 				pData.Files[fname] = fc
 
@@ -2035,7 +2057,7 @@ type AggProfile struct {
 	DescArch string
 	DescStat string
 	Repos    []AggProfileRepo
-	Files    map[string]g2.FileContent // Maps filename to its content
+	Files    map[string]utils.Content[[]byte] // Maps filename to its content
 }
 
 type AggEclass struct {

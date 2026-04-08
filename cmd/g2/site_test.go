@@ -1,9 +1,9 @@
 package main
 
 import (
-	"strings"
 	"os"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -149,11 +149,11 @@ func TestDominantMetadataSelection(t *testing.T) {
 				Version: "1.0",
 				Ebuild: &g2.Ebuild{
 					Vars: map[string]string{
-						"PV": "1.0",
-						"KEYWORDS": "~amd64",
+						"PV":          "1.0",
+						"KEYWORDS":    "~amd64",
 						"DESCRIPTION": "Ebuild description",
-						"HOMEPAGE": "https://ebuild.com",
-						"LICENSE": "GPL-2",
+						"HOMEPAGE":    "https://ebuild.com",
+						"LICENSE":     "GPL-2",
 					},
 				},
 			},

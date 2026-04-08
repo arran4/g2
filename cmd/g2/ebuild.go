@@ -81,7 +81,7 @@ func (cfg *MainArgConfig) cmdEbuild(args []string) error {
 	case "deps":
 		if err := config.cmdEbuildDeps(fs.Args()[1:]); err != nil {
 			return fmt.Errorf("ebuild deps: %w", err)
-    }
+		}
 	case "query":
 		if err := config.cmdEbuildQuery(fs.Args()[1:]); err != nil {
 			return fmt.Errorf("ebuild query: %w", err)
@@ -566,7 +566,7 @@ func (cfg *CmdEbuildArgConfig) cmdEbuildDeps(args []string) error {
 
 	return nil
 }
-    
+
 func (cfg *CmdEbuildArgConfig) cmdEbuildAsJson(args []string) error {
 	fs := flag.NewFlagSet("as-json", flag.ExitOnError)
 	if err := fs.Parse(args); err != nil {
@@ -734,9 +734,8 @@ func (cfg *CmdEbuildArgConfig) cmdEbuildCheck(args []string) error {
 	if *format == "text" {
 		fmt.Println("Check passed successfully.")
 	}
-  return nil
+	return nil
 }
-
 
 func (cfg *CmdEbuildArgConfig) cmdEbuildQuery(args []string) error {
 	fs := flag.NewFlagSet("query", flag.ExitOnError)
