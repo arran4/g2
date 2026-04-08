@@ -32,12 +32,14 @@ func resolveBash(text string, variables map[string]string) string {
 		runner, err := interp.New(
 			interp.Env(environ),
 			interp.StdIO(nil, &buf, nil),
-			interp.ExecHandler(func(ctx context.Context, args []string) error {
-				if len(args) > 0 && args[0] == "echo" {
-					return interp.DefaultExecHandler(2)(ctx, args)
+			interp.ExecHandlers(func(next interp.ExecHandlerFunc) interp.ExecHandlerFunc {
+				return func(ctx context.Context, args []string) error {
+					if len(args) > 0 && args[0] == "echo" {
+						return next(ctx, args)
+					}
+					// Deny all other external commands
+					return fmt.Errorf("external command execution denied: %s", args[0])
 				}
-				// Deny all other external commands
-				return fmt.Errorf("external command execution denied: %s", args[0])
 			}),
 		)
 		if err == nil {
