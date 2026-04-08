@@ -9,6 +9,7 @@ require (
 	golang.org/x/crypto v0.46.0
 	golang.org/x/text v0.32.0
 	golang.org/x/tools v0.40.0
+	mvdan.cc/sh/v3 v3.12.0
 )
 
 require (
@@ -28,10 +29,8 @@ require (
 	github.com/skeema/knownhosts v1.3.1 // indirect
 	github.com/xanzy/ssh-agent v0.3.3 // indirect
 	golang.org/x/net v0.48.0 // indirect
-	gopkg.in/warnings.v0 v0.1.2 // indirect
-)
-
-require (
 	golang.org/x/sync v0.19.0
 	golang.org/x/sys v0.39.0
+	golang.org/x/term v0.38.0 // indirect
+	gopkg.in/warnings.v0 v0.1.2 // indirect
 )
