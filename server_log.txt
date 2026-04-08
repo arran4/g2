@@ -1,3 +1,0 @@
-2026/04/08 02:35:56 Location . is not an overlay, checking /var/db/repos
-2026/04/08 02:35:56 site error: could not read /var/db/repos: open /var/db/repos: no such file or directory
-exit status 255
