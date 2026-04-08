@@ -70,7 +70,7 @@ func giteaUrlConverter(gitUrl string) (string, error) {
 	return fmt.Sprintf("https://%s%s/archive/HEAD.zip", u.Host, path), nil
 }
 
-func FetchRepo(ctx context.Context, gitUrl string, destDir string, useZip bool, persistent bool, retries int) error {
+func FetchRepo(ctx context.Context, gitUrl string, destDir string, useZip bool, workMode string, retries int) error {
 	var err error
 	for i := 0; i <= retries; i++ {
 		if i > 0 {
@@ -78,7 +78,7 @@ func FetchRepo(ctx context.Context, gitUrl string, destDir string, useZip bool, 
 			_ = os.RemoveAll(destDir)
 			time.Sleep(1 * time.Second)
 		}
-		err = fetchRepoAttempt(ctx, gitUrl, destDir, useZip, persistent)
+		err = fetchRepoAttempt(ctx, gitUrl, destDir, useZip, workMode)
 		if err == nil {
 			return nil
 		}
@@ -126,8 +126,8 @@ type osWriteFS struct{}
 func (osWriteFS) MkdirAll(path string, perm os.FileMode) error { return os.MkdirAll(path, perm) }
 func (osWriteFS) Create(name string) (io.WriteCloser, error)   { return os.Create(name) }
 
-func fetchRepoAttempt(ctx context.Context, gitUrl string, destDir string, useZip bool, persistent bool) error {
-	if persistent {
+func fetchRepoAttempt(ctx context.Context, gitUrl string, destDir string, useZip bool, workMode string) error {
+	if workMode == "persistent" {
 		gitDir := filepath.Join(destDir, ".git")
 		if info, err := os.Stat(gitDir); err == nil && info.IsDir() {
 			err := updatePersistentRepo(ctx, destDir)
