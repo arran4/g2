@@ -279,7 +279,8 @@ func generatePackagePages(outDir string, tmpl *template.Template, data *Aggregat
 
 		if len(reposList) == 1 {
 			targetURL := fmt.Sprintf("../../../repos/%s/categories/%s/packages/%s/", reposList[0].RepoName, pkg.Category, pkg.Name)
-			redirectHTML := fmt.Sprintf(`<!DOCTYPE html><html><head><meta http-equiv="refresh" content="0; url=%s"></head><body><a href="%s">Redirecting...</a></body></html>`, targetURL, targetURL)
+			escapedURL := template.HTMLEscapeString(targetURL)
+			redirectHTML := fmt.Sprintf(`<!DOCTYPE html><html><head><meta http-equiv="refresh" content="0; url=%s"></head><body><a href="%s">Redirecting...</a></body></html>`, escapedURL, escapedURL)
 			if err := os.WriteFile(filepath.Join(pkgDir, "index.html"), []byte(redirectHTML), 0644); err != nil {
 				return fmt.Errorf("rendering page: %w", err)
 			}
