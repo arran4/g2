@@ -30,8 +30,8 @@ func (n *PageNode) BaseURL() string {
 	}
 
 	res := ""
-	for i := 0; i < depth; i++ {
-		res += "../"
+	if depth > 0 {
+		res = strings.Repeat("../", depth)
 	}
 	return res
 }
@@ -56,8 +56,8 @@ func (n *PageNode) Breadcrumbs() []g2.Breadcrumb {
 				}
 				temp = temp.Parent
 			}
-			for i := 0; i < depthDiff; i++ {
-				url += "../"
+			if depthDiff > 0 {
+				url = strings.Repeat("../", depthDiff)
 			}
 		}
 
