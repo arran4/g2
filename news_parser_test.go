@@ -1,9 +1,129 @@
 package g2
 
 import (
+	"reflect"
 	"strings"
 	"testing"
+	"time"
 )
+
+func TestParseNewsItem(t *testing.T) {
+	tests := []struct {
+		name     string
+		content  string
+		expected NewsItem
+	}{
+		{
+			name: "Basic Format 1.0",
+			content: "Title: Test News\n" +
+				"Author: Tester <tester@example.com>\n" +
+				"Translator: Trans <trans@example.com>\n" +
+				"Posted: 2023-01-01\n" +
+				"Revision: 1\n" +
+				"News-Item-Format: 1.0\n" +
+				"Display-If-Installed: app-misc/foo\n" +
+				"Display-If-Keyword: amd64\n" +
+				"Display-If-Profile: default/linux/amd64/17.1\n" +
+				"\n" +
+				"This is the body.\n" +
+				"Line 2.",
+			expected: NewsItem{
+				Title:              "Test News",
+				Author:             "Tester",
+				Translator:         []string{"Trans"},
+				Posted:             time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC),
+				Revision:           "1",
+				NewsItemFormat:     "1.0",
+				DisplayIfInstalled: []string{"app-misc/foo"},
+				DisplayIfKeyword:   []string{"amd64"},
+				DisplayIfProfile:   []string{"default/linux/amd64/17.1"},
+				Body:               "This is the body.\nLine 2.",
+			},
+		},
+		{
+			name: "Missing Headers",
+			content: "Title: Test News 2\n" +
+				"\n" +
+				"Body only.",
+			expected: NewsItem{
+				Title: "Test News 2",
+				Body:  "Body only.",
+			},
+		},
+		{
+			name: "Multiple Translators and Display Ifs",
+			content: "Title: Multi\n" +
+				"Translator: Trans 1 <t1@example.com>\n" +
+				"Translator: Trans 2 <t2@example.com>\n" +
+				"Display-If-Installed: app-misc/foo\n" +
+				"Display-If-Installed: app-misc/bar\n" +
+				"Display-If-Keyword: amd64\n" +
+				"Display-If-Keyword: x86\n" +
+				"Display-If-Profile: p1\n" +
+				"Display-If-Profile: p2\n" +
+				"\n" +
+				"Body.",
+			expected: NewsItem{
+				Title:              "Multi",
+				Translator:         []string{"Trans 1", "Trans 2"},
+				DisplayIfInstalled: []string{"app-misc/foo", "app-misc/bar"},
+				DisplayIfKeyword:   []string{"amd64", "x86"},
+				DisplayIfProfile:   []string{"p1", "p2"},
+				Body:               "Body.",
+			},
+		},
+		{
+			name: "Invalid Date",
+			content: "Title: Invalid Date\n" +
+				"Posted: invalid-date\n" +
+				"\n" +
+				"Body.",
+			expected: NewsItem{
+				Title: "Invalid Date",
+				Body:  "Body.",
+			},
+		},
+		{
+			name: "Invalid Header Format",
+			content: "Title: No Colon Format\n" +
+				"InvalidHeaderNoColon\n" +
+				"Author: Tester\n" +
+				"\n" +
+				"Body.",
+			expected: NewsItem{
+				Title:  "No Colon Format",
+				Author: "Tester",
+				Body:   "Body.",
+			},
+		},
+		{
+			name: "Empty File",
+			content: "",
+			expected: NewsItem{
+				Body: "",
+			},
+		},
+		{
+			name: "No Body",
+			content: "Title: No Body\n",
+			expected: NewsItem{
+				Title: "No Body",
+				Body:  "",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := ParseNewsItem(tt.content)
+
+			// Verify all fields of the NewsItem struct match the expected values.
+			if !reflect.DeepEqual(got, tt.expected) {
+				t.Errorf("ParseNewsItem() = %#v, want %#v", got, tt.expected)
+			}
+		})
+	}
+}
 
 func TestParseNewsItem_Format2(t *testing.T) {
 	raw := `Title: Update defaults for various mail packages
