@@ -510,10 +510,7 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Helper for base URL
-	baseURL := ""
-	for i := 0; i < len(parts); i++ {
-		baseURL += "../"
-	}
+	baseURL := strings.Repeat("../", len(parts))
 
 	// Route based on first part
 	switch parts[0] {
