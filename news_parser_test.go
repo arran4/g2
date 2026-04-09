@@ -117,38 +117,9 @@ func TestParseNewsItem(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			got := ParseNewsItem(tt.content)
 
-			// We only want to compare fields populated in our expected struct.
-			// Format 2.0 has BodyAST which we might not want to check in all cases,
-			// but we can check if it's deeply equal.
-			if got.Title != tt.expected.Title {
-				t.Errorf("Title = %v, want %v", got.Title, tt.expected.Title)
-			}
-			if got.Author != tt.expected.Author {
-				t.Errorf("Author = %v, want %v", got.Author, tt.expected.Author)
-			}
-			if !reflect.DeepEqual(got.Translator, tt.expected.Translator) {
-				t.Errorf("Translator = %v, want %v", got.Translator, tt.expected.Translator)
-			}
-			if !got.Posted.Equal(tt.expected.Posted) {
-				t.Errorf("Posted = %v, want %v", got.Posted, tt.expected.Posted)
-			}
-			if got.Revision != tt.expected.Revision {
-				t.Errorf("Revision = %v, want %v", got.Revision, tt.expected.Revision)
-			}
-			if got.NewsItemFormat != tt.expected.NewsItemFormat {
-				t.Errorf("NewsItemFormat = %v, want %v", got.NewsItemFormat, tt.expected.NewsItemFormat)
-			}
-			if !reflect.DeepEqual(got.DisplayIfInstalled, tt.expected.DisplayIfInstalled) {
-				t.Errorf("DisplayIfInstalled = %v, want %v", got.DisplayIfInstalled, tt.expected.DisplayIfInstalled)
-			}
-			if !reflect.DeepEqual(got.DisplayIfKeyword, tt.expected.DisplayIfKeyword) {
-				t.Errorf("DisplayIfKeyword = %v, want %v", got.DisplayIfKeyword, tt.expected.DisplayIfKeyword)
-			}
-			if !reflect.DeepEqual(got.DisplayIfProfile, tt.expected.DisplayIfProfile) {
-				t.Errorf("DisplayIfProfile = %v, want %v", got.DisplayIfProfile, tt.expected.DisplayIfProfile)
-			}
-			if got.Body != tt.expected.Body {
-				t.Errorf("Body = %v, want %v", got.Body, tt.expected.Body)
+			// Verify all fields of the NewsItem struct match the expected values.
+			if !reflect.DeepEqual(got, tt.expected) {
+				t.Errorf("ParseNewsItem() = %#v, want %#v", got, tt.expected)
 			}
 		})
 	}
