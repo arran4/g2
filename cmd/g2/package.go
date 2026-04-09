@@ -13,6 +13,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -120,9 +121,16 @@ func (cfg *CmdPackageArgConfig) cmdSearch(args []string) error {
 	engine := NewSearchEngine()
 
 	// Handle loading logic based on type
-	if strings.HasPrefix(searchPath, "http://") || strings.HasPrefix(searchPath, "https://") {
+	if strings.HasPrefix(strings.ToLower(searchPath), "http://") || strings.HasPrefix(strings.ToLower(searchPath), "https://") {
 		// Load from URL
 		// For simplicity we try to fetch manifest.json then data files
+		u, err := url.Parse(searchPath)
+		if err != nil {
+			return fmt.Errorf("parsing search path url: %w", err)
+		}
+		if u.Scheme == "http" {
+			log.Printf("WARNING: Using unencrypted HTTP for search index could expose data or allow MITM attacks: %s", searchPath)
+		}
 
 		manifestURL := fmt.Sprintf("%s/data/manifest.json", strings.TrimRight(searchPath, "/"))
 		resp, err := http.Get(manifestURL)
@@ -582,6 +590,14 @@ func (cfg *CmdPackageArgConfig) cmdUpdate(args []string) error {
 
 	if *outDir == "" {
 		*outDir = fmt.Sprintf("%s/g2/search", cacheconfig.GetCacheDir())
+	}
+
+	u, err := url.Parse(*urlOpt)
+	if err != nil {
+		return fmt.Errorf("parsing search url: %w", err)
+	}
+	if u.Scheme == "http" {
+		log.Printf("WARNING: Using unencrypted HTTP for search update could expose data or allow MITM attacks: %s", *urlOpt)
 	}
 
 	log.Printf("Updating search index from %s to %s", *urlOpt, *outDir)
