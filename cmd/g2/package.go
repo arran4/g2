@@ -121,7 +121,7 @@ func (cfg *CmdPackageArgConfig) cmdSearch(args []string) error {
 	engine := NewSearchEngine()
 
 	// Handle loading logic based on type
-	if strings.HasPrefix(searchPath, "http://") || strings.HasPrefix(searchPath, "https://") {
+	if strings.HasPrefix(strings.ToLower(searchPath), "http://") || strings.HasPrefix(strings.ToLower(searchPath), "https://") {
 		// Load from URL
 		// For simplicity we try to fetch manifest.json then data files
 		u, err := url.Parse(searchPath)
