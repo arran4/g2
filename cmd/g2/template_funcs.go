@@ -36,19 +36,24 @@ func formatKeywordsFunc(keywords string, baseURL string) template.HTML {
 	}
 	parts := strings.Fields(keywords)
 	var formatted []string
+	safeBaseURL := template.HTMLEscapeString(baseURL)
 	for _, p := range parts {
 		if strings.HasPrefix(p, "-") {
-			formatted = append(formatted, p)
+			formatted = append(formatted, template.HTMLEscapeString(p))
 			continue
 		}
 
 		arch := p
+		prefix := ""
 		if strings.HasPrefix(p, "~") {
 			arch = p[1:]
-			formatted = append(formatted, fmt.Sprintf("~<a href=\"%sarches/%s/\" class=\"text-decoration-none\">%s</a>", baseURL, arch, arch))
-		} else {
-			formatted = append(formatted, fmt.Sprintf("<a href=\"%sarches/%s/\" class=\"text-decoration-none\">%s</a>", baseURL, arch, arch))
+			prefix = "~"
 		}
+
+		safeArchText := template.HTMLEscapeString(arch)
+		safeArchURL := url.PathEscape(arch)
+
+		formatted = append(formatted, fmt.Sprintf("%s<a href=\"%sarches/%s/\" class=\"text-decoration-none\">%s</a>", prefix, safeBaseURL, safeArchURL, safeArchText))
 	}
 	return template.HTML(strings.Join(formatted, " "))
 }

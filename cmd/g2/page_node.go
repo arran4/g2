@@ -29,8 +29,7 @@ func (n *PageNode) BaseURL() string {
 		curr = curr.Parent
 	}
 
-	res := strings.Repeat("../", depth)
-	return res
+	return strings.Repeat("../", depth)
 }
 
 func (n *PageNode) Breadcrumbs() []g2.Breadcrumb {
