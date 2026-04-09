@@ -29,11 +29,7 @@ func (n *PageNode) BaseURL() string {
 		curr = curr.Parent
 	}
 
-	res := ""
-	for i := 0; i < depth; i++ {
-		res += "../"
-	}
-	return res
+	return strings.Repeat("../", depth)
 }
 
 func (n *PageNode) Breadcrumbs() []g2.Breadcrumb {
@@ -56,9 +52,7 @@ func (n *PageNode) Breadcrumbs() []g2.Breadcrumb {
 				}
 				temp = temp.Parent
 			}
-			for i := 0; i < depthDiff; i++ {
-				url += "../"
-			}
+			url = strings.Repeat("../", depthDiff)
 		}
 
 		crumbs = append([]g2.Breadcrumb{{Name: curr.Name, URL: url}}, crumbs...)
