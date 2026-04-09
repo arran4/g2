@@ -592,8 +592,6 @@ func (cfg *CmdPackageArgConfig) cmdUpdate(args []string) error {
 		*outDir = fmt.Sprintf("%s/g2/search", cacheconfig.GetCacheDir())
 	}
 
-	log.Printf("Updating search index from %s to %s", *urlOpt, *outDir)
-
 	u, err := url.Parse(*urlOpt)
 	if err != nil {
 		return fmt.Errorf("parsing search url: %w", err)
@@ -601,6 +599,8 @@ func (cfg *CmdPackageArgConfig) cmdUpdate(args []string) error {
 	if u.Scheme == "http" {
 		log.Printf("WARNING: Using unencrypted HTTP for search update could expose data or allow MITM attacks: %s", *urlOpt)
 	}
+
+	log.Printf("Updating search index from %s to %s", *urlOpt, *outDir)
 
 	resp, err := http.Get(*urlOpt)
 	if err != nil {
