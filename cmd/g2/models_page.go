@@ -77,4 +77,7 @@ type GenericPageContext struct {
 	Package  any
 	Packages any
 	UseFlag  any
+
+	// Redirect
+	TargetURL string
 }
