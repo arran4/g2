@@ -1324,7 +1324,7 @@ func generateSite(outDir string, sites []*g2.SiteData, recentDuration time.Durat
 		return err
 	}
 
-	log.Printf("[PHASE] Rendering category pages...")
+log.Printf("[PHASE] Rendering %d category pages...", len(data.Categories))
 	if err := generateCategoryPages(outDir, tmpl, data, title, version, genInfo); err != nil {
 		return err
 	}
