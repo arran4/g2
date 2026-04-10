@@ -1339,7 +1339,7 @@ log.Printf("[PHASE] Rendering %d category pages...", len(data.Categories))
 		return err
 	}
 
-	log.Printf("[PHASE] Rendering repository pages...")
+log.Printf("[PHASE] Rendering %d repository pages...", len(sites))
 	if err := generateRepoPages(outDir, tmpl, sites, data, title, version, recentDurationStr, genInfo); err != nil {
 		return err
 	}
