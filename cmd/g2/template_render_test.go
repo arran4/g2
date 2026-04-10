@@ -26,7 +26,10 @@ func TestAllTemplatesRender(t *testing.T) {
 			data := GenericPageContext{}
 			// populate it with some dummy data to avoid nil pointer derefs
 			data.GlobalPackage = &AggPackage{}
-			data.RepoPackage = &g2.PackageData{}
+			data.RepoPackage = &g2.PackageData{
+				ReverseVirtuals: []string{"category/package", "invalid", "x/y"},
+				Equivalents: []string{"category/package", "invalid", "x/y"},
+			}
 			data.Project = &AggProject{Project: &g2.Project{}}
 			data.RepoCategory = &g2.CategoryData{}
 			data.Category = map[string]interface{}{}
