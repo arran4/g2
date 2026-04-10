@@ -27,7 +27,16 @@ func getTemplateFuncMap() template.FuncMap {
 			if val.Kind() == reflect.Slice || val.Kind() == reflect.Map || val.Kind() == reflect.String || val.Kind() == reflect.Array { return val.Len() }
 			return 0
 		},
+		"packageLink": packageLinkFunc,
 	}
+}
+
+func packageLinkFunc(baseURL string, pkg string) template.HTML {
+	parts := strings.Split(pkg, "/")
+	if len(parts) == 2 {
+		return template.HTML(fmt.Sprintf("<a href=\"%spackages/%s/%s/\">%s</a>", template.HTMLEscapeString(baseURL), url.PathEscape(parts[0]), url.PathEscape(parts[1]), template.HTMLEscapeString(pkg)))
+	}
+	return template.HTML(template.HTMLEscapeString(pkg))
 }
 
 func formatKeywordsFunc(keywords string, baseURL string) template.HTML {
