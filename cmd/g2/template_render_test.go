@@ -14,9 +14,21 @@ func WithGlobalPackage(pkg *AggPackage) GenericPageContextOption {
 	}
 }
 
-func WithRepoPackage(pkg *g2.PackageData) GenericPageContextOption {
+func WithRepoPackageReverseVirtuals(v ...string) GenericPageContextOption {
 	return func(c *GenericPageContext) {
-		c.RepoPackage = pkg
+		if c.RepoPackage == nil {
+			c.RepoPackage = &g2.PackageData{}
+		}
+		c.RepoPackage.ReverseVirtuals = append(c.RepoPackage.ReverseVirtuals, v...)
+	}
+}
+
+func WithRepoPackageEquivalents(eq ...string) GenericPageContextOption {
+	return func(c *GenericPageContext) {
+		if c.RepoPackage == nil {
+			c.RepoPackage = &g2.PackageData{}
+		}
+		c.RepoPackage.Equivalents = append(c.RepoPackage.Equivalents, eq...)
 	}
 }
 
@@ -117,7 +129,31 @@ func WithGlobalCategory(cat *AggCategory) GenericPageContextOption {
 }
 
 func NewGenericPageContext(opts ...GenericPageContextOption) GenericPageContext {
-	ctx := GenericPageContext{}
+	ctx := GenericPageContext{
+		GlobalPackage: &AggPackage{},
+		RepoPackage: &g2.PackageData{},
+		Project: &AggProject{Project: &g2.Project{}},
+		RepoCategory: &g2.CategoryData{},
+		Category: map[string]interface{}{},
+		GlobalProfile: &g2.AggProfile{},
+		RepoProfile: &g2.ProfileData{},
+		Group: &RepoGroup{},
+		GlobalUseFlag: &AggUseFlag{},
+		License: &AggLicense{},
+		Arch: &AggArch{},
+		Repo: &g2.SiteData{},
+		Manifest: &g2.ManifestEntryData{
+			Entry: &g2.ManifestEntry{},
+		},
+		VersionData: &g2.VersionData{
+			Ebuild: &g2.Ebuild{
+				Vars: map[string]string{},
+			},
+		},
+		Eclass: &AggEclass{},
+		UseExpandDesc: &g2.UseExpandDesc{},
+		GlobalCategory: &AggCategory{},
+	}
 	for _, opt := range opts {
 		opt(&ctx)
 	}
@@ -139,31 +175,8 @@ func TestAllTemplatesRender(t *testing.T) {
 		{
 			name: "Basic Dummy Data",
 			data: NewGenericPageContext(
-				WithGlobalPackage(&AggPackage{}),
-				WithRepoPackage(&g2.PackageData{
-					ReverseVirtuals: []string{"category/package", "invalid", "x/y"},
-					Equivalents:     []string{"category/package", "invalid", "x/y"},
-				}),
-				WithProject(&AggProject{Project: &g2.Project{}}),
-				WithRepoCategory(&g2.CategoryData{}),
-				WithCategory(map[string]interface{}{}),
-				WithGlobalProfile(&g2.AggProfile{}),
-				WithRepoProfile(&g2.ProfileData{}),
-				WithGroup(&RepoGroup{}),
-				WithGlobalUseFlag(&AggUseFlag{}),
-				WithLicense(&AggLicense{}),
-				WithArch(&AggArch{}),
-				WithRepo(&g2.SiteData{}),
-				WithManifest(&g2.ManifestEntryData{
-					Entry: &g2.ManifestEntry{},
-				}),
-				WithVersionData(&g2.VersionData{
-					Ebuild: &g2.Ebuild{
-						Vars: map[string]string{},
-					},
-				}),
-				WithEclass(&AggEclass{}),
-				WithUseExpandDesc(&g2.UseExpandDesc{}),
+				WithRepoPackageReverseVirtuals("category/package", "invalid", "x/y"),
+				WithRepoPackageEquivalents("category/package", "invalid", "x/y"),
 			),
 		},
 		{
@@ -173,25 +186,11 @@ func TestAllTemplatesRender(t *testing.T) {
 					Name:     "invalid-package", // missing slash
 					Category: "invalid",
 				}),
-				WithRepoPackage(&g2.PackageData{
-					ReverseVirtuals: []string{"invalid", "category/package", "foo/bar/baz"}, // invalid reverse virtuals
-					Equivalents:     []string{"invalid", "category/package"},
-				}),
-				WithProject(&AggProject{Project: &g2.Project{}}),
-				WithRepoCategory(&g2.CategoryData{}),
-				WithCategory(map[string]interface{}{}),
-				WithGlobalProfile(&g2.AggProfile{}),
-				WithRepoProfile(&g2.ProfileData{}),
-				WithGroup(&RepoGroup{}),
+				WithRepoPackageReverseVirtuals("invalid", "category/package", "foo/bar/baz"),
+				WithRepoPackageEquivalents("invalid", "category/package"),
 				WithGlobalUseFlag(&AggUseFlag{
 					LocalDescs:    map[string]string{"invalid": "desc"},
 					MetadataDescs: map[string]string{"invalid": "desc"},
-				}),
-				WithLicense(&AggLicense{}),
-				WithArch(&AggArch{}),
-				WithRepo(&g2.SiteData{}),
-				WithManifest(&g2.ManifestEntryData{
-					Entry: &g2.ManifestEntry{},
 				}),
 				WithVersionData(&g2.VersionData{
 					Ebuild: &g2.Ebuild{
@@ -203,8 +202,6 @@ func TestAllTemplatesRender(t *testing.T) {
 						RawText: "EAPI=8\n",
 					},
 				}),
-				WithEclass(&AggEclass{}),
-				WithUseExpandDesc(&g2.UseExpandDesc{}),
 				WithBreadcrumbs([]g2.Breadcrumb{
 					{Name: "Home", URL: "/"},
 				}),
@@ -213,33 +210,11 @@ func TestAllTemplatesRender(t *testing.T) {
 		{
 			name: "Extreme Edge Cases",
 			data: NewGenericPageContext(
-				WithGlobalPackage(&AggPackage{}),
-				WithRepoPackage(&g2.PackageData{}),
-				WithProject(&AggProject{Project: &g2.Project{}}),
-				WithRepoCategory(&g2.CategoryData{}),
 				WithCategory(map[string]interface{}{
 					"ReposList": []*g2.SiteData{},
 					"Name":      "invalid-no-slashes",
 				}),
-				WithGlobalProfile(&g2.AggProfile{}),
-				WithRepoProfile(&g2.ProfileData{}),
-				WithGroup(&RepoGroup{}),
-				WithGlobalUseFlag(&AggUseFlag{}),
-				WithLicense(&AggLicense{}),
-				WithArch(&AggArch{}),
-				WithRepo(&g2.SiteData{}),
-				WithManifest(&g2.ManifestEntryData{
-					Entry: &g2.ManifestEntry{},
-				}),
-				WithVersionData(&g2.VersionData{
-					Ebuild: &g2.Ebuild{
-						Vars: map[string]string{},
-					},
-				}),
-				WithEclass(&AggEclass{}),
-				WithUseExpandDesc(&g2.UseExpandDesc{}),
 				WithBreadcrumbs([]g2.Breadcrumb{}),
-				WithGlobalCategory(&AggCategory{}),
 			),
 		},
 	}
