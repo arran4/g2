@@ -6,6 +6,124 @@ import (
 	"testing"
 )
 
+type GenericPageContextOption func(*GenericPageContext)
+
+func WithGlobalPackage(pkg *AggPackage) GenericPageContextOption {
+	return func(c *GenericPageContext) {
+		c.GlobalPackage = pkg
+	}
+}
+
+func WithRepoPackage(pkg *g2.PackageData) GenericPageContextOption {
+	return func(c *GenericPageContext) {
+		c.RepoPackage = pkg
+	}
+}
+
+func WithProject(proj *AggProject) GenericPageContextOption {
+	return func(c *GenericPageContext) {
+		c.Project = proj
+	}
+}
+
+func WithRepoCategory(cat *g2.CategoryData) GenericPageContextOption {
+	return func(c *GenericPageContext) {
+		c.RepoCategory = cat
+	}
+}
+
+func WithCategory(cat map[string]interface{}) GenericPageContextOption {
+	return func(c *GenericPageContext) {
+		c.Category = cat
+	}
+}
+
+func WithGlobalProfile(prof *g2.AggProfile) GenericPageContextOption {
+	return func(c *GenericPageContext) {
+		c.GlobalProfile = prof
+	}
+}
+
+func WithRepoProfile(prof *g2.ProfileData) GenericPageContextOption {
+	return func(c *GenericPageContext) {
+		c.RepoProfile = prof
+	}
+}
+
+func WithGroup(group *RepoGroup) GenericPageContextOption {
+	return func(c *GenericPageContext) {
+		c.Group = group
+	}
+}
+
+func WithGlobalUseFlag(flag *AggUseFlag) GenericPageContextOption {
+	return func(c *GenericPageContext) {
+		c.GlobalUseFlag = flag
+	}
+}
+
+func WithLicense(lic *AggLicense) GenericPageContextOption {
+	return func(c *GenericPageContext) {
+		c.License = lic
+	}
+}
+
+func WithArch(arch *AggArch) GenericPageContextOption {
+	return func(c *GenericPageContext) {
+		c.Arch = arch
+	}
+}
+
+func WithRepo(repo *g2.SiteData) GenericPageContextOption {
+	return func(c *GenericPageContext) {
+		c.Repo = repo
+	}
+}
+
+func WithManifest(man *g2.ManifestEntryData) GenericPageContextOption {
+	return func(c *GenericPageContext) {
+		c.Manifest = man
+	}
+}
+
+func WithVersionData(ver *g2.VersionData) GenericPageContextOption {
+	return func(c *GenericPageContext) {
+		c.VersionData = ver
+	}
+}
+
+func WithEclass(eclass *AggEclass) GenericPageContextOption {
+	return func(c *GenericPageContext) {
+		c.Eclass = eclass
+	}
+}
+
+func WithUseExpandDesc(desc *g2.UseExpandDesc) GenericPageContextOption {
+	return func(c *GenericPageContext) {
+		c.UseExpandDesc = desc
+	}
+}
+
+func WithBreadcrumbs(bc []g2.Breadcrumb) GenericPageContextOption {
+	return func(c *GenericPageContext) {
+		c.Breadcrumbs = bc
+	}
+}
+
+func WithGlobalCategory(cat *AggCategory) GenericPageContextOption {
+	return func(c *GenericPageContext) {
+		c.GlobalCategory = cat
+	}
+}
+
+func NewGenericPageContext(opts ...GenericPageContextOption) GenericPageContext {
+	ctx := GenericPageContext{}
+	for _, opt := range opts {
+		opt(&ctx)
+	}
+	return ctx
+}
+
 func TestAllTemplatesRender(t *testing.T) {
 	tmpl, err := GetSiteTemplates()
 	if err != nil {
@@ -20,109 +138,109 @@ func TestAllTemplatesRender(t *testing.T) {
 	}{
 		{
 			name: "Basic Dummy Data",
-			data: GenericPageContext{
-				GlobalPackage: &AggPackage{},
-				RepoPackage: &g2.PackageData{
+			data: NewGenericPageContext(
+				WithGlobalPackage(&AggPackage{}),
+				WithRepoPackage(&g2.PackageData{
 					ReverseVirtuals: []string{"category/package", "invalid", "x/y"},
-					Equivalents: []string{"category/package", "invalid", "x/y"},
-				},
-				Project: &AggProject{Project: &g2.Project{}},
-				RepoCategory: &g2.CategoryData{},
-				Category: map[string]interface{}{},
-				GlobalProfile: &g2.AggProfile{},
-				RepoProfile: &g2.ProfileData{},
-				Group: &RepoGroup{},
-				GlobalUseFlag: &AggUseFlag{},
-				License: &AggLicense{},
-				Arch: &AggArch{},
-				Repo: &g2.SiteData{},
-				Manifest: &g2.ManifestEntryData{
+					Equivalents:     []string{"category/package", "invalid", "x/y"},
+				}),
+				WithProject(&AggProject{Project: &g2.Project{}}),
+				WithRepoCategory(&g2.CategoryData{}),
+				WithCategory(map[string]interface{}{}),
+				WithGlobalProfile(&g2.AggProfile{}),
+				WithRepoProfile(&g2.ProfileData{}),
+				WithGroup(&RepoGroup{}),
+				WithGlobalUseFlag(&AggUseFlag{}),
+				WithLicense(&AggLicense{}),
+				WithArch(&AggArch{}),
+				WithRepo(&g2.SiteData{}),
+				WithManifest(&g2.ManifestEntryData{
 					Entry: &g2.ManifestEntry{},
-				},
-				VersionData: &g2.VersionData{
+				}),
+				WithVersionData(&g2.VersionData{
 					Ebuild: &g2.Ebuild{
 						Vars: map[string]string{},
 					},
-				},
-				Eclass: &AggEclass{},
-				UseExpandDesc: &g2.UseExpandDesc{},
-			},
+				}),
+				WithEclass(&AggEclass{}),
+				WithUseExpandDesc(&g2.UseExpandDesc{}),
+			),
 		},
 		{
 			name: "Edge Cases",
-			data: GenericPageContext{
-				GlobalPackage: &AggPackage{
-					Name: "invalid-package", // missing slash
+			data: NewGenericPageContext(
+				WithGlobalPackage(&AggPackage{
+					Name:     "invalid-package", // missing slash
 					Category: "invalid",
-				},
-				RepoPackage: &g2.PackageData{
+				}),
+				WithRepoPackage(&g2.PackageData{
 					ReverseVirtuals: []string{"invalid", "category/package", "foo/bar/baz"}, // invalid reverse virtuals
-					Equivalents: []string{"invalid", "category/package"},
-				},
-				Project: &AggProject{Project: &g2.Project{}},
-				RepoCategory: &g2.CategoryData{},
-				Category: map[string]interface{}{},
-				GlobalProfile: &g2.AggProfile{},
-				RepoProfile: &g2.ProfileData{},
-				Group: &RepoGroup{},
-				GlobalUseFlag: &AggUseFlag{
-					LocalDescs: map[string]string{"invalid": "desc"},
+					Equivalents:     []string{"invalid", "category/package"},
+				}),
+				WithProject(&AggProject{Project: &g2.Project{}}),
+				WithRepoCategory(&g2.CategoryData{}),
+				WithCategory(map[string]interface{}{}),
+				WithGlobalProfile(&g2.AggProfile{}),
+				WithRepoProfile(&g2.ProfileData{}),
+				WithGroup(&RepoGroup{}),
+				WithGlobalUseFlag(&AggUseFlag{
+					LocalDescs:    map[string]string{"invalid": "desc"},
 					MetadataDescs: map[string]string{"invalid": "desc"},
-				},
-				License: &AggLicense{},
-				Arch: &AggArch{},
-				Repo: &g2.SiteData{},
-				Manifest: &g2.ManifestEntryData{
+				}),
+				WithLicense(&AggLicense{}),
+				WithArch(&AggArch{}),
+				WithRepo(&g2.SiteData{}),
+				WithManifest(&g2.ManifestEntryData{
 					Entry: &g2.ManifestEntry{},
-				},
-				VersionData: &g2.VersionData{
+				}),
+				WithVersionData(&g2.VersionData{
 					Ebuild: &g2.Ebuild{
 						Vars: map[string]string{
-							"KEYWORDS": "amd64 ~x86 -* invalid",
+							"KEYWORDS":  "amd64 ~x86 -* invalid",
 							"INHERITED": "eclass1 eclass2",
-							"LICENSE": "GPL-2",
+							"LICENSE":   "GPL-2",
 						},
 						RawText: "EAPI=8\n",
 					},
-				},
-				Eclass: &AggEclass{},
-				UseExpandDesc: &g2.UseExpandDesc{},
-				Breadcrumbs: []g2.Breadcrumb{
+				}),
+				WithEclass(&AggEclass{}),
+				WithUseExpandDesc(&g2.UseExpandDesc{}),
+				WithBreadcrumbs([]g2.Breadcrumb{
 					{Name: "Home", URL: "/"},
-				},
-			},
+				}),
+			),
 		},
 		{
 			name: "Extreme Edge Cases",
-			data: GenericPageContext{
-				GlobalPackage: &AggPackage{},
-				RepoPackage: &g2.PackageData{},
-				Project: &AggProject{Project: &g2.Project{}},
-				RepoCategory: &g2.CategoryData{},
-				Category: map[string]interface{}{
+			data: NewGenericPageContext(
+				WithGlobalPackage(&AggPackage{}),
+				WithRepoPackage(&g2.PackageData{}),
+				WithProject(&AggProject{Project: &g2.Project{}}),
+				WithRepoCategory(&g2.CategoryData{}),
+				WithCategory(map[string]interface{}{
 					"ReposList": []*g2.SiteData{},
-					"Name": "invalid-no-slashes",
-				},
-				GlobalProfile: &g2.AggProfile{},
-				RepoProfile: &g2.ProfileData{},
-				Group: &RepoGroup{},
-				GlobalUseFlag: &AggUseFlag{},
-				License: &AggLicense{},
-				Arch: &AggArch{},
-				Repo: &g2.SiteData{},
-				Manifest: &g2.ManifestEntryData{
+					"Name":      "invalid-no-slashes",
+				}),
+				WithGlobalProfile(&g2.AggProfile{}),
+				WithRepoProfile(&g2.ProfileData{}),
+				WithGroup(&RepoGroup{}),
+				WithGlobalUseFlag(&AggUseFlag{}),
+				WithLicense(&AggLicense{}),
+				WithArch(&AggArch{}),
+				WithRepo(&g2.SiteData{}),
+				WithManifest(&g2.ManifestEntryData{
 					Entry: &g2.ManifestEntry{},
-				},
-				VersionData: &g2.VersionData{
+				}),
+				WithVersionData(&g2.VersionData{
 					Ebuild: &g2.Ebuild{
 						Vars: map[string]string{},
 					},
-				},
-				Eclass: &AggEclass{},
-				UseExpandDesc: &g2.UseExpandDesc{},
-				Breadcrumbs: []g2.Breadcrumb{},
-				GlobalCategory: &AggCategory{},
-			},
+				}),
+				WithEclass(&AggEclass{}),
+				WithUseExpandDesc(&g2.UseExpandDesc{}),
+				WithBreadcrumbs([]g2.Breadcrumb{}),
+				WithGlobalCategory(&AggCategory{}),
+			),
 		},
 	}
 
