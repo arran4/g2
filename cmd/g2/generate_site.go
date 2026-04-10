@@ -1319,22 +1319,27 @@ func generateSite(outDir string, sites []*g2.SiteData, recentDuration time.Durat
 	}
 
 	// Render Phases
+	log.Printf("[PHASE] Rendering global pages...")
 	if err := generateGlobalPages(outDir, tmpl, sites, data, title, version, recentDurationStr, genInfo); err != nil {
 		return err
 	}
 
+	log.Printf("[PHASE] Rendering category pages...")
 	if err := generateCategoryPages(outDir, tmpl, data, title, version, genInfo); err != nil {
 		return err
 	}
 
+	log.Printf("[PHASE] Rendering package pages...")
 	if err := generatePackagePages(outDir, tmpl, data, title, version, genInfo); err != nil {
 		return err
 	}
 
+	log.Printf("[PHASE] Rendering other global pages...")
 	if err := generateOtherGlobalPages(outDir, tmpl, data, title, version, genInfo); err != nil {
 		return err
 	}
 
+	log.Printf("[PHASE] Rendering repository pages...")
 	if err := generateRepoPages(outDir, tmpl, sites, data, title, version, recentDurationStr, genInfo); err != nil {
 		return err
 	}
