@@ -14,6 +14,118 @@ func TestAllTemplatesRender(t *testing.T) {
 
 	templates := tmpl.Templates()
 
+	testCases := []struct {
+		name string
+		data GenericPageContext
+	}{
+		{
+			name: "Basic Dummy Data",
+			data: GenericPageContext{
+				GlobalPackage: &AggPackage{},
+				RepoPackage: &g2.PackageData{
+					ReverseVirtuals: []string{"category/package", "invalid", "x/y"},
+					Equivalents: []string{"category/package", "invalid", "x/y"},
+				},
+				Project: &AggProject{Project: &g2.Project{}},
+				RepoCategory: &g2.CategoryData{},
+				Category: map[string]interface{}{},
+				GlobalProfile: &g2.AggProfile{},
+				RepoProfile: &g2.ProfileData{},
+				Group: &RepoGroup{},
+				GlobalUseFlag: &AggUseFlag{},
+				License: &AggLicense{},
+				Arch: &AggArch{},
+				Repo: &g2.SiteData{},
+				Manifest: &g2.ManifestEntryData{
+					Entry: &g2.ManifestEntry{},
+				},
+				VersionData: &g2.VersionData{
+					Ebuild: &g2.Ebuild{
+						Vars: map[string]string{},
+					},
+				},
+				Eclass: &AggEclass{},
+				UseExpandDesc: &g2.UseExpandDesc{},
+			},
+		},
+		{
+			name: "Edge Cases",
+			data: GenericPageContext{
+				GlobalPackage: &AggPackage{
+					Name: "invalid-package", // missing slash
+					Category: "invalid",
+				},
+				RepoPackage: &g2.PackageData{
+					ReverseVirtuals: []string{"invalid", "category/package", "foo/bar/baz"}, // invalid reverse virtuals
+					Equivalents: []string{"invalid", "category/package"},
+				},
+				Project: &AggProject{Project: &g2.Project{}},
+				RepoCategory: &g2.CategoryData{},
+				Category: map[string]interface{}{},
+				GlobalProfile: &g2.AggProfile{},
+				RepoProfile: &g2.ProfileData{},
+				Group: &RepoGroup{},
+				GlobalUseFlag: &AggUseFlag{
+					LocalDescs: map[string]string{"invalid": "desc"},
+					MetadataDescs: map[string]string{"invalid": "desc"},
+				},
+				License: &AggLicense{},
+				Arch: &AggArch{},
+				Repo: &g2.SiteData{},
+				Manifest: &g2.ManifestEntryData{
+					Entry: &g2.ManifestEntry{},
+				},
+				VersionData: &g2.VersionData{
+					Ebuild: &g2.Ebuild{
+						Vars: map[string]string{
+							"KEYWORDS": "amd64 ~x86 -* invalid",
+							"INHERITED": "eclass1 eclass2",
+							"LICENSE": "GPL-2",
+						},
+						RawText: "EAPI=8\n",
+					},
+				},
+				Eclass: &AggEclass{},
+				UseExpandDesc: &g2.UseExpandDesc{},
+				Breadcrumbs: []g2.Breadcrumb{
+					{Name: "Home", URL: "/"},
+				},
+			},
+		},
+		{
+			name: "Extreme Edge Cases",
+			data: GenericPageContext{
+				GlobalPackage: &AggPackage{},
+				RepoPackage: &g2.PackageData{},
+				Project: &AggProject{Project: &g2.Project{}},
+				RepoCategory: &g2.CategoryData{},
+				Category: map[string]interface{}{
+					"ReposList": []*g2.SiteData{},
+					"Name": "invalid-no-slashes",
+				},
+				GlobalProfile: &g2.AggProfile{},
+				RepoProfile: &g2.ProfileData{},
+				Group: &RepoGroup{},
+				GlobalUseFlag: &AggUseFlag{},
+				License: &AggLicense{},
+				Arch: &AggArch{},
+				Repo: &g2.SiteData{},
+				Manifest: &g2.ManifestEntryData{
+					Entry: &g2.ManifestEntry{},
+				},
+				VersionData: &g2.VersionData{
+					Ebuild: &g2.Ebuild{
+						Vars: map[string]string{},
+					},
+				},
+				Eclass: &AggEclass{},
+				UseExpandDesc: &g2.UseExpandDesc{},
+				Breadcrumbs: []g2.Breadcrumb{},
+				GlobalCategory: &AggCategory{},
+			},
+		},
+	}
+
 	for _, tpl := range templates {
 		name := tpl.Name()
 		if name == "layout_header.html" || name == "layout_footer.html" || name == "" {
@@ -22,41 +134,14 @@ func TestAllTemplatesRender(t *testing.T) {
 		// we skip layout files, test only views
 		// to find what's wrong with them
 
-		t.Run(name, func(t *testing.T) {
-			data := GenericPageContext{}
-			// populate it with some dummy data to avoid nil pointer derefs
-			data.GlobalPackage = &AggPackage{}
-			data.RepoPackage = &g2.PackageData{
-				ReverseVirtuals: []string{"category/package", "invalid", "x/y"},
-				Equivalents: []string{"category/package", "invalid", "x/y"},
-			}
-			data.Project = &AggProject{Project: &g2.Project{}}
-			data.RepoCategory = &g2.CategoryData{}
-			data.Category = map[string]interface{}{}
-			data.GlobalProfile = &g2.AggProfile{}
-			data.RepoProfile = &g2.ProfileData{}
-			data.Group = &RepoGroup{}
-			data.GlobalUseFlag = &AggUseFlag{}
-			data.License = &AggLicense{}
-			data.Arch = &AggArch{}
-			data.Repo = &g2.SiteData{}
-			data.Manifest = &g2.ManifestEntryData{
-				Entry: &g2.ManifestEntry{},
-			}
-			data.VersionData = &g2.VersionData{
-				Ebuild: &g2.Ebuild{
-					Vars: map[string]string{},
-				},
-			}
-			data.Eclass = &AggEclass{}
-			data.UseExpandDesc = &g2.UseExpandDesc{}
-
-			var buf bytes.Buffer
-			err := tpl.Execute(&buf, data)
-			if err != nil {
-				t.Logf("template %s failed to render: %v", name, err)
-				t.Fail()
-			}
-		})
+		for _, tc := range testCases {
+			t.Run(name+"/"+tc.name, func(t *testing.T) {
+				var buf bytes.Buffer
+				err := tpl.Execute(&buf, tc.data)
+				if err != nil {
+					t.Errorf("template %s failed to render with %s: %v", name, tc.name, err)
+				}
+			})
+		}
 	}
 }
