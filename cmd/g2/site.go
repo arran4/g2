@@ -1795,8 +1795,6 @@ func prepareAggregatedData(sites []*g2.SiteData) *AggregatedData {
 }
 
 func renderPage(path string, tmpl *template.Template, name string, data interface{}) error {
-	log.Printf("Rendering page %s using template %s", path, name)
-
 	f, err := os.Create(path)
 	if err != nil {
 		return fmt.Errorf("creating file %s: %w", path, err)
