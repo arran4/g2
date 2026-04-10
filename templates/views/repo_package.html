@@ -35,12 +35,12 @@
 <div class="alert alert-info">
     <strong>Notice:</strong> This package is in a virtual group:
     {{range $index, $virtual := .RepoPackage.ReverseVirtuals}}{{if $index}}, {{end}}
-    <a href="{{$.BaseURL}}packages/{{index (split $virtual "/") 0}}/{{index (split $virtual "/") 1}}/">{{$virtual}}</a>{{end}}
+    {{packageLink $.BaseURL $virtual}}{{end}}
     {{if gt (len .RepoPackage.Equivalents) 0}}
     <br/>
     Equivalents:
     {{range $index, $eq := .RepoPackage.Equivalents}}{{if $index}}, {{end}}
-    <a href="{{$.BaseURL}}packages/{{index (split $eq "/") 0}}/{{index (split $eq "/") 1}}/">{{$eq}}</a>{{end}}
+    {{packageLink $.BaseURL $eq}}{{end}}
     {{end}}
 </div>
 {{end}}
