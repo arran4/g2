@@ -2413,3 +2413,18 @@ func (e *AggEclass) IsDefinedLocally(repoName string) bool {
 	}
 	return false
 }
+
+func (a *AggPackage) GetVersionsInRepo(repoName string) []g2.VersionData {
+	if site, ok := a.Repos[repoName]; ok {
+		for _, cat := range site.Categories {
+			if cat.Name == a.Category {
+				for _, pkg := range cat.Packages {
+					if pkg.Name == a.Name {
+						return pkg.Versions
+					}
+				}
+			}
+		}
+	}
+	return nil
+}

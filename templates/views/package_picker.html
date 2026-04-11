@@ -27,10 +27,8 @@
                 <td><a href="{{$baseURL}}repos/{{$repoName}}/categories/{{$catName}}/packages/{{$pkgName}}/" class="fw-bold">{{$repoName}}</a></td>
                 <td>
                     <ul class="list-unstyled mb-0">
-                    {{range $globalPkg.Versions}}
-                        {{if eq .RepoName $repoName}}
-                            <li>{{.VersionData.Version}}</li>
-                        {{end}}
+                    {{range ($globalPkg.GetVersionsInRepo $repoName)}}
+                        <li>{{.Version}}</li>
                     {{end}}
                     </ul>
                 </td>
