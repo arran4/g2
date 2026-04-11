@@ -17,37 +17,37 @@ import (
 
 type SearchDocument struct {
 	ID              int      `json:"id"`
-	Overlay         string   `json:"overlay"`
-	Category        string   `json:"category"`
-	Package         string   `json:"package"`
-	FullName        string   `json:"full_name"`
-	Version         string   `json:"version"`
-	VersionSortKey  string   `json:"version_sort_key"`
-	Description     string   `json:"description"`
-	Urls            []string `json:"urls"`
-	Licenses        []string `json:"licenses"`
-	EAPI            string   `json:"eapi"`
-	Slot            string   `json:"slot"`
-	Inherits        []string `json:"inherits"`
-	Uses            []string `json:"uses"`
-	UseDescriptions []string `json:"use_descriptions"`
-	Keywords        []string `json:"keywords"`
-	Arches          []string `json:"arches"`
-	Mask            string   `json:"mask"` // "none", "soft", "hard"
-	Depends         []string `json:"depends"`
-	Rdepends        []string `json:"rdepends"`
-	Bdepends        []string `json:"bdepends"`
-	Pdepends        []string `json:"pdepends"`
-	DependedBy      []string `json:"depended_by"`
-	RdependedBy     []string `json:"rdepended_by"`
-	RawDepends      string   `json:"raw_depends"`
-	RawRdepends     string   `json:"raw_rdepends"`
-	RawBdepends     string   `json:"raw_bdepends"`
-	RawPdepends     string   `json:"raw_pdepends"`
-	RawRequiredUse  string   `json:"raw_required_use"`
-	ManifestFiles   []string `json:"manifest_files"`
-	SearchText      string   `json:"search_text"`
-	PageURL         string   `json:"page_url"`
+	Overlay         string   `json:"overlay,omitempty"`
+	Category        string   `json:"category,omitempty"`
+	Package         string   `json:"package,omitempty"`
+	FullName        string   `json:"full_name,omitempty"`
+	Version         string   `json:"version,omitempty"`
+	VersionSortKey  string   `json:"version_sort_key,omitempty"`
+	Description     string   `json:"description,omitempty"`
+	Urls            []string `json:"urls,omitempty"`
+	Licenses        []string `json:"licenses,omitempty"`
+	EAPI            string   `json:"eapi,omitempty"`
+	Slot            string   `json:"slot,omitempty"`
+	Inherits        []string `json:"inherits,omitempty"`
+	Uses            []string `json:"uses,omitempty"`
+	UseDescriptions []string `json:"use_descriptions,omitempty"`
+	Keywords        []string `json:"keywords,omitempty"`
+	Arches          []string `json:"arches,omitempty"`
+	Mask            string   `json:"mask,omitempty"` // "none", "soft", "hard"
+	Depends         []string `json:"depends,omitempty"`
+	Rdepends        []string `json:"rdepends,omitempty"`
+	Bdepends        []string `json:"bdepends,omitempty"`
+	Pdepends        []string `json:"pdepends,omitempty"`
+	DependedBy      []string `json:"depended_by,omitempty"`
+	RdependedBy     []string `json:"rdepended_by,omitempty"`
+	RawDepends      string   `json:"raw_depends,omitempty"`
+	RawRdepends     string   `json:"raw_rdepends,omitempty"`
+	RawBdepends     string   `json:"raw_bdepends,omitempty"`
+	RawPdepends     string   `json:"raw_pdepends,omitempty"`
+	RawRequiredUse  string   `json:"raw_required_use,omitempty"`
+	ManifestFiles   []string `json:"manifest_files,omitempty"`
+	SearchText      string   `json:"search_text,omitempty"`
+	PageURL         string   `json:"page_url,omitempty"`
 }
 
 type SearchManifest struct {
@@ -249,8 +249,8 @@ func generateSearchData(outDir, outZip string, sites []*g2.SiteData, maxChunkSiz
 						RawBdepends:     rawBdepends,
 						RawPdepends:     rawPdepends,
 						RawRequiredUse:  rawRequiredUse,
-						DependedBy:      []string{},
-						RdependedBy:     []string{},
+						DependedBy:      nil,
+						RdependedBy:     nil,
 						ManifestFiles:   manifestFiles,
 						SearchText:      searchText,
 						PageURL:         fmt.Sprintf("../repos/%s/categories/%s/packages/%s/ebuild/%s/index.html", site.RepoName, cat.Name, pkg.Name, verStr),
@@ -430,7 +430,7 @@ func generateSearchIndex(outDir string, sites []*g2.SiteData) error {
 
 func deduplicateStrings(s []string) []string {
 	if len(s) == 0 {
-		return []string{}
+		return nil
 	}
 	seen := make(map[string]bool)
 	var res []string
