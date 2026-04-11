@@ -35,7 +35,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         await engine.init();
 
-        const results = engine.search(query);
+        // `engine.search` is now async
+        const results = await engine.search(query);
 
         resultsCount.textContent = `Found ${results.length} results.`;
 

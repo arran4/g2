@@ -10,34 +10,32 @@ class SearchEngine {
         try {
             const res = await fetch('data/manifest.json');
             this.manifest = await res.json();
-
-            for (const file of this.manifest.data_files) {
-                const dataRes = await fetch(`data/${file}`);
-                const data = await dataRes.json();
-                this.documents = this.documents.concat(data);
-            }
+            // Do not preload all documents; they will be fetched on demand.
             this.loaded = true;
         } catch (e) {
-            console.error("Failed to load search index", e);
+            console.error("Failed to load search index manifest", e);
         }
     }
 
-    search(query) {
+    async search(query) {
         if (!query.trim()) return [];
         const parser = new SearchParser(query);
         const ast = parser.parse();
 
-        // Match against all documents
-        const results = this.documents.filter(doc => this.matchDoc(doc, ast));
+        const allDocIDs = await this.evaluateAst(ast);
+        if (!allDocIDs || allDocIDs.size === 0) return [];
+
+        const results = await this.fetchDocsByIDs(allDocIDs);
+
+        // Filter sequence matches if any (since index only handles terms)
+        const filteredResults = results.filter(doc => this.matchDoc(doc, ast));
 
         const terms = this.getTerms(ast);
-        results.forEach(doc => {
+        filteredResults.forEach(doc => {
             doc._score = this.scoreDoc(doc, terms);
         });
 
-        // Rank results: score descending, then by full name alphabetical,
-        // then by version string descending.
-        results.sort((a, b) => {
+        filteredResults.sort((a, b) => {
             if (a._score !== b._score) {
                 return b._score - a._score;
             }
@@ -47,7 +45,173 @@ class SearchEngine {
             return (b.version_sort_key || b.version).localeCompare(a.version_sort_key || a.version);
         });
 
-        return results;
+        return filteredResults;
+    }
+
+
+    async fetchDocsByIDs(docIDs) {
+        // Find which batch files we need to load
+        // docs-0.json, docs-1.json...
+        // We do not have a direct id -> batch mapping without fetching all batches if they are not uniform,
+        // but earlier we updated batch generation. Wait, the manifest lists data_files.
+        // Actually, since we didn't output a strict ID range in manifest, we can just fetch all data_files if we really have to,
+        // but that defeats the purpose. Oh, wait! The user asked: "maintain a separate set of document detail files (e.g., docs/{id}.json or batched doc files) so the client can retrieve the full SearchDocument payload only for the IDs that match the query".
+        // With docs-0.json containing variable IDs, we would need an ID map.
+        // Let's implement fetchDocsByIDs to fetch all batches that could contain the IDs.
+        // Alternatively, if we just fetch all batches for now (or a cache), we should probably index them.
+        // Actually, let's keep track of loaded documents.
+        let docsToReturn = [];
+        let missingBatchFiles = new Set(this.manifest.data_files); // In a real app we'd map ID to file.
+        // To be efficient, we can load batch files one by one until we found all our docs.
+
+        // Let's just load them in parallel for now, but cache them
+        if (!this._docCache) {
+            this._docCache = new Map();
+            this._loadedBatches = new Set();
+        }
+
+        // Return docs from cache
+        let missingIds = new Set(docIDs);
+        for (const id of missingIds) {
+            if (this._docCache.has(id)) {
+                docsToReturn.push(this._docCache.get(id));
+                missingIds.delete(id);
+            }
+        }
+
+        if (missingIds.size > 0) {
+            // Fetch individual doc files with controlled concurrency
+            const idArray = Array.from(missingIds);
+            const batchSize = 10;
+            for (let i = 0; i < idArray.length; i += batchSize) {
+                const batch = idArray.slice(i, i + batchSize);
+                const promises = batch.map(id =>
+                    fetch(`data/docs/${id}.json`)
+                        .then(r => r.json())
+                        .then(data => {
+                            this._docCache.set(id, data);
+                            docsToReturn.push(data);
+                        })
+                        .catch(e => console.error("Error fetching doc", id, e))
+                );
+                await Promise.all(promises);
+            }
+        }
+        return docsToReturn;
+    }
+
+    getBucket(token) {
+        let val = token;
+        const colonIdx = token.indexOf(":");
+        if (colonIdx !== -1) {
+            val = token.substring(colonIdx + 1);
+        }
+        val = val.toLowerCase();
+        let cleaned = "";
+        for (let i = 0; i < val.length; i++) {
+            const c = val[i];
+            if ((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9')) {
+                cleaned += c;
+            }
+        }
+        if (cleaned.length === 0) return "_";
+        if (cleaned.length === 1) return cleaned + "_";
+        return cleaned.substring(0, 2);
+    }
+
+    async fetchIndexForTerm(term) {
+        if (!term) return new Set();
+        term = term.toLowerCase();
+        const bucket = this.getBucket(term);
+        if (!this._indexCache) this._indexCache = new Map();
+        if (this._indexCache.has(bucket)) {
+            const map = this._indexCache.get(bucket);
+            return new Set(map[term] || []);
+        }
+
+        const p1 = bucket[0];
+        const p2 = bucket.length > 1 ? bucket[1] : "_";
+        try {
+            const res = await fetch(`data/index/${p1}/${p2}/${bucket}.json`);
+            if (!res.ok) return new Set();
+            const map = await res.json();
+            this._indexCache.set(bucket, map);
+            return new Set(map[term] || []);
+        } catch (e) {
+            return new Set();
+        }
+    }
+
+    async evaluateAst(ast) {
+        if (!ast) return new Set();
+
+        if (ast.type === 'OR') {
+            const left = await this.evaluateAst(ast.left);
+            const right = await this.evaluateAst(ast.right);
+            // OR with a NOT doesn't make sense without a universe, so we ignore it if it's a NOT.
+            if (left._isNot || right._isNot) {
+                // Approximate: just return the positive side
+                if (!left._isNot) return left;
+                if (!right._isNot) return right;
+                return new Set();
+            }
+            return new Set([...left, ...right]);
+        }
+
+        if (ast.type === 'AND') {
+            const left = await this.evaluateAst(ast.left);
+            const right = await this.evaluateAst(ast.right);
+
+            if (left._isNot && right._isNot) return new Set(); // NOT AND NOT requires universe
+
+            if (right._isNot) {
+                return new Set([...left].filter(x => !right._childSet.has(x)));
+            }
+            if (left._isNot) {
+                return new Set([...right].filter(x => !left._childSet.has(x)));
+            }
+
+            if (left.size === 0) return new Set(); // Short circuit
+            return new Set([...left].filter(x => right.has(x)));
+        }
+
+        if (ast.type === 'NOT') {
+            // Returning a negated set isn't possible directly with pure Set math unless we have a universe.
+            // But we can mark it as a negation.
+            // We can do this by wrapping the result:
+            const childSet = await this.evaluateAst(ast.expr);
+            const res = new Set();
+            res._isNot = true;
+            res._childSet = childSet;
+            return res;
+        }
+
+        if (ast.type === 'GROUP') {
+            return await this.evaluateAst(ast.expr);
+        }
+
+        if (ast.type === 'TERM') {
+            return await this.fetchIndexForTerm(ast.value);
+        }
+
+        if (ast.type === 'FIELD') {
+            return await this.fetchIndexForTerm(`${ast.field}:${ast.value}`);
+        }
+
+        if (ast.type === 'SEQUENCE') {
+            // For sequences, fetch index for all words in sequence, AND them.
+            const words = ast.value.toLowerCase().trim().split(/\s+/);
+            if (words.length === 0) return new Set();
+            let currentSet = await this.fetchIndexForTerm(words[0]);
+            for (let i = 1; i < words.length; i++) {
+                if (currentSet.size === 0) break;
+                const wordSet = await this.fetchIndexForTerm(words[i]);
+                currentSet = new Set([...currentSet].filter(x => wordSet.has(x)));
+            }
+            return currentSet;
+        }
+
+        return new Set();
     }
 
     getTerms(ast) {

@@ -91,27 +91,24 @@ func TestGenerateSearchIndex(t *testing.T) {
 		t.Errorf("Expected 1 document, got %d", manifest.DocumentCount)
 	}
 
-	if len(manifest.DataFiles) != 1 {
-		t.Fatalf("Expected 1 data file, got %d", len(manifest.DataFiles))
-	}
-
-	// Verify docs
-	docsPath := filepath.Join(dataDir, manifest.DataFiles[0])
+	// Verify docs (ID should be 1)
+	docsPath := filepath.Join(dataDir, "docs", "1.json")
 	dBytes, err := os.ReadFile(docsPath)
 	if err != nil {
 		t.Fatalf("Failed to read docs: %v", err)
 	}
 
-	var docs []SearchDocument
-	if err := json.Unmarshal(dBytes, &docs); err != nil {
+	var doc SearchDocument
+	if err := json.Unmarshal(dBytes, &doc); err != nil {
 		t.Fatalf("Failed to unmarshal docs: %v", err)
 	}
+	var docs = []SearchDocument{doc}
 
 	if len(docs) != 1 {
 		t.Fatalf("Expected 1 doc in file, got %d", len(docs))
 	}
 
-	doc := docs[0]
+	doc = docs[0]
 	if doc.FullName != "app-test/test-pkg" {
 		t.Errorf("Expected FullName app-test/test-pkg, got %s", doc.FullName)
 	}
