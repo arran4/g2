@@ -1346,33 +1346,37 @@ func aggregateUseExpandDescs(sites []*g2.SiteData) map[string]*g2.UseExpandDesc 
 
 func aggregateProjects(sites []*g2.SiteData) map[string]*AggProject {
 	aggProjects := make(map[string]*AggProject)
+
+	// First pass: collect projects and count occurrences by email across distinct repos
+	emailRepoCount := make(map[string]map[string]bool)
+	for _, site := range sites {
+		if site.Projects != nil {
+			for i := range site.Projects.Projects {
+				proj := &site.Projects.Projects[i]
+				if emailRepoCount[proj.Email] == nil {
+					emailRepoCount[proj.Email] = make(map[string]bool)
+				}
+				emailRepoCount[proj.Email][site.RepoName] = true
+			}
+		}
+	}
+
+	// Second pass: construct keys correctly
 	for _, site := range sites {
 		if site.Projects != nil {
 			for i := range site.Projects.Projects {
 				proj := &site.Projects.Projects[i]
 				key := proj.Email
-				// If project name is already taken by another repo, append repo name to key
-				if existing, ok := aggProjects[key]; ok && existing.ReposList[0].RepoName != site.RepoName {
-					// Retroactively fix the first one
-					firstRepo := existing.ReposList[0].RepoName
-					firstKey := proj.Email + "-" + firstRepo
-					firstProjCopy := *existing.Project
-					firstProjCopy.Name = firstProjCopy.Name + " (" + firstRepo + ")"
-					firstProjCopy.Email = firstKey
-					existing.Project = &firstProjCopy
-					aggProjects[firstKey] = existing
-					delete(aggProjects, key)
 
-					// Now insert this one
+				// If the same project email appears in more than 1 distinct repo, disambiguate
+				if len(emailRepoCount[proj.Email]) > 1 {
 					key = proj.Email + "-" + site.RepoName
 					projCopy := *proj
 					projCopy.Name = projCopy.Name + " (" + site.RepoName + ")"
 					projCopy.Email = key
 					proj = &projCopy
-				} else if _, ok := aggProjects[key]; ok {
-					// Same repo, different project def? Just skip or append if needed. Usually just skip.
-					continue
 				}
+
 				if _, ok := aggProjects[key]; !ok {
 					aggProjects[key] = &AggProject{Project: proj, ReposList: []*g2.SiteData{site}}
 				}

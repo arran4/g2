@@ -20,20 +20,16 @@
             {{$catName := .GlobalPackage.Category}}
             {{$pkgName := .GlobalPackage.Name}}
             {{$baseURL := .BaseURL}}
+            {{$globalPkg := .GlobalPackage}}
             {{range .GlobalPackage.ReposList}}
+            {{$repoName := .RepoName}}
             <tr>
-                <td><a href="{{$baseURL}}repos/{{.RepoName}}/categories/{{$catName}}/packages/{{$pkgName}}/" class="fw-bold">{{.RepoName}}</a></td>
+                <td><a href="{{$baseURL}}repos/{{$repoName}}/categories/{{$catName}}/packages/{{$pkgName}}/" class="fw-bold">{{$repoName}}</a></td>
                 <td>
                     <ul class="list-unstyled mb-0">
-                    {{range .Categories}}
-                        {{if eq .Name $catName}}
-                            {{range .Packages}}
-                                {{if eq .Name $pkgName}}
-                                    {{range .Versions}}
-                                    <li>{{.Version}}</li>
-                                    {{end}}
-                                {{end}}
-                            {{end}}
+                    {{range $globalPkg.Versions}}
+                        {{if eq .RepoName $repoName}}
+                            <li>{{.VersionData.Version}}</li>
                         {{end}}
                     {{end}}
                     </ul>
