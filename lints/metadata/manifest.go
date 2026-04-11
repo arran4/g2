@@ -113,10 +113,9 @@ func (r *ManifestLintRule) LintWithQA(repoDir string, pkg *g2.PackageData, qa *g
 			if os.IsNotExist(err) {
 				res := lints.LintResult{
 					RuleMetadata: ruleManifestChecks,
-					Message:      fmt.Sprintf("[%s] Manifest entry %s references a missing file: %s", cases.Title(language.English).String(string(lints.SeverityError)), entry.Filename, entry.Filename),
+					Message:      fmt.Sprintf("[%s] Manifest entry %s references a missing file", cases.Title(language.English).String(string(lints.SeverityError)), entry.Filename),
 					Package:      pkg.Category + "/" + pkg.Name,
 				}
-				res.RuleMetadata.Severity = lints.SeverityError
 				results = append(results, res)
 			}
 		}
