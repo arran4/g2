@@ -981,8 +981,9 @@ func (a *AggPackage) ReposList() []*g2.SiteData {
 }
 
 type AggProject struct {
-	Project  *g2.Project
-	Packages []*AggPackage
+	ReposList []*g2.SiteData
+	Project   *g2.Project
+	Packages  []*AggPackage
 }
 
 type AggLicense struct {
@@ -1349,8 +1350,31 @@ func aggregateProjects(sites []*g2.SiteData) map[string]*AggProject {
 		if site.Projects != nil {
 			for i := range site.Projects.Projects {
 				proj := &site.Projects.Projects[i]
-				if _, ok := aggProjects[proj.Email]; !ok {
-					aggProjects[proj.Email] = &AggProject{Project: proj}
+				key := proj.Email
+				// If project name is already taken by another repo, append repo name to key
+				if existing, ok := aggProjects[key]; ok && existing.ReposList[0].RepoName != site.RepoName {
+					// Retroactively fix the first one
+					firstRepo := existing.ReposList[0].RepoName
+					firstKey := proj.Email + "-" + firstRepo
+					firstProjCopy := *existing.Project
+					firstProjCopy.Name = firstProjCopy.Name + " (" + firstRepo + ")"
+					firstProjCopy.Email = firstKey
+					existing.Project = &firstProjCopy
+					aggProjects[firstKey] = existing
+					delete(aggProjects, key)
+
+					// Now insert this one
+					key = proj.Email + "-" + site.RepoName
+					projCopy := *proj
+					projCopy.Name = projCopy.Name + " (" + site.RepoName + ")"
+					projCopy.Email = key
+					proj = &projCopy
+				} else if _, ok := aggProjects[key]; ok {
+					// Same repo, different project def? Just skip or append if needed. Usually just skip.
+					continue
+				}
+				if _, ok := aggProjects[key]; !ok {
+					aggProjects[key] = &AggProject{Project: proj, ReposList: []*g2.SiteData{site}}
 				}
 			}
 		}
@@ -2375,4 +2399,13 @@ func mapToList(m map[string]*g2.SiteData) []*g2.SiteData {
 	}
 	sort.Slice(l, func(i, j int) bool { return l[i].RepoName < l[j].RepoName })
 	return l
+}
+
+func (e *AggEclass) IsDefinedLocally(repoName string) bool {
+	for rn := range e.Repos {
+		if rn == repoName {
+			return true
+		}
+	}
+	return false
 }

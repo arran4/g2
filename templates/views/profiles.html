@@ -1,6 +1,32 @@
 <h2>All Profiles</h2>
-<ul>
-    {{range .GlobalProfiles}}
-    <li><a href="{{.Path}}/">{{.Path}}</a> ({{len .Repos}} repos){{if .IsDesc}} [{{.DescArch}} - {{.DescStat}}]{{end}}</li>
-    {{end}}
-</ul>
+<div class="table-responsive">
+    <table class="table table-striped table-hover datatable">
+        <thead>
+            <tr>
+                <th>Profile Path</th>
+                <th>Details</th>
+                <th>Overlays</th>
+            </tr>
+        </thead>
+        <tbody>
+            {{range .GlobalProfiles}}
+            <tr>
+                <td><a href="{{.Path}}/" class="fw-bold">{{.Path}}</a></td>
+                <td>
+                    {{if .IsDesc}}
+                        <span class="badge bg-info text-dark">{{.DescArch}}</span>
+                        <span class="badge bg-secondary">{{.DescStat}}</span>
+                    {{end}}
+                </td>
+                <td>
+                    <ul class="list-unstyled mb-0">
+                        {{range .Repos}}
+                            <li><a href="{{$.BaseURL}}repos/{{.RepoName}}/">{{.RepoName}}</a></li>
+                        {{end}}
+                    </ul>
+                </td>
+            </tr>
+            {{end}}
+        </tbody>
+    </table>
+</div>
