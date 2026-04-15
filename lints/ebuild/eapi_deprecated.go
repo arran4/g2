@@ -5,8 +5,6 @@ import (
 
 	"github.com/arran4/g2"
 	"github.com/arran4/g2/lints"
-	"golang.org/x/text/cases"
-	"golang.org/x/text/language"
 )
 
 var ruleEAPIDeprecated = lints.RuleMetadata{
