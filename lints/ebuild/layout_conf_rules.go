@@ -61,7 +61,7 @@ func (r *LayoutConfLintRule) LintWithQA(repoDir string, pkg *g2.PackageData, qa 
 			if eapi == dep {
 				res := lints.LintResult{
 					RuleMetadata: ruleLayoutConf,
-					Message:      fmt.Sprintf("[%s] EAPI %s is banned in layout.conf", cases.Title(language.Und, cases.NoLower).String(string(lints.SeverityError)), eapi),
+					Message:      fmt.Sprintf("[%s] EAPI %s is banned in layout.conf", lints.SeverityError, eapi),
 					Package:      pkg.Category + "/" + pkg.Name,
 				}
 				res.RuleMetadata.Severity = lints.SeverityError

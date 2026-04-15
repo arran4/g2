@@ -39,7 +39,7 @@ func (r *ManifestLintRule) LintWithQA(repoDir string, pkg *g2.PackageData, qa *g
 		if len(pkg.Versions) > 0 {
 			res := lints.LintResult{
 				RuleMetadata: ruleManifestChecks,
-				Message:      fmt.Sprintf("[%s] Missing or unparsable Manifest file", cases.Title(language.Und, cases.NoLower).String(string(lints.SeverityError))),
+				Message:      fmt.Sprintf("[%s] Missing or unparsable Manifest file", lints.SeverityError),
 				Package:      pkg.Category + "/" + pkg.Name,
 			}
 			res.RuleMetadata.Severity = lints.SeverityError
