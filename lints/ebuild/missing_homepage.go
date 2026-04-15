@@ -48,14 +48,14 @@ func (r *MissingHomepageLintRule) LintWithQA(repoDir string, pkg *g2.PackageData
 			if len(homepage) == 0 {
 				res := lints.LintResult{
 					RuleMetadata: ruleMissingHomepage,
-					Message:      fmt.Sprintf("[%s] Ebuild %s is missing HOMEPAGE", cases.Title(language.English).String(string(severity)), ver.Version),
+					Message:      fmt.Sprintf("[%s] Ebuild %s is missing HOMEPAGE", cases.Title(language.Und, cases.NoLower).String(string(severity)), ver.Version),
 					Package:      pkg.Category + "/" + pkg.Name,
 				}
 				results = append(results, res)
 			} else if !strings.HasPrefix(homepage, "http") && !strings.HasPrefix(homepage, "ftp") {
 				res := lints.LintResult{
 					RuleMetadata: ruleMissingHomepage,
-					Message:      fmt.Sprintf("[%s] Ebuild %s HOMEPAGE '%s' does not start with http/https/ftp", cases.Title(language.English).String(string(severity)), ver.Version, homepage),
+					Message:      fmt.Sprintf("[%s] Ebuild %s HOMEPAGE '%s' does not start with http/https/ftp", cases.Title(language.Und, cases.NoLower).String(string(severity)), ver.Version, homepage),
 					Package:      pkg.Category + "/" + pkg.Name,
 				}
 				results = append(results, res)

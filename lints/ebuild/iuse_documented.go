@@ -71,7 +71,7 @@ func (r *IUSELintRule) LintWithQA(repoDir string, pkg *g2.PackageData, qa *g2.QA
 						if _, exists := metadataIUSE[flag]; !exists {
 							res := lints.LintResult{
 								RuleMetadata: ruleIUSEDocumented,
-								Message:      fmt.Sprintf("[%s] USE flag '%s' in ebuild %s is not documented in metadata.xml", cases.Title(language.English).String(string(severity)), flag, ver.Version),
+								Message:      fmt.Sprintf("[%s] USE flag '%s' in ebuild %s is not documented in metadata.xml", cases.Title(language.Und, cases.NoLower).String(string(severity)), flag, ver.Version),
 								Package:      pkg.Category + "/" + pkg.Name,
 							}
 							res.RuleMetadata.Severity = severity
