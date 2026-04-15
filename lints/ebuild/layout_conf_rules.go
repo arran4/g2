@@ -61,7 +61,7 @@ func (r *LayoutConfLintRule) LintWithQA(repoDir string, pkg *g2.PackageData, qa 
 			if eapi == dep {
 				res := lints.LintResult{
 					RuleMetadata: ruleLayoutConf,
-					Message:      fmt.Sprintf("[%s] EAPI %s is banned in layout.conf", cases.Title(language.English).String(string(lints.SeverityError)), eapi),
+					Message:      fmt.Sprintf("[%s] EAPI %s is banned in layout.conf", lints.SeverityError, eapi),
 					Package:      pkg.Category + "/" + pkg.Name,
 				}
 				res.RuleMetadata.Severity = lints.SeverityError
@@ -73,7 +73,7 @@ func (r *LayoutConfLintRule) LintWithQA(repoDir string, pkg *g2.PackageData, qa 
 			if eapi == dep {
 				res := lints.LintResult{
 					RuleMetadata: ruleLayoutConf,
-					Message:      fmt.Sprintf("[%s] EAPI %s is deprecated in layout.conf", cases.Title(language.English).String(string(severity)), eapi),
+					Message:      fmt.Sprintf("[%s] EAPI %s is deprecated in layout.conf", cases.Title(language.Und, cases.NoLower).String(string(severity)), eapi),
 					Package:      pkg.Category + "/" + pkg.Name,
 				}
 				res.RuleMetadata.Severity = severity
@@ -94,7 +94,7 @@ func (r *LayoutConfLintRule) LintWithQA(repoDir string, pkg *g2.PackageData, qa 
 				if !allowed {
 					res := lints.LintResult{
 						RuleMetadata: ruleLayoutConf,
-						Message:      fmt.Sprintf("[%s] PROPERTY '%s' is not listed in layout.conf properties-allowed", cases.Title(language.English).String(string(severity)), prop),
+						Message:      fmt.Sprintf("[%s] PROPERTY '%s' is not listed in layout.conf properties-allowed", cases.Title(language.Und, cases.NoLower).String(string(severity)), prop),
 						Package:      pkg.Category + "/" + pkg.Name,
 					}
 					res.RuleMetadata.Severity = severity
@@ -116,7 +116,7 @@ func (r *LayoutConfLintRule) LintWithQA(repoDir string, pkg *g2.PackageData, qa 
 				if !allowed {
 					res := lints.LintResult{
 						RuleMetadata: ruleLayoutConf,
-						Message:      fmt.Sprintf("[%s] RESTRICT '%s' is not listed in layout.conf restrict-allowed", cases.Title(language.English).String(string(severity)), r),
+						Message:      fmt.Sprintf("[%s] RESTRICT '%s' is not listed in layout.conf restrict-allowed", cases.Title(language.Und, cases.NoLower).String(string(severity)), r),
 						Package:      pkg.Category + "/" + pkg.Name,
 					}
 					res.RuleMetadata.Severity = severity

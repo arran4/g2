@@ -51,7 +51,7 @@ func (r *MetadataLintRule) LintWithQA(repoDir string, pkg *g2.PackageData, qa *g
 	if pkg.MetadataError != nil {
 		res := lints.LintResult{
 			RuleMetadata: ruleMetadataMissing,
-			Message:      fmt.Sprintf("[%s] Invalid or missing metadata.xml: %v", cases.Title(language.English).String(string(severity)), pkg.MetadataError),
+			Message:      fmt.Sprintf("[%s] Invalid or missing metadata.xml: %v", cases.Title(language.Und, cases.NoLower).String(string(severity)), pkg.MetadataError),
 			Package:      pkg.Category + "/" + pkg.Name,
 		}
 		res.RuleMetadata.Severity = severity
@@ -59,7 +59,7 @@ func (r *MetadataLintRule) LintWithQA(repoDir string, pkg *g2.PackageData, qa *g
 	} else if pkg.Metadata == nil && len(pkg.Versions) > 0 {
 		res := lints.LintResult{
 			RuleMetadata: ruleMetadataMissing,
-			Message:      fmt.Sprintf("[%s] Missing metadata.xml", cases.Title(language.English).String(string(severity))),
+			Message:      fmt.Sprintf("[%s] Missing metadata.xml", cases.Title(language.Und, cases.NoLower).String(string(severity))),
 			Package:      pkg.Category + "/" + pkg.Name,
 		}
 		res.RuleMetadata.Severity = severity

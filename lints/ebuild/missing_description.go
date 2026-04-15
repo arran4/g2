@@ -43,14 +43,14 @@ func (r *MissingDescriptionLintRule) LintWithQA(repoDir string, pkg *g2.PackageD
 			if len(desc) == 0 {
 				res := lints.LintResult{
 					RuleMetadata: ruleMissingDescription,
-					Message:      fmt.Sprintf("[%s] Ebuild %s is missing DESCRIPTION", cases.Title(language.English).String(string(severity)), ver.Version),
+					Message:      fmt.Sprintf("[%s] Ebuild %s is missing DESCRIPTION", cases.Title(language.Und, cases.NoLower).String(string(severity)), ver.Version),
 					Package:      pkg.Category + "/" + pkg.Name,
 				}
 				results = append(results, res)
 			} else if len(desc) < 10 {
 				res := lints.LintResult{
 					RuleMetadata: ruleMissingDescription,
-					Message:      fmt.Sprintf("[%s] Ebuild %s DESCRIPTION is suspiciously short ('%s')", cases.Title(language.English).String(string(severity)), ver.Version, desc),
+					Message:      fmt.Sprintf("[%s] Ebuild %s DESCRIPTION is suspiciously short ('%s')", cases.Title(language.Und, cases.NoLower).String(string(severity)), ver.Version, desc),
 					Package:      pkg.Category + "/" + pkg.Name,
 				}
 				results = append(results, res)
