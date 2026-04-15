@@ -399,6 +399,14 @@ func TestResolveVariables(t *testing.T) {
 			},
 			want: "NO",
 		},
+		{
+			name: "Bash logical operators are evaluated",
+			text: "[[ $A == \"foo\" ]] && echo YES || echo NO",
+			variables: map[string]string{
+				"A": "foo",
+			},
+			want: "YES",
+		},
 	}
 
 	for _, tt := range tests {
