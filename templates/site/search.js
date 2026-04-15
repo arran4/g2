@@ -61,10 +61,7 @@ class SearchEngine {
         // Alternatively, if we just fetch all batches for now (or a cache), we should probably index them.
         // Actually, let's keep track of loaded documents.
         let docsToReturn = [];
-        let missingBatchFiles = new Set(this.manifest.data_files); // In a real app we'd map ID to file.
-        // To be efficient, we can load batch files one by one until we found all our docs.
 
-        // Let's just load them in parallel for now, but cache them
         if (!this._docCache) {
             this._docCache = new Map();
             this._loadedBatches = new Set();
