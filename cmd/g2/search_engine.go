@@ -4,14 +4,19 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"sync"
 )
 
 type SearchEngine struct {
-	documents []SearchDocument
+	documents   []SearchDocument
+	regexCache  map[string]*regexp.Regexp
+	regexCacheMu sync.RWMutex
 }
 
 func NewSearchEngine() *SearchEngine {
-	return &SearchEngine{}
+	return &SearchEngine{
+		regexCache: make(map[string]*regexp.Regexp),
+	}
 }
 
 func (e *SearchEngine) LoadDocuments(docs []SearchDocument) {
@@ -65,9 +70,35 @@ func (e *SearchEngine) evaluateAST(doc SearchDocument, ast *ASTNode) bool {
 	}
 }
 
+func (e *SearchEngine) matchWildcard(text, pattern string) bool {
+	if !strings.Contains(pattern, "*") && !strings.Contains(pattern, "?") {
+		return strings.Contains(text, pattern)
+	}
+
+	e.regexCacheMu.RLock()
+	re, ok := e.regexCache[pattern]
+	e.regexCacheMu.RUnlock()
+
+	if !ok {
+		regexPattern := regexp.QuoteMeta(pattern)
+		regexPattern = strings.ReplaceAll(regexPattern, "\\*", ".*")
+		regexPattern = strings.ReplaceAll(regexPattern, "\\?", ".")
+		var err error
+		re, err = regexp.Compile(regexPattern)
+		if err != nil {
+			return strings.Contains(text, pattern)
+		}
+		e.regexCacheMu.Lock()
+		e.regexCache[pattern] = re
+		e.regexCacheMu.Unlock()
+	}
+
+	return re.MatchString(text)
+}
+
 func (e *SearchEngine) matchTerm(doc SearchDocument, term string) bool {
 	termLower := strings.ToLower(term)
-	return strings.Contains(doc.SearchText, termLower)
+	return e.matchWildcard(doc.SearchText, termLower)
 }
 
 func (e *SearchEngine) matchField(doc SearchDocument, field string, value string) bool {
@@ -75,40 +106,40 @@ func (e *SearchEngine) matchField(doc SearchDocument, field string, value string
 
 	switch field {
 	case "category":
-		return strings.Contains(strings.ToLower(doc.Category), valLower)
+		return e.matchWildcard(strings.ToLower(doc.Category), valLower)
 	case "package":
-		return strings.Contains(strings.ToLower(doc.Package), valLower)
+		return e.matchWildcard(strings.ToLower(doc.Package), valLower)
 	case "name", "fullname":
-		return strings.Contains(strings.ToLower(doc.FullName), valLower)
+		return e.matchWildcard(strings.ToLower(doc.FullName), valLower)
 	case "desc", "description":
-		return strings.Contains(strings.ToLower(doc.Description), valLower)
+		return e.matchWildcard(strings.ToLower(doc.Description), valLower)
 	case "license":
 		for _, l := range doc.Licenses {
-			if strings.Contains(strings.ToLower(l), valLower) {
+			if e.matchWildcard(strings.ToLower(l), valLower) {
 				return true
 			}
 		}
 		return false
 	case "use":
 		for _, u := range doc.Uses {
-			if strings.Contains(strings.ToLower(u), valLower) {
+			if e.matchWildcard(strings.ToLower(u), valLower) {
 				return true
 			}
 		}
 		for _, u := range doc.UseDescriptions {
-			if strings.Contains(strings.ToLower(u), valLower) {
+			if e.matchWildcard(strings.ToLower(u), valLower) {
 				return true
 			}
 		}
 		return false
 	case "keyword", "keywords", "arch", "arches":
 		for _, k := range doc.Keywords {
-			if strings.Contains(strings.ToLower(k), valLower) {
+			if e.matchWildcard(strings.ToLower(k), valLower) {
 				return true
 			}
 		}
 		for _, a := range doc.Arches {
-			if strings.Contains(strings.ToLower(a), valLower) {
+			if e.matchWildcard(strings.ToLower(a), valLower) {
 				return true
 			}
 		}
@@ -117,18 +148,18 @@ func (e *SearchEngine) matchField(doc SearchDocument, field string, value string
 		return strings.ToLower(doc.Mask) == valLower
 	case "depend", "depends", "rdepend", "rdepends":
 		for _, d := range doc.Depends {
-			if strings.Contains(strings.ToLower(d), valLower) {
+			if e.matchWildcard(strings.ToLower(d), valLower) {
 				return true
 			}
 		}
 		for _, d := range doc.Rdepends {
-			if strings.Contains(strings.ToLower(d), valLower) {
+			if e.matchWildcard(strings.ToLower(d), valLower) {
 				return true
 			}
 		}
 		return false
 	case "overlay":
-		return strings.Contains(strings.ToLower(doc.Overlay), valLower)
+		return e.matchWildcard(strings.ToLower(doc.Overlay), valLower)
 	case "version":
 		return e.matchVersion(doc, value)
 	default:
