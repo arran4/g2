@@ -950,7 +950,7 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 							}
 
 							var filteredManifest []ManifestEntryData
-							for _, md := range pkgData.ManifestData {
+							for _, md := range pkgData.GetManifestData(site.ThirdPartyMirrors) {
 								for _, v := range md.Versions {
 									if v == versionData.Version || (versionData.Ebuild != nil && versionData.Ebuild.Vars != nil && v == versionData.Ebuild.Vars["PV"]) {
 										filteredManifest = append(filteredManifest, md)
@@ -985,7 +985,7 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 							manifestName := strings.TrimSuffix(parts[7], ".html")
 
 							var targetMD *ManifestEntryData
-							for _, md := range pkgData.ManifestData {
+							for _, md := range pkgData.GetManifestData(site.ThirdPartyMirrors) {
 								if md.Entry.Filename == manifestName {
 									targetMD = &md
 									break

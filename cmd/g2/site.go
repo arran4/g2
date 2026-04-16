@@ -116,7 +116,6 @@ type PackageData struct {
 	Metadata              *g2.PkgMetadata
 	MetadataError         error
 	Manifest              *g2.Manifest
-	ManifestData          []ManifestEntryData
 	Files                 []FileData
 	HighestStableVersion  template.HTML
 	HighestTestingVersion template.HTML
@@ -1218,7 +1217,6 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool, r
 			manifest, err := parseManifestFromFS(sysFS, filepath.ToSlash(manifestPath))
 			if err == nil {
 				pkgData.Manifest = manifest
-				pkgData.ManifestData = buildManifestData(manifest, pkgData.Versions, site.ThirdPartyMirrors)
 			}
 
 			// Read files/ directory
@@ -1518,6 +1516,13 @@ func extractDepNodes(nodes []g2.DepNode, depsMap map[string]bool) {
 			extractDepNodes(n.Children, depsMap)
 		}
 	}
+}
+
+func (p *PackageData) GetManifestData(thirdPartyMirrors map[string][]string) []ManifestEntryData {
+	if p.Manifest == nil {
+		return nil
+	}
+	return buildManifestData(p.Manifest, p.Versions, thirdPartyMirrors)
 }
 
 func buildManifestData(manifest *g2.Manifest, versions []VersionData, thirdPartyMirrors map[string][]string) []ManifestEntryData {
@@ -3737,7 +3742,8 @@ func generateRepoPackagesPages(repoDir string, tmpl *template.Template, site *Si
 			return fmt.Errorf("rendering page: %w", err)
 		}
 
-		for _, md := range pkg.ManifestData {
+		manifestData := pkg.GetManifestData(site.ThirdPartyMirrors)
+		for _, md := range manifestData {
 			if len(md.Versions) > 0 {
 				mdDir := filepath.Join(pkgDir, "manifest", md.Entry.Filename)
 				if err := os.MkdirAll(mdDir, 0755); err != nil {
@@ -3771,7 +3777,7 @@ func generateRepoPackagesPages(repoDir string, tmpl *template.Template, site *Si
 
 			var filteredManifest []ManifestEntryData
 			if pkg.Manifest != nil {
-				for _, md := range pkg.ManifestData {
+				for _, md := range manifestData {
 					for _, mv := range md.Versions {
 						if mv == v.Version || mv == versionStr {
 							filteredManifest = append(filteredManifest, md)

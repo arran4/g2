@@ -214,7 +214,7 @@ func generateSearchData(outDir, outZip string, sites []*SiteData, maxChunkSizeOv
 					searchText := strings.ToLower(fmt.Sprintf("%s %s %s %s %s", fullName, desc, strings.Join(uses, " "), strings.Join(urls, " "), strings.Join(useDescriptions, " ")))
 
 					var manifestFiles []string
-					for _, m := range pkg.ManifestData {
+					for _, m := range pkg.GetManifestData(site.ThirdPartyMirrors) {
 						for _, mv := range m.Versions {
 							if mv == ver.Version || mv == verStr {
 								manifestFiles = append(manifestFiles, m.Entry.Filename)

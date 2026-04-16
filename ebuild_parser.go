@@ -348,7 +348,7 @@ func (p *EbuildParser) consumeIdent() (string, error) {
 		r, err := p.peek()
 		if err != nil {
 			if errors.Is(err, io.EOF) && sb.Len() > 0 {
-				return sb.String(), nil
+				return InternString(sb.String()), nil
 			}
 			return "", err
 		}
@@ -359,7 +359,7 @@ func (p *EbuildParser) consumeIdent() (string, error) {
 			break
 		}
 	}
-	return sb.String(), nil
+	return InternString(sb.String()), nil
 }
 
 func (p *EbuildParser) consumeValue() (string, error) {
@@ -393,7 +393,7 @@ func (p *EbuildParser) consumeValue() (string, error) {
 	for {
 		r, err := p.peek()
 		if err != nil {
-			return sb.String(), nil
+			return InternString(sb.String()), nil
 		}
 		if unicode.IsSpace(r) || r == '#' {
 			break
@@ -401,7 +401,7 @@ func (p *EbuildParser) consumeValue() (string, error) {
 		sb.WriteRune(r)
 		_, _ = p.nextRune()
 	}
-	return sb.String(), nil
+	return InternString(sb.String()), nil
 }
 
 func (p *EbuildParser) consumeQuotedString() (string, error) {
@@ -428,7 +428,7 @@ func (p *EbuildParser) consumeQuotedString() (string, error) {
 		}
 		sb.WriteRune(r)
 	}
-	return sb.String(), nil
+	return InternString(sb.String()), nil
 }
 
 func (p *EbuildParser) consumeArray() (string, error) {
@@ -487,7 +487,7 @@ func (p *EbuildParser) consumeArray() (string, error) {
 		}
 		sb.WriteRune(r)
 	}
-	return sb.String(), nil
+	return InternString(sb.String()), nil
 }
 
 func (p *EbuildParser) consumeCondition() error {
@@ -540,7 +540,7 @@ func (p *EbuildParser) consumeFunctionBody() (string, error) {
 		if err != nil {
 			// If we hit EOF, it's just the end of the file. Ignore unterminated function for best-effort parsing.
 			if errors.Is(err, io.EOF) {
-				return sb.String(), nil
+				return InternString(sb.String()), nil
 			}
 			return "", fmt.Errorf("%w: unterminated function %v", ErrSyntaxError, err)
 		}
@@ -601,7 +601,7 @@ func (p *EbuildParser) consumeFunctionBody() (string, error) {
 			}
 		}
 	}
-	return sb.String(), nil
+	return InternString(sb.String()), nil
 }
 
 func (p *EbuildParser) skipLine() {

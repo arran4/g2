@@ -229,7 +229,7 @@
 </div>
 {{end}}
 
-{{if .RepoPackage.ManifestData}}
+{{if (.RepoPackage.GetManifestData .Repo.ThirdPartyMirrors)}}
 <div class="metadata-section">
     <h3>Manifest</h3>
     <table>
@@ -239,7 +239,7 @@
             <th>Size</th>
             <th>Versions</th>
         </tr>
-        {{range .RepoPackage.ManifestData}}
+        {{range (.RepoPackage.GetManifestData .Repo.ThirdPartyMirrors)}}
         {{if .Versions}}
         <tr>
             <td>{{.Entry.Type}}</td>
@@ -260,7 +260,7 @@
                 <th>File</th>
                 <th>Size</th>
             </tr>
-            {{range .RepoPackage.ManifestData}}
+            {{range (.RepoPackage.GetManifestData .Repo.ThirdPartyMirrors)}}
             {{if not .Versions}}
             <tr>
                 <td>{{.Entry.Type}}</td>

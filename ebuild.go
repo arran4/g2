@@ -211,7 +211,7 @@ func (e *Ebuild) String() string {
 // ParseEbuild parses an ebuild file with the specified mode.
 func ParseEbuild(fsys fs.FS, path string, mode ParsingMode) (*Ebuild, error) {
 	e := &Ebuild{
-		Path: path,
+		Path: InternString(path),
 		Vars: make(map[string]string),
 		Mode: mode,
 	}
@@ -219,7 +219,7 @@ func ParseEbuild(fsys fs.FS, path string, mode ParsingMode) (*Ebuild, error) {
 	// Always parse metadata from filename
 	vars := ParseEbuildVariables(path)
 	for k, v := range vars {
-		e.Vars[k] = v
+		e.Vars[InternString(k)] = InternString(v)
 	}
 
 	rawTextGen := func() (*string, error) {
@@ -288,12 +288,12 @@ func ParseEbuild(fsys fs.FS, path string, mode ParsingMode) (*Ebuild, error) {
 		// or at least resolve using the whole parsedVars map.
 		// Add parsed vars to e.Vars
 		for k, v := range parsedEbuild.Variables {
-			e.Vars[k] = v
+			e.Vars[InternString(k)] = InternString(v)
 		}
 
 		funcs := make(map[string]AST)
 		for k, v := range parsedEbuild.Functions {
-			funcs[k] = v
+			funcs[InternString(k)] = v
 		}
 
 		e.FunctionsContent = utils.NewContent[map[string]AST](
@@ -311,7 +311,7 @@ func ParseEbuild(fsys fs.FS, path string, mode ParsingMode) (*Ebuild, error) {
 			for k, v := range e.Vars {
 				resolved := ResolveVariables(v, e.Vars)
 				if resolved != v {
-					e.Vars[k] = resolved
+					e.Vars[k] = InternString(resolved)
 					changed = true
 				}
 			}
@@ -448,7 +448,7 @@ func parseDepTokens(tokens []string) ([]DepNode, int) {
 				nodes = append(nodes, DepAnyOf{Children: children})
 				i += advance + 1 // +1 for '('
 			} else {
-				nodes = append(nodes, DepString(t))
+				nodes = append(nodes, DepString(InternString(t)))
 			}
 		} else if strings.HasSuffix(t, "?") {
 			flag := strings.TrimSuffix(t, "?")
@@ -460,13 +460,13 @@ func parseDepTokens(tokens []string) ([]DepNode, int) {
 			if i+1 < len(tokens) && tokens[i+1] == "(" {
 				children, advance := parseDepTokens(tokens[i+2:])
 				nodes = append(nodes, DepUseConditional{
-					Flag:      flag,
+					Flag:      InternString(flag),
 					IsNegated: isNegated,
 					Children:  children,
 				})
 				i += advance + 1
 			} else {
-				nodes = append(nodes, DepString(t))
+				nodes = append(nodes, DepString(InternString(t)))
 			}
 		} else if t == "(" {
 			children, advance := parseDepTokens(tokens[i+1:])
@@ -475,7 +475,7 @@ func parseDepTokens(tokens []string) ([]DepNode, int) {
 		} else if t == ")" {
 			return nodes, i + 1
 		} else {
-			nodes = append(nodes, DepString(t))
+			nodes = append(nodes, DepString(InternString(t)))
 		}
 	}
 	return nodes, len(tokens)
@@ -764,8 +764,8 @@ func ExtractURIs(content string, variables map[string]string) ([]URIEntry, error
 				i += 1
 			}
 
-			url = ResolveVariables(url, variables)
-			filename = ResolveVariables(filename, variables)
+			url = InternString(ResolveVariables(url, variables))
+			filename = InternString(ResolveVariables(filename, variables))
 
 			uris = append(uris, URIEntry{URL: url, Filename: filename})
 		} else {
