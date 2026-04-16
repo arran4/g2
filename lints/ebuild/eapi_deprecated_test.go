@@ -12,9 +12,9 @@ func TestEAPIDeprecatedLintRule(t *testing.T) {
 	rule := &ebuild.EAPIDeprecatedLintRule{}
 
 	tests := []struct {
-		name     string
-		eapi     string
-		hasWarn  bool
+		name    string
+		eapi    string
+		hasWarn bool
 	}{
 		{"EAPI 5", "5", true},
 		{"EAPI 0", "0", true},

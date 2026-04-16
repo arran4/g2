@@ -34,18 +34,18 @@ RDEPEND="${DEPEND}"
 }
 
 func BenchmarkResolveVariables(b *testing.B) {
-    vars := map[string]string{
-        "A": "B",
-        "C": "D",
-        "E": "F",
-        "P": "pkg-1.0",
-        "PN": "pkg",
-        "PV": "1.0",
-    }
-    b.ResetTimer()
-    for i := 0; i < b.N; i++ {
-        ResolveVariables("This is a test with $P and ${PN} variables", vars)
-    }
+	vars := map[string]string{
+		"A":  "B",
+		"C":  "D",
+		"E":  "F",
+		"P":  "pkg-1.0",
+		"PN": "pkg",
+		"PV": "1.0",
+	}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		ResolveVariables("This is a test with $P and ${PN} variables", vars)
+	}
 }
 
 func BenchmarkExtractPackageNameFromDep(b *testing.B) {

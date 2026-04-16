@@ -131,17 +131,17 @@ func WithGlobalCategory(cat *AggCategory) GenericPageContextOption {
 func NewGenericPageContext(opts ...GenericPageContextOption) GenericPageContext {
 	ctx := GenericPageContext{
 		GlobalPackage: &AggPackage{},
-		RepoPackage: &g2.PackageData{},
-		Project: &AggProject{Project: &g2.Project{}},
-		RepoCategory: &g2.CategoryData{},
-		Category: map[string]interface{}{},
+		RepoPackage:   &g2.PackageData{},
+		Project:       &AggProject{Project: &g2.Project{}},
+		RepoCategory:  &g2.CategoryData{},
+		Category:      map[string]interface{}{},
 		GlobalProfile: &g2.AggProfile{},
-		RepoProfile: &g2.ProfileData{},
-		Group: &RepoGroup{},
+		RepoProfile:   &g2.ProfileData{},
+		Group:         &RepoGroup{},
 		GlobalUseFlag: &AggUseFlag{},
-		License: &AggLicense{},
-		Arch: &AggArch{},
-		Repo: &g2.SiteData{},
+		License:       &AggLicense{},
+		Arch:          &AggArch{},
+		Repo:          &g2.SiteData{},
 		Manifest: &g2.ManifestEntryData{
 			Entry: &g2.ManifestEntry{},
 		},
@@ -150,8 +150,8 @@ func NewGenericPageContext(opts ...GenericPageContextOption) GenericPageContext 
 				Vars: map[string]string{},
 			},
 		},
-		Eclass: &AggEclass{},
-		UseExpandDesc: &g2.UseExpandDesc{},
+		Eclass:         &AggEclass{},
+		UseExpandDesc:  &g2.UseExpandDesc{},
 		GlobalCategory: &AggCategory{},
 	}
 	for _, opt := range opts {

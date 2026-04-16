@@ -11,24 +11,24 @@ import (
 // GLSA represents a Gentoo Linux Security Advisory.
 // Source: https://github.com/gentoo-mirror/gentoo/blob/stable/metadata/dtd/glsa.dtd
 type GLSA struct {
-	XMLName     xml.Name       `xml:"glsa"`
-	ID          string         `xml:"id,attr"`
-	Title       string         `xml:"title"`
-	Synopsis    string         `xml:"synopsis"`
-	Product     Product        `xml:"product"`
-	Announced   string         `xml:"announced"`
-	Revised     Revised        `xml:"revised"`
-	Bugs        []string       `xml:"bug"`
-	Access      string         `xml:"access,omitempty"`
-	Affected    Affected       `xml:"affected"`
-	Background  *Background    `xml:"background"`
-	Description GLSADescription    `xml:"description"`
-	Impact      Impact         `xml:"impact"`
-	Workaround  Workaround     `xml:"workaround"`
-	Resolution  Resolution     `xml:"resolution"`
-	References  References     `xml:"references"`
-	License     *License       `xml:"license"`
-	Metadata    []GLSAMetadata `xml:"metadata"`
+	XMLName     xml.Name        `xml:"glsa"`
+	ID          string          `xml:"id,attr"`
+	Title       string          `xml:"title"`
+	Synopsis    string          `xml:"synopsis"`
+	Product     Product         `xml:"product"`
+	Announced   string          `xml:"announced"`
+	Revised     Revised         `xml:"revised"`
+	Bugs        []string        `xml:"bug"`
+	Access      string          `xml:"access,omitempty"`
+	Affected    Affected        `xml:"affected"`
+	Background  *Background     `xml:"background"`
+	Description GLSADescription `xml:"description"`
+	Impact      Impact          `xml:"impact"`
+	Workaround  Workaround      `xml:"workaround"`
+	Resolution  Resolution      `xml:"resolution"`
+	References  References      `xml:"references"`
+	License     *License        `xml:"license"`
+	Metadata    []GLSAMetadata  `xml:"metadata"`
 }
 
 type Product struct {

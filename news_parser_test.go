@@ -1,6 +1,7 @@
 package g2
 
 import (
+	"html/template"
 	"reflect"
 	"strings"
 	"testing"
@@ -97,14 +98,14 @@ func TestParseNewsItem(t *testing.T) {
 			},
 		},
 		{
-			name: "Empty File",
+			name:    "Empty File",
 			content: "",
 			expected: NewsItem{
 				Body: "",
 			},
 		},
 		{
-			name: "No Body",
+			name:    "No Body",
 			content: "Title: No Body\n",
 			expected: NewsItem{
 				Title: "No Body",
@@ -207,8 +208,8 @@ that should be preserved.
 
 func TestStripEmail(t *testing.T) {
 	tests := []struct {
-		in   string
-		out  string
+		in  string
+		out string
 	}{
 		{"John Doe <john@example.com>", "John Doe"},
 		{"<only@email.com>", ""},
@@ -220,5 +221,110 @@ func TestStripEmail(t *testing.T) {
 		if got != tc.out {
 			t.Errorf("StripEmail(%q) = %q, expected %q", tc.in, got, tc.out)
 		}
+	}
+}
+
+func TestNewsItem_ToHTMLTemplate(t *testing.T) {
+	tests := []struct {
+		name     string
+		item     NewsItem
+		expected template.HTML
+	}{
+		{
+			name: "Format 1.0 (Plain text)",
+			item: NewsItem{
+				NewsItemFormat: "1.0",
+				Body:           "Line 1\nLine 2 <tag>\nLine 3",
+			},
+			expected: "Line 1<br>Line 2 &lt;tag&gt;<br>Line 3",
+		},
+		{
+			name: "Format 2.0 with AST",
+			item: NewsItem{
+				NewsItemFormat: "2.0",
+				BodyAST: []NewsNode{
+					{
+						Type:  NewsNodeText,
+						Lines: []string{"Text <escaped> 1", "", "Text 2"},
+					},
+					{
+						Type:  NewsNodeList,
+						Lines: []string{"List <1>", "List 2"},
+					},
+					{
+						Type:  NewsNodeCode,
+						Lines: []string{"code <var>", "another"},
+					},
+				},
+			},
+			expected: "Text &lt;escaped&gt; 1\n<br><br>\nText 2\n<ul>\n<li>List &lt;1&gt;</li>\n<li>List 2</li>\n</ul>\n<pre><code>\ncode &lt;var&gt;\nanother\n</code></pre>",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tt.item.ToHTMLTemplate()
+			if got != tt.expected {
+				t.Errorf("NewsItem.ToHTMLTemplate() = %v, want %v", got, tt.expected)
+			}
+		})
+	}
+}
+
+func TestNewsItem_ToText(t *testing.T) {
+	tests := []struct {
+		name     string
+		item     NewsItem
+		expected string
+	}{
+		{
+			name: "Format 1.0",
+			item: NewsItem{
+				NewsItemFormat: "1.0",
+				Body:           "This is a standard body.\nIt has multiple lines.",
+			},
+			expected: "This is a standard body.\nIt has multiple lines.",
+		},
+		{
+			name: "Format 2.0 with various nodes",
+			item: NewsItem{
+				NewsItemFormat: "2.0",
+				BodyAST: []NewsNode{
+					{
+						Type:  NewsNodeText,
+						Lines: []string{"Intro text line 1.", "Intro text line 2."},
+					},
+					{
+						Type:  NewsNodeList,
+						Lines: []string{"Item 1", "Item 2"},
+					},
+					{
+						Type:  NewsNodeCode,
+						Lines: []string{"code block line 1", "", "code block line 3"},
+					},
+					{
+						Type:  NewsNodeText,
+						Lines: []string{"Outro text."},
+					},
+				},
+			},
+			expected: "Intro text line 1.\nIntro text line 2.\n - Item 1\n - Item 2\n  code block line 1\n\n  code block line 3\nOutro text.",
+		},
+		{
+			name: "Empty format",
+			item: NewsItem{
+				NewsItemFormat: "",
+				Body:           "Fallback plain text body.",
+			},
+			expected: "Fallback plain text body.",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.item.ToText(); got != tt.expected {
+				t.Errorf("NewsItem.ToText() = %v, want %v", got, tt.expected)
+			}
+		})
 	}
 }

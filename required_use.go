@@ -268,7 +268,7 @@ func parseTokens(tokens []string, start int, end int) ([]RequiredUseNode, int, e
 
 			nodes = append(nodes, RequiredUseConditional{
 				Condition: cond,
-				Nodes: RequiredUseAllOf{Nodes: childList},
+				Nodes:     RequiredUseAllOf{Nodes: childList},
 			})
 
 			i = nextI + 1

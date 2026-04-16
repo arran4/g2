@@ -1,8 +1,8 @@
 package g2
 
 import (
-	"context"
 	"bytes"
+	"context"
 	"fmt"
 	"strings"
 
