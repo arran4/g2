@@ -17,7 +17,7 @@ func TestParseArchList(t *testing.T) {
 	expected := []string{"amd64", "x86", "arm64"}
 	if !reflect.DeepEqual(al.Arches, expected) {
 		t.Errorf("expected %v, got %v", expected, al.Arches)
-  }
+	}
 }
 
 type errorReader struct{}
@@ -71,11 +71,11 @@ x86 stable`),
 			wantErr: false,
 		},
 		{
-			name: "empty",
-			input: strings.NewReader(``),
+			name:        "empty",
+			input:       strings.NewReader(``),
 			wantHeaders: []string{},
 			wantArches:  map[string]string{},
-			wantErr: false,
+			wantErr:     false,
 		},
 		{
 			name: "malformed arch line",

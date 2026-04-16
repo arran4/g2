@@ -301,9 +301,9 @@ func TestResolveVariables(t *testing.T) {
 		{
 			name: "Default values - UNSET",
 			// Input: "${UNSET:-default}" -> "default"
-			text: "${UNSET:-default}",
+			text:      "${UNSET:-default}",
 			variables: map[string]string{},
-			want: "default",
+			want:      "default",
 		},
 		{
 			name: "Default values - SET",
@@ -645,7 +645,6 @@ func TestCompareVersions(t *testing.T) {
 		})
 	}
 }
-
 
 func TestGentooVersion_String(t *testing.T) {
 	tests := []string{
