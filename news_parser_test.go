@@ -179,7 +179,7 @@ And code:
 	if !strings.Contains(htmlOut, "<li>mail-mta/postfix-3.11.0: March 2026.") {
 		t.Errorf("expected HTML to contain list item, got: %s", htmlOut)
 	}
-	if !strings.Contains(htmlOut, "<pre><code>\nemerge --ask mail-mta/postfix\n</code></pre>") {
+	if !strings.Contains(htmlOut, "<pre><code>emerge --ask mail-mta/postfix</code></pre>") {
 		t.Errorf("expected HTML to contain code block, got: %s", htmlOut)
 	}
 }
@@ -257,7 +257,7 @@ func TestNewsItem_ToHTMLTemplate(t *testing.T) {
 					},
 				},
 			},
-			expected: "Text &lt;escaped&gt; 1\n<br><br>\nText 2\n<ul>\n<li>List &lt;1&gt;</li>\n<li>List 2</li>\n</ul>\n<pre><code>\ncode &lt;var&gt;\nanother\n</code></pre>",
+			expected: "Text &lt;escaped&gt; 1\n<br><br>\nText 2\n<ul>\n<li>List &lt;1&gt;</li>\n<li>List 2</li>\n</ul>\n<pre><code>code &lt;var&gt;\nanother</code></pre>",
 		},
 	}
 
@@ -308,6 +308,31 @@ func TestNewsItem_ToText(t *testing.T) {
 					},
 				},
 			},
+			expected: "Intro text line 1.\nIntro text line 2.\n\n * Item 1\n * Item 2\n\n code block line 1\n\n code block line 3\n\nOutro text.",
+		},
+		{
+			name: "Format 2.0 with various nodes (Non-compliant togglable)",
+			item: NewsItem{
+				NewsItemFormat: "2.0",
+				BodyAST: []NewsNode{
+					{
+						Type:  NewsNodeText,
+						Lines: []string{"Intro text line 1.", "Intro text line 2."},
+					},
+					{
+						Type:  NewsNodeList,
+						Lines: []string{"Item 1", "Item 2"},
+					},
+					{
+						Type:  NewsNodeCode,
+						Lines: []string{"code block line 1", "", "code block line 3"},
+					},
+					{
+						Type:  NewsNodeText,
+						Lines: []string{"Outro text."},
+					},
+				},
+			},
 			expected: "Intro text line 1.\nIntro text line 2.\n - Item 1\n - Item 2\n  code block line 1\n\n  code block line 3\nOutro text.",
 		},
 		{
@@ -322,7 +347,8 @@ func TestNewsItem_ToText(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := tt.item.ToText(); got != tt.expected {
+			compliant := !strings.Contains(tt.name, "Non-compliant")
+			if got := tt.item.ToText(compliant); got != tt.expected {
 				t.Errorf("NewsItem.ToText() = %v, want %v", got, tt.expected)
 			}
 		})
