@@ -5,7 +5,7 @@ go 1.24.0
 toolchain go1.24.1
 
 require (
-	github.com/go-git/go-git/v5 v5.17.1
+	github.com/go-git/go-git/v5 v5.18.0
 	golang.org/x/crypto v0.46.0
 	golang.org/x/text v0.32.0
 	golang.org/x/tools v0.40.0
