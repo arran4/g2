@@ -1,7 +1,25 @@
-
 <h2>All Packages</h2>
-<ul>
-    {{range .GlobalPackages}}
-    <li><a href="{{.Category}}/{{.Name}}/">{{.Category}}/{{.Name}}</a></li>
-    {{end}}
-</ul>
+<div class="table-responsive">
+    <table class="table table-striped table-hover datatable">
+        <thead>
+            <tr>
+                <th>Package</th>
+                <th>Overlays</th>
+            </tr>
+        </thead>
+        <tbody>
+            {{range .GlobalPackages}}
+            <tr>
+                <td><a href="{{.Category}}/{{.Name}}/" class="fw-bold">{{.Category}}/{{.Name}}</a></td>
+                <td>
+                    <div class="d-flex flex-wrap gap-1">
+                        {{range .ReposList}}
+                            <span class="badge bg-light text-dark border">{{.RepoName}}</span>
+                        {{end}}
+                    </div>
+                </td>
+            </tr>
+            {{end}}
+        </tbody>
+    </table>
+</div>

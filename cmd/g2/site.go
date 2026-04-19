@@ -981,8 +981,9 @@ func (a *AggPackage) ReposList() []*g2.SiteData {
 }
 
 type AggProject struct {
-	Project  *g2.Project
-	Packages []*AggPackage
+	ReposList []*g2.SiteData
+	Project   *g2.Project
+	Packages  []*AggPackage
 }
 
 type AggLicense struct {
@@ -1345,12 +1346,39 @@ func aggregateUseExpandDescs(sites []*g2.SiteData) map[string]*g2.UseExpandDesc 
 
 func aggregateProjects(sites []*g2.SiteData) map[string]*AggProject {
 	aggProjects := make(map[string]*AggProject)
+
+	// First pass: collect projects and count occurrences by email across distinct repos
+	emailRepoCount := make(map[string]map[string]bool)
 	for _, site := range sites {
 		if site.Projects != nil {
 			for i := range site.Projects.Projects {
 				proj := &site.Projects.Projects[i]
-				if _, ok := aggProjects[proj.Email]; !ok {
-					aggProjects[proj.Email] = &AggProject{Project: proj}
+				if emailRepoCount[proj.Email] == nil {
+					emailRepoCount[proj.Email] = make(map[string]bool)
+				}
+				emailRepoCount[proj.Email][site.RepoName] = true
+			}
+		}
+	}
+
+	// Second pass: construct keys correctly
+	for _, site := range sites {
+		if site.Projects != nil {
+			for i := range site.Projects.Projects {
+				proj := &site.Projects.Projects[i]
+				key := proj.Email
+
+				// If the same project email appears in more than 1 distinct repo, disambiguate
+				if len(emailRepoCount[proj.Email]) > 1 {
+					key = proj.Email + "-" + site.RepoName
+					projCopy := *proj
+					projCopy.Name = projCopy.Name + " (" + site.RepoName + ")"
+					projCopy.Email = key
+					proj = &projCopy
+				}
+
+				if _, ok := aggProjects[key]; !ok {
+					aggProjects[key] = &AggProject{Project: proj, ReposList: []*g2.SiteData{site}}
 				}
 			}
 		}
@@ -2375,4 +2403,28 @@ func mapToList(m map[string]*g2.SiteData) []*g2.SiteData {
 	}
 	sort.Slice(l, func(i, j int) bool { return l[i].RepoName < l[j].RepoName })
 	return l
+}
+
+func (e *AggEclass) IsDefinedLocally(repoName string) bool {
+	for rn := range e.Repos {
+		if rn == repoName {
+			return true
+		}
+	}
+	return false
+}
+
+func (a *AggPackage) GetVersionsInRepo(repoName string) []g2.VersionData {
+	if site, ok := a.Repos[repoName]; ok {
+		for _, cat := range site.Categories {
+			if cat.Name == a.Category {
+				for _, pkg := range cat.Packages {
+					if pkg.Name == a.Name {
+						return pkg.Versions
+					}
+				}
+			}
+		}
+	}
+	return nil
 }

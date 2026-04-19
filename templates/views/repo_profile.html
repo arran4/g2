@@ -11,7 +11,7 @@
     <h4>Parents:</h4>
     <ul>
         {{range .RepoProfile.Parents}}
-        <li><a href="{{$.BaseURL}}repos/{{$.RepoName}}/profiles/{{.}}/">{{.}}</a></li>
+        <li><a href="{{$.BaseURL}}repos/{{$.RepoName}}/profiles/{{.}}/">{{if eq . ".."}}.. (Overlay Defaults){{else}}{{.}}{{end}}</a></li>
         {{end}}
     </ul>
     {{end}}
@@ -20,7 +20,7 @@
     <h4>Children:</h4>
     <ul>
         {{range .RepoProfile.Children}}
-        <li><a href="{{$.BaseURL}}repos/{{$.RepoName}}/profiles/{{.}}/">{{.}}</a></li>
+        <li><a href="{{$.BaseURL}}repos/{{$.RepoName}}/profiles/{{.}}/">{{if eq . ".."}}.. (Overlay Defaults){{else}}{{.}}{{end}}</a></li>
         {{end}}
     </ul>
     {{end}}
