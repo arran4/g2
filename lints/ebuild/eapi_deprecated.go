@@ -5,6 +5,8 @@ import (
 
 	"github.com/arran4/g2"
 	"github.com/arran4/g2/lints"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 )
 
 var ruleEAPIDeprecated = lints.RuleMetadata{
@@ -63,7 +65,7 @@ func (r *EAPIDeprecatedLintRule) LintWithQA(repoDir string, pkg *g2.PackageData,
 			if isDeprecated {
 				res := lints.LintResult{
 					RuleMetadata: ruleEAPIDeprecated,
-					Message:      fmt.Sprintf("[%s] Ebuild %s uses an outdated EAPI '%s'. Consider upgrading to a newer EAPI.", severity, ver.Version, eapi),
+					Message:      fmt.Sprintf("[%s] Ebuild %s uses an outdated EAPI '%s'. Consider upgrading to a newer EAPI.", cases.Title(language.English).String(string(severity)), ver.Version, eapi),
 					Package:      pkg.Category + "/" + pkg.Name,
 				}
 				res.RuleMetadata.Severity = severity
