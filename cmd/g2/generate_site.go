@@ -163,41 +163,41 @@ func generateCategoryPages(outDir string, tmpl *template.Template, data *Aggrega
 			if catDirName == "" {
 				return nil
 			}
-		// NOTE: Sanitize modifies directory generation, but not template linkages,
-		// but since null-bytes shouldn't be in valid names anyway, this prevents the filesystem crash.
-		catDir := filepath.Join(outDir, "categories", catDirName)
-		if err := os.MkdirAll(catDir, 0755); err != nil {
-			return fmt.Errorf("creating directory %s: %w", catDir, err)
-		}
+			// NOTE: Sanitize modifies directory generation, but not template linkages,
+			// but since null-bytes shouldn't be in valid names anyway, this prevents the filesystem crash.
+			catDir := filepath.Join(outDir, "categories", catDirName)
+			if err := os.MkdirAll(catDir, 0755); err != nil {
+				return fmt.Errorf("creating directory %s: %w", catDir, err)
+			}
 
-		type TmplPkg struct {
-			Name                  string
-			ReposList             []*g2.SiteData
-			EbuildCount           int
-			HighestStableVersion  template.HTML
-			HighestTestingVersion template.HTML
-			DominantDescription   string
-			DominantHomepage      string
-			DominantLicense       string
-			ReverseVirtuals       []string
-		}
-		var tmplPkgs []TmplPkg
-		for _, p := range cat.Packages {
-			var allVersions []g2.VersionData
-			for _, r := range p.Repos {
-				for _, c := range r.Categories {
-					if c.Name == cat.Name {
-						for _, pkgData := range c.Packages {
-							if pkgData.Name == p.Name {
-								allVersions = append(allVersions, pkgData.Versions...)
+			type TmplPkg struct {
+				Name                  string
+				ReposList             []*g2.SiteData
+				EbuildCount           int
+				HighestStableVersion  template.HTML
+				HighestTestingVersion template.HTML
+				DominantDescription   string
+				DominantHomepage      string
+				DominantLicense       string
+				ReverseVirtuals       []string
+			}
+			var tmplPkgs []TmplPkg
+			for _, p := range cat.Packages {
+				var allVersions []g2.VersionData
+				for _, r := range p.Repos {
+					for _, c := range r.Categories {
+						if c.Name == cat.Name {
+							for _, pkgData := range c.Packages {
+								if pkgData.Name == p.Name {
+									allVersions = append(allVersions, pkgData.Versions...)
+								}
 							}
 						}
 					}
 				}
+				hs, ht, count := getHighestVersionsAndCount(allVersions, nil)
+				tmplPkgs = append(tmplPkgs, TmplPkg{Name: p.Name, ReposList: mapToList(p.Repos), EbuildCount: count, HighestStableVersion: hs, HighestTestingVersion: ht, DominantDescription: p.DominantDescription, DominantHomepage: p.DominantHomepage, DominantLicense: p.DominantLicense, ReverseVirtuals: p.ReverseVirtuals})
 			}
-			hs, ht, count := getHighestVersionsAndCount(allVersions, nil)
-			tmplPkgs = append(tmplPkgs, TmplPkg{Name: p.Name, ReposList: mapToList(p.Repos), EbuildCount: count, HighestStableVersion: hs, HighestTestingVersion: ht, DominantDescription: p.DominantDescription, DominantHomepage: p.DominantHomepage, DominantLicense: p.DominantLicense, ReverseVirtuals: p.ReverseVirtuals})
-		}
 
 			if err := renderPage(filepath.Join(catDir, "index.html"), tmpl, "category.html", GenericPageContext{
 				Title:       "Category: " + cat.Name,
@@ -217,6 +217,11 @@ func generateCategoryPages(outDir string, tmpl *template.Template, data *Aggrega
 
 func generatePackagePages(outDir string, tmpl *template.Template, data *AggregatedData, title, version string, genInfo GenerationInfo) error {
 	// Global Moved Packages Pages
+	pkgMap := make(map[string]bool)
+	for _, p := range data.Packages {
+		pkgMap[p.Category+"/"+p.Name] = true
+	}
+
 	gMoves := new(errgroup.Group)
 	gMoves.SetLimit(10)
 	for oldPath, move := range data.Moves {
@@ -228,14 +233,7 @@ func generatePackagePages(outDir string, tmpl *template.Template, data *Aggregat
 			}
 			oldCat, oldName := parts[0], parts[1]
 
-			pkgExists := false
-			for _, p := range data.Packages {
-				if p.Category == oldCat && p.Name == oldName {
-					pkgExists = true
-					break
-				}
-			}
-			if pkgExists {
+			if pkgMap[oldPath] {
 				return nil // skip if a package now exists at this location
 			}
 
@@ -1231,14 +1229,11 @@ func generateRepoPackagesPages(repoDir string, tmpl *template.Template, site *g2
 			}
 
 			var movedToName, movedToURL string
-			for _, move := range site.Moves {
-				if move.Old == pkg.Category+"/"+pkg.Name {
-					newParts := strings.Split(move.New, "/")
-					if len(newParts) == 2 {
-						movedToName = move.New
-						movedToURL = "../../../" + newParts[0] + "/packages/" + newParts[1] + "/"
-					}
-					break
+			if move, ok := data.Moves[pkg.Category+"/"+pkg.Name]; ok {
+				newParts := strings.Split(move.New, "/")
+				if len(newParts) == 2 {
+					movedToName = move.New
+					movedToURL = "../../../" + newParts[0] + "/packages/" + newParts[1] + "/"
 				}
 			}
 
@@ -1377,7 +1372,7 @@ func generateSite(outDir string, sites []*g2.SiteData, recentDuration time.Durat
 		return err
 	}
 
-log.Printf("[PHASE] Rendering %d category pages...", len(data.Categories))
+	log.Printf("[PHASE] Rendering %d category pages...", len(data.Categories))
 	if err := generateCategoryPages(outDir, tmpl, data, title, version, genInfo); err != nil {
 		return err
 	}
@@ -1392,7 +1387,7 @@ log.Printf("[PHASE] Rendering %d category pages...", len(data.Categories))
 		return err
 	}
 
-log.Printf("[PHASE] Rendering %d repository pages...", len(sites))
+	log.Printf("[PHASE] Rendering %d repository pages...", len(sites))
 	if err := generateRepoPages(outDir, tmpl, sites, data, title, version, recentDurationStr, genInfo); err != nil {
 		return err
 	}
