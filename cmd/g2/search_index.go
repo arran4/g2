@@ -306,8 +306,6 @@ func generateSearchData(outDir, outZip string, sites []*g2.SiteData, maxChunkSiz
 	// Ensure dataFiles is initialized so it doesn't serialize to null for old clients.
 	dataFiles := make([]string, 0)
 
-	// Also write the index files to the zip/dir
-	// wait, we need to modify how zip/dir output works to support this.
 
 	if outZip != "" {
 		f, err := os.Create(outZip)
