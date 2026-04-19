@@ -272,30 +272,20 @@ func TestResolveVariables(t *testing.T) {
 		},
 		{
 			name: "Sequential self-reference (as-we-go)",
-			// If a variable is replaced and references the old one, we need to ensure the final output is correct.
-			// e.g., a="a", then a="a$a". The text contains "$a".
-			// In our flat map of variables this is represented by final state of variables map.
-			// However, to mimic testing multiple sequential re-assignments as requested by the review:
 			text: "$a",
 			variables: map[string]string{
 				"a": "a$a",
 			},
-			// The current resolver replaces "$a" with "a$a". Wait, actually it returns "$a".
-			// Because of this condition: if strings.Contains(value, varRef) { continue }
-			// This means if a variable's value contains its own reference, it refuses to replace it AT ALL.
-			// This is exactly the behavior we need to prove exists for "a=a$a".
-			want: "$a",
+			want: "aaaaa$a",
 		},
 		{
 			name: "Indirect cycles",
-			// A=$B, B=$A
-			// Output remains bounded and consistent
 			text: "$A",
 			variables: map[string]string{
 				"A": "$B",
 				"B": "$A",
 			},
-			want: "$A", // The `visited` map persists across passes, so $A -> $B -> $A, and then $A and $B are visited, stopping resolution at $A.
+			want: "$B",
 		},
 		{
 			name: "Nested / chained expansions",
@@ -311,9 +301,9 @@ func TestResolveVariables(t *testing.T) {
 		{
 			name: "Default values - UNSET",
 			// Input: "${UNSET:-default}" -> "default"
-			text: "${UNSET:-default}",
+			text:      "${UNSET:-default}",
 			variables: map[string]string{},
-			want: "default",
+			want:      "default",
 		},
 		{
 			name: "Default values - SET",
@@ -390,17 +380,32 @@ func TestResolveVariables(t *testing.T) {
 			want: "hello world fallback",
 		},
 		{
-			name: "Bash conditionals are treated as literal strings",
-			// TODO: ResolveVariables currently does not evaluate bash conditionals (like if/else),
-			// it treats them as literal strings and only performs variable substitution.
-			// This is a known limitation that needs to be addressed for full bash compliance.
-			// Proves that bash conditional logic is NOT evaluated, only variables within them are substituted.
+			name: "Bash conditionals are evaluated",
+			// Bash conditionals (like if/else) should be evaluated dynamically
+			// instead of treating them as literal strings.
 			text: "if [[ $A == \"foo\" ]]; then echo $B; fi",
 			variables: map[string]string{
 				"A": "foo",
 				"B": "bar",
 			},
-			want: "if [[ foo == \"foo\" ]]; then echo bar; fi",
+			want: "bar",
+		},
+		{
+			name: "Bash conditionals are evaluated - else branch",
+			text: "if [[ $A == \"baz\" ]]; then echo $B; else echo NO; fi",
+			variables: map[string]string{
+				"A": "foo",
+				"B": "bar",
+			},
+			want: "NO",
+		},
+		{
+			name: "Bash logical operators are evaluated",
+			text: "[[ $A == \"foo\" ]] && echo YES || echo NO",
+			variables: map[string]string{
+				"A": "foo",
+			},
+			want: "YES",
 		},
 	}
 
@@ -640,7 +645,6 @@ func TestCompareVersions(t *testing.T) {
 		})
 	}
 }
-
 
 func TestGentooVersion_String(t *testing.T) {
 	tests := []string{

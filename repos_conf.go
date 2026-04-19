@@ -1,7 +1,6 @@
 package g2
 
 import (
-
 	"os"
 	"path/filepath"
 	"strings"

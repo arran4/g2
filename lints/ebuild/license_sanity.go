@@ -63,7 +63,7 @@ func (r *LicenseSanityLintRule) LintWithQA(repoDir string, pkg *g2.PackageData, 
 				len(strings.Fields(license)) > 20 {
 				res := lints.LintResult{
 					RuleMetadata: ruleLicenseSanity,
-					Message:      fmt.Sprintf("[%s] Ebuild %s appears to have full-text license in LICENSE variable instead of identifiers", cases.Title(language.English).String(string(severity)), ver.Version),
+					Message:      fmt.Sprintf("[%s] Ebuild %s appears to have full-text license in LICENSE variable instead of identifiers", cases.Title(language.Und, cases.NoLower).String(string(severity)), ver.Version),
 					Package:      pkg.Category + "/" + pkg.Name,
 				}
 				res.RuleMetadata.Severity = severity
@@ -85,7 +85,7 @@ func (r *LicenseSanityLintRule) LintWithQA(repoDir string, pkg *g2.PackageData, 
 					if !hasAlnum {
 						res := lints.LintResult{
 							RuleMetadata: ruleLicenseSanity,
-							Message:      fmt.Sprintf("[%s] Ebuild %s contains invalid license identifier '%s' (missing alphanumeric characters)", cases.Title(language.English).String(string(severity)), ver.Version, lic),
+							Message:      fmt.Sprintf("[%s] Ebuild %s contains invalid license identifier '%s' (missing alphanumeric characters)", cases.Title(language.Und, cases.NoLower).String(string(severity)), ver.Version, lic),
 							Package:      pkg.Category + "/" + pkg.Name,
 						}
 						res.RuleMetadata.Severity = severity
@@ -93,7 +93,7 @@ func (r *LicenseSanityLintRule) LintWithQA(repoDir string, pkg *g2.PackageData, 
 					} else if strings.Contains(lic, "/") {
 						res := lints.LintResult{
 							RuleMetadata: ruleLicenseSanity,
-							Message:      fmt.Sprintf("[%s] Ebuild %s contains license identifier '%s' with a slash, which breaks URLs", cases.Title(language.English).String(string(severity)), ver.Version, lic),
+							Message:      fmt.Sprintf("[%s] Ebuild %s contains license identifier '%s' with a slash, which breaks URLs", cases.Title(language.Und, cases.NoLower).String(string(severity)), ver.Version, lic),
 							Package:      pkg.Category + "/" + pkg.Name,
 						}
 						res.RuleMetadata.Severity = severity

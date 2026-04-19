@@ -49,7 +49,7 @@ func (r *MissingKeywordLintRule) LintWithQA(repoDir string, pkg *g2.PackageData,
 			if strings.TrimSpace(keywords) == "" {
 				res := lints.LintResult{
 					RuleMetadata: ruleMissingKeyword,
-					Message:      fmt.Sprintf("[%s] Ebuild %s has empty KEYWORDS", cases.Title(language.English).String(string(severity)), ver.Version),
+					Message:      fmt.Sprintf("[%s] Ebuild %s has empty KEYWORDS", cases.Title(language.Und, cases.NoLower).String(string(severity)), ver.Version),
 					Package:      pkg.Category + "/" + pkg.Name,
 				}
 				results = append(results, res)

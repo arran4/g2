@@ -2,6 +2,7 @@ package metadata
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 
 	"github.com/arran4/g2"
@@ -39,7 +40,7 @@ func (r *ManifestLintRule) LintWithQA(repoDir string, pkg *g2.PackageData, qa *g
 		if len(pkg.Versions) > 0 {
 			res := lints.LintResult{
 				RuleMetadata: ruleManifestChecks,
-				Message:      fmt.Sprintf("[%s] Missing or unparsable Manifest file", cases.Title(language.English).String(string(lints.SeverityError))),
+				Message:      fmt.Sprintf("[%s] Missing or unparsable Manifest file", lints.SeverityError),
 				Package:      pkg.Category + "/" + pkg.Name,
 			}
 			res.RuleMetadata.Severity = lints.SeverityError
@@ -70,7 +71,7 @@ func (r *ManifestLintRule) LintWithQA(repoDir string, pkg *g2.PackageData, qa *g
 			if !found {
 				res := lints.LintResult{
 					RuleMetadata: ruleManifestChecks,
-					Message:      fmt.Sprintf("[%s] Manifest entry %s is missing required hash '%s'", cases.Title(language.English).String(string(lints.SeverityError)), entry.Filename, requiredHash),
+					Message:      fmt.Sprintf("[%s] Manifest entry %s is missing required hash '%s'", cases.Title(language.Und, cases.NoLower).String(string(lints.SeverityError)), entry.Filename, requiredHash),
 					Package:      pkg.Category + "/" + pkg.Name,
 				}
 				res.RuleMetadata.Severity = lints.SeverityError
@@ -90,12 +91,32 @@ func (r *ManifestLintRule) LintWithQA(repoDir string, pkg *g2.PackageData, qa *g
 				if !allowed {
 					res := lints.LintResult{
 						RuleMetadata: ruleManifestChecks,
-						Message:      fmt.Sprintf("[%s] Manifest entry %s has unallowed hash '%s'", cases.Title(language.English).String(string(lints.SeverityWarning)), entry.Filename, hash.Type),
+						Message:      fmt.Sprintf("[%s] Manifest entry %s has unallowed hash '%s'", cases.Title(language.Und, cases.NoLower).String(string(lints.SeverityWarning)), entry.Filename, hash.Type),
 						Package:      pkg.Category + "/" + pkg.Name,
 					}
 					res.RuleMetadata.Severity = lints.SeverityWarning
 					results = append(results, res)
 				}
+			}
+		}
+
+		// Ensure the file exists if it's expected to be in the tree
+		if entry.Type == "EBUILD" || entry.Type == "MISC" || entry.Type == "AUX" {
+			var filePath string
+			if entry.Type == "AUX" {
+				filePath = filepath.Join(repoDir, pkg.Category, pkg.Name, "files", entry.Filename)
+			} else {
+				filePath = filepath.Join(repoDir, pkg.Category, pkg.Name, entry.Filename)
+			}
+
+			_, err := os.Stat(filePath)
+			if os.IsNotExist(err) {
+				res := lints.LintResult{
+					RuleMetadata: ruleManifestChecks,
+					Message:      fmt.Sprintf("[%s] Manifest entry %s references a missing file", cases.Title(language.English).String(string(lints.SeverityError)), entry.Filename),
+					Package:      pkg.Category + "/" + pkg.Name,
+				}
+				results = append(results, res)
 			}
 		}
 	}

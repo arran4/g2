@@ -55,7 +55,7 @@ func (r *MissingSlotLintRule) LintWithQA(repoDir string, pkg *g2.PackageData, qa
 			if !ok || strings.TrimSpace(slot) == "" {
 				res := lints.LintResult{
 					RuleMetadata: ruleMissingSlot,
-					Message:      fmt.Sprintf("[%s] Ebuild %s is missing the SLOT variable.", cases.Title(language.English).String(string(severity)), ver.Version),
+					Message:      fmt.Sprintf("[%s] Ebuild %s is missing the SLOT variable.", cases.Title(language.Und, cases.NoLower).String(string(severity)), ver.Version),
 					Package:      pkg.Category + "/" + pkg.Name,
 				}
 				res.RuleMetadata.Severity = severity

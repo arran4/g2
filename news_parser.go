@@ -208,11 +208,11 @@ func (n NewsItem) ToHTMLTemplate() template.HTML {
 				}
 				out = append(out, "</ul>")
 			case NewsNodeCode:
-				out = append(out, "<pre><code>")
+				var codeLines []string
 				for _, codeLine := range node.Lines {
-					out = append(out, template.HTMLEscapeString(codeLine))
+					codeLines = append(codeLines, template.HTMLEscapeString(codeLine))
 				}
-				out = append(out, "</code></pre>")
+				out = append(out, "<pre><code>"+strings.Join(codeLines, "\n")+"</code></pre>")
 			}
 		}
 		return template.HTML(strings.Join(out, "\n"))
@@ -224,23 +224,35 @@ func (n NewsItem) ToHTMLTemplate() template.HTML {
 
 // ToText returns the plain text body of the NewsItem.
 // It will reconstruct it from the AST for 2.0 format to demonstrate serialization.
-func (n NewsItem) ToText() string {
+func (n NewsItem) ToText(compliant ...bool) string {
+	isCompliant := len(compliant) > 0 && compliant[0]
 	if n.NewsItemFormat == "2.0" {
 		var out []string
-		for _, node := range n.BodyAST {
+		for i, node := range n.BodyAST {
+			if isCompliant && i > 0 {
+				out = append(out, "")
+			}
 			switch node.Type {
 			case NewsNodeText:
 				out = append(out, node.Lines...)
 			case NewsNodeList:
 				for _, item := range node.Lines {
-					out = append(out, " - "+item)
+					if isCompliant {
+						out = append(out, " * "+item)
+					} else {
+						out = append(out, " - "+item)
+					}
 				}
 			case NewsNodeCode:
 				for _, codeLine := range node.Lines {
 					if codeLine == "" {
 						out = append(out, "")
 					} else {
-						out = append(out, "  "+codeLine)
+						if isCompliant {
+							out = append(out, " "+codeLine)
+						} else {
+							out = append(out, "  "+codeLine)
+						}
 					}
 				}
 			}

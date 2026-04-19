@@ -50,7 +50,7 @@ func (r *InvalidSlotLintRule) LintWithQA(repoDir string, pkg *g2.PackageData, qa
 			if slot != "" && !validSlotRegex.MatchString(slot) {
 				res := lints.LintResult{
 					RuleMetadata: ruleInvalidSlot,
-					Message:      fmt.Sprintf("[%s] Ebuild %s has invalid SLOT '%s'", cases.Title(language.English).String(string(severity)), ver.Version, slot),
+					Message:      fmt.Sprintf("[%s] Ebuild %s has invalid SLOT '%s'", cases.Title(language.Und, cases.NoLower).String(string(severity)), ver.Version, slot),
 					Package:      pkg.Category + "/" + pkg.Name,
 				}
 				results = append(results, res)

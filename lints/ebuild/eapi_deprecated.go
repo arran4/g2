@@ -64,7 +64,7 @@ func (r *EAPIDeprecatedLintRule) LintWithQA(repoDir string, pkg *g2.PackageData,
 			if isDeprecated {
 				res := lints.LintResult{
 					RuleMetadata: ruleEAPIDeprecated,
-					Message:      fmt.Sprintf("[%s] Ebuild %s uses an outdated EAPI '%s'. Consider upgrading to a newer EAPI.", strings.Title(string(severity)), ver.Version, eapi),
+					Message:      fmt.Sprintf("[%s] Ebuild %s uses an outdated EAPI '%s'. Consider upgrading to a newer EAPI.", severity, ver.Version, eapi),
 					Package:      pkg.Category + "/" + pkg.Name,
 				}
 				res.RuleMetadata.Severity = severity

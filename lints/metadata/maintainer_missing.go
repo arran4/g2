@@ -52,7 +52,7 @@ func (r *MaintainerLintRule) LintWithQA(repoDir string, pkg *g2.PackageData, qa 
 		if len(pkg.Metadata.Maintainers) == 0 {
 			res := lints.LintResult{
 				RuleMetadata: ruleMaintainerMissing,
-				Message:      fmt.Sprintf("[%s] Package has no maintainers defined in metadata.xml", cases.Title(language.English).String(string(severity))),
+				Message:      fmt.Sprintf("[%s] Package has no maintainers defined in metadata.xml", cases.Title(language.Und, cases.NoLower).String(string(severity))),
 				Package:      pkg.Category + "/" + pkg.Name,
 			}
 			res.RuleMetadata.Severity = severity
