@@ -4,19 +4,14 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
-	"sync"
 )
 
 type SearchEngine struct {
 	documents   []SearchDocument
-	regexCache  map[string]*regexp.Regexp
-	regexCacheMu sync.RWMutex
 }
 
 func NewSearchEngine() *SearchEngine {
-	return &SearchEngine{
-		regexCache: make(map[string]*regexp.Regexp),
-	}
+	return &SearchEngine{}
 }
 
 func (e *SearchEngine) LoadDocuments(docs []SearchDocument) {
@@ -75,25 +70,54 @@ func (e *SearchEngine) matchWildcard(text, pattern string) bool {
 		return strings.Contains(text, pattern)
 	}
 
-	e.regexCacheMu.RLock()
-	re, ok := e.regexCache[pattern]
-	e.regexCacheMu.RUnlock()
-
-	if !ok {
-		regexPattern := regexp.QuoteMeta(pattern)
-		regexPattern = strings.ReplaceAll(regexPattern, "\\*", ".*")
-		regexPattern = strings.ReplaceAll(regexPattern, "\\?", ".")
-		var err error
-		re, err = regexp.Compile(regexPattern)
-		if err != nil {
-			return strings.Contains(text, pattern)
-		}
-		e.regexCacheMu.Lock()
-		e.regexCache[pattern] = re
-		e.regexCacheMu.Unlock()
+	parts := strings.Split(pattern, "*")
+	if len(parts) == 1 {
+		return findQuestionContains(text, pattern) != -1
 	}
 
-	return re.MatchString(text)
+	prefix := parts[0]
+	if len(prefix) > 0 {
+		foundIdx := findQuestionContains(text, prefix)
+		if foundIdx == -1 {
+			return false
+		}
+		text = text[foundIdx+len(prefix):]
+	}
+
+	for i := 1; i < len(parts); i++ {
+		part := parts[i]
+		if len(part) == 0 {
+			continue
+		}
+		foundIdx := findQuestionContains(text, part)
+		if foundIdx == -1 {
+			return false
+		}
+		text = text[foundIdx+len(part):]
+	}
+	return true
+}
+
+func findQuestionContains(text, pattern string) int {
+	if len(pattern) == 0 {
+		return 0
+	}
+	if len(text) < len(pattern) {
+		return -1
+	}
+	for i := 0; i <= len(text)-len(pattern); i++ {
+		match := true
+		for j := 0; j < len(pattern); j++ {
+			if pattern[j] != '?' && pattern[j] != text[i+j] {
+				match = false
+				break
+			}
+		}
+		if match {
+			return i
+		}
+	}
+	return -1
 }
 
 func (e *SearchEngine) matchTerm(doc SearchDocument, term string) bool {
@@ -106,60 +130,60 @@ func (e *SearchEngine) matchField(doc SearchDocument, field string, value string
 
 	switch field {
 	case "category":
-		return e.matchWildcard(strings.ToLower(doc.Category), valLower)
+		return e.matchWildcard(doc.Category, valLower)
 	case "package":
-		return e.matchWildcard(strings.ToLower(doc.Package), valLower)
+		return e.matchWildcard(doc.Package, valLower)
 	case "name", "fullname":
-		return e.matchWildcard(strings.ToLower(doc.FullName), valLower)
+		return e.matchWildcard(doc.FullName, valLower)
 	case "desc", "description":
-		return e.matchWildcard(strings.ToLower(doc.Description), valLower)
+		return e.matchWildcard(doc.Description, valLower)
 	case "license":
 		for _, l := range doc.Licenses {
-			if e.matchWildcard(strings.ToLower(l), valLower) {
+			if e.matchWildcard(l, valLower) {
 				return true
 			}
 		}
 		return false
 	case "use":
 		for _, u := range doc.Uses {
-			if e.matchWildcard(strings.ToLower(u), valLower) {
+			if e.matchWildcard(u, valLower) {
 				return true
 			}
 		}
 		for _, u := range doc.UseDescriptions {
-			if e.matchWildcard(strings.ToLower(u), valLower) {
+			if e.matchWildcard(u, valLower) {
 				return true
 			}
 		}
 		return false
 	case "keyword", "keywords", "arch", "arches":
 		for _, k := range doc.Keywords {
-			if e.matchWildcard(strings.ToLower(k), valLower) {
+			if e.matchWildcard(k, valLower) {
 				return true
 			}
 		}
 		for _, a := range doc.Arches {
-			if e.matchWildcard(strings.ToLower(a), valLower) {
+			if e.matchWildcard(a, valLower) {
 				return true
 			}
 		}
 		return false
 	case "mask":
-		return strings.ToLower(doc.Mask) == valLower
+		return doc.Mask == valLower // Already lowercase
 	case "depend", "depends", "rdepend", "rdepends":
 		for _, d := range doc.Depends {
-			if e.matchWildcard(strings.ToLower(d), valLower) {
+			if e.matchWildcard(d, valLower) {
 				return true
 			}
 		}
 		for _, d := range doc.Rdepends {
-			if e.matchWildcard(strings.ToLower(d), valLower) {
+			if e.matchWildcard(d, valLower) {
 				return true
 			}
 		}
 		return false
 	case "overlay":
-		return e.matchWildcard(strings.ToLower(doc.Overlay), valLower)
+		return e.matchWildcard(doc.Overlay, valLower)
 	case "version":
 		return e.matchVersion(doc, value)
 	default:

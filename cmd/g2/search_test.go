@@ -11,7 +11,7 @@ func TestSearchEngine(t *testing.T) {
 			FullName:    "app-admin/ollama",
 			Version:     "0.0.1",
 			Description: "Run LLMs locally",
-			Licenses:    []string{"MIT"},
+			Licenses:    []string{"mit"},
 			Arches:      []string{"amd64", "arm64"},
 			Mask:        "none",
 			Keywords:    []string{"~amd64", "~arm64"},
@@ -24,7 +24,7 @@ func TestSearchEngine(t *testing.T) {
 			FullName:    "dev-lang/go",
 			Version:     "1.22.1",
 			Description: "The Go Programming Language",
-			Licenses:    []string{"BSD"},
+			Licenses:    []string{"bsd"},
 			Arches:      []string{"amd64", "arm64", "x86"},
 			Mask:        "none",
 			Keywords:    []string{"amd64", "arm64"},
@@ -62,22 +62,22 @@ func TestSearchEngine(t *testing.T) {
 		},
 		{
 			name:     "Field search license",
-			query:    "license:BSD",
+			query:    "license:bsd",
 			expected: []int{2},
 		},
 		{
 			name:     "AND implicit",
-			query:    "license:MIT app-admin",
+			query:    "license:mit app-admin",
 			expected: []int{1},
 		},
 		{
 			name:     "AND explicit",
-			query:    "license:MIT AND arch:amd64",
+			query:    "license:mit AND arch:amd64",
 			expected: []int{1},
 		},
 		{
 			name:     "Explicit OR",
-			query:    "license:MIT OR license:BSD",
+			query:    "license:mit OR license:bsd",
 			expected: []int{1, 2},
 		},
 		{
@@ -87,7 +87,7 @@ func TestSearchEngine(t *testing.T) {
 		},
 		{
 			name:     "Grouping",
-			query:    "(license:MIT OR license:BSD) AND arch:amd64",
+			query:    "(license:mit OR license:bsd) AND arch:amd64",
 			expected: []int{1, 2},
 		},
 		{
