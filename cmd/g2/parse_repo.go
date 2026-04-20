@@ -215,6 +215,26 @@ func parseRepoCategoriesAndPackages(sysFS fs.FS, repoDir string, repoName string
 		}
 	}
 
+	deprecatedMap := make(map[string]*g2.PackageDeprecated)
+	for i := range site.Deprecated {
+		for _, entry := range site.Deprecated[i].Entries {
+			pkgName := g2.ExtractPackageNameFromDep(entry.Package)
+			if pkgName != "" {
+				deprecatedMap[pkgName] = &site.Deprecated[i]
+			}
+		}
+	}
+
+	maskedMap := make(map[string]*g2.PackageMasked)
+	for i := range site.Masked {
+		for _, entry := range site.Masked[i].Entries {
+			pkgName := g2.ExtractPackageNameFromDep(entry.Package)
+			if pkgName != "" {
+				maskedMap[pkgName] = &site.Masked[i]
+			}
+		}
+	}
+
 	entries, err := fs.ReadDir(sysFS, filepath.ToSlash(repoDir))
 	if err != nil {
 		return fmt.Errorf("reading repo dir: %w", err)
@@ -463,41 +483,18 @@ func parseRepoCategoriesAndPackages(sysFS fs.FS, repoDir string, repoName string
 			}
 
 			pkgStr := pkgData.Category + "/" + pkgData.Name
-			for i := range site.Deprecated {
-				for _, entry := range site.Deprecated[i].Entries {
-					if strings.Contains(entry.Package, pkgStr) {
-						pkgData.Deprecated = &site.Deprecated[i]
-						break
-					}
-				}
+
+			if dep, ok := deprecatedMap[pkgStr]; ok {
+				pkgData.Deprecated = dep
 			}
 
-			for i := range site.Masked {
-				for _, entry := range site.Masked[i].Entries {
-					if strings.Contains(entry.Package, pkgStr) {
-						pkgData.Masked = &site.Masked[i]
-						break
-					}
-				}
+			if mask, ok := maskedMap[pkgStr]; ok {
+				pkgData.Masked = mask
 			}
 
 			for i, v := range pkgData.Versions {
-				for j := range site.Deprecated {
-					for _, entry := range site.Deprecated[j].Entries {
-						if strings.Contains(entry.Package, pkgStr) {
-							pkgData.Versions[i].Deprecated = &site.Deprecated[j]
-							break
-						}
-					}
-				}
-				for j := range site.Masked {
-					for _, entry := range site.Masked[j].Entries {
-						if strings.Contains(entry.Package, pkgStr) {
-							pkgData.Versions[i].Masked = &site.Masked[j]
-							break
-						}
-					}
-				}
+				pkgData.Versions[i].Deprecated = pkgData.Deprecated
+				pkgData.Versions[i].Masked = pkgData.Masked
 
 				g2PkgData.Versions = append(g2PkgData.Versions, g2.VersionData{
 					Version:      v.Version,
@@ -557,6 +554,13 @@ func parseRepoCategoriesAndPackages(sysFS fs.FS, repoDir string, repoName string
 		return site.Categories[i].Name < site.Categories[j].Name
 	})
 
+	pkgMap := make(map[string]bool)
+	for i := range site.Categories {
+		for j := range site.Categories[i].Packages {
+			pkgMap[site.Categories[i].Packages[j].Category+"/"+site.Categories[i].Packages[j].Name] = true
+		}
+	}
+
 	for i := range site.Categories {
 		for j := range site.Categories[i].Packages {
 			for k := range site.Categories[i].Packages[j].Versions {
@@ -568,7 +572,7 @@ func parseRepoCategoriesAndPackages(sysFS fs.FS, repoDir string, repoName string
 							tree := g2.ParseDepTree(depStr)
 							var nodes []ResolvedDepNode
 							for _, n := range tree.Nodes {
-								nodes = append(nodes, resolveDependencies(n, site))
+								nodes = append(nodes, resolveDependencies(n, pkgMap))
 							}
 							depsMap[depType] = nodes
 						}

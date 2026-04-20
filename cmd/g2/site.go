@@ -450,7 +450,7 @@ type ResolvedDepNode struct {
 	Children  []ResolvedDepNode `json:"children,omitempty"`
 }
 
-func resolveDependencies(node g2.DepNode, site *g2.SiteData) ResolvedDepNode {
+func resolveDependencies(node g2.DepNode, pkgMap map[string]bool) ResolvedDepNode {
 	switch n := node.(type) {
 	case g2.DepString:
 		raw := string(n)
@@ -458,11 +458,10 @@ func resolveDependencies(node g2.DepNode, site *g2.SiteData) ResolvedDepNode {
 		link := ""
 
 		if pkgName != "" {
-			for i := range site.Categories {
-				for j := range site.Categories[i].Packages {
-					if site.Categories[i].Packages[j].Category+"/"+site.Categories[i].Packages[j].Name == pkgName {
-						link = "../../../../../../categories/" + site.Categories[i].Packages[j].Category + "/packages/" + site.Categories[i].Packages[j].Name + "/"
-					}
+			if pkgMap[pkgName] {
+				parts := strings.SplitN(pkgName, "/", 2)
+				if len(parts) == 2 {
+					link = "../../../../../../categories/" + parts[0] + "/packages/" + parts[1] + "/"
 				}
 			}
 		}
@@ -476,14 +475,14 @@ func resolveDependencies(node g2.DepNode, site *g2.SiteData) ResolvedDepNode {
 	case g2.DepAnyOf:
 		res := ResolvedDepNode{Type: "any_of"}
 		for _, child := range n.Children {
-			res.Children = append(res.Children, resolveDependencies(child, site))
+			res.Children = append(res.Children, resolveDependencies(child, pkgMap))
 		}
 		return res
 
 	case g2.DepAllOf:
 		res := ResolvedDepNode{Type: "all_of"}
 		for _, child := range n.Children {
-			res.Children = append(res.Children, resolveDependencies(child, site))
+			res.Children = append(res.Children, resolveDependencies(child, pkgMap))
 		}
 		return res
 
@@ -494,7 +493,7 @@ func resolveDependencies(node g2.DepNode, site *g2.SiteData) ResolvedDepNode {
 			IsNegated: n.IsNegated,
 		}
 		for _, child := range n.Children {
-			res.Children = append(res.Children, resolveDependencies(child, site))
+			res.Children = append(res.Children, resolveDependencies(child, pkgMap))
 		}
 		return res
 	}
@@ -657,6 +656,14 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool, r
 }
 
 func extractVirtualDeps(site *g2.SiteData) {
+	pkgMap := make(map[string]*g2.PackageData)
+	for i := range site.Categories {
+		for j := range site.Categories[i].Packages {
+			key := site.Categories[i].Name + "/" + site.Categories[i].Packages[j].Name
+			pkgMap[key] = &site.Categories[i].Packages[j]
+		}
+	}
+
 	for i := range site.Categories {
 		if site.Categories[i].Name != "virtual" && !strings.HasPrefix(site.Categories[i].Name, "virtual-") {
 			continue
@@ -678,29 +685,17 @@ func extractVirtualDeps(site *g2.SiteData) {
 			}
 			for dep := range depsMap {
 				pkg.VirtualDeps = append(pkg.VirtualDeps, dep)
-				depParts := strings.Split(dep, "/")
-				if len(depParts) == 2 {
-					depCat := depParts[0]
-					depName := depParts[1]
-					for k := range site.Categories {
-						if site.Categories[k].Name == depCat {
-							for l := range site.Categories[k].Packages {
-								if site.Categories[k].Packages[l].Name == depName {
-									targetPkg := &site.Categories[k].Packages[l]
-									virtualName := pkg.Category + "/" + pkg.Name
-									found := false
-									for _, v := range targetPkg.ReverseVirtuals {
-										if v == virtualName {
-											found = true
-											break
-										}
-									}
-									if !found {
-										targetPkg.ReverseVirtuals = append(targetPkg.ReverseVirtuals, virtualName)
-									}
-								}
-							}
+				if targetPkg, ok := pkgMap[dep]; ok {
+					virtualName := pkg.Category + "/" + pkg.Name
+					found := false
+					for _, v := range targetPkg.ReverseVirtuals {
+						if v == virtualName {
+							found = true
+							break
 						}
+					}
+					if !found {
+						targetPkg.ReverseVirtuals = append(targetPkg.ReverseVirtuals, virtualName)
 					}
 				}
 			}
@@ -708,30 +703,18 @@ func extractVirtualDeps(site *g2.SiteData) {
 
 			// Compute Equivalents for each package in VirtualDeps
 			for _, dep := range pkg.VirtualDeps {
-				depParts := strings.Split(dep, "/")
-				if len(depParts) == 2 {
-					depCat := depParts[0]
-					depName := depParts[1]
-					for k := range site.Categories {
-						if site.Categories[k].Name == depCat {
-							for l := range site.Categories[k].Packages {
-								if site.Categories[k].Packages[l].Name == depName {
-									targetPkg := &site.Categories[k].Packages[l]
-									for _, otherDep := range pkg.VirtualDeps {
-										if otherDep != dep {
-											found := false
-											for _, e := range targetPkg.Equivalents {
-												if e == otherDep {
-													found = true
-													break
-												}
-											}
-											if !found {
-												targetPkg.Equivalents = append(targetPkg.Equivalents, otherDep)
-											}
-										}
-									}
+				if targetPkg, ok := pkgMap[dep]; ok {
+					for _, otherDep := range pkg.VirtualDeps {
+						if otherDep != dep {
+							found := false
+							for _, e := range targetPkg.Equivalents {
+								if e == otherDep {
+									found = true
+									break
 								}
+							}
+							if !found {
+								targetPkg.Equivalents = append(targetPkg.Equivalents, otherDep)
 							}
 						}
 					}
