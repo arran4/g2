@@ -56,17 +56,17 @@ func (p *Profiler) Write() error {
 		if err != nil {
 			return err
 		}
-		defer f.Close()
+		defer func() { _ = f.Close() }()
 		out = f
 	}
 
 	total := time.Since(p.startTime)
-	fmt.Fprintf(out, "Site Generation Profile Report\n")
-	fmt.Fprintf(out, "==============================\n")
+	_, _ = fmt.Fprintf(out, "Site Generation Profile Report\n")
+	_, _ = fmt.Fprintf(out, "==============================\n")
 	for _, ev := range p.events {
-		fmt.Fprintf(out, "%-40s %v\n", ev.Name+":", ev.Duration)
+		_, _ = fmt.Fprintf(out, "%-40s %v\n", ev.Name+":", ev.Duration)
 	}
-	fmt.Fprintf(out, "------------------------------\n")
-	fmt.Fprintf(out, "%-40s %v\n", "Total Time:", total)
+	_, _ = fmt.Fprintf(out, "------------------------------\n")
+	_, _ = fmt.Fprintf(out, "%-40s %v\n", "Total Time:", total)
 	return nil
 }

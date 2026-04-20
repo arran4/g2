@@ -1273,7 +1273,7 @@ func generateSite(outDir string, sites []*g2.SiteData, recentDuration time.Durat
 	if genInfo.Profiler == nil {
 		genInfo.Profiler = NewProfiler(false, "")
 	}
-	defer genInfo.Profiler.Write()
+	defer func() { _ = genInfo.Profiler.Write() }()
 
 	defer genInfo.Profiler.Track("Total Generation")()
 
