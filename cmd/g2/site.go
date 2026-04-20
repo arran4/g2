@@ -2395,7 +2395,12 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, 
 
 	log.Printf("Generating integrated site (v%s) for %d repos", version, len(allSites))
 	profiler := NewProfiler(profileSiteGen, profileOut)
-	genInfo := GenerationInfo{Profiler: profiler}
+	genInfo := GenerationInfo{
+		Profiler:       profiler,
+		Args:           cfg.Args,
+		FastGit:        fastGit,
+		RecentDuration: recentDurationStr,
+	}
 	if err := generateSite(outDir, allSites, recentDuration, recentDurationStr, genInfo); err != nil {
 		return fmt.Errorf("generating integrated site: %w", err)
 	}

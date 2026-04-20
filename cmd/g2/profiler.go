@@ -4,10 +4,12 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"sync"
 	"time"
 )
 
 type Profiler struct {
+	mu        sync.Mutex
 	enabled   bool
 	outPath   string
 	events    []ProfileEvent
@@ -31,6 +33,8 @@ func (p *Profiler) Record(name string, d time.Duration) {
 	if !p.enabled {
 		return
 	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
 	p.events = append(p.events, ProfileEvent{Name: name, Duration: d})
 }
 
