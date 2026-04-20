@@ -218,48 +218,20 @@ func parseRepoCategoriesAndPackages(sysFS fs.FS, repoDir string, repoName string
 	deprecatedMap := make(map[string]*g2.PackageDeprecated)
 	for i := range site.Deprecated {
 		for _, entry := range site.Deprecated[i].Entries {
-			parts := strings.Split(entry.Package, ":")
-			pkgName := parts[0]
-			pkgName = strings.TrimPrefix(pkgName, ">=")
-			pkgName = strings.TrimPrefix(pkgName, "<=")
-			pkgName = strings.TrimPrefix(pkgName, ">")
-			pkgName = strings.TrimPrefix(pkgName, "<")
-			pkgName = strings.TrimPrefix(pkgName, "=")
-			pkgName = strings.TrimPrefix(pkgName, "~")
-			pkgName = strings.TrimPrefix(pkgName, "!")
-			basePkg := pkgName
-			idx := strings.IndexAny(pkgName, "0123456789")
-			if idx > 0 {
-				if pkgName[idx-1] == '-' {
-					basePkg = pkgName[:idx-1]
-				}
+			pkgName := g2.ExtractPackageNameFromDep(entry.Package)
+			if pkgName != "" {
+				deprecatedMap[pkgName] = &site.Deprecated[i]
 			}
-			deprecatedMap[basePkg] = &site.Deprecated[i]
-			deprecatedMap[pkgName] = &site.Deprecated[i]
 		}
 	}
 
 	maskedMap := make(map[string]*g2.PackageMasked)
 	for i := range site.Masked {
 		for _, entry := range site.Masked[i].Entries {
-			parts := strings.Split(entry.Package, ":")
-			pkgName := parts[0]
-			pkgName = strings.TrimPrefix(pkgName, ">=")
-			pkgName = strings.TrimPrefix(pkgName, "<=")
-			pkgName = strings.TrimPrefix(pkgName, ">")
-			pkgName = strings.TrimPrefix(pkgName, "<")
-			pkgName = strings.TrimPrefix(pkgName, "=")
-			pkgName = strings.TrimPrefix(pkgName, "~")
-			pkgName = strings.TrimPrefix(pkgName, "!")
-			basePkg := pkgName
-			idx := strings.IndexAny(pkgName, "0123456789")
-			if idx > 0 {
-				if pkgName[idx-1] == '-' {
-					basePkg = pkgName[:idx-1]
-				}
+			pkgName := g2.ExtractPackageNameFromDep(entry.Package)
+			if pkgName != "" {
+				maskedMap[pkgName] = &site.Masked[i]
 			}
-			maskedMap[basePkg] = &site.Masked[i]
-			maskedMap[pkgName] = &site.Masked[i]
 		}
 	}
 
@@ -514,28 +486,10 @@ func parseRepoCategoriesAndPackages(sysFS fs.FS, repoDir string, repoName string
 
 			if dep, ok := deprecatedMap[pkgStr]; ok {
 				pkgData.Deprecated = dep
-			} else {
-				for i := range site.Deprecated {
-					for _, entry := range site.Deprecated[i].Entries {
-						if strings.Contains(entry.Package, pkgStr) {
-							pkgData.Deprecated = &site.Deprecated[i]
-							break
-						}
-					}
-				}
 			}
 
 			if mask, ok := maskedMap[pkgStr]; ok {
 				pkgData.Masked = mask
-			} else {
-				for i := range site.Masked {
-					for _, entry := range site.Masked[i].Entries {
-						if strings.Contains(entry.Package, pkgStr) {
-							pkgData.Masked = &site.Masked[i]
-							break
-						}
-					}
-				}
 			}
 
 			for i, v := range pkgData.Versions {
