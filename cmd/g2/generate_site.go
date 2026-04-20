@@ -154,104 +154,117 @@ func generateCategoryPages(outDir string, tmpl *template.Template, data *Aggrega
 		return fmt.Errorf("rendering page: %w", err)
 	}
 
+	g := new(errgroup.Group)
+	g.SetLimit(10)
 	for _, cat := range data.Categories {
-		catDirName := sanitizeFilename(cat.Name)
-		if catDirName == "" {
-			continue
-		}
-		// NOTE: Sanitize modifies directory generation, but not template linkages,
-		// but since null-bytes shouldn't be in valid names anyway, this prevents the filesystem crash.
-		catDir := filepath.Join(outDir, "categories", catDirName)
-		if err := os.MkdirAll(catDir, 0755); err != nil {
-			return fmt.Errorf("creating directory %s: %w", catDir, err)
-		}
+		cat := cat
+		g.Go(func() error {
+			catDirName := sanitizeFilename(cat.Name)
+			if catDirName == "" {
+				return nil
+			}
+			// NOTE: Sanitize modifies directory generation, but not template linkages,
+			// but since null-bytes shouldn't be in valid names anyway, this prevents the filesystem crash.
+			catDir := filepath.Join(outDir, "categories", catDirName)
+			if err := os.MkdirAll(catDir, 0755); err != nil {
+				return fmt.Errorf("creating directory %s: %w", catDir, err)
+			}
 
-		type TmplPkg struct {
-			Name                  string
-			ReposList             []*g2.SiteData
-			EbuildCount           int
-			HighestStableVersion  template.HTML
-			HighestTestingVersion template.HTML
-			DominantDescription   string
-			DominantHomepage      string
-			DominantLicense       string
-			ReverseVirtuals       []string
-		}
-		var tmplPkgs []TmplPkg
-		for _, p := range cat.Packages {
-			var allVersions []g2.VersionData
-			for _, r := range p.Repos {
-				for _, c := range r.Categories {
-					if c.Name == cat.Name {
-						for _, pkgData := range c.Packages {
-							if pkgData.Name == p.Name {
-								allVersions = append(allVersions, pkgData.Versions...)
+			type TmplPkg struct {
+				Name                  string
+				ReposList             []*g2.SiteData
+				EbuildCount           int
+				HighestStableVersion  template.HTML
+				HighestTestingVersion template.HTML
+				DominantDescription   string
+				DominantHomepage      string
+				DominantLicense       string
+				ReverseVirtuals       []string
+			}
+			var tmplPkgs []TmplPkg
+			for _, p := range cat.Packages {
+				var allVersions []g2.VersionData
+				for _, r := range p.Repos {
+					for _, c := range r.Categories {
+						if c.Name == cat.Name {
+							for _, pkgData := range c.Packages {
+								if pkgData.Name == p.Name {
+									allVersions = append(allVersions, pkgData.Versions...)
+								}
 							}
 						}
 					}
 				}
+				hs, ht, count := getHighestVersionsAndCount(allVersions, nil)
+				tmplPkgs = append(tmplPkgs, TmplPkg{Name: p.Name, ReposList: mapToList(p.Repos), EbuildCount: count, HighestStableVersion: hs, HighestTestingVersion: ht, DominantDescription: p.DominantDescription, DominantHomepage: p.DominantHomepage, DominantLicense: p.DominantLicense, ReverseVirtuals: p.ReverseVirtuals})
 			}
-			hs, ht, count := getHighestVersionsAndCount(allVersions, nil)
-			tmplPkgs = append(tmplPkgs, TmplPkg{Name: p.Name, ReposList: mapToList(p.Repos), EbuildCount: count, HighestStableVersion: hs, HighestTestingVersion: ht, DominantDescription: p.DominantDescription, DominantHomepage: p.DominantHomepage, DominantLicense: p.DominantLicense, ReverseVirtuals: p.ReverseVirtuals})
-		}
 
-		if err := renderPage(filepath.Join(catDir, "index.html"), tmpl, "category.html", GenericPageContext{
-			Title:       "Category: " + cat.Name,
-			BaseURL:     "../../",
-			Breadcrumbs: []g2.Breadcrumb{{Name: title, URL: "../../"}, {Name: "Categories", URL: "../"}, {Name: cat.Name}},
-			Category:    map[string]interface{}{"Name": cat.Name, "Packages": tmplPkgs},
-			Version:     version,
-			GenInfo:     genInfo,
-		}); err != nil {
-			return fmt.Errorf("rendering page: %w", err)
-		}
+			if err := renderPage(filepath.Join(catDir, "index.html"), tmpl, "category.html", GenericPageContext{
+				Title:       "Category: " + cat.Name,
+				BaseURL:     "../../",
+				Breadcrumbs: []g2.Breadcrumb{{Name: title, URL: "../../"}, {Name: "Categories", URL: "../"}, {Name: cat.Name}},
+				Category:    map[string]interface{}{"Name": cat.Name, "Packages": tmplPkgs},
+				Version:     version,
+				GenInfo:     genInfo,
+			}); err != nil {
+				return fmt.Errorf("rendering page: %w", err)
+			}
+			return nil
+		})
 	}
-	return nil
+	return g.Wait()
 }
 
 func generatePackagePages(outDir string, tmpl *template.Template, data *AggregatedData, title, version string, genInfo GenerationInfo) error {
 	// Global Moved Packages Pages
+	pkgMap := make(map[string]bool)
+	for _, p := range data.Packages {
+		pkgMap[p.Category+"/"+p.Name] = true
+	}
+
+	gMoves := new(errgroup.Group)
+	gMoves.SetLimit(10)
 	for oldPath, move := range data.Moves {
-		parts := strings.Split(oldPath, "/")
-		if len(parts) != 2 {
-			continue
-		}
-		oldCat, oldName := parts[0], parts[1]
-
-		pkgExists := false
-		for _, p := range data.Packages {
-			if p.Category == oldCat && p.Name == oldName {
-				pkgExists = true
-				break
+		oldPath, move := oldPath, move
+		gMoves.Go(func() error {
+			parts := strings.Split(oldPath, "/")
+			if len(parts) != 2 {
+				return nil
 			}
-		}
-		if pkgExists {
-			continue // skip if a package now exists at this location
-		}
+			oldCat, oldName := parts[0], parts[1]
 
-		newParts := strings.Split(move.New, "/")
-		if len(newParts) != 2 {
-			continue
-		}
+			if pkgMap[oldPath] {
+				return nil // skip if a package now exists at this location
+			}
 
-		pkgDir := filepath.Join(outDir, "packages", oldCat, oldName)
-		if err := os.MkdirAll(pkgDir, 0755); err != nil {
-			return fmt.Errorf("creating directory %s: %w", pkgDir, err)
-		}
+			newParts := strings.Split(move.New, "/")
+			if len(newParts) != 2 {
+				return nil
+			}
 
-		rootNode := &PageNode{Name: title, Path: ""}
-		packagesNode := &PageNode{Parent: rootNode, Name: "Packages", Path: "packages"}
-		catNode := &PageNode{Parent: packagesNode, Name: oldCat, Path: "packages/" + oldCat}
-		pkgNode := &PageNode{Parent: catNode, Name: oldName, Path: "packages/" + oldCat + "/" + oldName}
+			pkgDir := filepath.Join(outDir, "packages", oldCat, oldName)
+			if err := os.MkdirAll(pkgDir, 0755); err != nil {
+				return fmt.Errorf("creating directory %s: %w", pkgDir, err)
+			}
 
-		ctx := pkgNode.Context("Package Moved: "+oldCat+"/"+oldName, version, genInfo)
-		ctx.OldName = oldCat + "/" + oldName
-		ctx.NewName = move.New
-		ctx.NewURL = "../../" + newParts[0] + "/" + newParts[1] + "/"
+			rootNode := &PageNode{Name: title, Path: ""}
+			packagesNode := &PageNode{Parent: rootNode, Name: "Packages", Path: "packages"}
+			catNode := &PageNode{Parent: packagesNode, Name: oldCat, Path: "packages/" + oldCat}
+			pkgNode := &PageNode{Parent: catNode, Name: oldName, Path: "packages/" + oldCat + "/" + oldName}
 
-		if err := renderPage(filepath.Join(pkgDir, "index.html"), tmpl, "moved_package.html", ctx); err != nil {
-			return fmt.Errorf("rendering page: %w", err)
-		}
+			ctx := pkgNode.Context("Package Moved: "+oldCat+"/"+oldName, version, genInfo)
+			ctx.OldName = oldCat + "/" + oldName
+			ctx.NewName = move.New
+			ctx.NewURL = "../../" + newParts[0] + "/" + newParts[1] + "/"
+
+			if err := renderPage(filepath.Join(pkgDir, "index.html"), tmpl, "moved_package.html", ctx); err != nil {
+				return fmt.Errorf("rendering page: %w", err)
+			}
+			return nil
+		})
+	}
+	if err := gMoves.Wait(); err != nil {
+		return err
 	}
 
 	// 4. Global Packages
@@ -269,48 +282,53 @@ func generatePackagePages(outDir string, tmpl *template.Template, data *Aggregat
 		return fmt.Errorf("rendering page: %w", err)
 	}
 
+	gPkgs := new(errgroup.Group)
+	gPkgs.SetLimit(10)
 	for _, pkg := range data.Packages {
-		pkgDir := filepath.Join(outDir, "packages", pkg.Category, pkg.Name)
-		if err := os.MkdirAll(pkgDir, 0755); err != nil {
-			return fmt.Errorf("creating directory %s: %w", pkgDir, err)
-		}
-
-		reposList := mapToList(pkg.Repos)
-
-		if len(reposList) == 1 {
-			targetURL := fmt.Sprintf("../../../repos/%s/categories/%s/packages/%s/", reposList[0].RepoName, pkg.Category, pkg.Name)
-			if err := renderPage(filepath.Join(pkgDir, "index.html"), tmpl, "redirect.html", GenericPageContext{
-				TargetURL: targetURL,
-			}); err != nil {
-				return fmt.Errorf("rendering page: %w", err)
+		pkg := pkg
+		gPkgs.Go(func() error {
+			pkgDir := filepath.Join(outDir, "packages", pkg.Category, pkg.Name)
+			if err := os.MkdirAll(pkgDir, 0755); err != nil {
+				return fmt.Errorf("creating directory %s: %w", pkgDir, err)
 			}
-		} else {
-			var movedToName, movedToURL string
-			if move, ok := data.Moves[pkg.Category+"/"+pkg.Name]; ok {
-				newParts := strings.Split(move.New, "/")
-				if len(newParts) == 2 {
-					movedToName = move.New
-					movedToURL = "../../" + newParts[0] + "/" + newParts[1] + "/"
+
+			reposList := mapToList(pkg.Repos)
+
+			if len(reposList) == 1 {
+				targetURL := fmt.Sprintf("../../../repos/%s/categories/%s/packages/%s/", reposList[0].RepoName, pkg.Category, pkg.Name)
+				if err := renderPage(filepath.Join(pkgDir, "index.html"), tmpl, "redirect.html", GenericPageContext{
+					TargetURL: targetURL,
+				}); err != nil {
+					return fmt.Errorf("rendering page: %w", err)
+				}
+			} else {
+				var movedToName, movedToURL string
+				if move, ok := data.Moves[pkg.Category+"/"+pkg.Name]; ok {
+					newParts := strings.Split(move.New, "/")
+					if len(newParts) == 2 {
+						movedToName = move.New
+						movedToURL = "../../" + newParts[0] + "/" + newParts[1] + "/"
+					}
+				}
+
+				rootNode := &PageNode{Name: title, Path: ""}
+				packagesNode := &PageNode{Parent: rootNode, Name: "Packages", Path: "packages"}
+				catNode := &PageNode{Parent: packagesNode, Name: pkg.Category, Path: "packages/" + pkg.Category}
+				pkgNode := &PageNode{Parent: catNode, Name: pkg.Name, Path: "packages/" + pkg.Category + "/" + pkg.Name}
+
+				ctx := pkgNode.Context("Package: "+pkg.Category+"/"+pkg.Name, version, genInfo)
+				ctx.GlobalPackage = pkg
+				ctx.MovedToName = movedToName
+				ctx.MovedToURL = movedToURL
+
+				if err := renderPage(filepath.Join(pkgDir, "index.html"), tmpl, "package_picker.html", ctx); err != nil {
+					return fmt.Errorf("rendering page: %w", err)
 				}
 			}
-
-			rootNode := &PageNode{Name: title, Path: ""}
-			packagesNode := &PageNode{Parent: rootNode, Name: "Packages", Path: "packages"}
-			catNode := &PageNode{Parent: packagesNode, Name: pkg.Category, Path: "packages/" + pkg.Category}
-			pkgNode := &PageNode{Parent: catNode, Name: pkg.Name, Path: "packages/" + pkg.Category + "/" + pkg.Name}
-
-			ctx := pkgNode.Context("Package: "+pkg.Category+"/"+pkg.Name, version, genInfo)
-			ctx.GlobalPackage = pkg
-			ctx.MovedToName = movedToName
-			ctx.MovedToURL = movedToURL
-
-			if err := renderPage(filepath.Join(pkgDir, "index.html"), tmpl, "package_picker.html", ctx); err != nil {
-				return fmt.Errorf("rendering page: %w", err)
-			}
-
-		}
+			return nil
+		})
 	}
-	return nil
+	return gPkgs.Wait()
 }
 
 func generateOtherGlobalPages(outDir string, tmpl *template.Template, data *AggregatedData, title, version string, genInfo GenerationInfo) error {
@@ -329,22 +347,31 @@ func generateOtherGlobalPages(outDir string, tmpl *template.Template, data *Aggr
 		return fmt.Errorf("rendering page: %w", err)
 	}
 
+	gArches := new(errgroup.Group)
+	gArches.SetLimit(10)
 	for _, a := range data.Arches {
-		archDir := filepath.Join(outDir, "arches", a.Name)
-		if err := os.MkdirAll(archDir, 0755); err != nil {
-			return fmt.Errorf("creating directory %s: %w", archDir, err)
-		}
+		a := a
+		gArches.Go(func() error {
+			archDir := filepath.Join(outDir, "arches", a.Name)
+			if err := os.MkdirAll(archDir, 0755); err != nil {
+				return fmt.Errorf("creating directory %s: %w", archDir, err)
+			}
 
-		if err := renderPage(filepath.Join(archDir, "index.html"), tmpl, "arch.html", GenericPageContext{
-			Title:       "Architecture: " + a.Name,
-			BaseURL:     "../../",
-			Breadcrumbs: []g2.Breadcrumb{{Name: title, URL: "../../"}, {Name: "Architectures", URL: "../../arches/"}, {Name: a.Name}},
-			Arch:        a,
-			Version:     version,
-			GenInfo:     genInfo,
-		}); err != nil {
-			return fmt.Errorf("rendering page: %w", err)
-		}
+			if err := renderPage(filepath.Join(archDir, "index.html"), tmpl, "arch.html", GenericPageContext{
+				Title:       "Architecture: " + a.Name,
+				BaseURL:     "../../",
+				Breadcrumbs: []g2.Breadcrumb{{Name: title, URL: "../../"}, {Name: "Architectures", URL: "../../arches/"}, {Name: a.Name}},
+				Arch:        a,
+				Version:     version,
+				GenInfo:     genInfo,
+			}); err != nil {
+				return fmt.Errorf("rendering page: %w", err)
+			}
+			return nil
+		})
+	}
+	if err := gArches.Wait(); err != nil {
+		return err
 	}
 
 	// Profiles
@@ -363,25 +390,34 @@ func generateOtherGlobalPages(outDir string, tmpl *template.Template, data *Aggr
 			return fmt.Errorf("rendering page: %w", err)
 		}
 
+		gProfiles := new(errgroup.Group)
+		gProfiles.SetLimit(10)
 		for _, p := range data.Profiles {
-			profDir := filepath.Join(outDir, "profiles", p.Path)
-			if err := os.MkdirAll(profDir, 0755); err != nil {
-				return fmt.Errorf("creating directory %s: %w", profDir, err)
-			}
+			p := p
+			gProfiles.Go(func() error {
+				profDir := filepath.Join(outDir, "profiles", p.Path)
+				if err := os.MkdirAll(profDir, 0755); err != nil {
+					return fmt.Errorf("creating directory %s: %w", profDir, err)
+				}
 
-			relToRoot := "../../" + strings.Repeat("../", strings.Count(p.Path, "/"))
+				relToRoot := "../../" + strings.Repeat("../", strings.Count(p.Path, "/"))
 
-			if err := renderPage(filepath.Join(profDir, "index.html"), tmpl, "profile.html", GenericPageContext{
-				Title:       "Profile: " + p.Path,
-				BaseURL:     relToRoot,
-				Breadcrumbs: []g2.Breadcrumb{{Name: title, URL: relToRoot}, {Name: "Profiles", URL: relToRoot + "profiles/"}, {Name: p.Path}},
-				ProfilePath: p.Path,
-				ProfileList: p.Repos,
-				Version:     version,
-				GenInfo:     genInfo,
-			}); err != nil {
-				return fmt.Errorf("rendering page: %w", err)
-			}
+				if err := renderPage(filepath.Join(profDir, "index.html"), tmpl, "profile.html", GenericPageContext{
+					Title:       "Profile: " + p.Path,
+					BaseURL:     relToRoot,
+					Breadcrumbs: []g2.Breadcrumb{{Name: title, URL: relToRoot}, {Name: "Profiles", URL: relToRoot + "profiles/"}, {Name: p.Path}},
+					ProfilePath: p.Path,
+					ProfileList: p.Repos,
+					Version:     version,
+					GenInfo:     genInfo,
+				}); err != nil {
+					return fmt.Errorf("rendering page: %w", err)
+				}
+				return nil
+			})
+		}
+		if err := gProfiles.Wait(); err != nil {
+			return err
 		}
 
 	}
@@ -503,37 +539,46 @@ func generateOtherGlobalPages(outDir string, tmpl *template.Template, data *Aggr
 			return fmt.Errorf("rendering page: %w", err)
 		}
 
+		gProjects := new(errgroup.Group)
+		gProjects.SetLimit(10)
 		for _, proj := range data.Projects {
-			projDirName := sanitizeFilename(proj.Project.Email)
-			if projDirName == "" {
-				continue
-			}
-			projDir := filepath.Join(outDir, "projects", projDirName)
-			if err := os.MkdirAll(projDir, 0755); err != nil {
-				return fmt.Errorf("creating directory %s: %w", projDir, err)
-			}
+			proj := proj
+			gProjects.Go(func() error {
+				projDirName := sanitizeFilename(proj.Project.Email)
+				if projDirName == "" {
+					return nil
+				}
+				projDir := filepath.Join(outDir, "projects", projDirName)
+				if err := os.MkdirAll(projDir, 0755); err != nil {
+					return fmt.Errorf("creating directory %s: %w", projDir, err)
+				}
 
-			type TmplPkg struct {
-				Name      string
-				Category  string
-				ReposList []*g2.SiteData
-			}
-			var tmplPkgs []TmplPkg
-			for _, p := range proj.Packages {
-				tmplPkgs = append(tmplPkgs, TmplPkg{Name: p.Name, Category: p.Category, ReposList: mapToList(p.Repos)})
-			}
+				type TmplPkg struct {
+					Name      string
+					Category  string
+					ReposList []*g2.SiteData
+				}
+				var tmplPkgs []TmplPkg
+				for _, p := range proj.Packages {
+					tmplPkgs = append(tmplPkgs, TmplPkg{Name: p.Name, Category: p.Category, ReposList: mapToList(p.Repos)})
+				}
 
-			if err := renderPage(filepath.Join(projDir, "index.html"), tmpl, "project.html", GenericPageContext{
-				Title:       "Project: " + proj.Project.Name,
-				BaseURL:     "../../",
-				Breadcrumbs: []g2.Breadcrumb{{Name: title, URL: "../../"}, {Name: "Projects", URL: "../"}, {Name: proj.Project.Name}},
-				Project:     proj,
-				Packages:    tmplPkgs, // Legacy any for TmplPkgs
-				Version:     version,
-				GenInfo:     genInfo,
-			}); err != nil {
-				return fmt.Errorf("rendering page: %w", err)
-			}
+				if err := renderPage(filepath.Join(projDir, "index.html"), tmpl, "project.html", GenericPageContext{
+					Title:       "Project: " + proj.Project.Name,
+					BaseURL:     "../../",
+					Breadcrumbs: []g2.Breadcrumb{{Name: title, URL: "../../"}, {Name: "Projects", URL: "../"}, {Name: proj.Project.Name}},
+					Project:     proj,
+					Packages:    tmplPkgs, // Legacy any for TmplPkgs
+					Version:     version,
+					GenInfo:     genInfo,
+				}); err != nil {
+					return fmt.Errorf("rendering page: %w", err)
+				}
+				return nil
+			})
+		}
+		if err := gProjects.Wait(); err != nil {
+			return err
 		}
 
 	}
@@ -1173,100 +1218,103 @@ func generateRepoPackagesPages(repoDir string, tmpl *template.Template, site *g2
 		}
 	}
 
+	gPkgs := new(errgroup.Group)
+	gPkgs.SetLimit(10)
 	for _, pkg := range repoPkgs {
-		pkgDir := filepath.Join(repoDir, "categories", pkg.Category, "packages", pkg.Name)
-		if err := os.MkdirAll(pkgDir, 0755); err != nil {
-			return fmt.Errorf("creating directory %s: %w", pkgDir, err)
-		}
+		pkg := pkg
+		gPkgs.Go(func() error {
+			pkgDir := filepath.Join(repoDir, "categories", pkg.Category, "packages", pkg.Name)
+			if err := os.MkdirAll(pkgDir, 0755); err != nil {
+				return fmt.Errorf("creating directory %s: %w", pkgDir, err)
+			}
 
-		var movedToName, movedToURL string
-		for _, move := range site.Moves {
-			if move.Old == pkg.Category+"/"+pkg.Name {
+			var movedToName, movedToURL string
+			if move, ok := data.Moves[pkg.Category+"/"+pkg.Name]; ok {
 				newParts := strings.Split(move.New, "/")
 				if len(newParts) == 2 {
 					movedToName = move.New
 					movedToURL = "../../../" + newParts[0] + "/packages/" + newParts[1] + "/"
 				}
-				break
 			}
-		}
 
-		if err := renderPage(filepath.Join(pkgDir, "index.html"), tmpl, "repo_package.html", GenericPageContext{
-			Title:         fmt.Sprintf("%s - %s/%s", site.RepoName, pkg.Category, pkg.Name),
-			BaseURL:       "../../../../../../",
-			Breadcrumbs:   []g2.Breadcrumb{{Name: title, URL: "../../../../../../"}, {Name: site.RepoName, URL: "../../../../"}, {Name: "Categories", URL: "../../../"}, {Name: pkg.Category, URL: "../../"}, {Name: pkg.Name}},
-			Repo:          site,
-			RepoPackage:   &pkg,
-			MovedToName:   movedToName,
-			MovedToURL:    movedToURL,
-			Version:       version,
-			GenInfo:       genInfo,
-			ValidLicenses: data.ValidLicenses,
-		}); err != nil {
-			return fmt.Errorf("rendering page: %w", err)
-		}
+			if err := renderPage(filepath.Join(pkgDir, "index.html"), tmpl, "repo_package.html", GenericPageContext{
+				Title:         fmt.Sprintf("%s - %s/%s", site.RepoName, pkg.Category, pkg.Name),
+				BaseURL:       "../../../../../../",
+				Breadcrumbs:   []g2.Breadcrumb{{Name: title, URL: "../../../../../../"}, {Name: site.RepoName, URL: "../../../../"}, {Name: "Categories", URL: "../../../"}, {Name: pkg.Category, URL: "../../"}, {Name: pkg.Name}},
+				Repo:          site,
+				RepoPackage:   &pkg,
+				MovedToName:   movedToName,
+				MovedToURL:    movedToURL,
+				Version:       version,
+				GenInfo:       genInfo,
+				ValidLicenses: data.ValidLicenses,
+			}); err != nil {
+				return fmt.Errorf("rendering page: %w", err)
+			}
 
-		for _, md := range pkg.ManifestData {
-			if len(md.Versions) > 0 {
-				mdDir := filepath.Join(pkgDir, "manifest", md.Entry.Filename)
-				if err := os.MkdirAll(mdDir, 0755); err != nil {
-					return fmt.Errorf("creating directory %s: %w", mdDir, err)
+			for _, md := range pkg.ManifestData {
+				if len(md.Versions) > 0 {
+					mdDir := filepath.Join(pkgDir, "manifest", md.Entry.Filename)
+					if err := os.MkdirAll(mdDir, 0755); err != nil {
+						return fmt.Errorf("creating directory %s: %w", mdDir, err)
+					}
+
+					if err := renderPage(filepath.Join(mdDir, "index.html"), tmpl, "repo_package_manifest.html", GenericPageContext{
+						Title:       fmt.Sprintf("%s - %s/%s - Manifest: %s", site.RepoName, pkg.Category, pkg.Name, md.Entry.Filename),
+						BaseURL:     "../../../../../../../../",
+						Breadcrumbs: []g2.Breadcrumb{{Name: title, URL: "../../../../../../../../"}, {Name: site.RepoName, URL: "../../../../../../"}, {Name: "Categories", URL: "../../../../../"}, {Name: pkg.Category, URL: "../../../../"}, {Name: pkg.Name, URL: "../../"}, {Name: "Manifest"}, {Name: md.Entry.Filename}},
+						Repo:        site,
+						RepoPackage: &pkg,
+						Manifest:    &md,
+						Version:     version,
+						GenInfo:     genInfo,
+					}); err != nil {
+						return fmt.Errorf("rendering page: %w", err)
+					}
+				}
+			}
+			for _, v := range pkg.Versions {
+				versionStr := v.Version
+				if v.Ebuild != nil && v.Ebuild.Vars != nil && v.Ebuild.Vars["PV"] != "" {
+					versionStr = v.Ebuild.Vars["PV"]
 				}
 
-				if err := renderPage(filepath.Join(mdDir, "index.html"), tmpl, "repo_package_manifest.html", GenericPageContext{
-					Title:       fmt.Sprintf("%s - %s/%s - Manifest: %s", site.RepoName, pkg.Category, pkg.Name, md.Entry.Filename),
-					BaseURL:     "../../../../../../../../",
-					Breadcrumbs: []g2.Breadcrumb{{Name: title, URL: "../../../../../../../../"}, {Name: site.RepoName, URL: "../../../../../../"}, {Name: "Categories", URL: "../../../../../"}, {Name: pkg.Category, URL: "../../../../"}, {Name: pkg.Name, URL: "../../"}, {Name: "Manifest"}, {Name: md.Entry.Filename}},
-					Repo:        site,
-					RepoPackage: &pkg,
-					Manifest:    &md,
-					Version:     version,
-					GenInfo:     genInfo,
+				ebuildDir := filepath.Join(pkgDir, "ebuild", versionStr)
+				if err := os.MkdirAll(ebuildDir, 0755); err != nil {
+					return fmt.Errorf("creating directory %s: %w", ebuildDir, err)
+				}
+
+				var filteredManifest []g2.ManifestEntryData
+				if pkg.Manifest != nil {
+					for _, md := range pkg.ManifestData {
+						for _, mv := range md.Versions {
+							if mv == v.Version || mv == versionStr {
+								filteredManifest = append(filteredManifest, md)
+								break
+							}
+						}
+					}
+				}
+
+				if err := renderPage(filepath.Join(ebuildDir, "index.html"), tmpl, "ebuild_details.html", GenericPageContext{
+					Title:            fmt.Sprintf("%s - %s/%s-%s", site.RepoName, pkg.Category, pkg.Name, versionStr),
+					BaseURL:          "../../../../../../../../",
+					Breadcrumbs:      []g2.Breadcrumb{{Name: title, URL: "../../../../../../../../"}, {Name: site.RepoName, URL: "../../../../../../"}, {Name: "Categories", URL: "../../../../../"}, {Name: pkg.Category, URL: "../../../../"}, {Name: "Packages", URL: "../../../"}, {Name: pkg.Name, URL: "../../"}, {Name: "Ebuild", URL: "../"}, {Name: versionStr}},
+					Repo:             site,
+					RepoPackage:      &pkg,
+					VersionData:      &v,
+					FilteredManifest: filteredManifest,
+					Version:          version,
+					GenInfo:          genInfo,
+					ValidLicenses:    data.ValidLicenses,
 				}); err != nil {
 					return fmt.Errorf("rendering page: %w", err)
 				}
 			}
-		}
-		for _, v := range pkg.Versions {
-			versionStr := v.Version
-			if v.Ebuild != nil && v.Ebuild.Vars != nil && v.Ebuild.Vars["PV"] != "" {
-				versionStr = v.Ebuild.Vars["PV"]
-			}
-
-			ebuildDir := filepath.Join(pkgDir, "ebuild", versionStr)
-			if err := os.MkdirAll(ebuildDir, 0755); err != nil {
-				return fmt.Errorf("creating directory %s: %w", ebuildDir, err)
-			}
-
-			var filteredManifest []g2.ManifestEntryData
-			if pkg.Manifest != nil {
-				for _, md := range pkg.ManifestData {
-					for _, mv := range md.Versions {
-						if mv == v.Version || mv == versionStr {
-							filteredManifest = append(filteredManifest, md)
-							break
-						}
-					}
-				}
-			}
-
-			if err := renderPage(filepath.Join(ebuildDir, "index.html"), tmpl, "ebuild_details.html", GenericPageContext{
-				Title:            fmt.Sprintf("%s - %s/%s-%s", site.RepoName, pkg.Category, pkg.Name, versionStr),
-				BaseURL:          "../../../../../../../../",
-				Breadcrumbs:      []g2.Breadcrumb{{Name: title, URL: "../../../../../../../../"}, {Name: site.RepoName, URL: "../../../../../../"}, {Name: "Categories", URL: "../../../../../"}, {Name: pkg.Category, URL: "../../../../"}, {Name: "Packages", URL: "../../../"}, {Name: pkg.Name, URL: "../../"}, {Name: "Ebuild", URL: "../"}, {Name: versionStr}},
-				Repo:             site,
-				RepoPackage:      &pkg,
-				VersionData:      &v,
-				FilteredManifest: filteredManifest,
-				Version:          version,
-				GenInfo:          genInfo,
-				ValidLicenses:    data.ValidLicenses,
-			}); err != nil {
-				return fmt.Errorf("rendering page: %w", err)
-			}
-		}
+			return nil
+		})
 	}
-	return nil
+	return gPkgs.Wait()
 }
 
 func generateSite(outDir string, sites []*g2.SiteData, recentDuration time.Duration, recentDurationStr string, genInfo GenerationInfo) error {
