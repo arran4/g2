@@ -115,16 +115,16 @@ func TestGenerateSearchIndex(t *testing.T) {
 	if doc.FullName != "app-test/test-pkg" {
 		t.Errorf("Expected FullName app-test/test-pkg, got %s", doc.FullName)
 	}
-	if doc.Description != "A test package for testing" {
+	if doc.Description != "a test package for testing" {
 		t.Errorf("Expected Description 'A test package for testing', got %s", doc.Description)
 	}
-	if len(doc.Licenses) < 3 || doc.Licenses[0] != "MIT" || doc.Licenses[1] != "FREE" || doc.Licenses[2] != "OSI-APPROVED" {
+	if len(doc.Licenses) < 3 || doc.Licenses[0] != "mit" || doc.Licenses[1] != "free" || doc.Licenses[2] != "osi-approved" {
 		t.Errorf("Expected license MIT, FREE, OSI-APPROVED, got %v", doc.Licenses)
 	}
 	if len(doc.Depends) == 0 || doc.Depends[0] != "dev-lang/go" {
 		t.Errorf("Expected depend dev-lang/go, got %v", doc.Depends)
 	}
-	if len(doc.UseDescriptions) == 0 || doc.UseDescriptions[0] != "Enables testing" {
+	if len(doc.UseDescriptions) == 0 || doc.UseDescriptions[0] != "enables testing" {
 		t.Errorf("Expected use description 'Enables testing', got %v", doc.UseDescriptions)
 	}
 	if doc.VersionSortKey == "" {

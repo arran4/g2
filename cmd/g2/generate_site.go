@@ -1318,24 +1318,44 @@ func generateRepoPackagesPages(repoDir string, tmpl *template.Template, site *g2
 }
 
 func generateSite(outDir string, sites []*g2.SiteData, recentDuration time.Duration, recentDurationStr string, genInfo GenerationInfo) error {
+	if genInfo.Profiler == nil {
+		genInfo.Profiler = NewProfiler(false, "")
+	}
+	defer func() {
+		if err := genInfo.Profiler.Write(); err != nil {
+			log.Printf("Error writing profile: %v", err)
+		}
+	}()
+
+	defer genInfo.Profiler.Track("Total Generation")()
+
 	log.Printf("Starting site generation (v%s) with %d repos to %s", version, len(sites), outDir)
+	stepMkdir := genInfo.Profiler.Track("Create Output Directory")
 	if err := os.MkdirAll(outDir, 0755); err != nil {
 		return err
 	}
+	stepMkdir()
 
+	stepPopulate := genInfo.Profiler.Track("Populate Package Use Flags")
 	for _, site := range sites {
 		populatePkgUseFlags(site)
 	}
+	stepPopulate()
 
 	// Generate search index
+	stepSearchIndex := genInfo.Profiler.Track("Generate Search Index")
 	if err := generateSearchIndex(outDir, sites); err != nil {
 		log.Printf("Warning: failed to generate search index: %v", err)
 	}
+	stepSearchIndex()
 
+	stepTemplates := genInfo.Profiler.Track("Load Templates")
 	tmpl, err := GetSiteTemplates()
 	if err != nil {
 		return fmt.Errorf("loading templates: %w", err)
 	}
+	stepTemplates()
+
 
 	for _, site := range sites {
 		aggPackagesMap := make(map[string]*AggPackage)
@@ -1368,29 +1388,39 @@ func generateSite(outDir string, sites []*g2.SiteData, recentDuration time.Durat
 
 	// Render Phases
 	log.Printf("[PHASE] Rendering global pages...")
+	stepGlobalPages := genInfo.Profiler.Track("Render Global Pages")
 	if err := generateGlobalPages(outDir, tmpl, sites, data, title, version, recentDurationStr, genInfo); err != nil {
 		return err
 	}
+	stepGlobalPages()
 
 	log.Printf("[PHASE] Rendering %d category pages...", len(data.Categories))
+	stepCategoryPages := genInfo.Profiler.Track("Render Category Pages")
 	if err := generateCategoryPages(outDir, tmpl, data, title, version, genInfo); err != nil {
 		return err
 	}
+	stepCategoryPages()
 
 	log.Printf("[PHASE] Rendering package pages...")
+	stepPackagePages := genInfo.Profiler.Track("Render Package Pages")
 	if err := generatePackagePages(outDir, tmpl, data, title, version, genInfo); err != nil {
 		return err
 	}
+	stepPackagePages()
 
 	log.Printf("[PHASE] Rendering other global pages...")
+	stepOtherGlobalPages := genInfo.Profiler.Track("Render Other Global Pages")
 	if err := generateOtherGlobalPages(outDir, tmpl, data, title, version, genInfo); err != nil {
 		return err
 	}
+	stepOtherGlobalPages()
 
 	log.Printf("[PHASE] Rendering %d repository pages...", len(sites))
+	stepRepositoryPages := genInfo.Profiler.Track("Render Repository Pages")
 	if err := generateRepoPages(outDir, tmpl, sites, data, title, version, recentDurationStr, genInfo); err != nil {
 		return err
 	}
+	stepRepositoryPages()
 
 	totalNodes := len(data.Categories) + data.TotalPackages + len(data.Profiles) + len(data.GlobalNews) + len(data.Moves) + len(data.Eclasses)
 	for _, pkg := range data.Packages {

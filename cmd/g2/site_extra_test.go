@@ -22,9 +22,16 @@ func TestResolveDependencies(t *testing.T) {
 
 	depTree := g2.ParseDepTree("test? ( app-misc/bar app-misc/baz )")
 
+	pkgMap := make(map[string]bool)
+	for i := range site.Categories {
+		for j := range site.Categories[i].Packages {
+			pkgMap[site.Categories[i].Packages[j].Category+"/"+site.Categories[i].Packages[j].Name] = true
+		}
+	}
+
 	nodes := make([]ResolvedDepNode, 0)
 	for _, n := range depTree.Nodes {
-		nodes = append(nodes, resolveDependencies(n, site))
+		nodes = append(nodes, resolveDependencies(n, pkgMap))
 	}
 
 	if len(nodes) != 1 {

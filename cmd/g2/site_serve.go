@@ -257,7 +257,10 @@ func parseIUSEFlagsFunc(iuse string) []ParsedIUSEFlag {
 	var flags []ParsedIUSEFlag
 	parts := strings.Fields(iuse)
 	for _, part := range parts {
-		if part == "" {
+		if part == "" || part == "." || part == "/" || part == ".." {
+			if part != "" {
+				log.Printf("Warning: filtered out invalid use flag: %q", part)
+			}
 			continue
 		}
 		name := strings.TrimPrefix(part, "+")

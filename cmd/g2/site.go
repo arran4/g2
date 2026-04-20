@@ -80,6 +80,8 @@ func (cfg *MainArgConfig) cmdOverlay(args []string) error {
 	}
 
 	fs := flag.NewFlagSet("overlay site generate", flag.ExitOnError)
+	profileSiteGen := fs.Bool("profile", false, "Generate a profile report of site generation")
+	profileOut := fs.String("profile-out", "profile.txt", "Output file for the profile report, or '-' for stdout")
 	outDir := fs.String("out", "site_out", "Output directory for the generated site")
 	clear := fs.Bool("clear", false, "Clear output directory before generation")
 	recentDurOpt := fs.String("recent-duration", "3mo", "Duration to consider an update 'recent' (e.g. 3mo, 14d, 72h)")
@@ -262,6 +264,8 @@ func (cfg *MainArgConfig) cmdOverlay(args []string) error {
 	})
 
 	genInfo := GenerationInfo{Args: cfg.Args, FastGit: *fastGit, RecentDuration: recentDurationStr}
+	profiler := NewProfiler(*profileSiteGen, *profileOut)
+	genInfo.Profiler = profiler
 	if err := generateSite(*outDir, allSites, recentDuration, recentDurationStr, genInfo); err != nil {
 		return fmt.Errorf("generating site: %w", err)
 	}
@@ -289,6 +293,8 @@ func (cfg *MainArgConfig) cmdOverlays(args []string) error {
 	}
 
 	fs := flag.NewFlagSet("overlays site generate", flag.ExitOnError)
+	profileSiteGen := fs.Bool("profile", false, "Generate a profile report of site generation")
+	profileOut := fs.String("profile-out", "profile.txt", "Output file for the profile report, or '-' for stdout")
 	outDir := fs.String("out", "site_out", "Output directory for the generated site")
 	clear := fs.Bool("clear", false, "Clear output directory before generation")
 	recentDurOpt := fs.String("recent-duration", "3mo", "Duration to consider an update 'recent' (e.g. 3mo, 14d, 72h)")
@@ -327,7 +333,7 @@ func (cfg *MainArgConfig) cmdOverlays(args []string) error {
 	}
 
 	log.Printf("Generating site (v%s) from remote repositories: %s into %s", version, location, *outDir)
-	return cfg.cmdSiteRemote(location, *outDir, recentDuration, recentDurationStr, *fastGit, *useZip, *concurrency, *retries, *continueOnError, *persistentDir, *reposConfOpt, *tempDir, *workMode, *mode)
+	return cfg.cmdSiteRemote(location, *outDir, recentDuration, recentDurationStr, *fastGit, *useZip, *concurrency, *retries, *continueOnError, *persistentDir, *reposConfOpt, *tempDir, *workMode, *mode, *profileSiteGen, *profileOut)
 }
 
 func parseLayoutConfFromFS(sysFS fs.FS, path string) (*g2.LayoutConf, error) {
@@ -450,7 +456,7 @@ type ResolvedDepNode struct {
 	Children  []ResolvedDepNode `json:"children,omitempty"`
 }
 
-func resolveDependencies(node g2.DepNode, site *g2.SiteData) ResolvedDepNode {
+func resolveDependencies(node g2.DepNode, pkgMap map[string]bool) ResolvedDepNode {
 	switch n := node.(type) {
 	case g2.DepString:
 		raw := string(n)
@@ -458,11 +464,10 @@ func resolveDependencies(node g2.DepNode, site *g2.SiteData) ResolvedDepNode {
 		link := ""
 
 		if pkgName != "" {
-			for i := range site.Categories {
-				for j := range site.Categories[i].Packages {
-					if site.Categories[i].Packages[j].Category+"/"+site.Categories[i].Packages[j].Name == pkgName {
-						link = "../../../../../../categories/" + site.Categories[i].Packages[j].Category + "/packages/" + site.Categories[i].Packages[j].Name + "/"
-					}
+			if pkgMap[pkgName] {
+				parts := strings.SplitN(pkgName, "/", 2)
+				if len(parts) == 2 {
+					link = "../../../../../../categories/" + parts[0] + "/packages/" + parts[1] + "/"
 				}
 			}
 		}
@@ -476,14 +481,14 @@ func resolveDependencies(node g2.DepNode, site *g2.SiteData) ResolvedDepNode {
 	case g2.DepAnyOf:
 		res := ResolvedDepNode{Type: "any_of"}
 		for _, child := range n.Children {
-			res.Children = append(res.Children, resolveDependencies(child, site))
+			res.Children = append(res.Children, resolveDependencies(child, pkgMap))
 		}
 		return res
 
 	case g2.DepAllOf:
 		res := ResolvedDepNode{Type: "all_of"}
 		for _, child := range n.Children {
-			res.Children = append(res.Children, resolveDependencies(child, site))
+			res.Children = append(res.Children, resolveDependencies(child, pkgMap))
 		}
 		return res
 
@@ -494,7 +499,7 @@ func resolveDependencies(node g2.DepNode, site *g2.SiteData) ResolvedDepNode {
 			IsNegated: n.IsNegated,
 		}
 		for _, child := range n.Children {
-			res.Children = append(res.Children, resolveDependencies(child, site))
+			res.Children = append(res.Children, resolveDependencies(child, pkgMap))
 		}
 		return res
 	}
@@ -657,6 +662,14 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool, r
 }
 
 func extractVirtualDeps(site *g2.SiteData) {
+	pkgMap := make(map[string]*g2.PackageData)
+	for i := range site.Categories {
+		for j := range site.Categories[i].Packages {
+			key := site.Categories[i].Name + "/" + site.Categories[i].Packages[j].Name
+			pkgMap[key] = &site.Categories[i].Packages[j]
+		}
+	}
+
 	for i := range site.Categories {
 		if site.Categories[i].Name != "virtual" && !strings.HasPrefix(site.Categories[i].Name, "virtual-") {
 			continue
@@ -678,29 +691,17 @@ func extractVirtualDeps(site *g2.SiteData) {
 			}
 			for dep := range depsMap {
 				pkg.VirtualDeps = append(pkg.VirtualDeps, dep)
-				depParts := strings.Split(dep, "/")
-				if len(depParts) == 2 {
-					depCat := depParts[0]
-					depName := depParts[1]
-					for k := range site.Categories {
-						if site.Categories[k].Name == depCat {
-							for l := range site.Categories[k].Packages {
-								if site.Categories[k].Packages[l].Name == depName {
-									targetPkg := &site.Categories[k].Packages[l]
-									virtualName := pkg.Category + "/" + pkg.Name
-									found := false
-									for _, v := range targetPkg.ReverseVirtuals {
-										if v == virtualName {
-											found = true
-											break
-										}
-									}
-									if !found {
-										targetPkg.ReverseVirtuals = append(targetPkg.ReverseVirtuals, virtualName)
-									}
-								}
-							}
+				if targetPkg, ok := pkgMap[dep]; ok {
+					virtualName := pkg.Category + "/" + pkg.Name
+					found := false
+					for _, v := range targetPkg.ReverseVirtuals {
+						if v == virtualName {
+							found = true
+							break
 						}
+					}
+					if !found {
+						targetPkg.ReverseVirtuals = append(targetPkg.ReverseVirtuals, virtualName)
 					}
 				}
 			}
@@ -708,30 +709,18 @@ func extractVirtualDeps(site *g2.SiteData) {
 
 			// Compute Equivalents for each package in VirtualDeps
 			for _, dep := range pkg.VirtualDeps {
-				depParts := strings.Split(dep, "/")
-				if len(depParts) == 2 {
-					depCat := depParts[0]
-					depName := depParts[1]
-					for k := range site.Categories {
-						if site.Categories[k].Name == depCat {
-							for l := range site.Categories[k].Packages {
-								if site.Categories[k].Packages[l].Name == depName {
-									targetPkg := &site.Categories[k].Packages[l]
-									for _, otherDep := range pkg.VirtualDeps {
-										if otherDep != dep {
-											found := false
-											for _, e := range targetPkg.Equivalents {
-												if e == otherDep {
-													found = true
-													break
-												}
-											}
-											if !found {
-												targetPkg.Equivalents = append(targetPkg.Equivalents, otherDep)
-											}
-										}
-									}
+				if targetPkg, ok := pkgMap[dep]; ok {
+					for _, otherDep := range pkg.VirtualDeps {
+						if otherDep != dep {
+							found := false
+							for _, e := range targetPkg.Equivalents {
+								if e == otherDep {
+									found = true
+									break
 								}
+							}
+							if !found {
+								targetPkg.Equivalents = append(targetPkg.Equivalents, otherDep)
 							}
 						}
 					}
@@ -981,8 +970,9 @@ func (a *AggPackage) ReposList() []*g2.SiteData {
 }
 
 type AggProject struct {
-	Project  *g2.Project
-	Packages []*AggPackage
+	ReposList []*g2.SiteData
+	Project   *g2.Project
+	Packages  []*AggPackage
 }
 
 type AggLicense struct {
@@ -1345,12 +1335,39 @@ func aggregateUseExpandDescs(sites []*g2.SiteData) map[string]*g2.UseExpandDesc 
 
 func aggregateProjects(sites []*g2.SiteData) map[string]*AggProject {
 	aggProjects := make(map[string]*AggProject)
+
+	// First pass: collect projects and count occurrences by email across distinct repos
+	emailRepoCount := make(map[string]map[string]bool)
 	for _, site := range sites {
 		if site.Projects != nil {
 			for i := range site.Projects.Projects {
 				proj := &site.Projects.Projects[i]
-				if _, ok := aggProjects[proj.Email]; !ok {
-					aggProjects[proj.Email] = &AggProject{Project: proj}
+				if emailRepoCount[proj.Email] == nil {
+					emailRepoCount[proj.Email] = make(map[string]bool)
+				}
+				emailRepoCount[proj.Email][site.RepoName] = true
+			}
+		}
+	}
+
+	// Second pass: construct keys correctly
+	for _, site := range sites {
+		if site.Projects != nil {
+			for i := range site.Projects.Projects {
+				proj := &site.Projects.Projects[i]
+				key := proj.Email
+
+				// If the same project email appears in more than 1 distinct repo, disambiguate
+				if len(emailRepoCount[proj.Email]) > 1 {
+					key = proj.Email + "-" + site.RepoName
+					projCopy := *proj
+					projCopy.Name = projCopy.Name + " (" + site.RepoName + ")"
+					projCopy.Email = key
+					proj = &projCopy
+				}
+
+				if _, ok := aggProjects[key]; !ok {
+					aggProjects[key] = &AggProject{Project: proj, ReposList: []*g2.SiteData{site}}
 				}
 			}
 		}
@@ -1814,7 +1831,7 @@ func renderPage(path string, tmpl *template.Template, name string, data interfac
 	return nil
 }
 
-func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, recentDuration time.Duration, recentDurationStr string, fastGit bool, useZip bool, concurrency int, retries int, continueOnError bool, persistentDir string, reposConfPath string, tempDir string, workMode string, mode string) error {
+func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, recentDuration time.Duration, recentDurationStr string, fastGit bool, useZip bool, concurrency int, retries int, continueOnError bool, persistentDir string, reposConfPath string, tempDir string, workMode string, mode string, profileSiteGen bool, profileOut string) error {
 	var repos g2.Repositories
 
 	if reposConfPath != "" {
@@ -2360,7 +2377,14 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, 
 	log.Printf("--------------------------------------------------")
 
 	log.Printf("Generating integrated site (v%s) for %d repos", version, len(allSites))
-	if err := generateSite(outDir, allSites, recentDuration, recentDurationStr, GenerationInfo{}); err != nil {
+	profiler := NewProfiler(profileSiteGen, profileOut)
+	genInfo := GenerationInfo{
+		Profiler:       profiler,
+		Args:           cfg.Args,
+		FastGit:        fastGit,
+		RecentDuration: recentDurationStr,
+	}
+	if err := generateSite(outDir, allSites, recentDuration, recentDurationStr, genInfo); err != nil {
 		return fmt.Errorf("generating integrated site: %w", err)
 	}
 
@@ -2375,4 +2399,28 @@ func mapToList(m map[string]*g2.SiteData) []*g2.SiteData {
 	}
 	sort.Slice(l, func(i, j int) bool { return l[i].RepoName < l[j].RepoName })
 	return l
+}
+
+func (e *AggEclass) IsDefinedLocally(repoName string) bool {
+	for rn := range e.Repos {
+		if rn == repoName {
+			return true
+		}
+	}
+	return false
+}
+
+func (a *AggPackage) GetVersionsInRepo(repoName string) []g2.VersionData {
+	if site, ok := a.Repos[repoName]; ok {
+		for _, cat := range site.Categories {
+			if cat.Name == a.Category {
+				for _, pkg := range cat.Packages {
+					if pkg.Name == a.Name {
+						return pkg.Versions
+					}
+				}
+			}
+		}
+	}
+	return nil
 }

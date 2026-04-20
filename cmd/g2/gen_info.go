@@ -1,6 +1,7 @@
 package main
 
 type GenerationInfo struct {
+	Profiler        *Profiler
 	Args            []string
 	RepositoriesXML string
 	FastGit         bool

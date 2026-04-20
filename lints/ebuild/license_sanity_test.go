@@ -18,7 +18,7 @@ func TestLicenseSanityLintRule(t *testing.T) {
 		{"Valid License", "GPL-2", 0},
 		{"Multiple Valid", "GPL-2 MIT", 0},
 		{"Contains Slash", "GPL/2", 1},
-		{"Missing Alphanum", "|| ( MIT )", 0}, // || and ( ) are stripped by parser, leaving MIT
+		{"Missing Alphanum", "|| ( MIT )", 0},     // || and ( ) are stripped by parser, leaving MIT
 		{"Invalid Alphanum Check", "|| ( - )", 1}, // No alphanum in license name "-"
 		{"Full Text Like", "This is a custom license all rights reserved", 1},
 	}

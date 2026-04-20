@@ -12,7 +12,7 @@
     <h4>Parents:</h4>
     <ul>
         {{range .Profile.Parents}}
-        <li><a href="{{$.BaseURL}}profiles/{{.}}/">{{.}}</a></li>
+        <li><a href="{{$.BaseURL}}profiles/{{.}}/">{{if eq . ".."}}.. (Overlay Defaults){{else}}{{.}}{{end}}</a></li>
         {{end}}
     </ul>
     {{end}}
@@ -21,7 +21,7 @@
     <h4>Children:</h4>
     <ul>
         {{range .Profile.Children}}
-        <li><a href="{{$.BaseURL}}profiles/{{.}}/">{{.}}</a></li>
+        <li><a href="{{$.BaseURL}}profiles/{{.}}/">{{if eq . ".."}}.. (Overlay Defaults){{else}}{{.}}{{end}}</a></li>
         {{end}}
     </ul>
     {{end}}
