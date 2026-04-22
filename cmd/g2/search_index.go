@@ -311,42 +311,33 @@ func generateSearchData(outDir, outZip string, sites []*g2.SiteData, maxChunkSiz
 		}
 	}
 
-	var dataFiles []string
-	var chunks [][]SearchDocument
-
-	maxChunkSize := 2 * 1024 * 1024 // 2 MB
-	if len(maxChunkSizeOverride) > 0 {
-		maxChunkSize = maxChunkSizeOverride[0]
-	}
-
-	currentChunk := make([]SearchDocument, 0)
-	currentChunkSize := 2 // []
-
+	// Build inverted index mapping token -> []int (doc IDs)
+	invertedIndex := make(map[string][]int)
 	for _, doc := range documents {
-		b, _ := json.Marshal(doc)
-		docSize := len(b) + 1 // +1 for comma
-
-		if currentChunkSize+docSize > maxChunkSize && len(currentChunk) > 0 {
-			chunks = append(chunks, currentChunk)
-			currentChunk = make([]SearchDocument, 0)
-			currentChunkSize = 2
+		tokens := tokenizeDocument(doc)
+		for _, t := range tokens {
+			if len(invertedIndex[t]) > 0 && invertedIndex[t][len(invertedIndex[t])-1] == doc.ID {
+				continue
+			}
+			invertedIndex[t] = append(invertedIndex[t], doc.ID)
 		}
-
-		currentChunk = append(currentChunk, doc)
-		currentChunkSize += docSize
-	}
-	if len(currentChunk) > 0 {
-		chunks = append(chunks, currentChunk)
 	}
 
-	for i := range chunks {
-		dataFiles = append(dataFiles, fmt.Sprintf("docs-%d.json", i))
+	// Partition the inverted index
+	// bucket -> map[token][]int
+	partitionedIndex := make(map[string]map[string][]int)
+	for token, docIDs := range invertedIndex {
+		bucket := getBucket(token)
+		if partitionedIndex[bucket] == nil {
+			partitionedIndex[bucket] = make(map[string][]int)
+		}
+		partitionedIndex[bucket][token] = docIDs
 	}
 
-	manifest := SearchManifest{
-		DocumentCount: len(documents),
-		DataFiles:     dataFiles,
-	}
+	// Output individual docs directly.
+	// Ensure dataFiles is initialized so it doesn't serialize to null for old clients.
+	dataFiles := make([]string, 0)
+
 
 	if outZip != "" {
 		f, err := os.Create(outZip)
@@ -358,18 +349,46 @@ func generateSearchData(outDir, outZip string, sites []*g2.SiteData, maxChunkSiz
 		z := zip.NewWriter(f)
 		defer func() { _ = z.Close() }()
 
-		// Create data dir
-		for i, chunk := range chunks {
-			docsWriter, err := z.Create(fmt.Sprintf("data/docs-%d.json", i))
+		// Write individual doc files
+		for _, doc := range documents {
+			docsWriter, err := z.Create(fmt.Sprintf("data/docs/%d.json", doc.ID))
 			if err != nil {
-				return fmt.Errorf("creating docs-%d.json in zip: %w", i, err)
+				return fmt.Errorf("creating %d.json in zip: %w", doc.ID, err)
 			}
 			encoder := json.NewEncoder(docsWriter)
-			if err := encoder.Encode(chunk); err != nil {
-				return fmt.Errorf("encoding search docs %d: %w", i, err)
+			if err := encoder.Encode(doc); err != nil {
+				return fmt.Errorf("encoding search doc %d: %w", doc.ID, err)
 			}
 		}
 
+		// Write partitioned index files
+		for bucket, tokenMap := range partitionedIndex {
+			// Bucket string, e.g. "py" -> index/p/y/py.json
+			if len(bucket) < 1 {
+				continue
+			}
+			p1 := string(bucket[0])
+			p2 := ""
+			if len(bucket) > 1 {
+				p2 = string(bucket[1])
+			} else {
+				p2 = "_"
+			}
+			indexPath := fmt.Sprintf("data/index/%s/%s/%s.json", p1, p2, bucket)
+			idxWriter, err := z.Create(indexPath)
+			if err != nil {
+				return fmt.Errorf("creating index file %s in zip: %w", indexPath, err)
+			}
+			encoder := json.NewEncoder(idxWriter)
+			if err := encoder.Encode(tokenMap); err != nil {
+				return fmt.Errorf("encoding index %s: %w", bucket, err)
+			}
+		}
+
+		manifest := SearchManifest{
+			DocumentCount: len(documents),
+			DataFiles:     dataFiles,
+		}
 		manifestWriter, err := z.Create("data/manifest.json")
 		if err != nil {
 			return fmt.Errorf("creating manifest.json in zip: %w", err)
@@ -383,26 +402,60 @@ func generateSearchData(outDir, outZip string, sites []*g2.SiteData, maxChunkSiz
 
 	if outDir != "" {
 		dataDir := filepath.Join(outDir, "data")
-		if err := os.MkdirAll(dataDir, 0755); err != nil {
-			return fmt.Errorf("creating search data directory: %w", err)
+		docsDir := filepath.Join(dataDir, "docs")
+		if err := os.MkdirAll(docsDir, 0755); err != nil {
+			return fmt.Errorf("creating search docs directory: %w", err)
 		}
 
-		for i, chunk := range chunks {
-			dataFile := fmt.Sprintf("docs-%d.json", i)
-			dataFilePath := filepath.Join(dataDir, dataFile)
+		for _, doc := range documents {
+			dataFile := fmt.Sprintf("%d.json", doc.ID)
+			dataFilePath := filepath.Join(docsDir, dataFile)
 
 			f, err := os.Create(dataFilePath)
 			if err != nil {
-				return fmt.Errorf("creating docs data file %d: %w", i, err)
+				return fmt.Errorf("creating doc file %d: %w", doc.ID, err)
 			}
 			encoder := json.NewEncoder(f)
-			err = encoder.Encode(chunk)
+			err = encoder.Encode(doc)
 			_ = f.Close()
 			if err != nil {
-				return fmt.Errorf("encoding search docs %d: %w", i, err)
+				return fmt.Errorf("encoding search doc %d: %w", doc.ID, err)
 			}
 		}
 
+		// Write partitioned index files
+		for bucket, tokenMap := range partitionedIndex {
+			if len(bucket) < 1 {
+				continue
+			}
+			p1 := string(bucket[0])
+			p2 := ""
+			if len(bucket) > 1 {
+				p2 = string(bucket[1])
+			} else {
+				p2 = "_"
+			}
+			indexPath := filepath.Join(dataDir, "index", p1, p2)
+			if err := os.MkdirAll(indexPath, 0755); err != nil {
+				return fmt.Errorf("creating search index directory: %w", err)
+			}
+			indexFile := filepath.Join(indexPath, fmt.Sprintf("%s.json", bucket))
+			f, err := os.Create(indexFile)
+			if err != nil {
+				return fmt.Errorf("creating index file %s: %w", indexFile, err)
+			}
+			encoder := json.NewEncoder(f)
+			err = encoder.Encode(tokenMap)
+			_ = f.Close()
+			if err != nil {
+				return fmt.Errorf("encoding search index %s: %w", bucket, err)
+			}
+		}
+
+		manifest := SearchManifest{
+			DocumentCount: len(documents),
+			DataFiles:     dataFiles,
+		}
 		manifestPath := filepath.Join(dataDir, "manifest.json")
 		mf, err := os.Create(manifestPath)
 		if err != nil {
@@ -458,6 +511,117 @@ func generateSearchIndex(outDir string, sites []*g2.SiteData) error {
 	}
 
 	return nil
+}
+
+func getBucket(token string) string {
+	val := token
+	if idx := strings.Index(token, ":"); idx != -1 {
+		val = token[idx+1:]
+	}
+	t := strings.ToLower(val)
+	var cleaned []rune
+	for _, r := range t {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
+			cleaned = append(cleaned, r)
+		}
+	}
+	if len(cleaned) == 0 {
+		return "_"
+	}
+	if len(cleaned) == 1 {
+		return string(cleaned[0]) + "_"
+	}
+	return string(cleaned[0:2])
+}
+
+func tokenizeDocument(doc SearchDocument) []string {
+	seen := make(map[string]bool)
+	var tokens []string
+
+	addToken := func(t string) {
+		t = strings.ToLower(t)
+		if t == "" {
+			return
+		}
+		if !seen[t] {
+			seen[t] = true
+			tokens = append(tokens, t)
+		}
+	}
+
+	// Text fields
+	words := strings.Fields(doc.SearchText)
+	for _, w := range words {
+		// Just basic stripping of common punctuation from ends could be useful,
+		// but since earlier code didn't do much stripping, we just add the word.
+		addToken(w)
+	}
+	// Fullname split by /
+	parts := strings.Split(doc.FullName, "/")
+	for _, p := range parts {
+		addToken(p)
+	}
+
+	// Specific fields
+	if doc.Overlay != "" {
+		addToken("overlay:" + doc.Overlay)
+	}
+	if doc.Category != "" {
+		addToken("category:" + doc.Category)
+	}
+	for _, url := range doc.Urls {
+		addToken("url:" + url)
+	}
+	for _, a := range doc.Arches {
+		addToken("arch:" + a)
+	}
+	for _, k := range doc.Keywords {
+		addToken("keyword:" + k)
+	}
+	if doc.Mask != "" {
+		addToken("mask:" + doc.Mask)
+	}
+	for _, l := range doc.Licenses {
+		addToken("license:" + l)
+	}
+	for _, d := range doc.Depends {
+		addToken("depends:" + d)
+	}
+	for _, d := range doc.Rdepends {
+		addToken("rdepends:" + d)
+	}
+	for _, d := range doc.Bdepends {
+		addToken("bdepends:" + d)
+	}
+	for _, d := range doc.Pdepends {
+		addToken("pdepends:" + d)
+	}
+	for _, d := range doc.DependedBy {
+		addToken("depended:" + d)
+	}
+	for _, d := range doc.RdependedBy {
+		addToken("rdepended:" + d)
+	}
+	for _, m := range doc.ManifestFiles {
+		addToken("manifestfile:" + m)
+	}
+	if doc.EAPI != "" {
+		addToken("eapi:" + doc.EAPI)
+	}
+	if doc.Slot != "" {
+		addToken("slot:" + doc.Slot)
+	}
+	for _, i := range doc.Inherits {
+		addToken("inherit:" + i)
+	}
+	for _, u := range doc.Uses {
+		addToken("use:" + u)
+	}
+	if doc.Version != "" {
+		addToken("version:" + doc.Version)
+	}
+
+	return tokens
 }
 
 func deduplicateStrings(s []string) []string {
