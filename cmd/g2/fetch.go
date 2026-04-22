@@ -89,7 +89,10 @@ func FetchRepo(ctx context.Context, gitUrl string, destDir string, useZip bool, 
 
 func updatePersistentRepo(ctx context.Context, destDir string) error {
 	log.Printf("Persistent repo exists, attempting to fetch and reset: %s", destDir)
+	noPromptEnv := append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+
 	cmdFetch := exec.CommandContext(ctx, "git", "fetch", "--force", "--depth", "1", "origin", "HEAD")
+	cmdFetch.Env = noPromptEnv
 	cmdFetch.Dir = destDir
 	cmdFetch.Stdout = os.Stdout
 	cmdFetch.Stderr = os.Stderr
@@ -98,6 +101,7 @@ func updatePersistentRepo(ctx context.Context, destDir string) error {
 	}
 
 	cmdReset := exec.CommandContext(ctx, "git", "reset", "--hard", "FETCH_HEAD")
+	cmdReset.Env = noPromptEnv
 	cmdReset.Dir = destDir
 	cmdReset.Stdout = os.Stdout
 	cmdReset.Stderr = os.Stderr
@@ -106,6 +110,7 @@ func updatePersistentRepo(ctx context.Context, destDir string) error {
 	}
 
 	cmdClean := exec.CommandContext(ctx, "git", "clean", "-fdx")
+	cmdClean.Env = noPromptEnv
 	cmdClean.Dir = destDir
 	cmdClean.Stdout = os.Stdout
 	cmdClean.Stderr = os.Stderr
@@ -167,6 +172,7 @@ func fetchRepoAttempt(ctx context.Context, gitUrl string, destDir string, useZip
 	}
 
 	cmd := exec.CommandContext(ctx, "git", "clone", "--depth", "1", gitUrl, destDir)
+	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run()
