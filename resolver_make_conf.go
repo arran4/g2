@@ -32,7 +32,7 @@ func ParseMakeConfContent(content, filename string) (map[string]string, error) {
 	    if assign.Name != nil && assign.Value != nil {
 	        name := assign.Name.Value
 	        var b strings.Builder
-            printer.Print(&b, assign.Value)
+            _ = printer.Print(&b, assign.Value)
             valStr := b.String()
 
             // To evaluate string values that don't natively contain bash evaluation triggers (like "$"),
