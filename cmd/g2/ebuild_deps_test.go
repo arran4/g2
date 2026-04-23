@@ -98,6 +98,16 @@ func TestEbuildDeps(t *testing.T) {
 			// But the expected output has the base name.
 			got = strings.ReplaceAll(got, tmpDir+string(filepath.Separator), "")
 
+			// On Windows, filepath.Separator is '\\', which when JSON encoded becomes "\\\\"
+			if filepath.Separator == '\\' {
+				escapedPrefix := strings.ReplaceAll(tmpDir+string(filepath.Separator), "\\", "\\\\")
+				got = strings.ReplaceAll(got, escapedPrefix, "")
+
+				// Also handle the case where the path might use forward slashes even on Windows
+				forwardSlashPrefix := filepath.ToSlash(tmpDir) + "/"
+				got = strings.ReplaceAll(got, forwardSlashPrefix, "")
+			}
+
 			if strings.TrimSpace(got) != strings.TrimSpace(want) {
 				t.Errorf("mismatch\nwant:\n%s\n\ngot:\n%s\n", want, got)
 			}
