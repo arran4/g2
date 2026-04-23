@@ -57,147 +57,159 @@ type SearchManifest struct {
 
 var pkgRegex = regexp.MustCompile(`([a-zA-Z0-9_][a-zA-Z0-9_\-\+]*\/[a-zA-Z0-9_][a-zA-Z0-9_\-\+]+)`)
 
-func CreateSearchDocument(docID int, site *g2.SiteData, cat *g2.CategoryData, pkg *g2.PackageData, ver *g2.VersionData, dependedBy map[string]map[string]bool, rdependedBy map[string]map[string]bool) SearchDocument {
-	overlayName := site.RepoName
-	fullName := cat.Name + "/" + pkg.Name
+func generateSearchData(outDir, outZip string, sites []*g2.SiteData, maxChunkSizeOverride ...int) error {
+	var documents []SearchDocument
+	docID := 0
 
-	verStr := ver.Version
-	eapi := ""
-	slot := "0"
-	desc := ""
-	var urls []string
-	var licenses []string
-	var keywords []string
-	var inherits []string
-	var uses []string
-	var useDescriptions []string
-	var depends []string
-	var rdepends []string
-	var bdepends []string
-	var pdepends []string
-	var rawDepends, rawRdepends, rawBdepends, rawPdepends, rawRequiredUse string
-	var arches []string
+	dependedBy := make(map[string]map[string]bool)
+	rdependedBy := make(map[string]map[string]bool)
 
-	if ver.Ebuild != nil && ver.Ebuild.Vars != nil {
-		if v := ver.Ebuild.Vars["PV"]; v != "" {
-			verStr = v
-		}
-		eapi = ver.Ebuild.Vars["EAPI"]
-		slot = ver.Ebuild.Vars["SLOT"]
-		desc = ver.Ebuild.Vars["DESCRIPTION"]
+	for _, site := range sites {
+		overlayName := site.RepoName
+		for _, cat := range site.Categories {
+			for _, pkg := range cat.Packages {
+				fullName := cat.Name + "/" + pkg.Name
 
-		homepage := ver.Ebuild.Vars["HOMEPAGE"]
-		urls = append(urls, strings.Fields(homepage)...)
+				for _, ver := range pkg.Versions {
+					docID++
 
-		licenseStr := ver.Ebuild.Vars["LICENSE"]
-		for _, l := range strings.Fields(licenseStr) {
-			if l != "||" && l != "(" && l != ")" && !strings.HasPrefix(l, "?") {
-				licenses = append(licenses, l)
-				if site.LicenseMapping != nil {
-					if aliases, ok := site.LicenseMapping[l]; ok {
-						licenses = append(licenses, aliases...)
+					verStr := ver.Version
+					eapi := ""
+					slot := "0"
+					desc := ""
+					var urls []string
+					var licenses []string
+					var keywords []string
+					var inherits []string
+					var uses []string
+					var useDescriptions []string
+					var depends []string
+					var rdepends []string
+					var bdepends []string
+					var pdepends []string
+					var rawDepends, rawRdepends, rawBdepends, rawPdepends, rawRequiredUse string
+					var arches []string
+
+					if ver.Ebuild != nil && ver.Ebuild.Vars != nil {
+						if v := ver.Ebuild.Vars["PV"]; v != "" {
+							verStr = v
+						}
+						eapi = ver.Ebuild.Vars["EAPI"]
+						slot = ver.Ebuild.Vars["SLOT"]
+						desc = ver.Ebuild.Vars["DESCRIPTION"]
+
+						homepage := ver.Ebuild.Vars["HOMEPAGE"]
+						urls = append(urls, strings.Fields(homepage)...)
+
+						licenseStr := ver.Ebuild.Vars["LICENSE"]
+						for _, l := range strings.Fields(licenseStr) {
+							if l != "||" && l != "(" && l != ")" && !strings.HasPrefix(l, "?") {
+								licenses = append(licenses, l)
+								if site.LicenseMapping != nil {
+									if aliases, ok := site.LicenseMapping[l]; ok {
+										licenses = append(licenses, aliases...)
+									}
+								}
+							}
+						}
+
+						keywordStr := ver.Ebuild.Vars["KEYWORDS"]
+						for _, kw := range strings.Fields(keywordStr) {
+							keywords = append(keywords, kw)
+							arch := strings.TrimPrefix(kw, "~")
+							arch = strings.TrimPrefix(arch, "-")
+							if arch != "" {
+								arches = append(arches, arch)
+							}
+						}
+
+						iuseStr := ver.Ebuild.Vars["IUSE"]
+						for _, u := range strings.Fields(iuseStr) {
+							u = strings.TrimPrefix(u, "+")
+							u = strings.TrimPrefix(u, "-")
+							uses = append(uses, u)
+						}
+
+						if d := ver.Ebuild.Vars["DEPEND"]; d != "" {
+							rawDepends = d
+							matches := pkgRegex.FindAllString(d, -1)
+							for _, m := range matches {
+								depends = append(depends, m)
+								if dependedBy[m] == nil {
+									dependedBy[m] = make(map[string]bool)
+								}
+								dependedBy[m][fullName] = true
+							}
+						}
+
+						if d := ver.Ebuild.Vars["RDEPEND"]; d != "" {
+							rawRdepends = d
+							matches := pkgRegex.FindAllString(d, -1)
+							for _, m := range matches {
+								rdepends = append(rdepends, m)
+								if rdependedBy[m] == nil {
+									rdependedBy[m] = make(map[string]bool)
+								}
+								rdependedBy[m][fullName] = true
+							}
+						}
+
+						if d := ver.Ebuild.Vars["BDEPEND"]; d != "" {
+							rawBdepends = d
+							matches := pkgRegex.FindAllString(d, -1)
+							bdepends = append(bdepends, matches...)
+						}
+
+						if d := ver.Ebuild.Vars["PDEPEND"]; d != "" {
+							rawPdepends = d
+							matches := pkgRegex.FindAllString(d, -1)
+							pdepends = append(pdepends, matches...)
+						}
+
+						if d := ver.Ebuild.Vars["REQUIRED_USE"]; d != "" {
+							rawRequiredUse = d
+						}
+
+						if inh := ver.Ebuild.Vars["INHERITED"]; inh != "" {
+							inherits = strings.Fields(inh)
+						}
 					}
-				}
-			}
-		}
 
-		keywordStr := ver.Ebuild.Vars["KEYWORDS"]
-		for _, kw := range strings.Fields(keywordStr) {
-			keywords = append(keywords, kw)
-			arch := strings.TrimPrefix(kw, "~")
-			arch = strings.TrimPrefix(arch, "-")
-			if arch != "" {
-				arches = append(arches, arch)
-			}
-		}
+					for _, pUse := range pkg.PkgUseFlags {
+						if pUse.Versions[verStr] != "" {
+							useDescriptions = append(useDescriptions, pUse.Desc)
+						}
+					}
 
-		iuseStr := ver.Ebuild.Vars["IUSE"]
-		for _, u := range strings.Fields(iuseStr) {
-			u = strings.TrimPrefix(u, "+")
-			u = strings.TrimPrefix(u, "-")
-			uses = append(uses, u)
-		}
+					depends = deduplicateStrings(depends)
+					rdepends = deduplicateStrings(rdepends)
+					bdepends = deduplicateStrings(bdepends)
+					pdepends = deduplicateStrings(pdepends)
+					licenses = deduplicateStrings(licenses)
+					keywords = deduplicateStrings(keywords)
+					arches = deduplicateStrings(arches)
+					uses = deduplicateStrings(uses)
+					urls = deduplicateStrings(urls)
+					useDescriptions = deduplicateStrings(useDescriptions)
 
-		if d := ver.Ebuild.Vars["DEPEND"]; d != "" {
-			rawDepends = d
-			matches := pkgRegex.FindAllString(d, -1)
-			for _, m := range matches {
-				depends = append(depends, m)
-				if dependedBy[m] == nil {
-					dependedBy[m] = make(map[string]bool)
-				}
-				dependedBy[m][fullName] = true
-			}
-		}
-
-		if d := ver.Ebuild.Vars["RDEPEND"]; d != "" {
-			rawRdepends = d
-			matches := pkgRegex.FindAllString(d, -1)
-			for _, m := range matches {
-				rdepends = append(rdepends, m)
-				if rdependedBy[m] == nil {
-					rdependedBy[m] = make(map[string]bool)
-				}
-				rdependedBy[m][fullName] = true
-			}
-		}
-
-		if d := ver.Ebuild.Vars["BDEPEND"]; d != "" {
-			rawBdepends = d
-			matches := pkgRegex.FindAllString(d, -1)
-			bdepends = append(bdepends, matches...)
-		}
-
-		if d := ver.Ebuild.Vars["PDEPEND"]; d != "" {
-			rawPdepends = d
-			matches := pkgRegex.FindAllString(d, -1)
-			pdepends = append(pdepends, matches...)
-		}
-
-		if d := ver.Ebuild.Vars["REQUIRED_USE"]; d != "" {
-			rawRequiredUse = d
-		}
-
-		if inh := ver.Ebuild.Vars["INHERITED"]; inh != "" {
-			inherits = strings.Fields(inh)
-		}
-	}
-
-	for _, pUse := range pkg.PkgUseFlags {
-		if pUse.Versions[verStr] != "" {
-			useDescriptions = append(useDescriptions, pUse.Desc)
-		}
-	}
-
-	depends = deduplicateStrings(depends)
-	rdepends = deduplicateStrings(rdepends)
-	bdepends = deduplicateStrings(bdepends)
-	pdepends = deduplicateStrings(pdepends)
-	licenses = deduplicateStrings(licenses)
-	keywords = deduplicateStrings(keywords)
-	arches = deduplicateStrings(arches)
-	uses = deduplicateStrings(uses)
-	urls = deduplicateStrings(urls)
-	useDescriptions = deduplicateStrings(useDescriptions)
-
-	mask := "none"
-	allMasked := true
-	allTesting := true
-	for _, kw := range keywords {
-		if !strings.HasPrefix(kw, "-") && !strings.HasPrefix(kw, "~") {
-			allMasked = false
-			allTesting = false
-		} else if strings.HasPrefix(kw, "~") {
-			allMasked = false
-		}
-	}
-	if len(keywords) > 0 {
-		if allMasked {
-			mask = "hard"
-		} else if allTesting {
-			mask = "soft"
-		}
-	}
+					mask := "none"
+					allMasked := true
+					allTesting := true
+					for _, kw := range keywords {
+						if !strings.HasPrefix(kw, "-") && !strings.HasPrefix(kw, "~") {
+							allMasked = false
+							allTesting = false
+						} else if strings.HasPrefix(kw, "~") {
+							allMasked = false
+						}
+					}
+					if len(keywords) > 0 {
+						if allMasked {
+							mask = "hard"
+						} else if allTesting {
+							mask = "soft"
+						}
+					}
 
 	for i := range uses {
 		uses[i] = strings.ToLower(uses[i])
@@ -209,7 +221,7 @@ func CreateSearchDocument(docID int, site *g2.SiteData, cat *g2.CategoryData, pk
 		useDescriptions[i] = strings.ToLower(useDescriptions[i])
 	}
 
-	searchText := strings.ToLower(fmt.Sprintf("%s %s %s %s %s", fullName, desc, strings.Join(uses, " "), strings.Join(urls, " "), strings.Join(useDescriptions, " ")))
+					searchText := strings.ToLower(fmt.Sprintf("%s %s %s %s %s", fullName, desc, strings.Join(uses, " "), strings.Join(urls, " "), strings.Join(useDescriptions, " ")))
 
 	for i := range licenses {
 		licenses[i] = strings.ToLower(licenses[i])
@@ -227,76 +239,68 @@ func CreateSearchDocument(docID int, site *g2.SiteData, cat *g2.CategoryData, pk
 		rdepends[i] = strings.ToLower(rdepends[i])
 	}
 
+	depends = deduplicateStrings(depends)
+	rdepends = deduplicateStrings(rdepends)
+	bdepends = deduplicateStrings(bdepends)
+	pdepends = deduplicateStrings(pdepends)
+	licenses = deduplicateStrings(licenses)
+	keywords = deduplicateStrings(keywords)
+	arches = deduplicateStrings(arches)
+	uses = deduplicateStrings(uses)
+	urls = deduplicateStrings(urls)
+	useDescriptions = deduplicateStrings(useDescriptions)
+
 	catNameLower := strings.ToLower(cat.Name)
 	pkgNameLower := strings.ToLower(pkg.Name)
 	fullNameLower := strings.ToLower(fullName)
 	overlayNameLower := strings.ToLower(overlayName)
 	descLower := strings.ToLower(desc)
 
-	var manifestFiles []string
-	for _, m := range pkg.ManifestData {
-		for _, mv := range m.Versions {
-			if mv == ver.Version || mv == verStr {
-				manifestFiles = append(manifestFiles, m.Entry.Filename)
-			}
-		}
-	}
+					var manifestFiles []string
+					for _, m := range pkg.ManifestData {
+						for _, mv := range m.Versions {
+							if mv == ver.Version || mv == verStr {
+								manifestFiles = append(manifestFiles, m.Entry.Filename)
+							}
+						}
+					}
 
-	doc := SearchDocument{
-		ID:              docID,
+					doc := SearchDocument{
+						ID:              docID,
 		Overlay:         overlayNameLower,
 		Category:        catNameLower,
 		Package:         pkgNameLower,
 		FullName:        fullNameLower,
-		Version:         verStr,
+						Version:         verStr,
 		Description:     descLower,
-		Urls:            urls,
-		Licenses:        licenses,
-		EAPI:            eapi,
-		Slot:            slot,
-		Inherits:        inherits,
-		Uses:            uses,
-		UseDescriptions: useDescriptions,
-		Keywords:        keywords,
-		Arches:          arches,
-		Mask:            mask,
-		Depends:         depends,
-		Rdepends:        rdepends,
-		Bdepends:        bdepends,
-		Pdepends:        pdepends,
-		RawDepends:      rawDepends,
-		RawRdepends:     rawRdepends,
-		RawBdepends:     rawBdepends,
-		RawPdepends:     rawPdepends,
-		RawRequiredUse:  rawRequiredUse,
-		DependedBy:      []string{},
-		RdependedBy:     []string{},
-		ManifestFiles:   manifestFiles,
-		SearchText:      searchText,
-		PageURL:         fmt.Sprintf("../repos/%s/categories/%s/packages/%s/ebuild/%s/index.html", site.RepoName, cat.Name, pkg.Name, verStr),
-	}
+						Urls:            urls,
+						Licenses:        licenses,
+						EAPI:            eapi,
+						Slot:            slot,
+						Inherits:        inherits,
+						Uses:            uses,
+						UseDescriptions: useDescriptions,
+						Keywords:        keywords,
+						Arches:          arches,
+						Mask:            mask,
+						Depends:         depends,
+						Rdepends:        rdepends,
+						Bdepends:        bdepends,
+						Pdepends:        pdepends,
+						RawDepends:      rawDepends,
+						RawRdepends:     rawRdepends,
+						RawBdepends:     rawBdepends,
+						RawPdepends:     rawPdepends,
+						RawRequiredUse:  rawRequiredUse,
+						DependedBy:      []string{},
+						RdependedBy:     []string{},
+						ManifestFiles:   manifestFiles,
+						SearchText:      searchText,
+						PageURL:         fmt.Sprintf("../repos/%s/categories/%s/packages/%s/ebuild/%s/index.html", site.RepoName, cat.Name, pkg.Name, verStr),
+					}
 
-	doc.VersionSortKey = g2.PadVersionTokens(verStr)
+					doc.VersionSortKey = g2.PadVersionTokens(verStr)
 
-	return doc
-}
-
-func generateSearchData(outDir, outZip string, sites []*g2.SiteData, maxChunkSizeOverride ...int) error {
-	var documents []SearchDocument
-	docID := 0
-
-	dependedBy := make(map[string]map[string]bool)
-	rdependedBy := make(map[string]map[string]bool)
-
-	for _, site := range sites {
-		for i := range site.Categories {
-			cat := &site.Categories[i]
-			for j := range cat.Packages {
-				pkg := &cat.Packages[j]
-				for k := range pkg.Versions {
-					ver := &pkg.Versions[k]
-					docID++
-					doc := CreateSearchDocument(docID, site, cat, pkg, ver, dependedBy, rdependedBy)
 					documents = append(documents, doc)
 				}
 			}

@@ -1,0 +1,132 @@
+--- cmd/g2/search_index.go
++++ cmd/g2/search_index.go
+@@ -57,7 +57,12 @@
+
+ var pkgRegex = regexp.MustCompile(`([a-zA-Z0-9_][a-zA-Z0-9_\-\+]*\/[a-zA-Z0-9_][a-zA-Z0-9_\-\+]+)`)
+
+-func CreateSearchDocument(docID int, site *g2.SiteData, cat *g2.CategoryData, pkg *g2.PackageData, ver *g2.VersionData, dependedBy map[string]map[string]bool, rdependedBy map[string]map[string]bool) SearchDocument {
++type ExtractedDeps struct {
++	DependedBy  map[string]map[string]bool
++	RdependedBy map[string]map[string]bool
++}
++
++func CreateSearchDocument(docID int, site *g2.SiteData, cat *g2.CategoryData, pkg *g2.PackageData, ver *g2.VersionData) (SearchDocument, ExtractedDeps) {
+	overlayName := site.RepoName
+	fullName := cat.Name + "/" + pkg.Name
+
+@@ -77,6 +82,11 @@
+	var rawDepends, rawRdepends, rawBdepends, rawPdepends, rawRequiredUse string
+	var arches []string
+
++	extractedDeps := ExtractedDeps{
++		DependedBy:  make(map[string]map[string]bool),
++		RdependedBy: make(map[string]map[string]bool),
++	}
++
+	if ver.Ebuild != nil && ver.Ebuild.Vars != nil {
+		if v := ver.Ebuild.Vars["PV"]; v != "" {
+			verStr = v
+@@ -122,11 +132,12 @@
+			rawDepends = d
+			matches := pkgRegex.FindAllString(d, -1)
+			for _, m := range matches {
++				mLower := strings.ToLower(m)
+				depends = append(depends, m)
+-				if dependedBy[m] == nil {
+-					dependedBy[m] = make(map[string]bool)
++				if extractedDeps.DependedBy[mLower] == nil {
++					extractedDeps.DependedBy[mLower] = make(map[string]bool)
+				}
+-				dependedBy[m][fullName] = true
++				extractedDeps.DependedBy[mLower][strings.ToLower(fullName)] = true
+			}
+		}
+
+@@ -134,11 +145,12 @@
+			rawRdepends = d
+			matches := pkgRegex.FindAllString(d, -1)
+			for _, m := range matches {
++				mLower := strings.ToLower(m)
+				rdepends = append(rdepends, m)
+-				if rdependedBy[m] == nil {
+-					rdependedBy[m] = make(map[string]bool)
++				if extractedDeps.RdependedBy[mLower] == nil {
++					extractedDeps.RdependedBy[mLower] = make(map[string]bool)
+				}
+-				rdependedBy[m][fullName] = true
++				extractedDeps.RdependedBy[mLower][strings.ToLower(fullName)] = true
+			}
+		}
+
+@@ -169,17 +181,6 @@
+		}
+	}
+
+-	depends = deduplicateStrings(depends)
+-	rdepends = deduplicateStrings(rdepends)
+-	bdepends = deduplicateStrings(bdepends)
+-	pdepends = deduplicateStrings(pdepends)
+-	licenses = deduplicateStrings(licenses)
+-	keywords = deduplicateStrings(keywords)
+-	arches = deduplicateStrings(arches)
+-	uses = deduplicateStrings(uses)
+-	urls = deduplicateStrings(urls)
+-	useDescriptions = deduplicateStrings(useDescriptions)
+-
+	mask := "none"
+	allMasked := true
+	allTesting := true
+@@ -227,6 +228,17 @@
+		rdepends[i] = strings.ToLower(rdepends[i])
+	}
+
++	depends = deduplicateStrings(depends)
++	rdepends = deduplicateStrings(rdepends)
++	bdepends = deduplicateStrings(bdepends)
++	pdepends = deduplicateStrings(pdepends)
++	licenses = deduplicateStrings(licenses)
++	keywords = deduplicateStrings(keywords)
++	arches = deduplicateStrings(arches)
++	uses = deduplicateStrings(uses)
++	urls = deduplicateStrings(urls)
++	useDescriptions = deduplicateStrings(useDescriptions)
++
+	catNameLower := strings.ToLower(cat.Name)
+	pkgNameLower := strings.ToLower(pkg.Name)
+	fullNameLower := strings.ToLower(fullName)
+@@ -279,7 +291,7 @@
+
+	doc.VersionSortKey = g2.PadVersionTokens(verStr)
+
+-	return doc
++	return doc, extractedDeps
+ }
+
+ func generateSearchData(outDir, outZip string, sites []*g2.SiteData, maxChunkSizeOverride ...int) error {
+@@ -296,8 +308,24 @@
+				for k := range pkg.Versions {
+					ver := &pkg.Versions[k]
+					docID++
+-					doc := CreateSearchDocument(docID, site, cat, pkg, ver, dependedBy, rdependedBy)
++					doc, extractedDeps := CreateSearchDocument(docID, site, cat, pkg, ver)
+					documents = append(documents, doc)
++
++					for k, vMap := range extractedDeps.DependedBy {
++						if dependedBy[k] == nil {
++							dependedBy[k] = make(map[string]bool)
++						}
++						for fullNameLower := range vMap {
++							dependedBy[k][fullNameLower] = true
++						}
++					}
++					for k, vMap := range extractedDeps.RdependedBy {
++						if rdependedBy[k] == nil {
++							rdependedBy[k] = make(map[string]bool)
++						}
++						for fullNameLower := range vMap {
++							rdependedBy[k][fullNameLower] = true
++						}
++					}
+				}
+			}
+		}
