@@ -35,12 +35,6 @@ func getProcessMemUsage() uint64 {
 
 type SourceURL string
 
-type EclassData struct {
-	Name string
-}
-
-// End model TODO check
-
 func getDefaultCacheDir() string {
 	cacheDir, err := os.UserCacheDir()
 	if err != nil || cacheDir == "" {
