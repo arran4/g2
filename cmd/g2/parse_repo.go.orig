@@ -455,7 +455,7 @@ func parsePackage(sysFS fs.FS, repoDir, repoName, catName, catPath, pkgName stri
 		} else {
 			pkgData.LintWarnings = append(pkgData.LintWarnings, fmt.Sprintf("Error: category '%s' is not listed in repo's profiles/categories or the main gentoo categories list", catName))
 		}
-	} else if !inMain {
+	} else if len(g2.FetchMainGentooCategories()) > 0 && !inMain {
 		pkgData.LintWarnings = append(pkgData.LintWarnings, fmt.Sprintf("Note: category '%s' is not in the main gentoo categories list", catName))
 	}
 
@@ -602,7 +602,6 @@ func parseRepoCategoriesAndPackages(sysFS fs.FS, repoDir string, repoName string
 
 	return nil
 }
-// parseRepoEclasses parses .eclass files in the eclass directory.
 func parseRepoEclasses(sysFS fs.FS, repoDir string, site *g2.SiteData) {
 	eclassDir := filepath.Join(repoDir, "eclass")
 	if info, err := fs.Stat(sysFS, filepath.ToSlash(eclassDir)); err == nil && info.IsDir() {
