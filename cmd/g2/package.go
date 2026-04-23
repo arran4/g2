@@ -120,6 +120,27 @@ func (cfg *CmdPackageArgConfig) cmdSearch(args []string) error {
 
 	engine := NewSearchEngine()
 
+	if err := LoadSearchEngine(searchPath, engine); err != nil {
+		return err
+	}
+
+	results := engine.Search(query)
+
+	for _, res := range results {
+		fmt.Printf("%s\n", res.FullName)
+		if res.Description != "" {
+			fmt.Printf("  %s\n", res.Description)
+		}
+		if res.Version != "" {
+			fmt.Printf("  Version: %s\n", res.Version)
+		}
+	}
+
+	log.Printf("Found %d results for '%s'", len(results), query)
+	return nil
+}
+
+func LoadSearchEngine(searchPath string, engine *SearchEngine) error {
 	// Handle loading logic based on type
 	if strings.HasPrefix(strings.ToLower(searchPath), "http://") || strings.HasPrefix(strings.ToLower(searchPath), "https://") {
 		// Load from URL
@@ -383,19 +404,6 @@ func (cfg *CmdPackageArgConfig) cmdSearch(args []string) error {
 		}
 	}
 
-	results := engine.Search(query)
-
-	for _, res := range results {
-		fmt.Printf("%s\n", res.FullName)
-		if res.Description != "" {
-			fmt.Printf("  %s\n", res.Description)
-		}
-		if res.Version != "" {
-			fmt.Printf("  Version: %s\n", res.Version)
-		}
-	}
-
-	log.Printf("Found %d results for '%s'", len(results), query)
 	return nil
 }
 
