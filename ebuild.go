@@ -62,6 +62,52 @@ type funcEntry struct {
 	Value AST
 }
 
+func (e *Ebuild) addVar(k string, addedVars map[string]bool, orderedItems *[]interface{}) {
+	if addedVars[k] {
+		return
+	}
+	if k == "P" || k == "PN" || k == "PV" {
+		return
+	}
+	if k == "SRC_URI" && e.Mode == ParseFull && len(e.SrcUri) > 0 {
+		return
+	}
+	val, ok := e.Vars[k]
+	if !ok {
+		return
+	}
+
+	if strings.Contains(val, "\n") {
+		lines := strings.Split(val, "\n")
+		for i, line := range lines {
+			lines[i] = strings.TrimRight(line, " \t")
+		}
+		val = strings.Join(lines, "\n")
+	}
+	*orderedItems = append(*orderedItems, &varEntry{Key: k, Value: val})
+	addedVars[k] = true
+}
+
+func (e *Ebuild) addFunc(k string, addedFuncs map[string]bool, orderedItems *[]interface{}) {
+	if addedFuncs[k] {
+		return
+	}
+	val, ok := e.Functions[k]
+	if !ok {
+		return
+	}
+
+	if strings.Contains(val.Value, "\n") {
+		lines := strings.Split(val.Value, "\n")
+		for i, line := range lines {
+			lines[i] = strings.TrimRight(line, " \t")
+		}
+		val.Value = strings.Join(lines, "\n")
+	}
+	*orderedItems = append(*orderedItems, &funcEntry{Key: k, Value: val})
+	addedFuncs[k] = true
+}
+
 func (e *Ebuild) String() string {
 	// Reconstruct a valid-ish ebuild
 	// Since we don't preserve the whole file, we reconstruct what we know.
@@ -74,60 +120,12 @@ func (e *Ebuild) String() string {
 
 	var orderedItems []interface{}
 
-	// Helper function to add a variable
-	addVar := func(k string) {
-		if addedVars[k] {
-			return
-		}
-		if k == "P" || k == "PN" || k == "PV" {
-			return
-		}
-		if k == "SRC_URI" && e.Mode == ParseFull && len(e.SrcUri) > 0 {
-			return
-		}
-		val, ok := e.Vars[k]
-		if !ok {
-			return
-		}
-
-		if strings.Contains(val, "\n") {
-			lines := strings.Split(val, "\n")
-			for i, line := range lines {
-				lines[i] = strings.TrimRight(line, " \t")
-			}
-			val = strings.Join(lines, "\n")
-		}
-		orderedItems = append(orderedItems, &varEntry{Key: k, Value: val})
-		addedVars[k] = true
-	}
-
-	// Helper function to add a function
-	addFunc := func(k string) {
-		if addedFuncs[k] {
-			return
-		}
-		val, ok := e.Functions[k]
-		if !ok {
-			return
-		}
-
-		if strings.Contains(val.Value, "\n") {
-			lines := strings.Split(val.Value, "\n")
-			for i, line := range lines {
-				lines[i] = strings.TrimRight(line, " \t")
-			}
-			val.Value = strings.Join(lines, "\n")
-		}
-		orderedItems = append(orderedItems, &funcEntry{Key: k, Value: val})
-		addedFuncs[k] = true
-	}
-
 	// 1. Process items in the exact order they appeared in the original source
 	for _, name := range e.orderOverride {
 		if _, isFunc := e.Functions[name]; isFunc {
-			addFunc(name)
+			e.addFunc(name, addedFuncs, &orderedItems)
 		} else if _, isVar := e.Vars[name]; isVar {
-			addVar(name)
+			e.addVar(name, addedVars, &orderedItems)
 		}
 	}
 
@@ -140,7 +138,7 @@ func (e *Ebuild) String() string {
 	}
 	sort.Strings(remainingVars)
 	for _, k := range remainingVars {
-		addVar(k)
+		e.addVar(k, addedVars, &orderedItems)
 	}
 
 	// 3. Add remaining functions alphabetically
@@ -152,7 +150,7 @@ func (e *Ebuild) String() string {
 	}
 	sort.Strings(remainingFuncs)
 	for _, k := range remainingFuncs {
-		addFunc(k)
+		e.addFunc(k, addedFuncs, &orderedItems)
 	}
 
 	var buf bytes.Buffer
