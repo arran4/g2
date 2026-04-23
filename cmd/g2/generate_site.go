@@ -1356,7 +1356,6 @@ func generateSite(outDir string, sites []*g2.SiteData, recentDuration time.Durat
 	}
 	stepTemplates()
 
-
 	for _, site := range sites {
 		aggPackagesMap := make(map[string]*AggPackage)
 		for _, cat := range site.Categories {

@@ -211,39 +211,39 @@ func generateSearchData(outDir, outZip string, sites []*g2.SiteData, maxChunkSiz
 						}
 					}
 
-	for i := range uses {
-		uses[i] = strings.ToLower(uses[i])
-	}
-	for i := range urls {
-		urls[i] = strings.ToLower(urls[i])
-	}
-	for i := range useDescriptions {
-		useDescriptions[i] = strings.ToLower(useDescriptions[i])
-	}
+					for i := range uses {
+						uses[i] = strings.ToLower(uses[i])
+					}
+					for i := range urls {
+						urls[i] = strings.ToLower(urls[i])
+					}
+					for i := range useDescriptions {
+						useDescriptions[i] = strings.ToLower(useDescriptions[i])
+					}
 
 					searchText := strings.ToLower(fmt.Sprintf("%s %s %s %s %s", fullName, desc, strings.Join(uses, " "), strings.Join(urls, " "), strings.Join(useDescriptions, " ")))
 
-	for i := range licenses {
-		licenses[i] = strings.ToLower(licenses[i])
-	}
-	for i := range keywords {
-		keywords[i] = strings.ToLower(keywords[i])
-	}
-	for i := range arches {
-		arches[i] = strings.ToLower(arches[i])
-	}
-	for i := range depends {
-		depends[i] = strings.ToLower(depends[i])
-	}
-	for i := range rdepends {
-		rdepends[i] = strings.ToLower(rdepends[i])
-	}
+					for i := range licenses {
+						licenses[i] = strings.ToLower(licenses[i])
+					}
+					for i := range keywords {
+						keywords[i] = strings.ToLower(keywords[i])
+					}
+					for i := range arches {
+						arches[i] = strings.ToLower(arches[i])
+					}
+					for i := range depends {
+						depends[i] = strings.ToLower(depends[i])
+					}
+					for i := range rdepends {
+						rdepends[i] = strings.ToLower(rdepends[i])
+					}
 
-	catNameLower := strings.ToLower(cat.Name)
-	pkgNameLower := strings.ToLower(pkg.Name)
-	fullNameLower := strings.ToLower(fullName)
-	overlayNameLower := strings.ToLower(overlayName)
-	descLower := strings.ToLower(desc)
+					catNameLower := strings.ToLower(cat.Name)
+					pkgNameLower := strings.ToLower(pkg.Name)
+					fullNameLower := strings.ToLower(fullName)
+					overlayNameLower := strings.ToLower(overlayName)
+					descLower := strings.ToLower(desc)
 
 					var manifestFiles []string
 					for _, m := range pkg.ManifestData {
@@ -256,12 +256,12 @@ func generateSearchData(outDir, outZip string, sites []*g2.SiteData, maxChunkSiz
 
 					doc := SearchDocument{
 						ID:              docID,
-		Overlay:         overlayNameLower,
-		Category:        catNameLower,
-		Package:         pkgNameLower,
-		FullName:        fullNameLower,
+						Overlay:         overlayNameLower,
+						Category:        catNameLower,
+						Package:         pkgNameLower,
+						FullName:        fullNameLower,
 						Version:         verStr,
-		Description:     descLower,
+						Description:     descLower,
 						Urls:            urls,
 						Licenses:        licenses,
 						EAPI:            eapi,
@@ -337,7 +337,6 @@ func generateSearchData(outDir, outZip string, sites []*g2.SiteData, maxChunkSiz
 	// Output individual docs directly.
 	// Ensure dataFiles is initialized so it doesn't serialize to null for old clients.
 	dataFiles := make([]string, 0)
-
 
 	if outZip != "" {
 		f, err := os.Create(outZip)

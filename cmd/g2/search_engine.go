@@ -7,7 +7,7 @@ import (
 )
 
 type SearchEngine struct {
-	documents   []SearchDocument
+	documents []SearchDocument
 }
 
 func NewSearchEngine() *SearchEngine {
