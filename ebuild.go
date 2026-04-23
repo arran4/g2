@@ -62,6 +62,17 @@ type funcEntry struct {
 	Value AST
 }
 
+func cleanValue(v string) string {
+	if !strings.Contains(v, "\n") {
+		return v
+	}
+	lines := strings.Split(v, "\n")
+	for i, line := range lines {
+		lines[i] = strings.TrimRight(line, " \t")
+	}
+	return strings.Join(lines, "\n")
+}
+
 func (e *Ebuild) addVar(k string, addedVars map[string]bool, orderedItems *[]interface{}) {
 	if addedVars[k] {
 		return
@@ -77,13 +88,7 @@ func (e *Ebuild) addVar(k string, addedVars map[string]bool, orderedItems *[]int
 		return
 	}
 
-	if strings.Contains(val, "\n") {
-		lines := strings.Split(val, "\n")
-		for i, line := range lines {
-			lines[i] = strings.TrimRight(line, " \t")
-		}
-		val = strings.Join(lines, "\n")
-	}
+	val = cleanValue(val)
 	*orderedItems = append(*orderedItems, &varEntry{Key: k, Value: val})
 	addedVars[k] = true
 }
@@ -97,13 +102,7 @@ func (e *Ebuild) addFunc(k string, addedFuncs map[string]bool, orderedItems *[]i
 		return
 	}
 
-	if strings.Contains(val.Value, "\n") {
-		lines := strings.Split(val.Value, "\n")
-		for i, line := range lines {
-			lines[i] = strings.TrimRight(line, " \t")
-		}
-		val.Value = strings.Join(lines, "\n")
-	}
+	val.Value = cleanValue(val.Value)
 	*orderedItems = append(*orderedItems, &funcEntry{Key: k, Value: val})
 	addedFuncs[k] = true
 }
