@@ -239,6 +239,17 @@ func generateSearchData(outDir, outZip string, sites []*g2.SiteData, maxChunkSiz
 		rdepends[i] = strings.ToLower(rdepends[i])
 	}
 
+	depends = deduplicateStrings(depends)
+	rdepends = deduplicateStrings(rdepends)
+	bdepends = deduplicateStrings(bdepends)
+	pdepends = deduplicateStrings(pdepends)
+	licenses = deduplicateStrings(licenses)
+	keywords = deduplicateStrings(keywords)
+	arches = deduplicateStrings(arches)
+	uses = deduplicateStrings(uses)
+	urls = deduplicateStrings(urls)
+	useDescriptions = deduplicateStrings(useDescriptions)
+
 	catNameLower := strings.ToLower(cat.Name)
 	pkgNameLower := strings.ToLower(pkg.Name)
 	fullNameLower := strings.ToLower(fullName)
