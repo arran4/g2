@@ -106,6 +106,11 @@ func TestEbuildDeps(t *testing.T) {
 				// Also handle the case where the path might use forward slashes even on Windows
 				forwardSlashPrefix := filepath.ToSlash(tmpDir) + "/"
 				got = strings.ReplaceAll(got, forwardSlashPrefix, "")
+
+					// Normalize remaining double-escaped backslashes to forward slashes for JSON outputs
+					got = strings.ReplaceAll(got, "\\\\", "/")
+					// Normalize standard backslashes to forward slashes for text outputs
+					got = strings.ReplaceAll(got, "\\", "/")
 			}
 
 			if strings.TrimSpace(got) != strings.TrimSpace(want) {
