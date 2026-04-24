@@ -120,6 +120,27 @@ func (cfg *CmdPackageArgConfig) cmdSearch(args []string) error {
 
 	engine := NewSearchEngine()
 
+	if err := LoadSearchEngine(searchPath, engine); err != nil {
+		return err
+	}
+
+	results := engine.Search(query)
+
+	for _, res := range results {
+		fmt.Printf("%s\n", res.FullName)
+		if res.Description != "" {
+			fmt.Printf("  %s\n", res.Description)
+		}
+		if res.Version != "" {
+			fmt.Printf("  Version: %s\n", res.Version)
+		}
+	}
+
+	log.Printf("Found %d results for '%s'", len(results), query)
+	return nil
+}
+
+func LoadSearchEngine(searchPath string, engine *SearchEngine) error {
 	// Handle loading logic based on type
 	if strings.HasPrefix(strings.ToLower(searchPath), "http://") || strings.HasPrefix(strings.ToLower(searchPath), "https://") {
 		// Load from URL
@@ -167,9 +188,12 @@ func (cfg *CmdPackageArgConfig) cmdSearch(args []string) error {
 
 		var manifest SearchManifest
 		var manifestFound bool
+		var manifestPath string
+		var filesMap = make(map[string]*zip.File)
 
 		for _, f := range z.File {
-			if strings.HasSuffix(f.Name, "manifest.json") {
+			filesMap[f.Name] = f
+			if !manifestFound && strings.HasSuffix(f.Name, "manifest.json") {
 				rc, err := f.Open()
 				if err != nil {
 					return err
@@ -180,7 +204,7 @@ func (cfg *CmdPackageArgConfig) cmdSearch(args []string) error {
 					return fmt.Errorf("decoding manifest from zip: %w", err)
 				}
 				manifestFound = true
-				break
+				manifestPath = f.Name
 			}
 		}
 
@@ -188,22 +212,32 @@ func (cfg *CmdPackageArgConfig) cmdSearch(args []string) error {
 			return fmt.Errorf("manifest.json not found in zip")
 		}
 
-		for _, f := range z.File {
-			for _, mf := range manifest.DataFiles {
-				if strings.HasSuffix(f.Name, mf) {
-					rc, err := f.Open()
-					if err != nil {
-						return err
+		prefix := manifestPath[:len(manifestPath)-len("manifest.json")]
+		var matchingFiles []*zip.File
+		for _, mf := range manifest.DataFiles {
+			if f, ok := filesMap[prefix+mf]; ok {
+				matchingFiles = append(matchingFiles, f)
+			} else {
+				for name, f := range filesMap {
+					if strings.HasSuffix(name, mf) {
+						matchingFiles = append(matchingFiles, f)
 					}
-					var docs []SearchDocument
-					err = json.NewDecoder(rc).Decode(&docs)
-					_ = rc.Close()
-					if err != nil {
-						return fmt.Errorf("decoding data file %s from zip: %w", mf, err)
-					}
-					engine.LoadDocuments(docs)
 				}
 			}
+		}
+
+		for _, f := range matchingFiles {
+			rc, err := f.Open()
+			if err != nil {
+				return err
+			}
+			var docs []SearchDocument
+			err = json.NewDecoder(rc).Decode(&docs)
+			_ = rc.Close()
+			if err != nil {
+				return fmt.Errorf("decoding data file %s from zip: %w", f.Name, err)
+			}
+			engine.LoadDocuments(docs)
 		}
 	} else if strings.HasSuffix(searchPath, ".tar") || strings.HasSuffix(searchPath, ".tar.gz") {
 		f, err := os.Open(searchPath)
@@ -227,6 +261,7 @@ func (cfg *CmdPackageArgConfig) cmdSearch(args []string) error {
 		var manifest SearchManifest
 		var manifestFound bool
 		var filesData = make(map[string][]byte)
+		var manifestPath string
 
 		for {
 			hdr, err := tr.Next()
@@ -245,11 +280,12 @@ func (cfg *CmdPackageArgConfig) cmdSearch(args []string) error {
 			}
 			filesData[hdr.Name] = data
 
-			if strings.HasSuffix(hdr.Name, "manifest.json") {
+			if !manifestFound && strings.HasSuffix(hdr.Name, "manifest.json") {
 				if err := json.Unmarshal(data, &manifest); err != nil {
 					return fmt.Errorf("decoding manifest from tar: %w", err)
 				}
 				manifestFound = true
+				manifestPath = hdr.Name
 			}
 		}
 
@@ -257,16 +293,29 @@ func (cfg *CmdPackageArgConfig) cmdSearch(args []string) error {
 			return fmt.Errorf("manifest.json not found in tar")
 		}
 
-		for name, data := range filesData {
-			for _, mf := range manifest.DataFiles {
-				if strings.HasSuffix(name, mf) {
-					var docs []SearchDocument
-					if err := json.Unmarshal(data, &docs); err != nil {
-						return fmt.Errorf("decoding data file %s from tar: %w", mf, err)
+		prefix := manifestPath[:len(manifestPath)-len("manifest.json")]
+		var matchingData [][]byte
+		var matchingNames []string
+		for _, mf := range manifest.DataFiles {
+			if data, ok := filesData[prefix+mf]; ok {
+				matchingData = append(matchingData, data)
+				matchingNames = append(matchingNames, prefix+mf)
+			} else {
+				for name, data := range filesData {
+					if strings.HasSuffix(name, mf) {
+						matchingData = append(matchingData, data)
+						matchingNames = append(matchingNames, name)
 					}
-					engine.LoadDocuments(docs)
 				}
 			}
+		}
+
+		for i, data := range matchingData {
+			var docs []SearchDocument
+			if err := json.Unmarshal(data, &docs); err != nil {
+				return fmt.Errorf("decoding data file %s from tar: %w", matchingNames[i], err)
+			}
+			engine.LoadDocuments(docs)
 		}
 	} else if strings.HasSuffix(searchPath, ".txtar") {
 		archive, err := txtar.ParseFile(searchPath)
@@ -276,14 +325,17 @@ func (cfg *CmdPackageArgConfig) cmdSearch(args []string) error {
 
 		var manifest SearchManifest
 		var manifestFound bool
+		var manifestPath string
+		var filesData = make(map[string][]byte)
 
 		for _, f := range archive.Files {
-			if strings.HasSuffix(f.Name, "manifest.json") {
+			filesData[f.Name] = f.Data
+			if !manifestFound && strings.HasSuffix(f.Name, "manifest.json") {
 				if err := json.Unmarshal(f.Data, &manifest); err != nil {
 					return fmt.Errorf("decoding manifest from txtar: %w", err)
 				}
 				manifestFound = true
-				break
+				manifestPath = f.Name
 			}
 		}
 
@@ -291,16 +343,29 @@ func (cfg *CmdPackageArgConfig) cmdSearch(args []string) error {
 			return fmt.Errorf("manifest.json not found in txtar")
 		}
 
-		for _, f := range archive.Files {
-			for _, mf := range manifest.DataFiles {
-				if strings.HasSuffix(f.Name, mf) {
-					var docs []SearchDocument
-					if err := json.Unmarshal(f.Data, &docs); err != nil {
-						return fmt.Errorf("decoding data file %s from txtar: %w", mf, err)
+		prefix := manifestPath[:len(manifestPath)-len("manifest.json")]
+		var matchingData [][]byte
+		var matchingNames []string
+		for _, mf := range manifest.DataFiles {
+			if data, ok := filesData[prefix+mf]; ok {
+				matchingData = append(matchingData, data)
+				matchingNames = append(matchingNames, prefix+mf)
+			} else {
+				for name, data := range filesData {
+					if strings.HasSuffix(name, mf) {
+						matchingData = append(matchingData, data)
+						matchingNames = append(matchingNames, name)
 					}
-					engine.LoadDocuments(docs)
 				}
 			}
+		}
+
+		for i, data := range matchingData {
+			var docs []SearchDocument
+			if err := json.Unmarshal(data, &docs); err != nil {
+				return fmt.Errorf("decoding data file %s from txtar: %w", matchingNames[i], err)
+			}
+			engine.LoadDocuments(docs)
 		}
 	} else {
 		// Directory
@@ -339,19 +404,6 @@ func (cfg *CmdPackageArgConfig) cmdSearch(args []string) error {
 		}
 	}
 
-	results := engine.Search(query)
-
-	for _, res := range results {
-		fmt.Printf("%s\n", res.FullName)
-		if res.Description != "" {
-			fmt.Printf("  %s\n", res.Description)
-		}
-		if res.Version != "" {
-			fmt.Printf("  Version: %s\n", res.Version)
-		}
-	}
-
-	log.Printf("Found %d results for '%s'", len(results), query)
 	return nil
 }
 
