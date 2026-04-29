@@ -235,6 +235,23 @@ func parseRepoCategoriesAndPackages(sysFS fs.FS, repoDir string, repoName string
 		}
 	}
 
+	slotMovesMap := make(map[string][]g2.PackageSlotMove)
+	if site.SlotMoves != nil {
+		for _, sm := range site.SlotMoves {
+			slotMovesMap[sm.Package] = append(slotMovesMap[sm.Package], sm)
+		}
+	}
+
+	infoPkgsMap := make(map[string]bool)
+	for j := range site.InfoPkgs {
+		atom := site.InfoPkgs[j].PackageAtom
+		baseAtom := atom
+		if idx := strings.Index(atom, ":"); idx != -1 {
+			baseAtom = atom[:idx]
+		}
+		infoPkgsMap[baseAtom] = true
+	}
+
 	entries, err := fs.ReadDir(sysFS, filepath.ToSlash(repoDir))
 	if err != nil {
 		return fmt.Errorf("reading repo dir: %w", err)
@@ -334,10 +351,10 @@ func parseRepoCategoriesAndPackages(sysFS fs.FS, repoDir string, repoName string
 					ModTime:      modTime,
 				}
 
-				if site.SlotMoves != nil {
-					if slot := ebuild.Vars["SLOT"]; slot != "" {
-						for _, sm := range site.SlotMoves {
-							if sm.Package == name+"/"+pkgName && sm.Old == slot {
+				if slot := ebuild.Vars["SLOT"]; slot != "" {
+					if moves, ok := slotMovesMap[name+"/"+pkgName]; ok {
+						for _, sm := range moves {
+							if sm.Old == slot {
 								vd.MovedToSlot = sm.New
 								break
 							}
@@ -505,16 +522,8 @@ func parseRepoCategoriesAndPackages(sysFS fs.FS, repoDir string, repoName string
 				})
 			}
 
-			for j := range site.InfoPkgs {
-				atom := site.InfoPkgs[j].PackageAtom
-				baseAtom := atom
-				if idx := strings.Index(atom, ":"); idx != -1 {
-					baseAtom = atom[:idx]
-				}
-				if baseAtom == pkgStr {
-					pkgData.IsInfoPkg = true
-					break
-				}
+			if infoPkgsMap[pkgStr] {
+				pkgData.IsInfoPkg = true
 			}
 
 			pkgData.LintWarnings = lints.PerformLinting(repoDir, &g2PkgData)
