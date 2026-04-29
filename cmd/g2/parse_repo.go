@@ -298,6 +298,8 @@ func parseRepoCategoriesAndPackages(sysFS fs.FS, repoDir string, repoName string
 				Category: name,
 			}
 
+			pkgStr := name + "/" + pkgName
+
 			files, err := fs.ReadDir(sysFS, filepath.ToSlash(pkgPath))
 			if err != nil {
 				log.Printf("Warning: reading package dir %s: %v", pkgPath, err)
@@ -352,7 +354,7 @@ func parseRepoCategoriesAndPackages(sysFS fs.FS, repoDir string, repoName string
 				}
 
 				if slot := ebuild.Vars["SLOT"]; slot != "" {
-					if moves, ok := slotMovesMap[name+"/"+pkgName]; ok {
+					if moves, ok := slotMovesMap[pkgStr]; ok {
 						for _, sm := range moves {
 							if sm.Old == slot {
 								vd.MovedToSlot = sm.New
@@ -498,8 +500,6 @@ func parseRepoCategoriesAndPackages(sysFS fs.FS, repoDir string, repoName string
 				MetadataError: pkgData.MetadataError,
 				Manifest:      pkgData.Manifest,
 			}
-
-			pkgStr := pkgData.Category + "/" + pkgData.Name
 
 			if dep, ok := deprecatedMap[pkgStr]; ok {
 				pkgData.Deprecated = dep
