@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE repositories SYSTEM "https://www.gentoo.org/dtd/repositories.dtd">
+<repositories xmlns="" version="1.0">
+  <repo quality="experimental" status="unofficial" priority="50">
+    <name>foo-overlay</name>
+    <description lang="en">Foo Overlay</description>
+    <description lang="fr">Overlay Foo</description>
+    <longdescription lang="en">This is the foo overlay, providing various foo packages.</longdescription>
+    <homepage>https://example.com/foo</homepage>
+    <owner type="project">
+      <email>foo@example.com</email>
+      <name>Foo Project</name>
+    </owner>
+    <owner type="person">
+      <email>bar@example.com</email>
+      <name>Bar Person</name>
+    </owner>
+    <source type="git">https://git.example.com/foo.git</source>
+    <source type="rsync">rsync://rsync.example.com/foo</source>
+    <feed>https://example.com/foo/atom.xml</feed>
+  </repo>
+  <repo quality="core" status="official">
+    <name>gentoo</name>
+    <description lang="en">Gentoo Linux repository</description>
+    <owner type="project">
+      <email>bug-wranglers@gentoo.org</email>
+    </owner>
+    <source type="rsync">rsync://rsync.gentoo.org/gentoo-portage</source>
+  </repo>
+</repositories>
