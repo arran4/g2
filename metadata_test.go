@@ -34,11 +34,16 @@ func TestParseMetadata(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := ParseMetadata(tt.path)
-			if (err != nil) != tt.wantErr {
-				t.Fatalf("ParseMetadata() error = %v, wantErr %v", err, tt.wantErr)
-			}
-			if err != nil {
+
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("ParseMetadata() error = nil, wantErr %v", tt.wantErr)
+				}
 				return
+			}
+
+			if err != nil {
+				t.Fatalf("ParseMetadata() error = %v, wantErr %v", err, tt.wantErr)
 			}
 
 			if reflect.TypeOf(got) != reflect.TypeOf(tt.wantType) {
