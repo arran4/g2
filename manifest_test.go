@@ -171,7 +171,7 @@ func TestUpsert(t *testing.T) {
 
 	// Create initial manifest
 	entry1 := &ManifestEntry{Type: "DIST", Filename: "A", Size: 100}
-	entry1.AddHash("SHA256", "123")
+	entry1.AddHash(HashSha256, "123")
 	if err := UpsertManifest(manifestPath, entry1); err != nil {
 		t.Fatalf("First upsert failed: %v", err)
 	}
@@ -186,7 +186,7 @@ func TestUpsert(t *testing.T) {
 
 	// Update existing
 	entry1Updated := &ManifestEntry{Type: "DIST", Filename: "A", Size: 200}
-	entry1Updated.AddHash("SHA256", "999")
+	entry1Updated.AddHash(HashSha256, "999")
 	if err := UpsertManifest(manifestPath, entry1Updated); err != nil {
 		t.Fatalf("Update upsert failed: %v", err)
 	}
