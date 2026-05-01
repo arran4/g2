@@ -199,7 +199,6 @@ func (cfg *MainArgConfig) cmdManifest(args []string) error {
 	blake2s := fs.Bool("blake2s", false, "Calculate BLAKE2S checksum")
 	md5 := fs.Bool("md5", false, "Calculate MD5 checksum")
 	rmd160 := fs.Bool("rmd160", false, "Calculate RMD160 checksum")
-	sha1 := fs.Bool("sha1", false, "Calculate SHA1 checksum")
 	sha256 := fs.Bool("sha256", false, "Calculate SHA256 checksum")
 	sha3_256 := fs.Bool("sha3_256", false, "Calculate SHA3_256 checksum")
 	sha3_512 := fs.Bool("sha3_512", false, "Calculate SHA3_512 checksum")
@@ -230,9 +229,6 @@ func (cfg *MainArgConfig) cmdManifest(args []string) error {
 		}
 		if *rmd160 {
 			hashes = append(hashes, g2.HashRmd160)
-		}
-		if *sha1 {
-			hashes = append(hashes, g2.HashSha1)
 		}
 		if *sha256 {
 			hashes = append(hashes, g2.HashSha256)

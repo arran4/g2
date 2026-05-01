@@ -69,7 +69,6 @@ g2 manifest [flags] upsert-from-url <url> <filename> <manifestFileOrDir>
 * `-blake2s` (default: `false`): Calculate BLAKE2S checksum.
 * `-md5` (default: `false`): Calculate MD5 checksum.
 * `-rmd160` (default: `false`): Calculate RMD160 checksum.
-* `-sha1` (default: `false`): Calculate SHA1 checksum.
 * `-sha256` (default: `false`): Calculate SHA256 checksum.
 * `-sha3_256` (default: `false`): Calculate SHA3-256 checksum.
 * `-sha3_512` (default: `false`): Calculate SHA3-512 checksum.

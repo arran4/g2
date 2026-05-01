@@ -2,7 +2,6 @@ package g2
 
 import (
 	"crypto/md5"
-	"crypto/sha1"
 	"crypto/sha256"
 	"crypto/sha512"
 	"fmt"
@@ -22,7 +21,6 @@ const (
 	HashBlake2s  = "BLAKE2S"
 	HashMd5      = "MD5"
 	HashRmd160   = "RMD160"
-	HashSha1     = "SHA1"
 	HashSha256   = "SHA256"
 	HashSha3_256 = "SHA3_256"
 	HashSha3_512 = "SHA3_512"
@@ -34,7 +32,6 @@ var AllHashes = []string{
 	HashBlake2s,
 	HashMd5,
 	HashRmd160,
-	HashSha1,
 	HashSha256,
 	HashSha3_256,
 	HashSha3_512,
@@ -128,10 +125,6 @@ func DownloadAndChecksum(url string, hashes []string) (*Checksums, error) {
 			h := ripemd160.New() //nolint:staticcheck
 			writers = append(writers, h)
 			hashers[HashRmd160] = h
-		case HashSha1:
-			h := sha1.New()
-			writers = append(writers, h)
-			hashers[HashSha1] = h
 		case HashSha256:
 			h := sha256.New()
 			writers = append(writers, h)
