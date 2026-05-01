@@ -865,25 +865,36 @@ func parseProfilesDirFS(sysFS fs.FS, repoDir string, entries []g2.ProfileDescEnt
 			"use.stable.force", "use.stable.mask",
 		}
 
+		var g errgroup.Group
+		var mu sync.Mutex
 		for _, fname := range fileNames {
-			b, err := fs.ReadFile(sysFS, path2.Join(path, fname))
-			if err == nil {
-				pData.Files[fname] = string(b)
-				if fname == "parent" {
-					lines := strings.Split(string(b), "\n")
-					for _, line := range lines {
-						line = strings.TrimSpace(line)
-						if line == "" || strings.HasPrefix(line, "#") {
-							continue
-						}
-						parentRelPath := path2.Clean(path2.Join(relPath, line))
-						if !strings.HasPrefix(parentRelPath, "..") {
-							pData.Parents = append(pData.Parents, parentRelPath)
+			fname := fname
+			g.Go(func() error {
+				b, err := fs.ReadFile(sysFS, path2.Join(path, fname))
+				if err == nil {
+					content := string(b)
+					var parents []string
+					if fname == "parent" {
+						for _, line := range strings.Split(content, "\n") {
+							line = strings.TrimSpace(line)
+							if line == "" || strings.HasPrefix(line, "#") {
+								continue
+							}
+							parentRelPath := path2.Clean(path2.Join(relPath, line))
+							if !strings.HasPrefix(parentRelPath, "..") {
+								parents = append(parents, parentRelPath)
+							}
 						}
 					}
+					mu.Lock()
+					pData.Files[fname] = content
+					pData.Parents = append(pData.Parents, parents...)
+					mu.Unlock()
 				}
-			}
+				return nil
+			})
 		}
+		_ = g.Wait()
 
 		profilesMap[relPath] = pData
 		return nil
