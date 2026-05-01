@@ -262,3 +262,35 @@ func TestSort(t *testing.T) {
 		t.Error("Sort failed: expected EBUILD last")
 	}
 }
+
+func TestGetEntry(t *testing.T) {
+	e1 := NewManifestEntry("DIST", "file1", 100)
+	e2 := NewManifestEntry("AUX", "file2", 200)
+	m := &Manifest{Entries: []*ManifestEntry{e1, e2}}
+
+	tests := []struct {
+		name     string
+		filename string
+		want     *ManifestEntry
+	}{
+		{"Existing file 1", "file1", e1},
+		{"Existing file 2", "file2", e2},
+		{"Non-existent file", "file3", nil},
+		{"Empty filename", "", nil},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := m.GetEntry(tt.filename); got != tt.want {
+				t.Errorf("GetEntry(%q) = %v; want %v", tt.filename, got, tt.want)
+			}
+		})
+	}
+
+	t.Run("Empty manifest", func(t *testing.T) {
+		emptyM := &Manifest{}
+		if got := emptyM.GetEntry("file1"); got != nil {
+			t.Errorf("GetEntry on empty manifest = %v; want nil", got)
+		}
+	})
+}
