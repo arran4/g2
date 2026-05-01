@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"github.com/arran4/g2"
+	"io/fs"
 	"log"
 	"os"
 	"path/filepath"
@@ -64,43 +65,43 @@ func (cfg *MainArgConfig) cmdMetadata(args []string) error {
 		return cfg.cmdMetadataDiscover(args[1:])
 	}
 
-	fs := flag.NewFlagSet("metadata", flag.ExitOnError)
+	fset := flag.NewFlagSet("metadata", flag.ExitOnError)
 
 	var maintainers MaintainerFlag
-	fs.Var(&maintainers, "maintainer-add", "Add/Update maintainer (format: email[:name[:type]])")
-	fs.Var(&maintainers, "maintainer", "Alias for maintainer-add")
-	fs.Var(&maintainers, "m", "Alias for maintainer-add")
+	fset.Var(&maintainers, "maintainer-add", "Add/Update maintainer (format: email[:name[:type]])")
+	fset.Var(&maintainers, "maintainer", "Alias for maintainer-add")
+	fset.Var(&maintainers, "m", "Alias for maintainer-add")
 
 	var maintainerRemoves StringSliceFlag
-	fs.Var(&maintainerRemoves, "maintainer-remove", "Remove maintainer (format: email)")
+	fset.Var(&maintainerRemoves, "maintainer-remove", "Remove maintainer (format: email)")
 
-	longDesc := fs.String("longdescription", "", "Set long description")
-	longDescShort := fs.String("l", "", "Set long description")
+	longDesc := fset.String("longdescription", "", "Set long description")
+	longDescShort := fset.String("l", "", "Set long description")
 
 	var remoteIDs RemoteIDFlag
-	fs.Var(&remoteIDs, "upstream-add", "Add upstream remote ID (format: type:id)")
-	fs.Var(&remoteIDs, "upstream-id", "Alias for upstream-add")
-	fs.Var(&remoteIDs, "u", "Alias for upstream-add")
+	fset.Var(&remoteIDs, "upstream-add", "Add upstream remote ID (format: type:id)")
+	fset.Var(&remoteIDs, "upstream-id", "Alias for upstream-add")
+	fset.Var(&remoteIDs, "u", "Alias for upstream-add")
 
 	var remoteIDRemoves StringSliceFlag
-	fs.Var(&remoteIDRemoves, "upstream-remove", "Remove upstream remote ID (format: type:id)")
+	fset.Var(&remoteIDRemoves, "upstream-remove", "Remove upstream remote ID (format: type:id)")
 
 	var useAdds UseFlagFlag
-	fs.Var(&useAdds, "use-add", "Add/Update USE flag (format: name:description)")
-	fs.Var(&useAdds, "use", "Alias for use-add")
+	fset.Var(&useAdds, "use-add", "Add/Update USE flag (format: name:description)")
+	fset.Var(&useAdds, "use", "Alias for use-add")
 
 	var useRemoves StringSliceFlag
-	fs.Var(&useRemoves, "use-remove", "Remove USE flag (format: name)")
+	fset.Var(&useRemoves, "use-remove", "Remove USE flag (format: name)")
 
-	force := fs.Bool("force", false, "Force overwrite if type mismatches or other errors")
+	force := fset.Bool("force", false, "Force overwrite if type mismatches or other errors")
 
-	if err := fs.Parse(args); err != nil {
+	if err := fset.Parse(args); err != nil {
 		return err
 	}
 
 	targetFile := "metadata.xml"
-	if fs.NArg() > 0 {
-		targetFile = fs.Arg(0)
+	if fset.NArg() > 0 {
+		targetFile = fset.Arg(0)
 	}
 
 	// Load existing or create new
@@ -319,21 +320,21 @@ func (cfg *MainArgConfig) cmdMetadata(args []string) error {
 }
 
 func (cfg *MainArgConfig) cmdMetadataDiscover(args []string) error {
-	fs := flag.NewFlagSet("discover", flag.ExitOnError)
-	if err := fs.Parse(args); err != nil {
+	fset := flag.NewFlagSet("discover", flag.ExitOnError)
+	if err := fset.Parse(args); err != nil {
 		return err
 	}
 
 	targetDir := "."
-	if fs.NArg() > 0 {
-		targetDir = fs.Arg(0)
+	if fset.NArg() > 0 {
+		targetDir = fset.Arg(0)
 	}
 
-	return filepath.Walk(targetDir, func(path string, info os.FileInfo, err error) error {
+	return filepath.WalkDir(targetDir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
-		if info.IsDir() {
+		if d.IsDir() {
 			return nil
 		}
 		if !strings.HasSuffix(path, ".ebuild") {
