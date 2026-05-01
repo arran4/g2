@@ -102,8 +102,8 @@ func generateSearchData(outDir, outZip string, sites []*g2.SiteData, maxChunkSiz
 						urls = append(urls, strings.Fields(homepage)...)
 
 						licenseStr := ver.Ebuild.Vars["LICENSE"]
-						for _, l := range strings.Fields(licenseStr) {
-							if l != "||" && l != "(" && l != ")" && !strings.HasPrefix(l, "?") {
+						forEachToken(licenseStr, func(l string) {
+							if l != "||" && l != "(" && l != ")" && (len(l) == 0 || l[0] != '?') {
 								licenses = append(licenses, l)
 								if site.LicenseMapping != nil {
 									if aliases, ok := site.LicenseMapping[l]; ok {
@@ -111,24 +111,33 @@ func generateSearchData(outDir, outZip string, sites []*g2.SiteData, maxChunkSiz
 									}
 								}
 							}
-						}
+						})
 
 						keywordStr := ver.Ebuild.Vars["KEYWORDS"]
-						for _, kw := range strings.Fields(keywordStr) {
+						forEachToken(keywordStr, func(kw string) {
 							keywords = append(keywords, kw)
-							arch := strings.TrimPrefix(kw, "~")
-							arch = strings.TrimPrefix(arch, "-")
-							if arch != "" {
+							arch := kw
+							if len(arch) > 0 && arch[0] == '~' {
+								arch = arch[1:]
+							}
+							if len(arch) > 0 && arch[0] == '-' {
+								arch = arch[1:]
+							}
+							if len(arch) > 0 {
 								arches = append(arches, arch)
 							}
-						}
+						})
 
 						iuseStr := ver.Ebuild.Vars["IUSE"]
-						for _, u := range strings.Fields(iuseStr) {
-							u = strings.TrimPrefix(u, "+")
-							u = strings.TrimPrefix(u, "-")
+						forEachToken(iuseStr, func(u string) {
+							if len(u) > 0 && u[0] == '+' {
+								u = u[1:]
+							}
+							if len(u) > 0 && u[0] == '-' {
+								u = u[1:]
+							}
 							uses = append(uses, u)
-						}
+						})
 
 						if d := ver.Ebuild.Vars["DEPEND"]; d != "" {
 							rawDepends = d
@@ -211,50 +220,50 @@ func generateSearchData(outDir, outZip string, sites []*g2.SiteData, maxChunkSiz
 						}
 					}
 
-	for i := range uses {
-		uses[i] = strings.ToLower(uses[i])
-	}
-	for i := range urls {
-		urls[i] = strings.ToLower(urls[i])
-	}
-	for i := range useDescriptions {
-		useDescriptions[i] = strings.ToLower(useDescriptions[i])
-	}
+					for i := range uses {
+						uses[i] = strings.ToLower(uses[i])
+					}
+					for i := range urls {
+						urls[i] = strings.ToLower(urls[i])
+					}
+					for i := range useDescriptions {
+						useDescriptions[i] = strings.ToLower(useDescriptions[i])
+					}
 
 					searchText := strings.ToLower(fmt.Sprintf("%s %s %s %s %s", fullName, desc, strings.Join(uses, " "), strings.Join(urls, " "), strings.Join(useDescriptions, " ")))
 
-	for i := range licenses {
-		licenses[i] = strings.ToLower(licenses[i])
-	}
-	for i := range keywords {
-		keywords[i] = strings.ToLower(keywords[i])
-	}
-	for i := range arches {
-		arches[i] = strings.ToLower(arches[i])
-	}
-	for i := range depends {
-		depends[i] = strings.ToLower(depends[i])
-	}
-	for i := range rdepends {
-		rdepends[i] = strings.ToLower(rdepends[i])
-	}
+					for i := range licenses {
+						licenses[i] = strings.ToLower(licenses[i])
+					}
+					for i := range keywords {
+						keywords[i] = strings.ToLower(keywords[i])
+					}
+					for i := range arches {
+						arches[i] = strings.ToLower(arches[i])
+					}
+					for i := range depends {
+						depends[i] = strings.ToLower(depends[i])
+					}
+					for i := range rdepends {
+						rdepends[i] = strings.ToLower(rdepends[i])
+					}
 
-	depends = deduplicateStrings(depends)
-	rdepends = deduplicateStrings(rdepends)
-	bdepends = deduplicateStrings(bdepends)
-	pdepends = deduplicateStrings(pdepends)
-	licenses = deduplicateStrings(licenses)
-	keywords = deduplicateStrings(keywords)
-	arches = deduplicateStrings(arches)
-	uses = deduplicateStrings(uses)
-	urls = deduplicateStrings(urls)
-	useDescriptions = deduplicateStrings(useDescriptions)
+					depends = deduplicateStrings(depends)
+					rdepends = deduplicateStrings(rdepends)
+					bdepends = deduplicateStrings(bdepends)
+					pdepends = deduplicateStrings(pdepends)
+					licenses = deduplicateStrings(licenses)
+					keywords = deduplicateStrings(keywords)
+					arches = deduplicateStrings(arches)
+					uses = deduplicateStrings(uses)
+					urls = deduplicateStrings(urls)
+					useDescriptions = deduplicateStrings(useDescriptions)
 
-	catNameLower := strings.ToLower(cat.Name)
-	pkgNameLower := strings.ToLower(pkg.Name)
-	fullNameLower := strings.ToLower(fullName)
-	overlayNameLower := strings.ToLower(overlayName)
-	descLower := strings.ToLower(desc)
+					catNameLower := strings.ToLower(cat.Name)
+					pkgNameLower := strings.ToLower(pkg.Name)
+					fullNameLower := strings.ToLower(fullName)
+					overlayNameLower := strings.ToLower(overlayName)
+					descLower := strings.ToLower(desc)
 
 					var manifestFiles []string
 					for _, m := range pkg.ManifestData {
@@ -267,12 +276,12 @@ func generateSearchData(outDir, outZip string, sites []*g2.SiteData, maxChunkSiz
 
 					doc := SearchDocument{
 						ID:              docID,
-		Overlay:         overlayNameLower,
-		Category:        catNameLower,
-		Package:         pkgNameLower,
-		FullName:        fullNameLower,
+						Overlay:         overlayNameLower,
+						Category:        catNameLower,
+						Package:         pkgNameLower,
+						FullName:        fullNameLower,
 						Version:         verStr,
-		Description:     descLower,
+						Description:     descLower,
 						Urls:            urls,
 						Licenses:        licenses,
 						EAPI:            eapi,
@@ -348,7 +357,6 @@ func generateSearchData(outDir, outZip string, sites []*g2.SiteData, maxChunkSiz
 	// Output individual docs directly.
 	// Ensure dataFiles is initialized so it doesn't serialize to null for old clients.
 	dataFiles := make([]string, 0)
-
 
 	if outZip != "" {
 		f, err := os.Create(outZip)
@@ -522,6 +530,24 @@ func generateSearchIndex(outDir string, sites []*g2.SiteData) error {
 	}
 
 	return nil
+}
+
+// forEachToken acts as a zero-allocation split by whitespace, calling fn for each non-empty token.
+func forEachToken(s string, fn func(string)) {
+	for len(s) > 0 {
+		for len(s) > 0 && s[0] <= ' ' {
+			s = s[1:]
+		}
+		if s == "" {
+			break
+		}
+		end := 0
+		for end < len(s) && s[end] > ' ' {
+			end++
+		}
+		fn(s[:end])
+		s = s[end:]
+	}
 }
 
 func getBucket(token string) string {
