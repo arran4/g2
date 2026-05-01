@@ -781,11 +781,12 @@ func buildManifestData(manifest *g2.Manifest, versions []g2.VersionData, thirdPa
 								filePath := parts[1]
 								if mirrors, ok := thirdPartyMirrors[mirrorName]; ok {
 									for _, mirrorURL := range mirrors {
-										resolvedURL := mirrorURL
-										if !strings.HasSuffix(resolvedURL, "/") {
-											resolvedURL += "/"
+										var resolvedURL string
+										if strings.HasSuffix(mirrorURL, "/") {
+											resolvedURL = mirrorURL + filePath
+										} else {
+											resolvedURL = mirrorURL + "/" + filePath
 										}
-										resolvedURL += filePath
 										md.ResolvedURLs = append(md.ResolvedURLs, resolvedURL)
 									}
 								} else {
