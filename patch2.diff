@@ -1,0 +1,34 @@
+--- repositories_test.go
++++ repositories_test.go
+@@ -82,9 +82,9 @@
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+-	if len(repos.Repositories) == 0 || repos.Repositories[0].Name != expectedName {
+-		t.Errorf("expected first repository name to be %q, got %q", expectedName, repos.Repositories[0].Name)
++	if len(repos.Repositories) == 0 {
++		t.Fatal("expected at least one repository, got none")
+	}
++	if repos.Repositories[0].Name != expectedName {
++		t.Errorf("expected first repository name to be %q, got %q", expectedName, repos.Repositories[0].Name)
++	}
+ }
+
+ func TestParseRepositoriesFromReader(t *testing.T) {
+	expectedName := "foo-overlay"
+
+-	repos, err := ParseRepositoriesFromReader(strings.NewReader(string(validRepositoriesXML)))
++	repos, err := ParseRepositoriesFromReader(bytes.NewReader(validRepositoriesXML))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+-	if len(repos.Repositories) == 0 || repos.Repositories[0].Name != expectedName {
+-		t.Errorf("expected first repository name to be %q, got %q", expectedName, repos.Repositories[0].Name)
++	if len(repos.Repositories) == 0 {
++		t.Fatal("expected at least one repository, got none")
+	}
++	if repos.Repositories[0].Name != expectedName {
++		t.Errorf("expected first repository name to be %q, got %q", expectedName, repos.Repositories[0].Name)
++	}
+ }

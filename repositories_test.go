@@ -1,6 +1,7 @@
 package g2
 
 import (
+	"bytes"
 	_ "embed"
 	"encoding/xml"
 	"os"
@@ -80,7 +81,10 @@ func TestParseRepositoriesBytes(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if len(repos.Repositories) == 0 || repos.Repositories[0].Name != expectedName {
+	if len(repos.Repositories) == 0 {
+		t.Fatal("expected at least one repository, got none")
+	}
+	if repos.Repositories[0].Name != expectedName {
 		t.Errorf("expected first repository name to be %q, got %q", expectedName, repos.Repositories[0].Name)
 	}
 }
@@ -88,12 +92,15 @@ func TestParseRepositoriesBytes(t *testing.T) {
 func TestParseRepositoriesFromReader(t *testing.T) {
 	expectedName := "foo-overlay"
 
-	repos, err := ParseRepositoriesFromReader(strings.NewReader(string(validRepositoriesXML)))
+	repos, err := ParseRepositoriesFromReader(bytes.NewReader(validRepositoriesXML))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if len(repos.Repositories) == 0 || repos.Repositories[0].Name != expectedName {
+	if len(repos.Repositories) == 0 {
+		t.Fatal("expected at least one repository, got none")
+	}
+	if repos.Repositories[0].Name != expectedName {
 		t.Errorf("expected first repository name to be %q, got %q", expectedName, repos.Repositories[0].Name)
 	}
 }
