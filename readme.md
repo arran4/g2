@@ -309,7 +309,7 @@ g2 use local-desc-list
 
 ### `cache`
 
-Manage `md5-dict` cache files.
+Manage `sha256-dict` cache files.
 
 **Usage:**
 

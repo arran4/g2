@@ -173,8 +173,8 @@ func TestCacheCommands(t *testing.T) {
 				wantStr := strings.TrimSpace(string(want))
 				gotStr := strings.TrimSpace(string(got))
 
-				// for tests sort lines of md5-dict to prevent flaky order matching
-				if strings.Contains(name, "md5-dict") {
+				// for tests sort lines of sha256-dict to prevent flaky order matching
+				if strings.Contains(name, "sha256-dict") {
 					wantLines := strings.Split(wantStr, "\n")
 					gotLines := strings.Split(gotStr, "\n")
 					sort.Strings(wantLines)
@@ -185,10 +185,9 @@ func TestCacheCommands(t *testing.T) {
 
 				// The _md5_ generated hash from test files will vary depending on ebuild contents padding
 				// and variable order, so if they just differ by hash let's normalize or use fixed fixture hash expectations.
-				if strings.Contains(name, "md5-dict") && strings.Contains(baseName, "generate") {
+				if strings.Contains(name, "sha256-dict") && strings.Contains(baseName, "generate") {
 					// We're verifying generate, so the md5 sum is generated dynamically based on the exact ebuild string
 					// Since it generated successfully, we just verify the exact string it produced: `8a0cb2db1a7d82e9b53aaa062277608f`
-					wantStr = strings.ReplaceAll(wantStr, "50b18ec4900a68e27c001cfbc8cd5ed3", "8a0cb2db1a7d82e9b53aaa062277608f")
 				}
 
 				if gotStr != wantStr {

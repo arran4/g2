@@ -1,7 +1,7 @@
 package main
 
 import (
-	"crypto/md5"
+	"crypto/sha256"
 	"flag"
 	"fmt"
 	"io"
@@ -128,7 +128,7 @@ func doCacheVerify(cfs CacheFS, repoDir string) error {
 		}
 	}
 
-	cacheFormats := []string{"md5-dict"} // Default if not found
+	cacheFormats := []string{"sha256-dict"} // Default if not found
 	if lc != nil {
 		if formats := lc.GetValuesAsSlice("cache-formats"); len(formats) > 0 {
 			cacheFormats = formats
@@ -143,8 +143,8 @@ func doCacheVerify(cfs CacheFS, repoDir string) error {
 	hasErrors := false
 
 	for _, format := range cacheFormats {
-		if format != "md5-dict" {
-			log.Printf("Warning: Cache format '%s' is not supported. Only md5-dict is supported.", format)
+		if format != "sha256-dict" {
+			log.Printf("Warning: Cache format '%s' is not supported. Only sha256-dict is supported.", format)
 			hasErrors = true
 			continue
 		}
@@ -196,7 +196,7 @@ func doCacheGenerate(cfs CacheFS, repoDir string) error {
 		}
 	}
 
-	cacheFormats := []string{"md5-dict"} // Default if not found
+	cacheFormats := []string{"sha256-dict"} // Default if not found
 	if lc != nil {
 		if formats := lc.GetValuesAsSlice("cache-formats"); len(formats) > 0 {
 			cacheFormats = formats
@@ -209,8 +209,8 @@ func doCacheGenerate(cfs CacheFS, repoDir string) error {
 	}
 
 	for _, format := range cacheFormats {
-		if format != "md5-dict" {
-			log.Printf("Warning: Cache format '%s' is not supported. Skipping. Only md5-dict is supported.", format)
+		if format != "sha256-dict" {
+			log.Printf("Warning: Cache format '%s' is not supported. Skipping. Only sha256-dict is supported.", format)
 			continue
 		}
 
@@ -238,7 +238,7 @@ func doCacheGenerate(cfs CacheFS, repoDir string) error {
 					// We write variables directly as K=V. Or K=V... Wait, it's just K=V according to devmanual.
 					// e.g. DESCRIPTION=...
 					for k, v := range ver.Ebuild.Vars {
-						// Don't output variables that are empty to match standard md5-dict
+						// Don't output variables that are empty to match standard sha256-dict
 						if v != "" {
 							// For multi-line or complex things, we might just write as is
 							// We can filter to known metadata keys to avoid noise, but for now we write what ParseEbuild extracted.
@@ -249,13 +249,13 @@ func doCacheGenerate(cfs CacheFS, repoDir string) error {
 						}
 					}
 
-					// Add an md5 entry. To calculate _md5_, we need the md5 of the ebuild file.
+					// Add a sha256 entry. To calculate _sha256_, we need the sha256 of the ebuild file.
 					ebuildPath := filepath.ToSlash(filepath.Join(repoDir, pkg.Category, pkg.Name, fmt.Sprintf("%s-%s.ebuild", pkg.Name, ver.Version)))
 					ebuildContent, err := fs.ReadFile(cfs, ebuildPath)
 					if err == nil {
 						// eclass handling is omitted for this simple cache generation
-						md5sum := fmt.Sprintf("%x", md5.Sum(ebuildContent))
-						_, _ = fmt.Fprintf(f, "_md5_=%s\n", md5sum)
+						sha256sum := fmt.Sprintf("%x", sha256.Sum256(ebuildContent))
+						_, _ = fmt.Fprintf(f, "_sha256_=%s\n", sha256sum)
 					}
 
 					_ = f.Close()
@@ -315,7 +315,7 @@ func (cfg *MainArgConfig) cmdCacheListMethods(args []string) error {
 	}
 
 	fmt.Println("Available cache methods:")
-	fmt.Println("  md5-dict (default)")
+	fmt.Println("  sha256-dict (default)")
 	fmt.Println("  pms (deprecated)")
 	return nil
 }
@@ -343,7 +343,7 @@ func doCacheClean(cfs CacheFS, repoDir string) error {
 		}
 	}
 
-	cacheFormats := []string{"md5-dict", "pms"} // check common ones during clean
+	cacheFormats := []string{"sha256-dict", "pms"} // check common ones during clean
 	if lc != nil {
 		if formats := lc.GetValuesAsSlice("cache-formats"); len(formats) > 0 {
 			cacheFormats = formats
@@ -362,7 +362,7 @@ func doCacheClean(cfs CacheFS, repoDir string) error {
 		for _, cat := range siteData.Categories {
 			for _, pkg := range cat.Packages {
 				for _, ver := range pkg.Versions {
-					// cache path format: metadata/md5-dict/sys-apps/pkg-version
+					// cache path format: metadata/sha256-dict/sys-apps/pkg-version
 					relPath := filepath.Join("metadata", format, pkg.Category, fmt.Sprintf("%s-%s", pkg.Name, ver.Version))
 					validCacheEntries[relPath] = true
 				}
