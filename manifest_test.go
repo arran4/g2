@@ -262,3 +262,25 @@ func TestSort(t *testing.T) {
 		t.Error("Sort failed: expected EBUILD last")
 	}
 }
+
+func TestGetEntry(t *testing.T) {
+	m := &Manifest{}
+	e1 := NewManifestEntry("DIST", "file1", 100)
+	e2 := NewManifestEntry("AUX", "file2", 200)
+	m.AddOrReplace(e1)
+	m.AddOrReplace(e2)
+
+	entry := m.GetEntry("file1")
+	if entry == nil || entry.Filename != "file1" {
+		t.Errorf("GetEntry failed to find existing file1")
+	}
+
+	entry2 := m.GetEntry("file2")
+	if entry2 == nil || entry2.Type != "AUX" {
+		t.Errorf("GetEntry failed to find existing file2")
+	}
+
+	if m.GetEntry("file3") != nil {
+		t.Errorf("GetEntry found non-existent file3")
+	}
+}
