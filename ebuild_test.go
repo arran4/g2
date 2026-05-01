@@ -759,3 +759,167 @@ func TestGentooVersion_IncrementPartMultiple(t *testing.T) {
 		})
 	}
 }
+
+func TestParsePackageAtom(t *testing.T) {
+	tests := []struct {
+		name string
+		dep  string
+		want PackageAtom
+	}{
+		{
+			name: "basic category and name",
+			dep:  "dev-lang/python",
+			want: PackageAtom{
+				Category: "dev-lang",
+				Name:     "python",
+			},
+		},
+		{
+			name: "with version",
+			dep:  "dev-lang/python-3.10.4",
+			want: PackageAtom{
+				Category: "dev-lang",
+				Name:     "python",
+				Version:  "3.10.4",
+			},
+		},
+		{
+			name: "with revision",
+			dep:  "dev-lang/python-3.10.4-r1",
+			want: PackageAtom{
+				Category: "dev-lang",
+				Name:     "python",
+				Version:  "3.10.4-r1",
+			},
+		},
+		{
+			name: "with operator >=",
+			dep:  ">=dev-lang/python-3.10.4",
+			want: PackageAtom{
+				Operator: ">=",
+				Category: "dev-lang",
+				Name:     "python",
+				Version:  "3.10.4",
+			},
+		},
+		{
+			name: "with operator ~",
+			dep:  "~dev-lang/python-3.10.4",
+			want: PackageAtom{
+				Operator: "~",
+				Category: "dev-lang",
+				Name:     "python",
+				Version:  "3.10.4",
+			},
+		},
+		{
+			name: "with operator !",
+			dep:  "!dev-lang/python-3.10.4",
+			want: PackageAtom{
+				Operator: "!",
+				Category: "dev-lang",
+				Name:     "python",
+				Version:  "3.10.4",
+			},
+		},
+		{
+			name: "with slot",
+			dep:  "dev-lang/python:3.10",
+			want: PackageAtom{
+				Category: "dev-lang",
+				Name:     "python",
+				Slot:     "3.10",
+			},
+		},
+		{
+			name: "with subslot",
+			dep:  "dev-lang/python-3.10.4:0/3.10",
+			want: PackageAtom{
+				Category: "dev-lang",
+				Name:     "python",
+				Version:  "3.10.4",
+				Slot:     "0/3.10",
+			},
+		},
+		{
+			name: "with USE flags",
+			dep:  "dev-lang/python[sqlite,xml]",
+			want: PackageAtom{
+				Category: "dev-lang",
+				Name:     "python",
+				UseFlags: "sqlite,xml",
+			},
+		},
+		{
+			name: "everything combined",
+			dep:  ">=dev-lang/python-3.10.4-r1:0/3.10[sqlite,xml,-test]",
+			want: PackageAtom{
+				Operator: ">=",
+				Category: "dev-lang",
+				Name:     "python",
+				Version:  "3.10.4-r1",
+				Slot:     "0/3.10",
+				UseFlags: "sqlite,xml,-test",
+			},
+		},
+		{
+			name: "missing category",
+			dep:  "python",
+			want: PackageAtom{
+				Name: "python",
+			},
+		},
+		{
+			name: "missing category with version and operator",
+			dep:  ">=python-3.10",
+			want: PackageAtom{
+				Operator: ">=",
+				Name:     "python-3.10", // Fallback logic leaves version inside name
+			},
+		},
+		{
+			name: "name with numbers",
+			dep:  "sys-devel/gcc-11",
+			want: PackageAtom{
+				Category: "sys-devel",
+				Name:     "gcc",
+				Version:  "11",
+			},
+		},
+		{
+			name: "name with numbers and no version",
+			dep:  "x11-libs/libX11",
+			want: PackageAtom{
+				Category: "x11-libs",
+				Name:     "libX11",
+			},
+		},
+		{
+			name: "name with numbers and version",
+			dep:  "x11-libs/libX11-1.7.2",
+			want: PackageAtom{
+				Category: "x11-libs",
+				Name:     "libX11",
+				Version:  "1.7.2",
+			},
+		},
+		{
+			name: "virtual with USE flag",
+			dep:  "virtual/pkgconfig[native-symlinks]",
+			want: PackageAtom{
+				Category: "virtual",
+				Name:     "pkgconfig",
+				UseFlags: "native-symlinks",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := ParsePackageAtom(tt.dep)
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("ParsePackageAtom(%q) = %v, want %v", tt.dep, got, tt.want)
+			}
+		})
+	}
+}
