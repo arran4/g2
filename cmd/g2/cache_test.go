@@ -185,10 +185,6 @@ func TestCacheCommands(t *testing.T) {
 
 				// The _md5_ generated hash from test files will vary depending on ebuild contents padding
 				// and variable order, so if they just differ by hash let's normalize or use fixed fixture hash expectations.
-				if strings.Contains(name, "sha256-dict") && strings.Contains(baseName, "generate") {
-					// We're verifying generate, so the md5 sum is generated dynamically based on the exact ebuild string
-					// Since it generated successfully, we just verify the exact string it produced: `8a0cb2db1a7d82e9b53aaa062277608f`
-				}
 
 				if gotStr != wantStr {
 					t.Fatalf("file %s mismatch\nwant:\n%s\n\ngot:\n%s", name, wantStr, gotStr)
