@@ -1,0 +1,47 @@
+--- manifest_test.go
++++ manifest_test.go
+@@ -263,22 +263,28 @@
+ }
+
+ func TestGetEntry(t *testing.T) {
+-	m := &Manifest{}
+	e1 := NewManifestEntry("DIST", "file1", 100)
+	e2 := NewManifestEntry("AUX", "file2", 200)
+-	m.AddOrReplace(e1)
+-	m.AddOrReplace(e2)
++	m := &Manifest{Entries: []*ManifestEntry{e1, e2}}
+
+-	entry := m.GetEntry("file1")
+-	if entry == nil || entry.Filename != "file1" {
+-		t.Errorf("GetEntry failed to find existing file1")
+-	}
+-
+-	entry2 := m.GetEntry("file2")
+-	if entry2 == nil || entry2.Type != "AUX" {
+-		t.Errorf("GetEntry failed to find existing file2")
+-	}
+-
+-	if m.GetEntry("file3") != nil {
+-		t.Errorf("GetEntry found non-existent file3")
+-	}
++	tests := []struct {
++		name     string
++		filename string
++		want     *ManifestEntry
++	}{
++		{"Existing file 1", "file1", e1},
++		{"Existing file 2", "file2", e2},
++		{"Non-existent file", "file3", nil},
++		{"Empty filename", "", nil},
++	}
++
++	for _, tt := range tests {
++		t.Run(tt.name, func(t *testing.T) {
++			if got := m.GetEntry(tt.filename); got != tt.want {
++				t.Errorf("GetEntry(%q) = %v; want %v", tt.filename, got, tt.want)
++			}
++		})
++	}
++
++	t.Run("Empty manifest", func(t *testing.T) {
++		emptyM := &Manifest{}
