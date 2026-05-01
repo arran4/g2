@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"github.com/arran4/g2"
+	"io/fs"
 	"log"
 	"os"
 	"path/filepath"
@@ -319,21 +320,21 @@ func (cfg *MainArgConfig) cmdMetadata(args []string) error {
 }
 
 func (cfg *MainArgConfig) cmdMetadataDiscover(args []string) error {
-	fs := flag.NewFlagSet("discover", flag.ExitOnError)
-	if err := fs.Parse(args); err != nil {
+	fset := flag.NewFlagSet("discover", flag.ExitOnError)
+	if err := fset.Parse(args); err != nil {
 		return err
 	}
 
 	targetDir := "."
-	if fs.NArg() > 0 {
-		targetDir = fs.Arg(0)
+	if fset.NArg() > 0 {
+		targetDir = fset.Arg(0)
 	}
 
-	return filepath.Walk(targetDir, func(path string, info os.FileInfo, err error) error {
+	return filepath.WalkDir(targetDir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
-		if info.IsDir() {
+		if d.IsDir() {
 			return nil
 		}
 		if !strings.HasSuffix(path, ".ebuild") {
