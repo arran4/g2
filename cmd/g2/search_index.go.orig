@@ -102,7 +102,19 @@ func generateSearchData(outDir, outZip string, sites []*g2.SiteData, maxChunkSiz
 						urls = append(urls, strings.Fields(homepage)...)
 
 						licenseStr := ver.Ebuild.Vars["LICENSE"]
-						forEachToken(licenseStr, func(l string) {
+						sL := licenseStr
+						for len(sL) > 0 {
+							for len(sL) > 0 && sL[0] <= ' ' {
+								sL = sL[1:]
+							}
+							if sL == "" {
+								break
+							}
+							end := 0
+							for end < len(sL) && sL[end] > ' ' {
+								end++
+							}
+							l := sL[:end]
 							if l != "||" && l != "(" && l != ")" && (len(l) == 0 || l[0] != '?') {
 								licenses = append(licenses, l)
 								if site.LicenseMapping != nil {
@@ -111,10 +123,23 @@ func generateSearchData(outDir, outZip string, sites []*g2.SiteData, maxChunkSiz
 									}
 								}
 							}
-						})
+							sL = sL[end:]
+						}
 
 						keywordStr := ver.Ebuild.Vars["KEYWORDS"]
-						forEachToken(keywordStr, func(kw string) {
+						sK := keywordStr
+						for len(sK) > 0 {
+							for len(sK) > 0 && sK[0] <= ' ' {
+								sK = sK[1:]
+							}
+							if sK == "" {
+								break
+							}
+							end := 0
+							for end < len(sK) && sK[end] > ' ' {
+								end++
+							}
+							kw := sK[:end]
 							keywords = append(keywords, kw)
 							arch := kw
 							if len(arch) > 0 && arch[0] == '~' {
@@ -126,18 +151,29 @@ func generateSearchData(outDir, outZip string, sites []*g2.SiteData, maxChunkSiz
 							if len(arch) > 0 {
 								arches = append(arches, arch)
 							}
-						})
+							sK = sK[end:]
+						}
 
 						iuseStr := ver.Ebuild.Vars["IUSE"]
-						forEachToken(iuseStr, func(u string) {
-							if len(u) > 0 && u[0] == '+' {
-								u = u[1:]
+						sI := iuseStr
+						for len(sI) > 0 {
+							for len(sI) > 0 && sI[0] <= ' ' {
+								sI = sI[1:]
 							}
-							if len(u) > 0 && u[0] == '-' {
+							if sI == "" {
+								break
+							}
+							end := 0
+							for end < len(sI) && sI[end] > ' ' {
+								end++
+							}
+							u := sI[:end]
+							if len(u) > 0 && (u[0] == '+' || u[0] == '-') {
 								u = u[1:]
 							}
 							uses = append(uses, u)
-						})
+							sI = sI[end:]
+						}
 
 						if d := ver.Ebuild.Vars["DEPEND"]; d != "" {
 							rawDepends = d
@@ -530,24 +566,6 @@ func generateSearchIndex(outDir string, sites []*g2.SiteData) error {
 	}
 
 	return nil
-}
-
-// forEachToken acts as a zero-allocation split by whitespace, calling fn for each non-empty token.
-func forEachToken(s string, fn func(string)) {
-	for len(s) > 0 {
-		for len(s) > 0 && s[0] <= ' ' {
-			s = s[1:]
-		}
-		if s == "" {
-			break
-		}
-		end := 0
-		for end < len(s) && s[end] > ' ' {
-			end++
-		}
-		fn(s[:end])
-		s = s[end:]
-	}
 }
 
 func getBucket(token string) string {
