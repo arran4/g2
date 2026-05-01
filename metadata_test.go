@@ -12,6 +12,7 @@ func TestParseMetadata(t *testing.T) {
 		name     string
 		path     string
 		wantType interface{}
+		wantErr  bool
 	}{
 		{
 			name:     "PkgMetadata",
@@ -23,13 +24,26 @@ func TestParseMetadata(t *testing.T) {
 			path:     "testdata/cat_metadata.xml",
 			wantType: &CatMetadata{},
 		},
+		{
+			name:    "Invalid XML",
+			path:    "testdata/invalid_metadata.xml",
+			wantErr: true,
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := ParseMetadata(tt.path)
+
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("ParseMetadata() error = nil, wantErr %v", tt.wantErr)
+				}
+				return
+			}
+
 			if err != nil {
-				t.Fatalf("ParseMetadata() error = %v", err)
+				t.Fatalf("ParseMetadata() error = %v, wantErr %v", err, tt.wantErr)
 			}
 
 			if reflect.TypeOf(got) != reflect.TypeOf(tt.wantType) {
