@@ -823,6 +823,45 @@ func TestParsePackageAtom(t *testing.T) {
 			},
 		},
 		{
+			name: "with operator =",
+			dep:  "=media-libs/libpng-1.6.39-r1",
+			want: PackageAtom{
+				Operator: "=",
+				Category: "media-libs",
+				Name:     "libpng",
+				Version:  "1.6.39-r1",
+			},
+		},
+		{
+			name: "with operator <",
+			dep:  "<sys-libs/glibc-2.38",
+			want: PackageAtom{
+				Operator: "<",
+				Category: "sys-libs",
+				Name:     "glibc",
+				Version:  "2.38",
+			},
+		},
+		{
+			name: "with operator !!",
+			dep:  "!!sys-fs/udev",
+			want: PackageAtom{
+				Operator: "!!",
+				Category: "sys-fs",
+				Name:     "udev",
+			},
+		},
+		{
+			name: "with operator !<",
+			dep:  "!<sys-apps/systemd-216",
+			want: PackageAtom{
+				Operator: "!<",
+				Category: "sys-apps",
+				Name:     "systemd",
+				Version:  "216",
+			},
+		},
+		{
 			name: "with slot",
 			dep:  "dev-lang/python:3.10",
 			want: PackageAtom{
@@ -918,7 +957,7 @@ func TestParsePackageAtom(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			got := ParsePackageAtom(tt.dep)
 			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("ParsePackageAtom(%q) = %v, want %v", tt.dep, got, tt.want)
+				t.Errorf("ParsePackageAtom(%q) = %+v, want %+v", tt.dep, got, tt.want)
 			}
 		})
 	}
