@@ -115,7 +115,7 @@ func generateSearchData(outDir, outZip string, sites []*g2.SiteData, maxChunkSiz
 								end++
 							}
 							l := sL[:end]
-							if l != "||" && l != "(" && l != ")" && !(len(l) > 0 && l[0] == '?') {
+							if l != "||" && l != "(" && l != ")" && (len(l) == 0 || l[0] != '?') {
 								licenses = append(licenses, l)
 								if site.LicenseMapping != nil {
 									if aliases, ok := site.LicenseMapping[l]; ok {
