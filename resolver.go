@@ -29,18 +29,13 @@ func fastResolveBash(text string, variables map[string]string) (string, bool) {
 		return "", false
 	}
 
-	if !strings.Contains(text, "$") {
-		// We still need to check for bash keywords if we want to fallback
-		// (Same as resolveBash does).
-		if strings.Contains(text, "if ") || strings.Contains(text, "case ") || strings.Contains(text, "for ") || strings.Contains(text, "while ") || strings.Contains(text, "&&") || strings.Contains(text, "||") || strings.Contains(text, "elif ") {
-			return "", false
-		}
-		return text, true
-	}
-
 	// Fallback if keywords are found. Note: resolveBash also only does simple string matching.
 	if strings.Contains(text, "if ") || strings.Contains(text, "case ") || strings.Contains(text, "for ") || strings.Contains(text, "while ") || strings.Contains(text, "&&") || strings.Contains(text, "||") || strings.Contains(text, "elif ") {
 		return "", false
+	}
+
+	if !strings.Contains(text, "$") {
+		return text, true
 	}
 
 	var buf strings.Builder
