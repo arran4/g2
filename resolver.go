@@ -19,78 +19,96 @@ func isAlnumUnderscore(c byte) bool {
 	return isAlphaUnderscore(c) || (c >= '0' && c <= '9')
 }
 
-// fastResolveBash attempts to quickly resolve simple bash variables like $VAR or ${VAR}
-// without invoking the full parser. Returns the resolved string and true if successful.
-// If it encounters complex bash syntax, it returns an empty string and false.
-func fastResolveBash(text string, variables map[string]string) (string, bool) {
-	// If it contains quotes, subshells, command substitution, globbing, or escapes, fallback to full parser.
-	// We want to be very conservative to avoid subtle bash evaluation differences.
-	if strings.ContainsAny(text, "'\"`\\!?*") || strings.Contains(text, "$(") {
-		return "", false
+type ResolveBashOption func(*ResolveBashOptions)
+
+type ResolveBashOptions struct {
+	InterpOptions []interp.RunnerOption
+	Lazy          bool
+}
+
+func WithInterpOption(opt interp.RunnerOption) ResolveBashOption {
+	return func(o *ResolveBashOptions) {
+		o.InterpOptions = append(o.InterpOptions, opt)
 	}
+}
 
-	// Fallback if keywords are found. Note: resolveBash also only does simple string matching.
-	if strings.Contains(text, "if ") || strings.Contains(text, "case ") || strings.Contains(text, "for ") || strings.Contains(text, "while ") || strings.Contains(text, "&&") || strings.Contains(text, "||") || strings.Contains(text, "elif ") {
-		return "", false
+func WithLazy() ResolveBashOption {
+	return func(o *ResolveBashOptions) {
+		o.Lazy = true
 	}
-
-	if !strings.Contains(text, "$") {
-		return text, true
-	}
-
-	var buf strings.Builder
-	buf.Grow(len(text) * 2)
-
-	i := 0
-	for i < len(text) {
-		c := text[i]
-		if c != '$' {
-			buf.WriteByte(c)
-			i++
-			continue
-		}
-
-		i++
-		if i >= len(text) {
-			buf.WriteByte('$')
-			break
-		}
-
-		if text[i] == '{' {
-			i++
-			start := i
-			complex := false
-			for i < len(text) && text[i] != '}' {
-				if !isAlnumUnderscore(text[i]) {
-					complex = true
-					break
-				}
-				i++
-			}
-			if i >= len(text) || complex {
-				return "", false
-			}
-			varName := text[start:i]
-			buf.WriteString(variables[varName])
-			i++ // skip }
-		} else if isAlphaUnderscore(text[i]) {
-			start := i
-			for i < len(text) && isAlnumUnderscore(text[i]) {
-				i++
-			}
-			varName := text[start:i]
-			buf.WriteString(variables[varName])
-		} else {
-			// e.g. $$, $!, $?, $#
-			return "", false
-		}
-	}
-
-	return buf.String(), true
 }
 
 // resolveBash replaces ${VAR} and evaluates bash code in text using mvdan.cc/sh.
-func resolveBash(ctx context.Context, text string, variables map[string]string, opts ...interp.RunnerOption) string {
+// If WithLazy() is passed, it attempts a fast-path string substitution for simple variables.
+func resolveBash(ctx context.Context, text string, variables map[string]string, opts ...ResolveBashOption) string {
+	options := ResolveBashOptions{}
+	for _, opt := range opts {
+		opt(&options)
+	}
+
+	if options.Lazy {
+		if !strings.ContainsAny(text, "'\"`\\!?*") && !strings.Contains(text, "$(") {
+			if !strings.Contains(text, "if ") && !strings.Contains(text, "case ") && !strings.Contains(text, "for ") && !strings.Contains(text, "while ") && !strings.Contains(text, "&&") && !strings.Contains(text, "||") && !strings.Contains(text, "elif ") {
+				if !strings.Contains(text, "$") {
+					return text
+				}
+
+				var buf strings.Builder
+				buf.Grow(len(text) * 2)
+
+				i := 0
+				complex := false
+				for i < len(text) {
+					c := text[i]
+					if c != '$' {
+						buf.WriteByte(c)
+						i++
+						continue
+					}
+
+					i++
+					if i >= len(text) {
+						buf.WriteByte('$')
+						break
+					}
+
+					if text[i] == '{' {
+						i++
+						start := i
+						innerComplex := false
+						for i < len(text) && text[i] != '}' {
+							if !isAlnumUnderscore(text[i]) {
+								innerComplex = true
+								break
+							}
+							i++
+						}
+						if i >= len(text) || innerComplex {
+							complex = true
+							break
+						}
+						varName := text[start:i]
+						buf.WriteString(variables[varName])
+						i++ // skip }
+					} else if isAlphaUnderscore(text[i]) {
+						start := i
+						for i < len(text) && isAlnumUnderscore(text[i]) {
+							i++
+						}
+						varName := text[start:i]
+						buf.WriteString(variables[varName])
+					} else {
+						// e.g. $$, $!, $?, $#
+						complex = true
+						break
+					}
+				}
+				if !complex {
+					return buf.String()
+				}
+			}
+		}
+	}
 	if !strings.Contains(text, "$") && !strings.Contains(text, "if ") && !strings.Contains(text, "case ") && !strings.Contains(text, "for ") && !strings.Contains(text, "while ") && !strings.Contains(text, "&&") && !strings.Contains(text, "||") && !strings.Contains(text, "elif ") {
 		return text
 	}
@@ -121,7 +139,7 @@ func resolveBash(ctx context.Context, text string, variables map[string]string, 
 				}
 			}),
 		}
-		runnerOpts = append(runnerOpts, opts...)
+		runnerOpts = append(runnerOpts, options.InterpOptions...)
 
 		runner, err := interp.New(runnerOpts...)
 		if err == nil {
