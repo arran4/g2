@@ -16,7 +16,7 @@ type ResolveBashOption func(*ResolveBashOptions)
 
 type ResolveBashOptions struct {
 	InterpOptions []interp.RunnerOption
-	Lazy          bool
+	FastPath      bool
 	Variables     map[string]string
 }
 
@@ -26,9 +26,9 @@ func WithInterpOption(opt interp.RunnerOption) ResolveBashOption {
 	}
 }
 
-func WithLazy() ResolveBashOption {
+func WithFastPath() ResolveBashOption {
 	return func(o *ResolveBashOptions) {
-		o.Lazy = true
+		o.FastPath = true
 	}
 }
 
@@ -44,11 +44,15 @@ func WithVars(vars map[string]string) ResolveBashOption {
 }
 
 // resolveBash replaces ${VAR} and evaluates bash code in text using mvdan.cc/sh.
-// If WithLazy() is passed, it attempts a fast-path string substitution for simple variables.
+// If WithFastPath() is passed, it attempts a pre-emptive fast-path string substitution for simple variables.
 func resolveBash(ctx context.Context, text string, variables map[string]string, opts ...ResolveBashOption) string {
 	options := ResolveBashOptions{}
 	for _, opt := range opts {
 		opt(&options)
+	}
+
+	if !strings.Contains(text, "$") && !strings.Contains(text, "if ") && !strings.Contains(text, "case ") && !strings.Contains(text, "for ") && !strings.Contains(text, "while ") && !strings.Contains(text, "&&") && !strings.Contains(text, "||") && !strings.Contains(text, "elif ") {
+		return text
 	}
 
 	mergedVars := make(map[string]string)
@@ -59,21 +63,14 @@ func resolveBash(ctx context.Context, text string, variables map[string]string, 
 		mergedVars[k] = v
 	}
 
-	if options.Lazy {
-		if !strings.ContainsAny(text, "'\"`\\!?*:/#%-") && !strings.Contains(text, "$(") {
+	if options.FastPath {
+		if !strings.ContainsAny(text, "'\"`\\!?*:/#%-=[]+;|<>&^,~@") && !strings.Contains(text, "$(") {
 			if !strings.Contains(text, "if ") && !strings.Contains(text, "case ") && !strings.Contains(text, "for ") && !strings.Contains(text, "while ") && !strings.Contains(text, "&&") && !strings.Contains(text, "||") && !strings.Contains(text, "elif ") {
-				if !strings.Contains(text, "$") {
-					return text
-				}
-
 				return os.Expand(text, func(k string) string {
 					return mergedVars[k]
 				})
 			}
 		}
-	}
-	if !strings.Contains(text, "$") && !strings.Contains(text, "if ") && !strings.Contains(text, "case ") && !strings.Contains(text, "for ") && !strings.Contains(text, "while ") && !strings.Contains(text, "&&") && !strings.Contains(text, "||") && !strings.Contains(text, "elif ") {
-		return text
 	}
 
 	var env []string
