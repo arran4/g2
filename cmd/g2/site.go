@@ -891,7 +891,7 @@ func parseProfilesDirFS(sysFS fs.FS, repoDir string, entries []g2.ProfileDescEnt
 				return nil
 			})
 		}
-		g.Wait()
+		_ = g.Wait()
 
 		profilesMap[relPath] = pData
 		return nil
