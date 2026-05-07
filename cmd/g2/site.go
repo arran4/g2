@@ -81,6 +81,7 @@ func (cfg *MainArgConfig) cmdOverlay(args []string) error {
 	recentDurOpt := fs.String("recent-duration", "3mo", "Duration to consider an update 'recent' (e.g. 3mo, 14d, 72h)")
 	fastGit := fs.Bool("fast-git-modtime", false, "Use fast (O(1)) but potentially less reliable go-git file log lookup")
 	useZip := fs.Bool("use-zip", false, "Download zip archives instead of git clone when supported")
+
 	workMode := fs.String("work-mode", "persistent", "Work mode: 'persistent' or 'temp'")
 	persistentDir := fs.String("persistent-dir", getDefaultCacheDir(), "Directory to persistently store checked out repositories instead of a temporary directory")
 	tempDir := fs.String("temp-dir", "", "Directory to use for temporary files instead of the default")
@@ -294,6 +295,9 @@ func (cfg *MainArgConfig) cmdOverlays(args []string) error {
 	recentDurOpt := fs.String("recent-duration", "3mo", "Duration to consider an update 'recent' (e.g. 3mo, 14d, 72h)")
 	fastGit := fs.Bool("fast-git-modtime", false, "Use fast (O(1)) but potentially less reliable go-git file log lookup")
 	useZip := fs.Bool("use-zip", false, "Download zip archives instead of git clone when supported")
+	smartMode := fs.Bool("smart-mode", true, "Use smart mode for parsing repositories in memory without disk access")
+
+
 	concurrency := fs.Int("concurrency", 4, "Maximum number of concurrent repository fetches/parses")
 	retries := fs.Int("retries", 3, "Number of times to retry fetching a repository")
 	continueOnError := fs.Bool("continue-on-error", true, "Continue parsing other repositories even if fetching one fails")
@@ -327,7 +331,7 @@ func (cfg *MainArgConfig) cmdOverlays(args []string) error {
 	}
 
 	log.Printf("Generating site (v%s) from remote repositories: %s into %s", version, location, *outDir)
-	return cfg.cmdSiteRemote(location, *outDir, recentDuration, recentDurationStr, *fastGit, *useZip, *concurrency, *retries, *continueOnError, *persistentDir, *reposConfOpt, *tempDir, *workMode, *mode, *profileSiteGen, *profileOut)
+	return cfg.cmdSiteRemote(location, *outDir, recentDuration, recentDurationStr, *fastGit, *useZip, *concurrency, *retries, *continueOnError, *persistentDir, *reposConfOpt, *tempDir, *workMode, *mode, *profileSiteGen, *profileOut, *smartMode)
 }
 
 func parseLayoutConfFromFS(sysFS fs.FS, path string) (*g2.LayoutConf, error) {
@@ -1837,7 +1841,7 @@ func renderPage(path string, tmpl *template.Template, name string, data interfac
 	return nil
 }
 
-func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, recentDuration time.Duration, recentDurationStr string, fastGit bool, useZip bool, concurrency int, retries int, continueOnError bool, persistentDir string, reposConfPath string, tempDir string, workMode string, mode string, profileSiteGen bool, profileOut string) error {
+func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, recentDuration time.Duration, recentDurationStr string, fastGit bool, useZip bool, concurrency int, retries int, continueOnError bool, persistentDir string, reposConfPath string, tempDir string, workMode string, mode string, profileSiteGen bool, profileOut string, smartMode bool) error {
 	var repos g2.Repositories
 
 	if reposConfPath != "" {
@@ -1934,6 +1938,17 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, 
 	var totalPackages int
 	var totalPackageVersions int
 
+limit := concurrency
+	if limit <= 0 {
+		limit = 10
+	}
+
+	memManager := NewMemoryManager()
+	freeMem, err := getFreeMemory()
+	var defaultAlloc uint64 = 0
+	if err == nil && limit > 0 {
+		defaultAlloc = freeMem / 2 / uint64(limit)
+	}
 	if mode == "pipeline" {
 		log.Printf("Starting pipelined remote repository processing")
 		type fetchTask struct {
@@ -1944,6 +1959,7 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, 
 			repo         g2.Repository
 			gitUrl       string
 			repoPath     string
+			sysFS        fs.FS
 			checkoutTime time.Duration
 		}
 		type cleanTask struct {
@@ -2002,7 +2018,15 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, 
 					repoCopy := task.repo
 
 					t1 := time.Now()
-					siteData, err := parseRepo(os.DirFS(task.repoPath), ".", task.repo.Name, fastGit, &repoCopy, SourceURL(task.gitUrl))
+					var parseFS fs.FS
+					if task.sysFS != nil {
+						parseFS = task.sysFS
+					} else {
+						parseFS = os.DirFS(task.repoPath)
+					}
+					memManager.Acquire(defaultAlloc)
+						siteData, err := parseRepo(parseFS, ".", task.repo.Name, fastGit, &repoCopy, SourceURL(task.gitUrl))
+						memManager.Release(defaultAlloc)
 
 					cleanCh <- cleanTask{repoPath: task.repoPath}
 
@@ -2126,10 +2150,33 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, 
 					ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 
 					t0 := time.Now()
-					err := FetchRepo(ctx, task.gitUrl, repoPath, useZip, workMode, retries)
+
+					var sysFS fs.FS
+					var err error
+
+					if smartMode {
+						zipUrl := getZipUrl(task.gitUrl)
+						if zipUrl != "" {
+							sysFS, err = tryFetchZipFS(ctx, zipUrl)
+							if err == nil {
+								log.Printf("Successfully fetched zip in memory for %s", task.repo.Name)
+							}
+						}
+						if sysFS == nil {
+							sysFS, err = tryFetchGitFS(ctx, task.gitUrl)
+							if err == nil {
+								log.Printf("Successfully cloned into memory for %s", task.repo.Name)
+							}
+						}
+					}
+
+					if sysFS == nil {
+						err = FetchRepo(ctx, task.gitUrl, repoPath, useZip, workMode, retries)
+					}
+
 					cancel()
 
-					if err != nil {
+					if err != nil && sysFS == nil {
 						log.Printf("Failed to fetch %s: %v", task.repo.Name, err)
 						if !continueOnError {
 							setErr(fmt.Errorf("fetching %s: %w", task.repo.Name, err))
@@ -2144,6 +2191,7 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, 
 						repo:         task.repo,
 						gitUrl:       task.gitUrl,
 						repoPath:     repoPath,
+						sysFS:        sysFS,
 						checkoutTime: checkoutTime,
 					}
 				}
@@ -2220,7 +2268,30 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, 
 				defer cancel()
 
 				t0 := time.Now()
-				if err := FetchRepo(ctx, gitUrl, repoPath, useZip, workMode, retries); err != nil {
+				var sysFS fs.FS
+				var err error
+
+				if smartMode {
+					zipUrl := getZipUrl(gitUrl)
+					if zipUrl != "" {
+						sysFS, err = tryFetchZipFS(ctx, zipUrl)
+						if err == nil {
+							log.Printf("Successfully fetched zip in memory for %s", repo.Name)
+						}
+					}
+					if sysFS == nil {
+						sysFS, err = tryFetchGitFS(ctx, gitUrl)
+						if err == nil {
+							log.Printf("Successfully cloned into memory for %s", repo.Name)
+						}
+					}
+				}
+
+				if sysFS == nil {
+					err = FetchRepo(ctx, gitUrl, repoPath, useZip, workMode, retries)
+				}
+
+				if err != nil && sysFS == nil {
 					log.Printf("Failed to fetch %s: %v", repo.Name, err)
 					if !continueOnError {
 						return fmt.Errorf("fetching %s: %w", repo.Name, err)
@@ -2241,7 +2312,15 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, 
 				repoCopy := repo
 
 				t1 := time.Now()
-				siteData, err := parseRepo(os.DirFS(repoPath), ".", repo.Name, fastGit, &repoCopy, SourceURL(gitUrl))
+				var parseFS fs.FS
+				if sysFS != nil {
+					parseFS = sysFS
+				} else {
+					parseFS = os.DirFS(repoPath)
+				}
+				memManager.Acquire(defaultAlloc)
+				siteData, err := parseRepo(parseFS, ".", repo.Name, fastGit, &repoCopy, SourceURL(gitUrl))
+				memManager.Release(defaultAlloc)
 				if err != nil {
 					log.Printf("Failed to parse repo %s: %v", repo.Name, err)
 					return nil
