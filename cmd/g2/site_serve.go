@@ -113,16 +113,13 @@ limit := *concurrency
 
 		var sitesMu sync.Mutex
 		g, _ := errgroup.WithContext(context.Background())
+		if *smartMode {
+			log.Printf("Smart mode enabled for site serve, using in-memory parsing")
+		}
 		if *concurrency > 0 {
-			if *smartMode {
-				log.Printf("Smart mode enabled for site serve, using in-memory parsing")
-			}
 			g.SetLimit(*concurrency)
 			log.Printf("Starting concurrent repository processing with %d concurrency limit", *concurrency)
 		} else {
-			if *smartMode {
-				log.Printf("Smart mode enabled for site serve, using in-memory parsing")
-			}
 			log.Printf("Starting concurrent repository processing with unbounded concurrency")
 		}
 
@@ -134,8 +131,8 @@ limit := *concurrency
 				g.Go(func() error {
 					log.Printf("[START] Parsing repository %s", repoName)
 					memManager.Acquire(defaultAlloc)
+					defer memManager.Release(defaultAlloc)
 					siteData, err := parseRepo(os.DirFS(repoPath), ".", repoName, false, nil)
-					memManager.Release(defaultAlloc)
 					if err != nil {
 						log.Printf("Warning: failed to parse repo %s: %v", repoName, err)
 						return nil // Don't fail entire group

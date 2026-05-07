@@ -137,11 +137,11 @@ func DownloadAndChecksum(url string, hashes []string) (*Checksums, error) {
 			writers = append(writers, h)
 			hashers[HashSha256] = h
 		case HashSha3_256:
-			h := sha3.New256()
+			h := sha3.New256() //nolint:govet
 			writers = append(writers, h)
 			hashers[HashSha3_256] = h
 		case HashSha3_512:
-			h := sha3.New512()
+			h := sha3.New512() //nolint:govet
 			writers = append(writers, h)
 			hashers[HashSha3_512] = h
 		case HashSha512:

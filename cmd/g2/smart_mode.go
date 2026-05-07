@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"log"
 	"sync"
 
 	"github.com/go-git/go-git/v5"
@@ -52,7 +53,7 @@ func tryFetchZipFS(ctx context.Context, zipUrl string) (fs.FS, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != 200 {
 		return nil, fmt.Errorf("bad status: %d", resp.StatusCode)
@@ -184,12 +185,13 @@ func (m *MemoryManager) Acquire(baseAlloc uint64) {
 	for {
 		free, err := getFreeMemory()
 		if err != nil {
-			// If we can't get free memory, just allow it
-			m.activeTasks++
-			break
+			// If we can't get free memory, we should wait and retry.
+			log.Printf("Warning: could not get free memory: %v. Retrying...", err)
+			m.cond.Wait()
+			continue
 		}
 
-		if m.activeTasks == 0 || (free > m.reserved && free - m.reserved >= baseAlloc) {
+		if m.activeTasks == 0 || free >= m.reserved+baseAlloc {
 			m.activeTasks++
 			m.reserved += baseAlloc
 			break
