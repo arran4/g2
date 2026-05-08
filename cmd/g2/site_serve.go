@@ -130,9 +130,13 @@ limit := *concurrency
 			if isOverlayDir(repoPath) {
 				g.Go(func() error {
 					log.Printf("[START] Parsing repository %s", repoName)
-					memManager.Acquire(defaultAlloc)
-					defer memManager.Release(defaultAlloc)
-					siteData, err := parseRepo(os.DirFS(repoPath), ".", repoName, false, nil)
+					var siteData *g2.SiteData
+					var err error
+					func() {
+						memManager.Acquire(defaultAlloc)
+						defer memManager.Release(defaultAlloc)
+						siteData, err = parseRepo(os.DirFS(repoPath), ".", repoName, false, nil)
+					}()
 					if err != nil {
 						log.Printf("Warning: failed to parse repo %s: %v", repoName, err)
 						return nil // Don't fail entire group

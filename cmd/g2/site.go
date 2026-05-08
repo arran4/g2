@@ -2024,9 +2024,12 @@ limit := concurrency
 					} else {
 						parseFS = os.DirFS(task.repoPath)
 					}
-					memManager.Acquire(defaultAlloc)
+					var siteData *g2.SiteData
+					func() {
+						memManager.Acquire(defaultAlloc)
 						defer memManager.Release(defaultAlloc)
-						siteData, err := parseRepo(parseFS, ".", task.repo.Name, fastGit, &repoCopy, SourceURL(task.gitUrl))
+						siteData, err = parseRepo(parseFS, ".", task.repo.Name, fastGit, &repoCopy, SourceURL(task.gitUrl))
+					}()
 
 					cleanCh <- cleanTask{repoPath: task.repoPath}
 
@@ -2318,9 +2321,12 @@ limit := concurrency
 				} else {
 					parseFS = os.DirFS(repoPath)
 				}
-				memManager.Acquire(defaultAlloc)
-				defer memManager.Release(defaultAlloc)
-				siteData, err := parseRepo(parseFS, ".", repo.Name, fastGit, &repoCopy, SourceURL(gitUrl))
+				var siteData *g2.SiteData
+				func() {
+					memManager.Acquire(defaultAlloc)
+					defer memManager.Release(defaultAlloc)
+					siteData, err = parseRepo(parseFS, ".", repo.Name, fastGit, &repoCopy, SourceURL(gitUrl))
+				}()
 				if err != nil {
 					log.Printf("Failed to parse repo %s: %v", repo.Name, err)
 					return nil
