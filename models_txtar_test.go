@@ -27,7 +27,7 @@ func assertStableParse(t *testing.T, xmlData []byte, model interface{}) {
 	}
 
 	modelType := reflect.TypeOf(model)
-	if modelType.Kind() == reflect.Ptr {
+	if modelType.Kind() == reflect.Ptr { //nolint:govet
 		modelType = modelType.Elem()
 	}
 	model2 := reflect.New(modelType).Interface()

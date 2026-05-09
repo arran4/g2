@@ -38,6 +38,7 @@ func (cfg *MainArgConfig) cmdSiteServe(args []string) error {
 	fs := flag.NewFlagSet("site serve", flag.ExitOnError)
 	port := fs.Int("port", 8080, "Port to run the site server on")
 	concurrency := fs.Int("concurrency", 4, "Maximum number of concurrent repository fetches/parses")
+	smartMode := fs.Bool("smart-mode", true, "Use smart mode for parsing repositories in memory without disk access")
 	reposConfOpt := fs.String("repos-conf", "", "Path to repos.conf file or directory")
 
 	if err := fs.Parse(args); err != nil {
@@ -52,6 +53,17 @@ func (cfg *MainArgConfig) cmdSiteServe(args []string) error {
 	// Determine if location is a single overlay or we need to fall back to repos.conf / /var/db/repos
 	var sites []*g2.SiteData
 
+limit := *concurrency
+	if limit <= 0 {
+		limit = 10
+	}
+
+	memManager := NewMemoryManager()
+	freeMem, err := getFreeMemory()
+	var defaultAlloc uint64 = 0
+	if err == nil && limit > 0 {
+		defaultAlloc = freeMem / 2 / uint64(limit)
+	}
 	if isOverlayDir(location) {
 		log.Printf("Parsing local overlay at %s", location)
 		siteData, err := parseRepo(os.DirFS(location), ".", "Gentoo Packages", false, nil)
@@ -101,6 +113,9 @@ func (cfg *MainArgConfig) cmdSiteServe(args []string) error {
 
 		var sitesMu sync.Mutex
 		g, _ := errgroup.WithContext(context.Background())
+		if *smartMode {
+			log.Printf("Smart mode enabled for site serve, using in-memory parsing")
+		}
 		if *concurrency > 0 {
 			g.SetLimit(*concurrency)
 			log.Printf("Starting concurrent repository processing with %d concurrency limit", *concurrency)
@@ -115,7 +130,13 @@ func (cfg *MainArgConfig) cmdSiteServe(args []string) error {
 			if isOverlayDir(repoPath) {
 				g.Go(func() error {
 					log.Printf("[START] Parsing repository %s", repoName)
-					siteData, err := parseRepo(os.DirFS(repoPath), ".", repoName, false, nil)
+					var siteData *g2.SiteData
+					var err error
+					func() {
+						memManager.Acquire(defaultAlloc)
+						defer memManager.Release(defaultAlloc)
+						siteData, err = parseRepo(os.DirFS(repoPath), ".", repoName, false, nil)
+					}()
 					if err != nil {
 						log.Printf("Warning: failed to parse repo %s: %v", repoName, err)
 						return nil // Don't fail entire group
