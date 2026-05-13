@@ -9,7 +9,7 @@ import (
 	"golang.org/x/crypto/blake2b"
 	"golang.org/x/crypto/blake2s"
 	"golang.org/x/crypto/ripemd160" //nolint:staticcheck
-	"golang.org/x/crypto/sha3"
+	"crypto/sha3"
 	"hash"
 	"io"
 	"log"
