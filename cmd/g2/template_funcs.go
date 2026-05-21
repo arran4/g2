@@ -21,6 +21,8 @@ func getTemplateFuncMap() template.FuncMap {
 		"formatKeywords":      formatKeywordsFunc,
 		"hasPrefix":           strings.HasPrefix,
 		"groupIUSEFlags":      groupIUSEFlagsFunc,
+		"isLikelyMasked":      isLikelyMaskedFunc,
+		"isPkgLikelyMasked":   isPkgLikelyMaskedFunc,
 		"len_or_zero": func(v any) int {
 			if v == nil {
 				return 0
@@ -120,4 +122,81 @@ func groupIUSEFlagsFunc(flags []ParsedIUSEFlag, useExpandPrefixes map[string]boo
 		result = append(result, UseFlagGroup{Name: name, Flags: groups[name]})
 	}
 	return result
+}
+
+func isLikelyMaskedFunc(keywords any, explicitlyMasked any) bool {
+	if val := reflect.ValueOf(explicitlyMasked); val.IsValid() && !val.IsZero() {
+		return true
+	}
+
+	keywordsStr, _ := keywords.(string)
+	parts := strings.Fields(keywordsStr)
+	if len(parts) == 0 {
+		return true
+	}
+	for _, p := range parts {
+		if !strings.HasPrefix(p, "-") && !strings.HasPrefix(p, "~") {
+			return false
+		}
+	}
+	return true
+}
+
+func isPkgLikelyMaskedFunc(pkg any) bool {
+	val := reflect.ValueOf(pkg)
+	if !val.IsValid() || val.IsZero() || val.Kind() != reflect.Struct {
+		return false
+	}
+
+	// Check explicitlyMasked (.Masked)
+	explicitlyMasked := val.FieldByName("Masked")
+	if explicitlyMasked.IsValid() && !explicitlyMasked.IsZero() {
+		return true
+	}
+
+	versions := val.FieldByName("Versions")
+	if versions.IsValid() && versions.Kind() == reflect.Slice {
+		if versions.Len() == 0 {
+			return true // No versions, likely masked/empty
+		}
+
+		allVersionsMasked := true
+		for i := 0; i < versions.Len(); i++ {
+			versionVal := versions.Index(i)
+			if !versionVal.IsValid() || versionVal.Kind() != reflect.Struct {
+				continue
+			}
+
+			ebuildVal := versionVal.FieldByName("Ebuild")
+			if !ebuildVal.IsValid() || ebuildVal.IsZero() {
+				continue
+			}
+
+			if ebuildVal.Kind() == reflect.Pointer {
+				ebuildVal = ebuildVal.Elem()
+			}
+
+			varsVal := ebuildVal.FieldByName("Vars")
+			if !varsVal.IsValid() || varsVal.IsZero() {
+				continue
+			}
+
+			keywordsVal := varsVal.MapIndex(reflect.ValueOf("KEYWORDS"))
+			var keywords string
+			if keywordsVal.IsValid() {
+				keywords = keywordsVal.String()
+			}
+
+			if !isLikelyMaskedFunc(keywords, nil) {
+				allVersionsMasked = false
+				break
+			}
+		}
+
+		if allVersionsMasked {
+			return true
+		}
+	}
+
+	return false
 }

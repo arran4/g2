@@ -55,10 +55,12 @@
     <h3>Install</h3>
     <p>Install this package:</p>
     <pre><code>emerge -a {{.RepoPackage.Category}}/{{.RepoPackage.Name}}</code></pre>
+    {{if isPkgLikelyMasked .RepoPackage}}
     <p>If the package is masked, you can unmask it using the <code>autounmask</code> tool or standard <code>emerge</code> options:</p>
     <pre><code>autounmask {{.RepoPackage.Category}}/{{.RepoPackage.Name}}</code></pre>
     <p>Or alternatively:</p>
     <pre><code>emerge --autounmask-write -a {{.RepoPackage.Category}}/{{.RepoPackage.Name}}</code></pre>
+    {{end}}
 </div>
 
 <div class="metadata-section">
