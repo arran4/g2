@@ -5,9 +5,12 @@ import (
 	"html/template"
 	"net/url"
 	"reflect"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/arran4/g2"
 )
 
 func getTemplateFuncMap() template.FuncMap {
@@ -31,8 +34,49 @@ func getTemplateFuncMap() template.FuncMap {
 			}
 			return 0
 		},
-		"packageLink": packageLinkFunc,
+		"packageLink":       packageLinkFunc,
+		"formatPkgLinkBody": formatPkgLinkBodyFunc,
 	}
+}
+
+var tmplPkgRegex = regexp.MustCompile(`&lt;pkg&gt;(.*?)&lt;/pkg&gt;|<pkg>(.*?)</pkg>`)
+
+func formatPkgLinkBodyFunc(body string, baseURL string, currentRepo string, repoPkgs interface{}, globalPkgs []*AggPackage) template.HTML {
+	safeBody := template.HTMLEscapeString(body)
+	return template.HTML(tmplPkgRegex.ReplaceAllStringFunc(safeBody, func(m string) string {
+		match := tmplPkgRegex.FindStringSubmatch(m)
+		pkg := match[1]
+		if pkg == "" {
+			pkg = match[2]
+		}
+		parts := strings.Split(pkg, "/")
+		if len(parts) == 2 {
+			repoHasPkg := false
+			if repoPkgs != nil {
+				if rp, ok := repoPkgs.([]*AggPackage); ok {
+					for _, p := range rp {
+						if p.Category == parts[0] && p.Name == parts[1] {
+							repoHasPkg = true
+							break
+						}
+					}
+				} else if rp, ok := repoPkgs.([]g2.PackageData); ok {
+					for _, p := range rp {
+						if p.Category == parts[0] && p.Name == parts[1] {
+							repoHasPkg = true
+							break
+						}
+					}
+				}
+			}
+			if repoHasPkg && currentRepo != "" {
+				return fmt.Sprintf("<a href=\"%srepos/%s/categories/%s/packages/%s/\">%s</a>", template.HTMLEscapeString(baseURL), template.HTMLEscapeString(currentRepo), url.PathEscape(parts[0]), url.PathEscape(parts[1]), template.HTMLEscapeString(pkg))
+			}
+
+			return fmt.Sprintf("<a href=\"%spackages/%s/%s/\">%s</a>", template.HTMLEscapeString(baseURL), url.PathEscape(parts[0]), url.PathEscape(parts[1]), template.HTMLEscapeString(pkg))
+		}
+		return template.HTMLEscapeString(m)
+	}))
 }
 
 func packageLinkFunc(baseURL string, pkg string) template.HTML {
