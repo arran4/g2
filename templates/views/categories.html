@@ -1,7 +1,16 @@
 
+{{if .RepoCategories}}
+<h2>Repo Categories</h2>
+<ul>
+    {{range .RepoCategories}}
+    <li><a href="{{.Name}}/">{{.Name}}</a> ({{len .Packages}} packages)</li>
+    {{end}}
+</ul>
+{{else}}
 <h2>All Categories</h2>
 <ul>
     {{range .GlobalCategories}}
     <li><a href="{{.Name}}/">{{.Name}}</a> ({{len .Packages}} packages)</li>
     {{end}}
 </ul>
+{{end}}
