@@ -126,9 +126,9 @@ func groupIUSEFlagsFunc(flags []ParsedIUSEFlag, useExpandPrefixes map[string]boo
 func isLikelyMaskedFunc(keywords interface{}, explicitlyMasked interface{}) bool {
 	if explicitlyMasked != nil {
 		val := reflect.ValueOf(explicitlyMasked)
-		if val.Kind() == reflect.Ptr && !val.IsNil() {
+		if val.Kind() == reflect.Pointer && !val.IsNil() {
 			return true
-		} else if val.Kind() != reflect.Ptr && val.IsValid() && !val.IsZero() {
+		} else if val.Kind() != reflect.Pointer && val.IsValid() && !val.IsZero() {
 			return true
 		}
 	}
