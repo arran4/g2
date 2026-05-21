@@ -21,6 +21,7 @@ func getTemplateFuncMap() template.FuncMap {
 		"formatKeywords":      formatKeywordsFunc,
 		"hasPrefix":           strings.HasPrefix,
 		"groupIUSEFlags":      groupIUSEFlagsFunc,
+		"isLikelyMasked":      isLikelyMaskedFunc,
 		"len_or_zero": func(v any) int {
 			if v == nil {
 				return 0
@@ -120,4 +121,33 @@ func groupIUSEFlagsFunc(flags []ParsedIUSEFlag, useExpandPrefixes map[string]boo
 		result = append(result, UseFlagGroup{Name: name, Flags: groups[name]})
 	}
 	return result
+}
+
+func isLikelyMaskedFunc(keywords interface{}, explicitlyMasked interface{}) bool {
+	if explicitlyMasked != nil {
+		val := reflect.ValueOf(explicitlyMasked)
+		if val.Kind() == reflect.Ptr && !val.IsNil() {
+			return true
+		} else if val.Kind() != reflect.Ptr && val.IsValid() && !val.IsZero() {
+			return true
+		}
+	}
+
+	keywordsStr := ""
+	if keywords != nil {
+		if s, ok := keywords.(string); ok {
+			keywordsStr = s
+		}
+	}
+
+	if strings.TrimSpace(keywordsStr) == "" {
+		return true
+	}
+	parts := strings.Fields(keywordsStr)
+	for _, p := range parts {
+		if !strings.HasPrefix(p, "-") && !strings.HasPrefix(p, "~") {
+			return false
+		}
+	}
+	return true
 }
