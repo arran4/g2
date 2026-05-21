@@ -521,8 +521,8 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			"Title":      s.Title,
 			"BaseURL":    "",
 			"Repos":      s.Sites,
-			"Categories": s.AggCategories,
-			"Packages":   s.AggPackages,
+			"GlobalCategories": s.AggCategories,
+			"GlobalPackages":   s.AggPackages,
 			"Licenses":   s.AggLicenses,
 			"UseFlags":   s.AggUseFlags,
 			"Projects":   s.AggProjects,
@@ -557,7 +557,7 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				"Title":       "Categories",
 				"BaseURL":     baseURL,
 				"Breadcrumbs": []g2.Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: "Categories"}},
-				"Categories":  s.AggCategories,
+				"GlobalCategories":  s.AggCategories,
 				"Version":     version,
 				"GenInfo":     s.GenInfo,
 			})
@@ -868,7 +868,7 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 							"Title":       site.RepoName + " - Categories",
 							"BaseURL":     baseURL,
 							"Breadcrumbs": []g2.Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: site.RepoName, URL: "../"}, {Name: "Categories"}},
-							"Categories":  site.Categories,
+							"RepoCategories":  site.Categories,
 							"Version":     version,
 							"GenInfo":     s.GenInfo,
 						})
