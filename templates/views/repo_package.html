@@ -55,7 +55,7 @@
     <h3>Install</h3>
     <p>Install this package:</p>
     <pre><code>emerge -a {{.RepoPackage.Category}}/{{.RepoPackage.Name}}</code></pre>
-    {{if .RepoPackage.Masked}}
+    {{if isPkgLikelyMasked .RepoPackage}}
     <p>If the package is masked, you can unmask it using the <code>autounmask</code> tool or standard <code>emerge</code> options:</p>
     <pre><code>autounmask {{.RepoPackage.Category}}/{{.RepoPackage.Name}}</code></pre>
     <p>Or alternatively:</p>

@@ -22,6 +22,7 @@ func getTemplateFuncMap() template.FuncMap {
 		"hasPrefix":           strings.HasPrefix,
 		"groupIUSEFlags":      groupIUSEFlagsFunc,
 		"isLikelyMasked":      isLikelyMaskedFunc,
+		"isPkgLikelyMasked":   isPkgLikelyMaskedFunc,
 		"len_or_zero": func(v any) int {
 			if v == nil {
 				return 0
@@ -123,31 +124,79 @@ func groupIUSEFlagsFunc(flags []ParsedIUSEFlag, useExpandPrefixes map[string]boo
 	return result
 }
 
-func isLikelyMaskedFunc(keywords interface{}, explicitlyMasked interface{}) bool {
-	if explicitlyMasked != nil {
-		val := reflect.ValueOf(explicitlyMasked)
-		if val.Kind() == reflect.Pointer && !val.IsNil() {
-			return true
-		} else if val.Kind() != reflect.Pointer && val.IsValid() && !val.IsZero() {
-			return true
-		}
-	}
-
-	keywordsStr := ""
-	if keywords != nil {
-		if s, ok := keywords.(string); ok {
-			keywordsStr = s
-		}
-	}
-
-	if strings.TrimSpace(keywordsStr) == "" {
+func isLikelyMaskedFunc(keywords any, explicitlyMasked any) bool {
+	if val := reflect.ValueOf(explicitlyMasked); val.IsValid() && !val.IsZero() {
 		return true
 	}
+
+	keywordsStr, _ := keywords.(string)
 	parts := strings.Fields(keywordsStr)
+	if len(parts) == 0 {
+		return true
+	}
 	for _, p := range parts {
 		if !strings.HasPrefix(p, "-") && !strings.HasPrefix(p, "~") {
 			return false
 		}
 	}
 	return true
+}
+
+func isPkgLikelyMaskedFunc(pkg any) bool {
+	val := reflect.ValueOf(pkg)
+	if !val.IsValid() || val.IsZero() || val.Kind() != reflect.Struct {
+		return false
+	}
+
+	// Check explicitlyMasked (.Masked)
+	explicitlyMasked := val.FieldByName("Masked")
+	if explicitlyMasked.IsValid() && !explicitlyMasked.IsZero() {
+		return true
+	}
+
+	versions := val.FieldByName("Versions")
+	if versions.IsValid() && versions.Kind() == reflect.Slice {
+		if versions.Len() == 0 {
+			return true // No versions, likely masked/empty
+		}
+
+		allVersionsMasked := true
+		for i := 0; i < versions.Len(); i++ {
+			versionVal := versions.Index(i)
+			if !versionVal.IsValid() || versionVal.Kind() != reflect.Struct {
+				continue
+			}
+
+			ebuildVal := versionVal.FieldByName("Ebuild")
+			if !ebuildVal.IsValid() || ebuildVal.IsZero() {
+				continue
+			}
+
+			if ebuildVal.Kind() == reflect.Pointer {
+				ebuildVal = ebuildVal.Elem()
+			}
+
+			varsVal := ebuildVal.FieldByName("Vars")
+			if !varsVal.IsValid() || varsVal.IsZero() {
+				continue
+			}
+
+			keywordsVal := varsVal.MapIndex(reflect.ValueOf("KEYWORDS"))
+			var keywords string
+			if keywordsVal.IsValid() {
+				keywords = keywordsVal.String()
+			}
+
+			if !isLikelyMaskedFunc(keywords, nil) {
+				allVersionsMasked = false
+				break
+			}
+		}
+
+		if allVersionsMasked {
+			return true
+		}
+	}
+
+	return false
 }
