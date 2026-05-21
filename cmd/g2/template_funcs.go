@@ -39,16 +39,13 @@ func getTemplateFuncMap() template.FuncMap {
 	}
 }
 
-var tmplPkgRegex = regexp.MustCompile(`&lt;pkg&gt;(.*?)&lt;/pkg&gt;|<pkg>(.*?)</pkg>`)
+var tmplPkgRegex = regexp.MustCompile(`&lt;pkg&gt;(.*?)&lt;/pkg&gt;`)
 
 func formatPkgLinkBodyFunc(body string, baseURL string, currentRepo string, repoPkgs interface{}, globalPkgs []*AggPackage) template.HTML {
 	safeBody := template.HTMLEscapeString(body)
 	return template.HTML(tmplPkgRegex.ReplaceAllStringFunc(safeBody, func(m string) string {
 		match := tmplPkgRegex.FindStringSubmatch(m)
 		pkg := match[1]
-		if pkg == "" {
-			pkg = match[2]
-		}
 		parts := strings.Split(pkg, "/")
 		if len(parts) == 2 {
 			repoHasPkg := false
@@ -70,12 +67,12 @@ func formatPkgLinkBodyFunc(body string, baseURL string, currentRepo string, repo
 				}
 			}
 			if repoHasPkg && currentRepo != "" {
-				return fmt.Sprintf("<a href=\"%srepos/%s/categories/%s/packages/%s/\">%s</a>", template.HTMLEscapeString(baseURL), template.HTMLEscapeString(currentRepo), url.PathEscape(parts[0]), url.PathEscape(parts[1]), template.HTMLEscapeString(pkg))
+				return fmt.Sprintf("<a href=\"%srepos/%s/categories/%s/packages/%s/\">%s</a>", template.HTMLEscapeString(baseURL), template.HTMLEscapeString(currentRepo), url.PathEscape(parts[0]), url.PathEscape(parts[1]), pkg)
 			}
 
-			return fmt.Sprintf("<a href=\"%spackages/%s/%s/\">%s</a>", template.HTMLEscapeString(baseURL), url.PathEscape(parts[0]), url.PathEscape(parts[1]), template.HTMLEscapeString(pkg))
+			return fmt.Sprintf("<a href=\"%spackages/%s/%s/\">%s</a>", template.HTMLEscapeString(baseURL), url.PathEscape(parts[0]), url.PathEscape(parts[1]), pkg)
 		}
-		return template.HTMLEscapeString(m)
+		return m
 	}))
 }
 
