@@ -92,7 +92,7 @@
         <tr>
             <td>{{if .VersionData.Ebuild.Vars.PV}}{{.VersionData.Ebuild.Vars.PV}}{{else}}{{.VersionData.Version}}{{end}}{{if .VersionData.EbuildRawURL}} <a href="{{.VersionData.EbuildRawURL}}" style="font-size: 0.8em; font-weight: normal; color: #888;">(raw)</a>{{end}}</td>
             <td>{{.VersionData.Ebuild.Vars.EAPI}}</td>
-            <td>{{if index .VersionData.Ebuild.Vars "KEYWORDS"}}{{formatKeywords (index .VersionData.Ebuild.Vars "KEYWORDS") .BaseURL}}{{end}}</td>
+            <td>{{if and .VersionData.Ebuild.Vars (index .VersionData.Ebuild.Vars "KEYWORDS")}}{{formatKeywords (index .VersionData.Ebuild.Vars "KEYWORDS") .BaseURL}}{{end}}</td>
             <td>{{.VersionData.Ebuild.Vars.SLOT}}</td>
         </tr>
     </table>
@@ -193,15 +193,15 @@
     <h3>Dependencies</h3>
     {{if .VersionData.Ebuild.Vars.DEPEND}}
     <h4>DEPEND</h4>
-    <pre>{{.VersionData.Ebuild.Vars.DEPEND}}</pre>
+    <pre>{{formatDependency $.BaseURL .VersionData.Ebuild.Vars.DEPEND}}</pre>
     {{end}}
     {{if .VersionData.Ebuild.Vars.RDEPEND}}
     <h4>RDEPEND</h4>
-    <pre>{{.VersionData.Ebuild.Vars.RDEPEND}}</pre>
+    <pre>{{formatDependency $.BaseURL .VersionData.Ebuild.Vars.RDEPEND}}</pre>
     {{end}}
     {{if .VersionData.Ebuild.Vars.BDEPEND}}
     <h4>BDEPEND</h4>
-    <pre>{{.VersionData.Ebuild.Vars.BDEPEND}}</pre>
+    <pre>{{formatDependency $.BaseURL .VersionData.Ebuild.Vars.BDEPEND}}</pre>
     {{end}}
 </div>
 {{end}}
