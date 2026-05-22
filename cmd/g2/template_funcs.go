@@ -22,7 +22,14 @@ func getTemplateFuncMap() template.FuncMap {
 		"slugify":             sanitizeFilename,
 		"split":               strings.Split,
 		"formatKeywords":      formatKeywordsFunc,
-		"hasPrefix":           strings.HasPrefix,
+		"hasPrefix":           func(s, prefix any) bool {
+			sStr, ok1 := s.(string)
+			pStr, ok2 := prefix.(string)
+			if ok1 && ok2 {
+				return strings.HasPrefix(sStr, pStr)
+			}
+			return false
+		},
 		"groupIUSEFlags":      groupIUSEFlagsFunc,
 		"isLikelyMasked":      isLikelyMaskedFunc,
 		"isPkgLikelyMasked":   isPkgLikelyMaskedFunc,
@@ -36,6 +43,7 @@ func getTemplateFuncMap() template.FuncMap {
 			}
 			return 0
 		},
+		"formatDependency":  formatDependencyFunc,
 		"packageLink":       packageLinkFunc,
 		"formatPkgLinkBody": formatPkgLinkBodyFunc,
 	}
@@ -84,6 +92,56 @@ func packageLinkFunc(baseURL string, pkg string) template.HTML {
 		return template.HTML(fmt.Sprintf("<a href=\"%spackages/%s/%s/\">%s</a>", template.HTMLEscapeString(baseURL), url.PathEscape(parts[0]), url.PathEscape(parts[1]), template.HTMLEscapeString(pkg)))
 	}
 	return template.HTML(template.HTMLEscapeString(pkg))
+}
+
+func formatDependencyFunc(baseURL string, dep string) template.HTML {
+	if dep == "" {
+		return template.HTML("")
+	}
+
+	var b strings.Builder
+	b.Grow(len(dep) * 2)
+
+	isSpace := func(r rune) bool {
+		return r == ' ' || r == '\t' || r == '\n' || r == '\r'
+	}
+
+	var currentToken strings.Builder
+	flushToken := func() {
+		token := currentToken.String()
+		if token == "" {
+			return
+		}
+		currentToken.Reset()
+
+		if token == "||" || token == "(" || token == ")" || strings.HasSuffix(token, "?") || !strings.Contains(token, "/") {
+			b.WriteString(template.HTMLEscapeString(token))
+			return
+		}
+
+		pkgName := g2.ExtractPackageNameFromDep(token)
+		if pkgName != "" {
+			parts := strings.Split(pkgName, "/")
+			if len(parts) == 2 {
+				link := fmt.Sprintf("<a href=\"%spackages/%s/%s/\">%s</a>", template.HTMLEscapeString(baseURL), url.PathEscape(parts[0]), url.PathEscape(parts[1]), template.HTMLEscapeString(token))
+				b.WriteString(link)
+				return
+			}
+		}
+		b.WriteString(template.HTMLEscapeString(token))
+	}
+
+	for _, r := range dep {
+		if isSpace(r) {
+			flushToken()
+			b.WriteRune(r)
+		} else {
+			currentToken.WriteRune(r)
+		}
+	}
+	flushToken()
+
+	return template.HTML(b.String())
 }
 
 func formatKeywordsFunc(keywords string, baseURL string) template.HTML {
