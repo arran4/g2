@@ -17,10 +17,11 @@
         </tr>
         {{range .RepoPackage.Versions}}
         <tr>
-            <td><a href="{{.Version}}/">{{if .Ebuild.Vars.PV}}{{.Ebuild.Vars.PV}}{{else}}{{.Version}}{{end}}</a>{{if .EbuildRawURL}} <a href="{{.EbuildRawURL}}" style="font-size: 0.8em; font-weight: normal; color: #888;">(raw)</a>{{end}}</td>
-            <td>{{.Ebuild.Vars.EAPI}}</td>
-            <td>{{.Ebuild.Vars.KEYWORDS}}</td>
-            <td>{{.Ebuild.Vars.SLOT}}</td>
+            {{$vName := .Version}}{{if and .Ebuild .Ebuild.Vars .Ebuild.Vars.PV}}{{$vName = .Ebuild.Vars.PV}}{{end}}
+            <td><a href="{{$vName}}/">{{$vName}}</a>{{if .EbuildRawURL}} <a href="{{.EbuildRawURL}}" style="font-size: 0.8em; font-weight: normal; color: #888;">(raw)</a>{{end}}</td>
+            <td>{{if and .Ebuild .Ebuild.Vars}}{{.Ebuild.Vars.EAPI}}{{end}}</td>
+            <td>{{if and .Ebuild .Ebuild.Vars}}{{.Ebuild.Vars.KEYWORDS}}{{end}}</td>
+            <td>{{if and .Ebuild .Ebuild.Vars}}{{.Ebuild.Vars.SLOT}}{{end}}</td>
         </tr>
         {{end}}
     </table>
