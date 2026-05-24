@@ -53,7 +53,7 @@ func (cfg *MainArgConfig) cmdSiteServe(args []string) error {
 	// Determine if location is a single overlay or we need to fall back to repos.conf / /var/db/repos
 	var sites []*g2.SiteData
 
-limit := *concurrency
+	limit := *concurrency
 	if limit <= 0 {
 		limit = 10
 	}
@@ -518,17 +518,17 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// 1. Root Dashboard
 	if len(parts) == 0 {
 		s.renderPageHTTP(w, "dashboard.html", map[string]interface{}{
-			"Title":      s.Title,
-			"BaseURL":    "",
-			"Repos":      s.Sites,
+			"Title":            s.Title,
+			"BaseURL":          "",
+			"Repos":            s.Sites,
 			"GlobalCategories": s.AggCategories,
 			"GlobalPackages":   s.AggPackages,
-			"Licenses":   s.AggLicenses,
-			"UseFlags":   s.AggUseFlags,
-			"Projects":   s.AggProjects,
-			"Profiles":   []interface{}{},
-			"Version":    version,
-			"GenInfo":    s.GenInfo,
+			"Licenses":         s.AggLicenses,
+			"UseFlags":         s.AggUseFlags,
+			"Projects":         s.AggProjects,
+			"Profiles":         []interface{}{},
+			"Version":          version,
+			"GenInfo":          s.GenInfo,
 		})
 		return
 	}
@@ -554,12 +554,12 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case "categories":
 		if len(parts) == 1 {
 			s.renderPageHTTP(w, "categories.html", map[string]interface{}{
-				"Title":       "Categories",
-				"BaseURL":     baseURL,
-				"Breadcrumbs": []g2.Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: "Categories"}},
-				"GlobalCategories":  s.AggCategories,
-				"Version":     version,
-				"GenInfo":     s.GenInfo,
+				"Title":            "Categories",
+				"BaseURL":          baseURL,
+				"Breadcrumbs":      []g2.Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: "Categories"}},
+				"GlobalCategories": s.AggCategories,
+				"Version":          version,
+				"GenInfo":          s.GenInfo,
 			})
 			return
 		} else if len(parts) == 2 {
@@ -865,12 +865,12 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				case "categories":
 					if len(parts) == 3 {
 						s.renderPageHTTP(w, "categories.html", map[string]interface{}{
-							"Title":       site.RepoName + " - Categories",
-							"BaseURL":     baseURL,
-							"Breadcrumbs": []g2.Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: site.RepoName, URL: "../"}, {Name: "Categories"}},
-							"RepoCategories":  site.Categories,
-							"Version":     version,
-							"GenInfo":     s.GenInfo,
+							"Title":          site.RepoName + " - Categories",
+							"BaseURL":        baseURL,
+							"Breadcrumbs":    []g2.Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: site.RepoName, URL: "../"}, {Name: "Categories"}},
+							"RepoCategories": site.Categories,
+							"Version":        version,
+							"GenInfo":        s.GenInfo,
 						})
 						return
 					} else if len(parts) == 4 {
@@ -953,6 +953,25 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 								"Version":       version,
 								"GenInfo":       s.GenInfo,
 								"ValidLicenses": validLicenses,
+							})
+							return
+						} else if len(parts) == 7 && parts[6] == "ebuild" {
+							s.renderPageHTTP(w, "repo_package_ebuilds.html", map[string]interface{}{
+								"Title":   fmt.Sprintf("%s - %s/%s - Ebuilds", site.RepoName, pkgData.Category, pkgData.Name),
+								"BaseURL": baseURL,
+								"Breadcrumbs": []g2.Breadcrumb{
+									{Name: s.Title, URL: baseURL},
+									{Name: site.RepoName, URL: "../../../../../"},
+									{Name: "Categories", URL: "../../../../"},
+									{Name: pkgData.Category, URL: "../../../"},
+									{Name: "Packages", URL: "../../"},
+									{Name: pkgData.Name, URL: "../"},
+									{Name: "Ebuilds"},
+								},
+								"Repo":        site,
+								"RepoPackage": pkgData,
+								"Version":     version,
+								"GenInfo":     s.GenInfo,
 							})
 							return
 						} else if len(parts) == 8 && parts[6] == "ebuild" {

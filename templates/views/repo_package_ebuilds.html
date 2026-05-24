@@ -1,0 +1,28 @@
+<div class="metadata-section">
+    <h3>Search</h3>
+    <form action="{{.BaseURL}}search/" method="get">
+        <input type="text" name="q" value="overlay:{{.Repo.RepoName}} category:{{.RepoPackage.Category}} {{.RepoPackage.Name}} " placeholder="Search packages, descriptions, use flags..." style="width: 80%; padding: 0.5rem;" />
+        <button type="submit" style="padding: 0.5rem;">Search</button>
+    </form>
+</div>
+
+<div class="metadata-section">
+    <h3>Ebuilds</h3>
+    <table>
+        <tr>
+            <th>Version</th>
+            <th>EAPI</th>
+            <th>Keywords</th>
+            <th>Slot</th>
+        </tr>
+        {{range .RepoPackage.Versions}}
+        <tr>
+            {{$vName := .Version}}{{if and .Ebuild .Ebuild.Vars .Ebuild.Vars.PV}}{{$vName = .Ebuild.Vars.PV}}{{end}}
+            <td><a href="{{$vName}}/">{{$vName}}</a>{{if .EbuildRawURL}} <a href="{{.EbuildRawURL}}" style="font-size: 0.8em; font-weight: normal; color: #888;">(raw)</a>{{end}}</td>
+            <td>{{if and .Ebuild .Ebuild.Vars}}{{.Ebuild.Vars.EAPI}}{{end}}</td>
+            <td>{{if and .Ebuild .Ebuild.Vars}}{{.Ebuild.Vars.KEYWORDS}}{{end}}</td>
+            <td>{{if and .Ebuild .Ebuild.Vars}}{{.Ebuild.Vars.SLOT}}{{end}}</td>
+        </tr>
+        {{end}}
+    </table>
+</div>

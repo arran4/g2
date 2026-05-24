@@ -1273,6 +1273,22 @@ func generateRepoPackagesPages(repoDir string, tmpl *template.Template, site *g2
 					}
 				}
 			}
+			ebuildBaseDir := filepath.Join(pkgDir, "ebuild")
+			if err := os.MkdirAll(ebuildBaseDir, 0755); err != nil {
+				return fmt.Errorf("creating directory %s: %w", ebuildBaseDir, err)
+			}
+			if err := renderPage(filepath.Join(ebuildBaseDir, "index.html"), tmpl, "repo_package_ebuilds.html", GenericPageContext{
+				Title:       fmt.Sprintf("%s - %s/%s - Ebuilds", site.RepoName, pkg.Category, pkg.Name),
+				BaseURL:     "../../../../../../../",
+				Breadcrumbs: []g2.Breadcrumb{{Name: title, URL: "../../../../../../../"}, {Name: site.RepoName, URL: "../../../../../"}, {Name: "Categories", URL: "../../../../"}, {Name: pkg.Category, URL: "../../../"}, {Name: "Packages", URL: "../../"}, {Name: pkg.Name, URL: "../"}, {Name: "Ebuilds"}},
+				Repo:        site,
+				RepoPackage: &pkg,
+				Version:     version,
+				GenInfo:     genInfo,
+			}); err != nil {
+				return fmt.Errorf("rendering page: %w", err)
+			}
+
 			for _, v := range pkg.Versions {
 				versionStr := v.Version
 				if v.Ebuild != nil && v.Ebuild.Vars != nil && v.Ebuild.Vars["PV"] != "" {
@@ -1355,7 +1371,6 @@ func generateSite(outDir string, sites []*g2.SiteData, recentDuration time.Durat
 		return fmt.Errorf("loading templates: %w", err)
 	}
 	stepTemplates()
-
 
 	for _, site := range sites {
 		aggPackagesMap := make(map[string]*AggPackage)
