@@ -55,18 +55,18 @@ func writeWorldFile(path string, lines []string) error {
 	writer := bufio.NewWriter(file)
 	for _, line := range lines {
 		if _, err := writer.WriteString(line + "\n"); err != nil {
-			file.Close()
-			os.Remove(tmpPath)
+			_ = file.Close()
+			_ = os.Remove(tmpPath)
 			return err
 		}
 	}
 	if err := writer.Flush(); err != nil {
-		file.Close()
-		os.Remove(tmpPath)
+		_ = file.Close()
+		_ = os.Remove(tmpPath)
 		return err
 	}
 	if err := file.Close(); err != nil {
-		os.Remove(tmpPath)
+		_ = os.Remove(tmpPath)
 		return err
 	}
 	return os.Rename(tmpPath, path)

@@ -95,7 +95,6 @@ func runWorldTUI(path string, lines []string) error {
 				case 27: // Esc
 					mode = "normal"
 					inputBuffer = ""
-					break
 				case 13: // Enter
 					if strings.TrimSpace(inputBuffer) != "" {
 						if cursor >= len(lines) {
@@ -109,7 +108,6 @@ func runWorldTUI(path string, lines []string) error {
 					}
 					mode = "normal"
 					inputBuffer = ""
-					break
 				case 127, 8: // Backspace
 					// Basic backspace handling (assumes 1 byte = 1 char for simplicity in deletion,
 					// real UTF-8 backspace requires rune parsing, but this handles standard ASCII well enough
