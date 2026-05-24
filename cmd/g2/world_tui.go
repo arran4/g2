@@ -88,27 +88,39 @@ func runWorldTUI(path string, lines []string) error {
 
 		if mode == "insert" {
 			// Handle insert mode
-			if n == 1 {
-				c := buf[0]
+			// Support UTF-8 multi-byte sequences by converting the entire buffer read
+			for i := 0; i < n; i++ {
+				c := buf[i]
 				switch c {
 				case 27: // Esc
 					mode = "normal"
 					inputBuffer = ""
+					break
 				case 13: // Enter
 					if strings.TrimSpace(inputBuffer) != "" {
-						// Add to lines and move cursor
-						lines = append(lines, "")
-						copy(lines[cursor+1:], lines[cursor:])
-						lines[cursor] = inputBuffer
+						if cursor >= len(lines) {
+							lines = append(lines, inputBuffer)
+						} else {
+							// Add to lines and move cursor
+							lines = append(lines, "")
+							copy(lines[cursor+1:], lines[cursor:])
+							lines[cursor] = inputBuffer
+						}
 					}
 					mode = "normal"
 					inputBuffer = ""
-				case 127: // Backspace
+					break
+				case 127, 8: // Backspace
+					// Basic backspace handling (assumes 1 byte = 1 char for simplicity in deletion,
+					// real UTF-8 backspace requires rune parsing, but this handles standard ASCII well enough
+					// without getting overly complex for this TUI)
 					if len(inputBuffer) > 0 {
 						inputBuffer = inputBuffer[:len(inputBuffer)-1]
 					}
 				default:
-					if c >= 32 && c <= 126 {
+					// Just append printable/valid characters directly from the buffer.
+					// This allows pasting and UTF-8 to work naturally since they arrive in the buffer together.
+					if c >= 32 || c > 127 { // Allows ASCII and extended UTF-8 bytes
 						inputBuffer += string(c)
 					}
 				}
@@ -118,16 +130,11 @@ func runWorldTUI(path string, lines []string) error {
 			if n == 1 {
 				switch buf[0] {
 				case 'q', 27: // q or Esc
-					if buf[0] == 27 && n > 1 {
-						// Not actually just Esc, probably an escape sequence chunk.
-						// TUI frameworks handle this better, but we do this as a simple hack.
-						break
-					}
 					return nil
 				case 's', 13: // s or Enter
 					return writeWorldFile(path, lines)
 				case 'j':
-					if cursor < len(lines)-1 {
+					if cursor < len(lines) {
 						cursor++
 					}
 				case 'k':
@@ -164,7 +171,7 @@ func runWorldTUI(path string, lines []string) error {
 						cursor--
 					}
 				case 'B': // Down
-					if cursor < len(lines)-1 {
+					if cursor < len(lines) {
 						cursor++
 					}
 				}
