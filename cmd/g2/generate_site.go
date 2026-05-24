@@ -1280,7 +1280,7 @@ func generateRepoPackagesPages(repoDir string, tmpl *template.Template, site *g2
 			if err := renderPage(filepath.Join(ebuildBaseDir, "index.html"), tmpl, "repo_package_ebuilds.html", GenericPageContext{
 				Title:       fmt.Sprintf("%s - %s/%s - Ebuilds", site.RepoName, pkg.Category, pkg.Name),
 				BaseURL:     "../../../../../../../",
-				Breadcrumbs: []g2.Breadcrumb{{Name: title, URL: "../../../../../../../"}, {Name: site.RepoName, URL: "../../../../../"}, {Name: "Categories", URL: "../../../../"}, {Name: pkg.Category, URL: "../../../"}, {Name: "Packages", URL: "../../"}, {Name: pkg.Name, URL: "../"}, {Name: "Ebuilds"}},
+				Breadcrumbs: []g2.Breadcrumb{{Name: title, URL: "../../../../../../../"}, {Name: site.RepoName, URL: "../../../../../"}, {Name: "Categories", URL: "../../../../"}, {Name: pkg.Category, URL: "../../../"}, {Name: pkg.Name, URL: "../"}, {Name: "Ebuilds"}},
 				Repo:        site,
 				RepoPackage: &pkg,
 				Version:     version,
@@ -1315,7 +1315,7 @@ func generateRepoPackagesPages(repoDir string, tmpl *template.Template, site *g2
 				if err := renderPage(filepath.Join(ebuildDir, "index.html"), tmpl, "ebuild_details.html", GenericPageContext{
 					Title:            fmt.Sprintf("%s - %s/%s-%s", site.RepoName, pkg.Category, pkg.Name, versionStr),
 					BaseURL:          "../../../../../../../../",
-					Breadcrumbs:      []g2.Breadcrumb{{Name: title, URL: "../../../../../../../../"}, {Name: site.RepoName, URL: "../../../../../../"}, {Name: "Categories", URL: "../../../../../"}, {Name: pkg.Category, URL: "../../../../"}, {Name: "Packages", URL: "../../../"}, {Name: pkg.Name, URL: "../../"}, {Name: "Ebuild", URL: "../"}, {Name: versionStr}},
+					Breadcrumbs:      []g2.Breadcrumb{{Name: title, URL: "../../../../../../../../"}, {Name: site.RepoName, URL: "../../../../../../"}, {Name: "Categories", URL: "../../../../../"}, {Name: pkg.Category, URL: "../../../../"}, {Name: pkg.Name, URL: "../../"}, {Name: "Ebuild", URL: "../"}, {Name: versionStr}},
 					Repo:             site,
 					RepoPackage:      &pkg,
 					VersionData:      &v,
