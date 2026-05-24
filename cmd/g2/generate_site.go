@@ -312,8 +312,7 @@ func generatePackagePages(outDir string, tmpl *template.Template, data *Aggregat
 				}
 
 				rootNode := &PageNode{Name: title, Path: ""}
-				packagesNode := &PageNode{Parent: rootNode, Name: "Packages", Path: "packages"}
-				catNode := &PageNode{Parent: packagesNode, Name: pkg.Category, Path: "packages/" + pkg.Category}
+				catNode := &PageNode{Parent: rootNode, Name: pkg.Category, Path: "packages/" + pkg.Category}
 				pkgNode := &PageNode{Parent: catNode, Name: pkg.Name, Path: "packages/" + pkg.Category + "/" + pkg.Name}
 
 				ctx := pkgNode.Context("Package: "+pkg.Category+"/"+pkg.Name, version, genInfo)
@@ -874,8 +873,7 @@ func generateRepoMovedPackagesPages(repoDir string, tmpl *template.Template, sit
 		}
 
 		rootNode := &PageNode{Name: title, Path: ""}
-		packagesNode := &PageNode{Parent: rootNode, Name: "Packages", Path: "packages"}
-		catNode := &PageNode{Parent: packagesNode, Name: oldCat, Path: "packages/" + oldCat}
+		catNode := &PageNode{Parent: rootNode, Name: oldCat, Path: "packages/" + oldCat}
 		pkgNode := &PageNode{Parent: catNode, Name: oldName, Path: "packages/" + oldCat + "/" + oldName}
 
 		ctx := pkgNode.Context("Package Moved: "+oldCat+"/"+oldName, version, genInfo)
