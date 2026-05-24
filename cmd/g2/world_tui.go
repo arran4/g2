@@ -17,7 +17,7 @@ func runWorldTUI(path string, lines []string) error {
 	if err != nil {
 		return err
 	}
-	defer term.Restore(int(os.Stdin.Fd()), oldState)
+	defer func() { _ = term.Restore(int(os.Stdin.Fd()), oldState) }()
 
 	cursor := 0
 	mode := "normal" // "normal" or "insert"
