@@ -312,8 +312,7 @@ func generatePackagePages(outDir string, tmpl *template.Template, data *Aggregat
 				}
 
 				rootNode := &PageNode{Name: title, Path: ""}
-				packagesNode := &PageNode{Parent: rootNode, Name: "Packages", Path: "packages"}
-				catNode := &PageNode{Parent: packagesNode, Name: pkg.Category, Path: "packages/" + pkg.Category}
+				catNode := &PageNode{Parent: rootNode, Name: pkg.Category, Path: "packages/" + pkg.Category}
 				pkgNode := &PageNode{Parent: catNode, Name: pkg.Name, Path: "packages/" + pkg.Category + "/" + pkg.Name}
 
 				ctx := pkgNode.Context("Package: "+pkg.Category+"/"+pkg.Name, version, genInfo)
@@ -874,8 +873,7 @@ func generateRepoMovedPackagesPages(repoDir string, tmpl *template.Template, sit
 		}
 
 		rootNode := &PageNode{Name: title, Path: ""}
-		packagesNode := &PageNode{Parent: rootNode, Name: "Packages", Path: "packages"}
-		catNode := &PageNode{Parent: packagesNode, Name: oldCat, Path: "packages/" + oldCat}
+		catNode := &PageNode{Parent: rootNode, Name: oldCat, Path: "packages/" + oldCat}
 		pkgNode := &PageNode{Parent: catNode, Name: oldName, Path: "packages/" + oldCat + "/" + oldName}
 
 		ctx := pkgNode.Context("Package Moved: "+oldCat+"/"+oldName, version, genInfo)
@@ -1280,7 +1278,7 @@ func generateRepoPackagesPages(repoDir string, tmpl *template.Template, site *g2
 			if err := renderPage(filepath.Join(ebuildBaseDir, "index.html"), tmpl, "repo_package_ebuilds.html", GenericPageContext{
 				Title:       fmt.Sprintf("%s - %s/%s - Ebuilds", site.RepoName, pkg.Category, pkg.Name),
 				BaseURL:     "../../../../../../../",
-				Breadcrumbs: []g2.Breadcrumb{{Name: title, URL: "../../../../../../../"}, {Name: site.RepoName, URL: "../../../../../"}, {Name: "Categories", URL: "../../../../"}, {Name: pkg.Category, URL: "../../../"}, {Name: "Packages", URL: "../../"}, {Name: pkg.Name, URL: "../"}, {Name: "Ebuilds"}},
+				Breadcrumbs: []g2.Breadcrumb{{Name: title, URL: "../../../../../../../"}, {Name: site.RepoName, URL: "../../../../../"}, {Name: "Categories", URL: "../../../../"}, {Name: pkg.Category, URL: "../../../"}, {Name: pkg.Name, URL: "../"}, {Name: "Ebuilds"}},
 				Repo:        site,
 				RepoPackage: &pkg,
 				Version:     version,
@@ -1315,7 +1313,7 @@ func generateRepoPackagesPages(repoDir string, tmpl *template.Template, site *g2
 				if err := renderPage(filepath.Join(ebuildDir, "index.html"), tmpl, "ebuild_details.html", GenericPageContext{
 					Title:            fmt.Sprintf("%s - %s/%s-%s", site.RepoName, pkg.Category, pkg.Name, versionStr),
 					BaseURL:          "../../../../../../../../",
-					Breadcrumbs:      []g2.Breadcrumb{{Name: title, URL: "../../../../../../../../"}, {Name: site.RepoName, URL: "../../../../../../"}, {Name: "Categories", URL: "../../../../../"}, {Name: pkg.Category, URL: "../../../../"}, {Name: "Packages", URL: "../../../"}, {Name: pkg.Name, URL: "../../"}, {Name: "Ebuild", URL: "../"}, {Name: versionStr}},
+					Breadcrumbs:      []g2.Breadcrumb{{Name: title, URL: "../../../../../../../../"}, {Name: site.RepoName, URL: "../../../../../../"}, {Name: "Categories", URL: "../../../../../"}, {Name: pkg.Category, URL: "../../../../"}, {Name: pkg.Name, URL: "../../"}, {Name: "Ebuild", URL: "../"}, {Name: versionStr}},
 					Repo:             site,
 					RepoPackage:      &pkg,
 					VersionData:      &v,
