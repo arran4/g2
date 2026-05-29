@@ -94,6 +94,11 @@ type FileData struct {
 	RawURL string
 }
 
+type VersionGroup struct {
+	Version string
+	Archs   string
+}
+
 type PackageData struct {
 	Name                  string
 	Category              string
@@ -105,6 +110,7 @@ type PackageData struct {
 	Files                 []FileData
 	HighestStableVersion  any
 	HighestTestingVersion any
+	SnapshotVersion       any
 	EbuildCount           int
 	DominantDescription   string
 	DominantHomepage      string

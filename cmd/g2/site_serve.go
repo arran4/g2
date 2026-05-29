@@ -574,8 +574,9 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				Name                  string
 				ReposList             []*g2.SiteData
 				EbuildCount           int
-				HighestStableVersion  template.HTML
-				HighestTestingVersion template.HTML
+				HighestStableVersion  any
+				HighestTestingVersion any
+				SnapshotVersion       string
 				DominantDescription   string
 				DominantHomepage      string
 				DominantLicense       string
@@ -595,8 +596,8 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 						}
 					}
 				}
-				hs, ht, count := getHighestVersionsAndCount(allVersions, nil)
-				tmplPkgs = append(tmplPkgs, TmplPkg{Name: p.Name, ReposList: mapToList(p.Repos), EbuildCount: count, HighestStableVersion: hs, HighestTestingVersion: ht, DominantDescription: p.DominantDescription, DominantHomepage: p.DominantHomepage, DominantLicense: p.DominantLicense, ReverseVirtuals: p.ReverseVirtuals})
+				hs, ht, snap, count := getHighestVersionsAndCount(allVersions, nil)
+				tmplPkgs = append(tmplPkgs, TmplPkg{Name: p.Name, ReposList: mapToList(p.Repos), EbuildCount: count, HighestStableVersion: hs, HighestTestingVersion: ht, SnapshotVersion: snap, DominantDescription: p.DominantDescription, DominantHomepage: p.DominantHomepage, DominantLicense: p.DominantLicense, ReverseVirtuals: p.ReverseVirtuals})
 			}
 
 			s.renderPageHTTP(w, "category.html", map[string]interface{}{
@@ -891,8 +892,9 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 							Name                  string
 							ReposList             []*g2.SiteData
 							EbuildCount           int
-							HighestStableVersion  template.HTML
-							HighestTestingVersion template.HTML
+							HighestStableVersion  any
+							HighestTestingVersion any
+							SnapshotVersion       string
 							DominantDescription   string
 							DominantHomepage      string
 							DominantLicense       string
@@ -900,7 +902,7 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 						}
 						var tmplPkgs []TmplPkg
 						for _, p := range catData.Packages {
-							tmplPkgs = append(tmplPkgs, TmplPkg{Name: p.Name, ReposList: []*g2.SiteData{site}, EbuildCount: p.EbuildCount, HighestStableVersion: p.HighestStableVersion.(template.HTML), HighestTestingVersion: p.HighestTestingVersion.(template.HTML), DominantDescription: p.DominantDescription, DominantHomepage: p.DominantHomepage, DominantLicense: p.DominantLicense, ReverseVirtuals: p.ReverseVirtuals})
+							tmplPkgs = append(tmplPkgs, TmplPkg{Name: p.Name, ReposList: []*g2.SiteData{site}, EbuildCount: p.EbuildCount, HighestStableVersion: p.HighestStableVersion, HighestTestingVersion: p.HighestTestingVersion, SnapshotVersion: func() string { if v, ok := p.SnapshotVersion.(string); ok { return v }; return "" }(), DominantDescription: p.DominantDescription, DominantHomepage: p.DominantHomepage, DominantLicense: p.DominantLicense, ReverseVirtuals: p.ReverseVirtuals})
 						}
 
 						s.renderPageHTTP(w, "category.html", map[string]interface{}{

@@ -361,14 +361,23 @@ func parseManifestFromFS(sysFS fs.FS, path string) (*g2.Manifest, error) {
 	return g2.ParseManifestFromReader(file)
 }
 
-func getHighestVersionsAndCount(versions []g2.VersionData, site *g2.SiteData) (template.HTML, template.HTML, int) {
+func getHighestVersionsAndCount(versions []g2.VersionData, site *g2.SiteData) ([]g2.VersionGroup, []g2.VersionGroup, string, int) {
 	// Parse KEYWORDS and group versions
 
 	stableMap := make(map[string]string)
 	testingMap := make(map[string]string)
 
+	var snapshot string
+
 	for _, ver := range versions {
 		if ver.Ebuild == nil || ver.Ebuild.Vars == nil {
+			continue
+		}
+
+		if strings.Contains(ver.Version, "9999") {
+			if snapshot == "" || g2.CompareVersions(ver.Version, snapshot) > 0 {
+				snapshot = ver.Version
+			}
 			continue
 		}
 
@@ -404,9 +413,9 @@ func getHighestVersionsAndCount(versions []g2.VersionData, site *g2.SiteData) (t
 		testingGroup[ver] = append(testingGroup[ver], arch)
 	}
 
-	formatGroups := func(groups map[string][]string) string {
+	formatGroups := func(groups map[string][]string) []g2.VersionGroup {
 		if len(groups) == 0 {
-			return ""
+			return nil
 		}
 
 		var sortedVersions []string
@@ -423,26 +432,32 @@ func getHighestVersionsAndCount(versions []g2.VersionData, site *g2.SiteData) (t
 			}
 		}
 
-		var parts []string
-		for _, ver := range sortedVersions {
+		var result []g2.VersionGroup
+		for i, ver := range sortedVersions {
+			if i >= 2 {
+				break
+			}
 			archs := groups[ver]
 
 			// sort archs
-			for i := 0; i < len(archs); i++ {
-				for j := i + 1; j < len(archs); j++ {
-					if archs[i] > archs[j] {
-						archs[i], archs[j] = archs[j], archs[i]
+			for k := 0; k < len(archs); k++ {
+				for l := k + 1; l < len(archs); l++ {
+					if archs[k] > archs[l] {
+						archs[k], archs[l] = archs[l], archs[k]
 					}
 				}
 			}
 
-			parts = append(parts, "<span title=\""+strings.Join(archs, " ")+"\">"+ver+"</span>")
+			result = append(result, g2.VersionGroup{
+				Version: ver,
+				Archs:   strings.Join(archs, " "),
+			})
 		}
 
-		return strings.Join(parts, ", ")
+		return result
 	}
 
-	return template.HTML(formatGroups(stableGroup)), template.HTML(formatGroups(testingGroup)), len(versions)
+	return formatGroups(stableGroup), formatGroups(testingGroup), snapshot, len(versions)
 }
 
 type ResolvedDepNode struct {

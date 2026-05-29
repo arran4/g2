@@ -371,7 +371,7 @@ func parseRepoCategoriesAndPackages(sysFS fs.FS, repoDir string, repoName string
 				continue
 			}
 
-			pkgData.HighestStableVersion, pkgData.HighestTestingVersion, pkgData.EbuildCount = getHighestVersionsAndCount(pkgData.Versions, site)
+			pkgData.HighestStableVersion, pkgData.HighestTestingVersion, pkgData.SnapshotVersion, pkgData.EbuildCount = getHighestVersionsAndCount(pkgData.Versions, site)
 
 			metaPath := filepath.Join(pkgPath, "metadata.xml")
 			metadata, err := parseMetadataFromFS(sysFS, filepath.ToSlash(metaPath))
