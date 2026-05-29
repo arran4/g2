@@ -46,6 +46,7 @@ func main() {
 		fmt.Printf("\t\t %s \t\t %s\n", "profile", "commands relating to profiles")
 		fmt.Printf("\t\t %s \t\t %s\n", "repos-conf", "commands relating to repos.conf")
 		fmt.Printf("\t\t %s \t\t %s\n", "make-conf", "commands relating to make.conf")
+		fmt.Printf("\t\t %s \t\t %s\n", "world", "manage the portage world file via TUI")
 	}
 	if err := fs.Parse(os.Args); err != nil {
 		log.Printf("Flag parse error: %s", err)
@@ -82,6 +83,12 @@ func main() {
 	case "make-conf":
 		if err := cfg.cmdMakeConf(fs.Args()[2:]); err != nil {
 			log.Printf("make-conf error: %s", err)
+			os.Exit(-1)
+			return
+		}
+	case "world":
+		if err := cfg.cmdWorld(fs.Args()[2:]); err != nil {
+			log.Printf("world error: %s", err)
 			os.Exit(-1)
 			return
 		}
