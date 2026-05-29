@@ -440,13 +440,7 @@ func getHighestVersionsAndCount(versions []g2.VersionData, site *g2.SiteData) ([
 			archs := groups[ver]
 
 			// sort archs
-			for k := 0; k < len(archs); k++ {
-				for l := k + 1; l < len(archs); l++ {
-					if archs[k] > archs[l] {
-						archs[k], archs[l] = archs[l], archs[k]
-					}
-				}
-			}
+			sort.Strings(archs)
 
 			result = append(result, g2.VersionGroup{
 				Version: ver,

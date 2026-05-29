@@ -574,8 +574,8 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				Name                  string
 				ReposList             []*g2.SiteData
 				EbuildCount           int
-				HighestStableVersion  any
-				HighestTestingVersion any
+				HighestStableVersion  []g2.VersionGroup
+				HighestTestingVersion []g2.VersionGroup
 				SnapshotVersion       string
 				DominantDescription   string
 				DominantHomepage      string
@@ -892,8 +892,8 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 							Name                  string
 							ReposList             []*g2.SiteData
 							EbuildCount           int
-							HighestStableVersion  any
-							HighestTestingVersion any
+							HighestStableVersion  []g2.VersionGroup
+							HighestTestingVersion []g2.VersionGroup
 							SnapshotVersion       string
 							DominantDescription   string
 							DominantHomepage      string
@@ -902,7 +902,7 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 						}
 						var tmplPkgs []TmplPkg
 						for _, p := range catData.Packages {
-							tmplPkgs = append(tmplPkgs, TmplPkg{Name: p.Name, ReposList: []*g2.SiteData{site}, EbuildCount: p.EbuildCount, HighestStableVersion: p.HighestStableVersion, HighestTestingVersion: p.HighestTestingVersion, SnapshotVersion: func() string { if v, ok := p.SnapshotVersion.(string); ok { return v }; return "" }(), DominantDescription: p.DominantDescription, DominantHomepage: p.DominantHomepage, DominantLicense: p.DominantLicense, ReverseVirtuals: p.ReverseVirtuals})
+							tmplPkgs = append(tmplPkgs, TmplPkg{Name: p.Name, ReposList: []*g2.SiteData{site}, EbuildCount: p.EbuildCount, HighestStableVersion: p.HighestStableVersion, HighestTestingVersion: p.HighestTestingVersion, SnapshotVersion: p.SnapshotVersion, DominantDescription: p.DominantDescription, DominantHomepage: p.DominantHomepage, DominantLicense: p.DominantLicense, ReverseVirtuals: p.ReverseVirtuals})
 						}
 
 						s.renderPageHTTP(w, "category.html", map[string]interface{}{

@@ -108,9 +108,9 @@ type PackageData struct {
 	Manifest              *Manifest
 	ManifestData          []ManifestEntryData
 	Files                 []FileData
-	HighestStableVersion  any
-	HighestTestingVersion any
-	SnapshotVersion       any
+	HighestStableVersion  []VersionGroup
+	HighestTestingVersion []VersionGroup
+	SnapshotVersion       string
 	EbuildCount           int
 	DominantDescription   string
 	DominantHomepage      string

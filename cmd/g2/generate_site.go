@@ -174,8 +174,8 @@ func generateCategoryPages(outDir string, tmpl *template.Template, data *Aggrega
 				Name                  string
 				ReposList             []*g2.SiteData
 				EbuildCount           int
-				HighestStableVersion  any
-				HighestTestingVersion any
+				HighestStableVersion  []g2.VersionGroup
+				HighestTestingVersion []g2.VersionGroup
 				SnapshotVersion       string
 				DominantDescription   string
 				DominantHomepage      string
@@ -1063,8 +1063,8 @@ func generateRepoCategoriesPages(repoDir string, tmpl *template.Template, site *
 			Name                  string
 			ReposList             []*g2.SiteData
 			EbuildCount           int
-			HighestStableVersion  any
-			HighestTestingVersion any
+			HighestStableVersion  []g2.VersionGroup
+			HighestTestingVersion []g2.VersionGroup
 			SnapshotVersion       string
 			DominantDescription   string
 			DominantHomepage      string
@@ -1073,7 +1073,7 @@ func generateRepoCategoriesPages(repoDir string, tmpl *template.Template, site *
 		}
 		var tmplPkgs []TmplPkg
 		for _, p := range cat.Packages {
-			tmplPkgs = append(tmplPkgs, TmplPkg{Name: p.Name, ReposList: []*g2.SiteData{site}, EbuildCount: p.EbuildCount, HighestStableVersion: p.HighestStableVersion, HighestTestingVersion: p.HighestTestingVersion, SnapshotVersion: func() string { if v, ok := p.SnapshotVersion.(string); ok { return v }; return "" }(), DominantDescription: p.DominantDescription, DominantHomepage: p.DominantHomepage, DominantLicense: p.DominantLicense, ReverseVirtuals: p.ReverseVirtuals})
+			tmplPkgs = append(tmplPkgs, TmplPkg{Name: p.Name, ReposList: []*g2.SiteData{site}, EbuildCount: p.EbuildCount, HighestStableVersion: p.HighestStableVersion, HighestTestingVersion: p.HighestTestingVersion, SnapshotVersion: p.SnapshotVersion, DominantDescription: p.DominantDescription, DominantHomepage: p.DominantHomepage, DominantLicense: p.DominantLicense, ReverseVirtuals: p.ReverseVirtuals})
 		}
 
 		if err := renderPage(filepath.Join(catDir, "index.html"), tmpl, "category.html", GenericPageContext{
