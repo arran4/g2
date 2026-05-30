@@ -4,7 +4,7 @@
     {{range .RepoPackages}}
     <li>
         <a href="../categories/{{.Category}}/packages/{{.Name}}/">{{.Category}}/{{.Name}}</a>
-        - Ebuilds: {{.EbuildCount}}{{if .HighestStableVersion}}, Stable: {{.HighestStableVersion}}{{end}}{{if .HighestTestingVersion}}, Testing: {{.HighestTestingVersion}}{{end}}
+        {{$pkgName := .Name}}{{$pkgCat := .Category}}- Ebuilds: {{.EbuildCount}}{{if .HighestStableVersion}}, Stable: {{range $i, $v := .HighestStableVersion}}{{if $i}}, {{end}}<span title="{{$v.Archs}}"><a href="../categories/{{$pkgCat}}/packages/{{$pkgName}}/ebuild/{{$v.Version}}/">{{$v.Version}}</a></span>{{end}}{{end}}{{if .HighestTestingVersion}}, Testing: {{range $i, $v := .HighestTestingVersion}}{{if $i}}, {{end}}<span title="{{$v.Archs}}"><a href="../categories/{{$pkgCat}}/packages/{{$pkgName}}/ebuild/{{$v.Version}}/">{{$v.Version}}</a></span>{{end}}{{end}}{{if .SnapshotVersion}}, Snapshot: <a href="../categories/{{.Category}}/packages/{{.Name}}/ebuild/{{.SnapshotVersion}}/">{{.SnapshotVersion}}</a>{{end}}
     </li>
     {{end}}
 </ul>

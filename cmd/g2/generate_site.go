@@ -174,8 +174,9 @@ func generateCategoryPages(outDir string, tmpl *template.Template, data *Aggrega
 				Name                  string
 				ReposList             []*g2.SiteData
 				EbuildCount           int
-				HighestStableVersion  template.HTML
-				HighestTestingVersion template.HTML
+				HighestStableVersion  []g2.VersionGroup
+				HighestTestingVersion []g2.VersionGroup
+				SnapshotVersion       string
 				DominantDescription   string
 				DominantHomepage      string
 				DominantLicense       string
@@ -195,8 +196,8 @@ func generateCategoryPages(outDir string, tmpl *template.Template, data *Aggrega
 						}
 					}
 				}
-				hs, ht, count := getHighestVersionsAndCount(allVersions, nil)
-				tmplPkgs = append(tmplPkgs, TmplPkg{Name: p.Name, ReposList: mapToList(p.Repos), EbuildCount: count, HighestStableVersion: hs, HighestTestingVersion: ht, DominantDescription: p.DominantDescription, DominantHomepage: p.DominantHomepage, DominantLicense: p.DominantLicense, ReverseVirtuals: p.ReverseVirtuals})
+				hs, ht, snap, count := getHighestVersionsAndCount(allVersions, nil)
+				tmplPkgs = append(tmplPkgs, TmplPkg{Name: p.Name, ReposList: mapToList(p.Repos), EbuildCount: count, HighestStableVersion: hs, HighestTestingVersion: ht, SnapshotVersion: snap, DominantDescription: p.DominantDescription, DominantHomepage: p.DominantHomepage, DominantLicense: p.DominantLicense, ReverseVirtuals: p.ReverseVirtuals})
 			}
 
 			if err := renderPage(filepath.Join(catDir, "index.html"), tmpl, "category.html", GenericPageContext{
@@ -1062,8 +1063,9 @@ func generateRepoCategoriesPages(repoDir string, tmpl *template.Template, site *
 			Name                  string
 			ReposList             []*g2.SiteData
 			EbuildCount           int
-			HighestStableVersion  template.HTML
-			HighestTestingVersion template.HTML
+			HighestStableVersion  []g2.VersionGroup
+			HighestTestingVersion []g2.VersionGroup
+			SnapshotVersion       string
 			DominantDescription   string
 			DominantHomepage      string
 			DominantLicense       string
@@ -1071,7 +1073,7 @@ func generateRepoCategoriesPages(repoDir string, tmpl *template.Template, site *
 		}
 		var tmplPkgs []TmplPkg
 		for _, p := range cat.Packages {
-			tmplPkgs = append(tmplPkgs, TmplPkg{Name: p.Name, ReposList: []*g2.SiteData{site}, EbuildCount: p.EbuildCount, HighestStableVersion: p.HighestStableVersion.(template.HTML), HighestTestingVersion: p.HighestTestingVersion.(template.HTML), DominantDescription: p.DominantDescription, DominantHomepage: p.DominantHomepage, DominantLicense: p.DominantLicense, ReverseVirtuals: p.ReverseVirtuals})
+			tmplPkgs = append(tmplPkgs, TmplPkg{Name: p.Name, ReposList: []*g2.SiteData{site}, EbuildCount: p.EbuildCount, HighestStableVersion: p.HighestStableVersion, HighestTestingVersion: p.HighestTestingVersion, SnapshotVersion: p.SnapshotVersion, DominantDescription: p.DominantDescription, DominantHomepage: p.DominantHomepage, DominantLicense: p.DominantLicense, ReverseVirtuals: p.ReverseVirtuals})
 		}
 
 		if err := renderPage(filepath.Join(catDir, "index.html"), tmpl, "category.html", GenericPageContext{

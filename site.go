@@ -94,6 +94,11 @@ type FileData struct {
 	RawURL string
 }
 
+type VersionGroup struct {
+	Version string
+	Archs   string
+}
+
 type PackageData struct {
 	Name                  string
 	Category              string
@@ -103,8 +108,9 @@ type PackageData struct {
 	Manifest              *Manifest
 	ManifestData          []ManifestEntryData
 	Files                 []FileData
-	HighestStableVersion  any
-	HighestTestingVersion any
+	HighestStableVersion  []VersionGroup
+	HighestTestingVersion []VersionGroup
+	SnapshotVersion       string
 	EbuildCount           int
 	DominantDescription   string
 	DominantHomepage      string
