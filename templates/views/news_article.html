@@ -4,6 +4,7 @@
     {{if .GlobalNewsItem}}
     <div class="news-meta">
         <span class="news-date">Posted: {{.GlobalNewsItem.Posted.Format "2006-01-02"}}</span>
+        {{if .GlobalNewsItem.RepoName}}<span class="news-repo"> in <a href="{{.BaseURL}}repos/{{.GlobalNewsItem.RepoName}}/">{{.GlobalNewsItem.RepoName}}</a></span>{{end}}
         {{if .GlobalNewsItem.Author}}<span class="news-author"> by {{.GlobalNewsItem.Author}}</span>{{end}}
         {{if .GlobalNewsItem.Revision}}<span class="news-revision"> | Revision: {{.GlobalNewsItem.Revision}}</span>{{end}}
         {{if or .GlobalNewsItem.NewsItemFormat .GlobalNewsItem.Translator .GlobalNewsItem.DisplayIfInstalled .GlobalNewsItem.DisplayIfKeyword .GlobalNewsItem.DisplayIfProfile}}
