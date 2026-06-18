@@ -103,6 +103,9 @@ func generateSearchData(outDir, outZip string, sites []*g2.SiteData, maxChunkSiz
 
 						licenseStr := ver.Ebuild.Vars["LICENSE"]
 						for _, l := range g2.ParseLicense(licenseStr) {
+							if l == "" {
+								continue
+							}
 							licenses = append(licenses, l)
 							if site.LicenseMapping != nil {
 								if aliases, ok := site.LicenseMapping[l]; ok {
