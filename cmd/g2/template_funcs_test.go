@@ -1,9 +1,9 @@
 package main
 
 import (
+	"github.com/arran4/g2"
 	"html/template"
 	"testing"
-	"github.com/arran4/g2"
 )
 
 func TestFormatKeywordsFunc(t *testing.T) {
@@ -116,7 +116,6 @@ func TestFormatDependencyFunc(t *testing.T) {
 	}
 }
 
-
 func TestResolveBreadcrumbsFunc(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -168,6 +167,16 @@ func TestResolveBreadcrumbsFunc(t *testing.T) {
 			},
 			expected: []g2.Breadcrumb{
 				{Name: "Home", Path: "", URL: "../../../"},
+			},
+		},
+		{
+			name:        "trailing slash bug",
+			currentPath: "/categories/app-admin/foo/",
+			crumbs: []g2.Breadcrumb{
+				{Name: "foo", Path: "/categories/app-admin/foo"},
+			},
+			expected: []g2.Breadcrumb{
+				{Name: "foo", Path: "/categories/app-admin/foo", URL: ""},
 			},
 		},
 	}

@@ -55,8 +55,8 @@ func pathRel(basePath, targetPath string) string {
 		return "."
 	}
 
-	basePath = strings.TrimPrefix(basePath, "/")
-	targetPath = strings.TrimPrefix(targetPath, "/")
+	basePath = strings.Trim(basePath, "/")
+	targetPath = strings.Trim(targetPath, "/")
 
 	baseParts := strings.Split(basePath, "/")
 	targetParts := strings.Split(targetPath, "/")
