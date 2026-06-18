@@ -51,6 +51,7 @@ type LicenseData struct {
 type Breadcrumb struct {
 	Name string
 	URL  string
+	Path string
 }
 
 type ProfileDescEntry struct {

@@ -43,10 +43,66 @@ func getTemplateFuncMap() template.FuncMap {
 			}
 			return 0
 		},
-		"formatDependency":  formatDependencyFunc,
-		"packageLink":       packageLinkFunc,
-		"formatPkgLinkBody": formatPkgLinkBodyFunc,
+		"formatDependency":   formatDependencyFunc,
+		"packageLink":        packageLinkFunc,
+		"formatPkgLinkBody":  formatPkgLinkBodyFunc,
+		"resolveBreadcrumbs": resolveBreadcrumbsFunc,
 	}
+}
+
+func pathRel(basePath, targetPath string) string {
+	if basePath == targetPath {
+		return "."
+	}
+
+	basePath = strings.TrimPrefix(basePath, "/")
+	targetPath = strings.TrimPrefix(targetPath, "/")
+
+	baseParts := strings.Split(basePath, "/")
+	targetParts := strings.Split(targetPath, "/")
+
+	if len(baseParts) == 1 && baseParts[0] == "" {
+		baseParts = nil
+	}
+	if len(targetParts) == 1 && targetParts[0] == "" {
+		targetParts = nil
+	}
+
+	i := 0
+	for i < len(baseParts) && i < len(targetParts) && baseParts[i] == targetParts[i] {
+		i++
+	}
+
+	var res []string
+	for j := i; j < len(baseParts); j++ {
+		res = append(res, "..")
+	}
+	for j := i; j < len(targetParts); j++ {
+		res = append(res, targetParts[j])
+	}
+
+	if len(res) == 0 {
+		return "."
+	}
+
+	return strings.Join(res, "/")
+}
+
+func resolveBreadcrumbsFunc(currentPath string, crumbs []g2.Breadcrumb) []g2.Breadcrumb {
+	var resolved []g2.Breadcrumb
+	for _, crumb := range crumbs {
+		urlStr := crumb.URL
+		if crumb.Path != "" {
+			rel := pathRel(currentPath, crumb.Path)
+			if rel == "." {
+				urlStr = "" // current page doesn't usually need a link
+			} else {
+				urlStr = rel + "/"
+			}
+		}
+		resolved = append(resolved, g2.Breadcrumb{Name: crumb.Name, URL: urlStr, Path: crumb.Path})
+	}
+	return resolved
 }
 
 var tmplPkgRegex = regexp.MustCompile(`&lt;pkg&gt;(.*?)&lt;/pkg&gt;`)
