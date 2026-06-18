@@ -102,16 +102,14 @@ func generateSearchData(outDir, outZip string, sites []*g2.SiteData, maxChunkSiz
 						urls = append(urls, strings.Fields(homepage)...)
 
 						licenseStr := ver.Ebuild.Vars["LICENSE"]
-						forEachToken(licenseStr, func(l string) {
-							if l != "||" && l != "(" && l != ")" && (len(l) == 0 || l[0] != '?') {
-								licenses = append(licenses, l)
-								if site.LicenseMapping != nil {
-									if aliases, ok := site.LicenseMapping[l]; ok {
-										licenses = append(licenses, aliases...)
-									}
+						for _, l := range g2.ParseLicense(licenseStr) {
+							licenses = append(licenses, l)
+							if site.LicenseMapping != nil {
+								if aliases, ok := site.LicenseMapping[l]; ok {
+									licenses = append(licenses, aliases...)
 								}
 							}
-						})
+						}
 
 						keywordStr := ver.Ebuild.Vars["KEYWORDS"]
 						forEachToken(keywordStr, func(kw string) {
