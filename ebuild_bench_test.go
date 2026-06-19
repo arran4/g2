@@ -54,3 +54,23 @@ func BenchmarkExtractPackageNameFromDep(b *testing.B) {
 		ExtractPackageNameFromDep(">=dev-lang/python-3.10.4-r1:0/3.10[sqlite,xml]")
 	}
 }
+
+func BenchmarkResolveVariables_WithVars(b *testing.B) {
+	vars := map[string]string{"A": "1", "B": "2"}
+	text := "Some ${A} and $B here"
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		ResolveVariables(text, vars)
+	}
+}
+
+func BenchmarkResolveVariables_Complex(b *testing.B) {
+	vars := map[string]string{"A": "1", "B": "2"}
+	text := "if [ -z \"$A\" ]; then echo \"empty\"; else echo \"$B\"; fi"
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		ResolveVariables(text, vars)
+	}
+}
