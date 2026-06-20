@@ -40,13 +40,7 @@
 <ul>
     {{range .License.Packages}}
     <li>
-        {{if eq (len .Repos) 1}}
-            {{$repo := ""}}
-            {{range $k, $v := .Repos}}{{$repo = $k}}{{end}}
-            <a href="{{$.BaseURL}}repos/{{$repo}}/categories/{{.Category}}/packages/{{.Name}}/">{{.Category}}/{{.Name}}::{{$repo}}</a>
-        {{else}}
-            <a href="{{$.BaseURL}}packages/{{.Category}}/{{.Name}}/">{{.Category}}/{{.Name}}</a>
-        {{end}}
+        <a href="{{$.BaseURL}}repos/{{$.Repo.RepoName}}/categories/{{.Category}}/packages/{{.Name}}/">{{.Category}}/{{.Name}}::{{$.Repo.RepoName}}</a>
     </li>
     {{end}}
 </ul>

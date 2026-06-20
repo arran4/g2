@@ -141,7 +141,9 @@
     {{else if gt .GlobalPackagesCount 0}}
     <li><a href="../../packages/">Packages (Global)</a></li>
     {{end}}
+    {{if or .Repo.AggLicenses .Repo.ProvidedLicenses}}
     <li><a href="licenses/">Licenses</a></li>
+    {{end}}
     {{if gt (len .Repo.Profiles) 0}}
     <li><a href="profiles/">Profiles</a></li>
     {{else if gt .GlobalProfilesCount 0}}

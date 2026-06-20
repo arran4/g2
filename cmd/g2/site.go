@@ -1120,8 +1120,8 @@ func getRepoLicenses(site *g2.SiteData, aggPackages map[string]*AggPackage) []*A
 							if !found {
 								if aggPkg, ok := aggPackages[pkgKey]; ok {
 									aggLicenses[lic].Packages = append(aggLicenses[lic].Packages, aggPkg)
+									aggLicenses[lic].Count++
 								}
-								aggLicenses[lic].Count++
 							}
 
 							if site.LicenseMapping != nil {
@@ -1154,6 +1154,7 @@ func getRepoLicenses(site *g2.SiteData, aggPackages map[string]*AggPackage) []*A
 	}
 	sort.Slice(sortedLicenses, func(i, j int) bool { return sortedLicenses[i].Name < sortedLicenses[j].Name })
 
+	site.AggLicenses = sortedLicenses
 	return sortedLicenses
 }
 

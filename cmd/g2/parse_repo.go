@@ -91,7 +91,7 @@ func parseRepoProfilesDir(sysFS fs.FS, repoDir string, site *g2.SiteData) {
 	licensesDir := filepath.Join(repoDir, "licenses")
 	if entries, err := fs.ReadDir(sysFS, filepath.ToSlash(licensesDir)); err == nil {
 		for _, entry := range entries {
-			if !entry.IsDir() {
+			if !entry.IsDir() && !strings.HasPrefix(entry.Name(), ".") {
 				site.ProvidedLicenses = append(site.ProvidedLicenses, entry.Name())
 			}
 		}

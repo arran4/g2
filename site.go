@@ -21,6 +21,7 @@ type SiteData struct {
 	LayoutConf        *LayoutConf
 	LicenseMapping    map[string][]string
 	ProvidedLicenses  []string
+	AggLicenses       interface{}
 	QAPolicy          *QAPolicy
 	UseDesc           *UseDesc
 	UseLocalDesc      *UseLocalDesc
