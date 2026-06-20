@@ -4,12 +4,12 @@ import (
 	"crypto/md5"
 	"crypto/sha1"
 	"crypto/sha256"
+	"crypto/sha3"
 	"crypto/sha512"
 	"fmt"
 	"golang.org/x/crypto/blake2b"
 	"golang.org/x/crypto/blake2s"
 	"golang.org/x/crypto/ripemd160" //nolint:staticcheck
-	"crypto/sha3"
 	"hash"
 	"io"
 	"log"

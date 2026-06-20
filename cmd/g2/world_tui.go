@@ -47,12 +47,12 @@ func runWorldTUI(path string, lines []string) error {
 
 		if cursor < scrollOffset {
 			scrollOffset = cursor
-		} else if cursor >= scrollOffset + listHeight {
+		} else if cursor >= scrollOffset+listHeight {
 			scrollOffset = cursor - listHeight + 1
 		}
 
 		for i, line := range lines {
-			if i < scrollOffset || i >= scrollOffset + listHeight {
+			if i < scrollOffset || i >= scrollOffset+listHeight {
 				continue
 			}
 			if i == cursor {

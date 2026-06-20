@@ -1213,6 +1213,46 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 						})
 						return
 					}
+
+				case "licenses":
+					repoLicenses := getRepoLicenses(site, s.PkgMap)
+
+					if len(parts) == 3 {
+						s.renderPageHTTP(w, "repo_licenses.html", map[string]interface{}{
+							"Title":        site.RepoName + " - Licenses",
+							"BaseURL":      baseURL,
+							"Breadcrumbs":  []g2.Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: site.RepoName, URL: "../"}, {Name: "Licenses"}},
+							"RepoLicenses": repoLicenses,
+							"Repo":         site,
+							"Version":      version,
+							"GenInfo":      s.GenInfo,
+						})
+						return
+					} else if len(parts) == 4 {
+						licNameSlug := parts[3]
+						var lic *AggLicense
+						for _, l := range repoLicenses {
+							if sanitizeFilename(l.Name) == licNameSlug {
+								lic = l
+								break
+							}
+						}
+						if lic == nil {
+							http.NotFound(w, r)
+							return
+						}
+
+						s.renderPageHTTP(w, "repo_license.html", map[string]interface{}{
+							"Title":       site.RepoName + " - License: " + lic.Name,
+							"BaseURL":     baseURL,
+							"Breadcrumbs": []g2.Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: site.RepoName, URL: "../../"}, {Name: "Licenses", URL: "../"}, {Name: lic.Name}},
+							"License":     lic,
+							"Repo":        site,
+							"Version":     version,
+							"GenInfo":     s.GenInfo,
+						})
+						return
+					}
 				}
 			}
 		}

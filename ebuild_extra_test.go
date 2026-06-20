@@ -27,4 +27,3 @@ func TestExtractPackageNameFromDep(t *testing.T) {
 		}
 	}
 }
-

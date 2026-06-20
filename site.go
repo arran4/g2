@@ -20,6 +20,7 @@ type SiteData struct {
 	News              []NewsItem
 	LayoutConf        *LayoutConf
 	LicenseMapping    map[string][]string
+	ProvidedLicenses  []string
 	QAPolicy          *QAPolicy
 	UseDesc           *UseDesc
 	UseLocalDesc      *UseLocalDesc

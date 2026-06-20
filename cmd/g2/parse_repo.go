@@ -88,6 +88,15 @@ func parseRepoProfilesDir(sysFS fs.FS, repoDir string, site *g2.SiteData) {
 		}
 	}
 
+	licensesDir := filepath.Join(repoDir, "licenses")
+	if entries, err := fs.ReadDir(sysFS, filepath.ToSlash(licensesDir)); err == nil {
+		for _, entry := range entries {
+			if !entry.IsDir() {
+				site.ProvidedLicenses = append(site.ProvidedLicenses, entry.Name())
+			}
+		}
+	}
+
 	if f, err := sysFS.Open(filepath.ToSlash(filepath.Join(repoDir, "profiles", "use.desc"))); err == nil {
 		defer func() { _ = f.Close() }()
 		if ud, err := g2.ParseUseDesc(f); err == nil {

@@ -1,5 +1,4 @@
-
-<h2>License: {{.License.Name}}</h2>
+<h2>License: {{.License.Name}} in {{.Repo.RepoName}}</h2>
 
 <div class="metadata-section">
     <h3>Search</h3>
@@ -37,7 +36,7 @@
 </ul>
 {{end}}
 
-<h3>Packages with this license</h3>
+<h3>Packages with this license in {{.Repo.RepoName}}</h3>
 <ul>
     {{range .License.Packages}}
     <li>

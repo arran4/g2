@@ -22,7 +22,7 @@ func getTemplateFuncMap() template.FuncMap {
 		"slugify":             sanitizeFilename,
 		"split":               strings.Split,
 		"formatKeywords":      formatKeywordsFunc,
-		"hasPrefix":           func(s, prefix any) bool {
+		"hasPrefix": func(s, prefix any) bool {
 			sStr, ok1 := s.(string)
 			pStr, ok2 := prefix.(string)
 			if ok1 && ok2 {
@@ -30,9 +30,9 @@ func getTemplateFuncMap() template.FuncMap {
 			}
 			return false
 		},
-		"groupIUSEFlags":      groupIUSEFlagsFunc,
-		"isLikelyMasked":      isLikelyMaskedFunc,
-		"isPkgLikelyMasked":   isPkgLikelyMaskedFunc,
+		"groupIUSEFlags":    groupIUSEFlagsFunc,
+		"isLikelyMasked":    isLikelyMaskedFunc,
+		"isPkgLikelyMasked": isPkgLikelyMaskedFunc,
 		"len_or_zero": func(v any) int {
 			if v == nil {
 				return 0
