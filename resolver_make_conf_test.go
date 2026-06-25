@@ -13,12 +13,12 @@ func TestParseMakeConf(t *testing.T) {
 
 	err := os.Mkdir(confDDir, 0755)
 	if err != nil {
-	    t.Fatal(err)
+		t.Fatal(err)
 	}
 
 	err = os.WriteFile(filepath.Join(confDDir, "01-custom.conf"), []byte(`VAR4="sourced"`), 0644)
 	if err != nil {
-	    t.Fatal(err)
+		t.Fatal(err)
 	}
 
 	err = os.WriteFile(confPath, []byte(`
@@ -35,7 +35,7 @@ ARR=(a b c)
 ARR2=(1 2)
 ARR2+=(3)
 
-source "` + filepath.Join(confDDir, "01-custom.conf") + `"
+source "`+filepath.Join(confDDir, "01-custom.conf")+`"
 	`), 0644)
 	if err != nil {
 		t.Fatal(err)
@@ -51,18 +51,18 @@ source "` + filepath.Join(confDDir, "01-custom.conf") + `"
 	}
 
 	if vars["USE"] != "foo bar baz" {
-	    t.Errorf("Unexpected USE: %q", vars["USE"])
+		t.Errorf("Unexpected USE: %q", vars["USE"])
 	}
 
 	if vars["ARR"] != "a b c" {
-	    t.Errorf("Unexpected ARR: %q", vars["ARR"])
+		t.Errorf("Unexpected ARR: %q", vars["ARR"])
 	}
 
 	if vars["ARR2"] != "1 2 3" {
-	    t.Errorf("Unexpected ARR2: %q", vars["ARR2"])
+		t.Errorf("Unexpected ARR2: %q", vars["ARR2"])
 	}
 
 	if vars["VAR4"] != "sourced" {
-	    t.Errorf("Unexpected VAR4 (source failed?): %q", vars["VAR4"])
+		t.Errorf("Unexpected VAR4 (source failed?): %q", vars["VAR4"])
 	}
 }

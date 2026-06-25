@@ -7,16 +7,16 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"log"
 	"net/http"
 	"net/url"
 	"strings"
-	"log"
 	"sync"
 
-	"github.com/go-git/go-git/v5"
-	"github.com/go-git/go-git/v5/storage/memory"
 	"github.com/go-git/go-billy/v5"
 	"github.com/go-git/go-billy/v5/memfs"
+	"github.com/go-git/go-git/v5"
+	"github.com/go-git/go-git/v5/storage/memory"
 )
 
 func getZipUrl(gitUrl string) string {
@@ -99,8 +99,8 @@ type billyFS struct {
 }
 
 type billyFile struct {
-	bf billy.File
-	fs billy.Filesystem
+	bf   billy.File
+	fs   billy.Filesystem
 	name string
 }
 
@@ -130,11 +130,11 @@ func (f *billyFile) Close() error {
 type billyDirEntry struct {
 	info fs.FileInfo
 }
-func (b *billyDirEntry) Name() string { return b.info.Name() }
-func (b *billyDirEntry) IsDir() bool { return b.info.IsDir() }
-func (b *billyDirEntry) Type() fs.FileMode { return b.info.Mode().Type() }
-func (b *billyDirEntry) Info() (fs.FileInfo, error) { return b.info, nil }
 
+func (b *billyDirEntry) Name() string               { return b.info.Name() }
+func (b *billyDirEntry) IsDir() bool                { return b.info.IsDir() }
+func (b *billyDirEntry) Type() fs.FileMode          { return b.info.Mode().Type() }
+func (b *billyDirEntry) Info() (fs.FileInfo, error) { return b.info, nil }
 
 func (b *billyFS) ReadDir(name string) ([]fs.DirEntry, error) {
 	if !fs.ValidPath(name) {
@@ -152,12 +152,11 @@ func (b *billyFS) ReadDir(name string) ([]fs.DirEntry, error) {
 	return entries, nil
 }
 
-
 func tryFetchGitFS(ctx context.Context, gitUrl string) (fs.FS, error) {
 	st := memory.NewStorage()
 	bfs := memfs.New()
 	_, err := git.CloneContext(ctx, st, bfs, &git.CloneOptions{
-		URL: gitUrl,
+		URL:   gitUrl,
 		Depth: 1,
 	})
 	if err != nil {
@@ -167,9 +166,9 @@ func tryFetchGitFS(ctx context.Context, gitUrl string) (fs.FS, error) {
 }
 
 type MemoryManager struct {
-	mu sync.Mutex
-	cond *sync.Cond
-	reserved uint64
+	mu          sync.Mutex
+	cond        *sync.Cond
+	reserved    uint64
 	activeTasks int
 }
 

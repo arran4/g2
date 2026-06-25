@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"strings"
 	"path/filepath"
 	"reflect"
+	"strings"
 
 	"mvdan.cc/sh/v3/interp"
 	"mvdan.cc/sh/v3/syntax"
@@ -61,7 +61,7 @@ func ParseMakeConfContent(content, filename string) (map[string]string, error) {
 
 			// Exclude typical bash built-in variables we don't care about
 			if name == "PWD" || name == "OLDPWD" || name == "SHLVL" || name == "IFS" || name == "OPTIND" || name == "PS4" {
-			    continue
+				continue
 			}
 
 			script := fmt.Sprintf(`echo "${%s[@]}"`, name)
@@ -71,7 +71,7 @@ func ParseMakeConfContent(content, filename string) (map[string]string, error) {
 
 			val := strings.TrimSuffix(outBuf.String(), "\n")
 			if val != "" {
-			    vars[name] = val
+				vars[name] = val
 			}
 		}
 	}

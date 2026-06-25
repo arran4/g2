@@ -1,7 +1,6 @@
-
-<h2>All Licenses</h2>
+<h2>All Licenses for {{.Repo.RepoName}}</h2>
 <ul>
-    {{range .Licenses}}
+    {{range .RepoLicenses}}
     <li>
         <a href="{{slugify .Name}}/">{{.Name}}</a> ({{.Count}} packages)
         <br><small>Provided in {{len .ProvidedByRepos}} overlays, Used in {{len .UsedByRepos}} overlays.</small>

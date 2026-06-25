@@ -20,6 +20,8 @@ type SiteData struct {
 	News              []NewsItem
 	LayoutConf        *LayoutConf
 	LicenseMapping    map[string][]string
+	ProvidedLicenses  []string
+	AggLicenses       any // To break cycle, keep CLI specific type as any or redefine
 	QAPolicy          *QAPolicy
 	UseDesc           *UseDesc
 	UseLocalDesc      *UseLocalDesc

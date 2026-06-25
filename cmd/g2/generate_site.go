@@ -630,6 +630,10 @@ func generateRepoPages(outDir string, tmpl *template.Template, sites []*g2.SiteD
 				return err
 			}
 
+			if err := generateRepoLicensesPages(repoDir, tmpl, site, data, title, version, genInfo); err != nil {
+				return err
+			}
+
 			if err := generateRepoDeprecatedMaskedInfoPages(repoDir, tmpl, site, title); err != nil {
 				return err
 			}
@@ -734,6 +738,55 @@ func generateRepoUseFlagsPages(repoDir string, tmpl *template.Template, site *g2
 				GlobalUseFlag: f,
 				Version:       version,
 				GenInfo:       genInfo,
+			}); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func generateRepoLicensesPages(repoDir string, tmpl *template.Template, site *g2.SiteData, data *AggregatedData, title, version string, genInfo GenerationInfo) error {
+	aggPackagesMap := make(map[string]*AggPackage)
+	for _, p := range data.Packages {
+		aggPackagesMap[p.Category+"/"+p.Name] = p
+	}
+	repoLicenses := getRepoLicenses(site, aggPackagesMap)
+
+	if len(repoLicenses) > 0 {
+		if err := os.MkdirAll(filepath.Join(repoDir, "licenses"), 0755); err != nil {
+			return fmt.Errorf("creating directory: %w", err)
+		}
+		if err := renderPage(filepath.Join(repoDir, "licenses", "index.html"), tmpl, "repo_licenses.html", GenericPageContext{
+			Title:        site.RepoName + " - Licenses",
+			BaseURL:      "../../../",
+			Breadcrumbs:  []g2.Breadcrumb{{Name: title, URL: "../../../"}, {Name: site.RepoName, URL: "../"}, {Name: "Licenses"}},
+			Repo:         site,
+			RepoLicenses: repoLicenses,
+			Version:      version,
+			GenInfo:      genInfo,
+		}); err != nil {
+			return fmt.Errorf("rendering page: %w", err)
+		}
+
+		for _, lic := range repoLicenses {
+			safeName := sanitizeFilename(lic.Name)
+			if safeName == "" {
+				continue
+			}
+			licDir := filepath.Join(repoDir, "licenses", safeName)
+			if err := os.MkdirAll(licDir, 0755); err != nil {
+				return fmt.Errorf("creating directory %s: %w", licDir, err)
+			}
+
+			if err := renderPage(filepath.Join(licDir, "index.html"), tmpl, "repo_license.html", GenericPageContext{
+				Title:       site.RepoName + " - License: " + lic.Name,
+				BaseURL:     "../../../../",
+				Breadcrumbs: []g2.Breadcrumb{{Name: title, URL: "../../../../"}, {Name: site.RepoName, URL: "../../"}, {Name: "Licenses", URL: "../"}, {Name: lic.Name}},
+				License:     lic,
+				Repo:        site,
+				Version:     version,
+				GenInfo:     genInfo,
 			}); err != nil {
 				return err
 			}

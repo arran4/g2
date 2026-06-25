@@ -297,7 +297,6 @@ func (cfg *MainArgConfig) cmdOverlays(args []string) error {
 	useZip := fs.Bool("use-zip", false, "Download zip archives instead of git clone when supported")
 	smartMode := fs.Bool("smart-mode", true, "Use smart mode for parsing repositories in memory without disk access")
 
-
 	concurrency := fs.Int("concurrency", 4, "Maximum number of concurrent repository fetches/parses")
 	retries := fs.Int("retries", 3, "Number of times to retry fetching a repository")
 	continueOnError := fs.Bool("continue-on-error", true, "Continue parsing other repositories even if fetching one fails")
@@ -995,11 +994,13 @@ type AggProject struct {
 }
 
 type AggLicense struct {
-	Name     string
-	Count    int
-	Packages []*AggPackage
-	Text     string
-	Aliases  []string
+	Name            string
+	Count           int
+	Packages        []*AggPackage
+	Text            string
+	Aliases         []string
+	ProvidedByRepos map[string]*g2.SiteData
+	UsedByRepos     map[string]*g2.SiteData
 }
 
 type AggUseFlag struct {
@@ -1070,6 +1071,91 @@ func getRepoEclasses(site *g2.SiteData, aggPackages map[string]*AggPackage) []*A
 	sort.Slice(sortedEclasses, func(i, j int) bool { return sortedEclasses[i].Name < sortedEclasses[j].Name })
 
 	return sortedEclasses
+}
+
+func getRepoLicenses(site *g2.SiteData, aggPackages map[string]*AggPackage) []*AggLicense {
+	aggLicenses := make(map[string]*AggLicense)
+
+	for _, providedLic := range site.ProvidedLicenses {
+		if _, ok := aggLicenses[providedLic]; !ok {
+			aggLicenses[providedLic] = &AggLicense{
+				Name:            providedLic,
+				ProvidedByRepos: map[string]*g2.SiteData{site.RepoName: site},
+				UsedByRepos:     make(map[string]*g2.SiteData),
+			}
+		}
+	}
+
+	for _, cat := range site.Categories {
+		for _, pkg := range cat.Packages {
+			pkgKey := pkg.Category + "/" + pkg.Name
+
+			for _, ver := range pkg.Versions {
+				if ver.Ebuild != nil && ver.Ebuild.Vars != nil {
+					licenseStr := ver.Ebuild.Vars["LICENSE"]
+					licenses := g2.ParseLicense(licenseStr)
+
+					for _, lic := range licenses {
+						if lic != "" {
+							if !isValidLicense(lic) {
+								continue
+							}
+							if _, ok := aggLicenses[lic]; !ok {
+								aggLicenses[lic] = &AggLicense{
+									Name:            lic,
+									ProvidedByRepos: make(map[string]*g2.SiteData),
+									UsedByRepos:     make(map[string]*g2.SiteData),
+								}
+							}
+
+							aggLicenses[lic].UsedByRepos[site.RepoName] = site
+
+							found := false
+							for _, p := range aggLicenses[lic].Packages {
+								if p.Name == pkg.Name && p.Category == pkg.Category {
+									found = true
+									break
+								}
+							}
+							if !found {
+								if aggPkg, ok := aggPackages[pkgKey]; ok {
+									aggLicenses[lic].Packages = append(aggLicenses[lic].Packages, aggPkg)
+									aggLicenses[lic].Count++
+								}
+							}
+
+							if site.LicenseMapping != nil {
+								if aliases, ok := site.LicenseMapping[lic]; ok {
+									for _, alias := range aliases {
+										hasAlias := false
+										for _, existing := range aggLicenses[lic].Aliases {
+											if existing == alias {
+												hasAlias = true
+												break
+											}
+										}
+										if !hasAlias {
+											aggLicenses[lic].Aliases = append(aggLicenses[lic].Aliases, alias)
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	var sortedLicenses []*AggLicense
+	for _, l := range aggLicenses {
+		sort.Strings(l.Aliases)
+		sortedLicenses = append(sortedLicenses, l)
+	}
+	sort.Slice(sortedLicenses, func(i, j int) bool { return sortedLicenses[i].Name < sortedLicenses[j].Name })
+
+	site.AggLicenses = sortedLicenses
+	return sortedLicenses
 }
 
 func getRepoUseFlags(site *g2.SiteData, aggPackages map[string]*AggPackage) []*AggUseFlag {
@@ -1531,6 +1617,17 @@ func aggregatePackagesAndCategories(sites []*g2.SiteData, aggProjects map[string
 	catPkgMap := make(map[string]map[string]*AggPackage)
 
 	for _, site := range sites {
+		for _, providedLic := range site.ProvidedLicenses {
+			if _, ok := aggLicenses[providedLic]; !ok {
+				aggLicenses[providedLic] = &AggLicense{
+					Name:            providedLic,
+					ProvidedByRepos: make(map[string]*g2.SiteData),
+					UsedByRepos:     make(map[string]*g2.SiteData),
+				}
+			}
+			aggLicenses[providedLic].ProvidedByRepos[site.RepoName] = site
+		}
+
 		for _, cat := range site.Categories {
 			if _, ok := aggCategories[cat.Name]; !ok {
 				aggCategories[cat.Name] = &AggCategory{Name: cat.Name}
@@ -1610,8 +1707,14 @@ func aggregatePackagesAndCategories(sites []*g2.SiteData, aggProjects map[string
 									continue
 								}
 								if _, ok := aggLicenses[lic]; !ok {
-									aggLicenses[lic] = &AggLicense{Name: lic}
+									aggLicenses[lic] = &AggLicense{
+										Name:            lic,
+										ProvidedByRepos: make(map[string]*g2.SiteData),
+										UsedByRepos:     make(map[string]*g2.SiteData),
+									}
 								}
+
+								aggLicenses[lic].UsedByRepos[site.RepoName] = site
 
 								found := false
 								for _, p := range aggLicenses[lic].Packages {
@@ -1947,7 +2050,7 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, 
 	var totalPackages int
 	var totalPackageVersions int
 
-limit := concurrency
+	limit := concurrency
 	if limit <= 0 {
 		limit = 10
 	}
