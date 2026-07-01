@@ -1,4 +1,3 @@
-
 <h2>Category: {{if .GlobalCategory}}{{.GlobalCategory.Name}}{{else if .RepoCategory}}{{.RepoCategory.Name}}{{else}}{{.Category.Name}}{{end}}</h2>
 
 <div class="metadata-section">
@@ -35,14 +34,16 @@
 <ul id="package-list" style="clear: both;">
     {{if .GlobalCategory}}
     {{range .Category.Packages}}
+        {{$pkgName := .Name}}
+        {{$catName := $.GlobalCategory.Name}}
         <li>
             {{if eq (len .ReposList) 1}}
                 {{$repo := index .ReposList 0}}
-                <a href="{{$.BaseURL}}repos/{{$repo.RepoName}}/categories/{{$.GlobalCategory.Name}}/packages/{{.Name}}/">{{.Name}}</a>
+                <a href="{{$.BaseURL}}repos/{{$repo.RepoName}}/categories/{{$catName}}/packages/{{$pkgName}}/">{{formatQualifiedPackage $catName $pkgName "" $repo.RepoName}}</a>
             {{else}}
-                <a href="{{$.BaseURL}}packages/{{$.GlobalCategory.Name}}/{{.Name}}/">{{.Name}}</a> (ambiguous, available in {{len .ReposList}} overlays)
+                <a href="{{$.BaseURL}}packages/{{$catName}}/{{$pkgName}}/">{{.Name}}</a> (available in: {{range $i, $repo := .ReposList}}{{if $i}}, {{end}}<a href="{{$.BaseURL}}repos/{{$repo.RepoName}}/categories/{{$catName}}/packages/{{$pkgName}}/">{{formatQualifiedPackage $catName $pkgName "" $repo.RepoName}}</a>{{end}})
             {{end}}
-            {{$pkgName := .Name}}- Ebuilds: {{.EbuildCount}}{{if .HighestStableVersion}}, Stable: {{range $i, $v := .HighestStableVersion}}{{if $i}}, {{end}}<span title="{{$v.Archs}}">{{if $.GlobalCategory}}<a href="{{$.BaseURL}}packages/{{$.GlobalCategory.Name}}/{{$pkgName}}/ebuild/{{$v.Version}}/">{{$v.Version}}</a>{{else if $.RepoCategory}}<a href="{{$.BaseURL}}repos/{{$.Repo.RepoName}}/categories/{{$.RepoCategory.Name}}/packages/{{$pkgName}}/ebuild/{{$v.Version}}/">{{$v.Version}}</a>{{else}}<a href="{{$.BaseURL}}packages/{{$.Category.Name}}/{{$pkgName}}/ebuild/{{$v.Version}}/">{{$v.Version}}</a>{{end}}</span>{{end}}{{end}}{{if .HighestTestingVersion}}, Testing: {{range $i, $v := .HighestTestingVersion}}{{if $i}}, {{end}}<span title="{{$v.Archs}}">{{if $.GlobalCategory}}<a href="{{$.BaseURL}}packages/{{$.GlobalCategory.Name}}/{{$pkgName}}/ebuild/{{$v.Version}}/">{{$v.Version}}</a>{{else if $.RepoCategory}}<a href="{{$.BaseURL}}repos/{{$.Repo.RepoName}}/categories/{{$.RepoCategory.Name}}/packages/{{$pkgName}}/ebuild/{{$v.Version}}/">{{$v.Version}}</a>{{else}}<a href="{{$.BaseURL}}packages/{{$.Category.Name}}/{{$pkgName}}/ebuild/{{$v.Version}}/">{{$v.Version}}</a>{{end}}</span>{{end}}{{end}}{{if .SnapshotVersion}}, Snapshot: {{if $.GlobalCategory}}<a href="{{$.BaseURL}}packages/{{$.GlobalCategory.Name}}/{{$pkgName}}/ebuild/{{.SnapshotVersion}}/">{{.SnapshotVersion}}</a>{{else if $.RepoCategory}}<a href="{{$.BaseURL}}repos/{{$.Repo.RepoName}}/categories/{{$.RepoCategory.Name}}/packages/{{$pkgName}}/ebuild/{{.SnapshotVersion}}/">{{.SnapshotVersion}}</a>{{else}}<a href="{{$.BaseURL}}packages/{{$.Category.Name}}/{{$pkgName}}/ebuild/{{.SnapshotVersion}}/">{{.SnapshotVersion}}</a>{{end}}{{end}}
+            - Ebuilds: {{.EbuildCount}}{{if .HighestStableVersion}}, Stable: {{range $i, $v := .HighestStableVersion}}{{if $i}}, {{end}}<span title="{{$v.Archs}}"><a href="{{$.BaseURL}}packages/{{$catName}}/{{$pkgName}}/ebuild/{{$v.Version}}/">{{$v.Version}}</a></span>{{end}}{{end}}{{if .HighestTestingVersion}}, Testing: {{range $i, $v := .HighestTestingVersion}}{{if $i}}, {{end}}<span title="{{$v.Archs}}"><a href="{{$.BaseURL}}packages/{{$catName}}/{{$pkgName}}/ebuild/{{$v.Version}}/">{{$v.Version}}</a></span>{{end}}{{end}}{{if .SnapshotVersion}}, Snapshot: <a href="{{$.BaseURL}}packages/{{$catName}}/{{$pkgName}}/ebuild/{{.SnapshotVersion}}/">{{.SnapshotVersion}}</a>{{end}}
             {{if .ReverseVirtuals}}
             <span class="badge" style="background-color: #17a2b8; color: white; padding: 2px 5px; border-radius: 3px; font-size: 0.8em;">Virtual</span>
             {{end}}
@@ -55,9 +56,11 @@
     {{end}}
     {{else if .RepoCategory}}
     {{range .RepoCategory.Packages}}
+        {{$pkgName := .Name}}
+        {{$catName := $.RepoCategory.Name}}
         <li>
-            <a href="{{$.BaseURL}}repos/{{$.Repo.RepoName}}/categories/{{$.RepoCategory.Name}}/packages/{{.Name}}/">{{.Name}}</a>
-            {{$pkgName := .Name}}- Ebuilds: {{.EbuildCount}}{{if .HighestStableVersion}}, Stable: {{range $i, $v := .HighestStableVersion}}{{if $i}}, {{end}}<span title="{{$v.Archs}}">{{if $.GlobalCategory}}<a href="{{$.BaseURL}}packages/{{$.GlobalCategory.Name}}/{{$pkgName}}/ebuild/{{$v.Version}}/">{{$v.Version}}</a>{{else if $.RepoCategory}}<a href="{{$.BaseURL}}repos/{{$.Repo.RepoName}}/categories/{{$.RepoCategory.Name}}/packages/{{$pkgName}}/ebuild/{{$v.Version}}/">{{$v.Version}}</a>{{else}}<a href="{{$.BaseURL}}packages/{{$.Category.Name}}/{{$pkgName}}/ebuild/{{$v.Version}}/">{{$v.Version}}</a>{{end}}</span>{{end}}{{end}}{{if .HighestTestingVersion}}, Testing: {{range $i, $v := .HighestTestingVersion}}{{if $i}}, {{end}}<span title="{{$v.Archs}}">{{if $.GlobalCategory}}<a href="{{$.BaseURL}}packages/{{$.GlobalCategory.Name}}/{{$pkgName}}/ebuild/{{$v.Version}}/">{{$v.Version}}</a>{{else if $.RepoCategory}}<a href="{{$.BaseURL}}repos/{{$.Repo.RepoName}}/categories/{{$.RepoCategory.Name}}/packages/{{$pkgName}}/ebuild/{{$v.Version}}/">{{$v.Version}}</a>{{else}}<a href="{{$.BaseURL}}packages/{{$.Category.Name}}/{{$pkgName}}/ebuild/{{$v.Version}}/">{{$v.Version}}</a>{{end}}</span>{{end}}{{end}}{{if .SnapshotVersion}}, Snapshot: {{if $.GlobalCategory}}<a href="{{$.BaseURL}}packages/{{$.GlobalCategory.Name}}/{{$pkgName}}/ebuild/{{.SnapshotVersion}}/">{{.SnapshotVersion}}</a>{{else if $.RepoCategory}}<a href="{{$.BaseURL}}repos/{{$.Repo.RepoName}}/categories/{{$.RepoCategory.Name}}/packages/{{$pkgName}}/ebuild/{{.SnapshotVersion}}/">{{.SnapshotVersion}}</a>{{else}}<a href="{{$.BaseURL}}packages/{{$.Category.Name}}/{{$pkgName}}/ebuild/{{.SnapshotVersion}}/">{{.SnapshotVersion}}</a>{{end}}{{end}}
+            <a href="{{$.BaseURL}}repos/{{$.Repo.RepoName}}/categories/{{$catName}}/packages/{{$pkgName}}/">{{formatQualifiedPackage $catName $pkgName "" $.Repo.RepoName}}</a>
+            - Ebuilds: {{.EbuildCount}}{{if .HighestStableVersion}}, Stable: {{range $i, $v := .HighestStableVersion}}{{if $i}}, {{end}}<span title="{{$v.Archs}}"><a href="{{$.BaseURL}}repos/{{$.Repo.RepoName}}/categories/{{$catName}}/packages/{{$pkgName}}/ebuild/{{$v.Version}}/">{{$v.Version}}</a></span>{{end}}{{end}}{{if .HighestTestingVersion}}, Testing: {{range $i, $v := .HighestTestingVersion}}{{if $i}}, {{end}}<span title="{{$v.Archs}}"><a href="{{$.BaseURL}}repos/{{$.Repo.RepoName}}/categories/{{$catName}}/packages/{{$pkgName}}/ebuild/{{$v.Version}}/">{{$v.Version}}</a></span>{{end}}{{end}}{{if .SnapshotVersion}}, Snapshot: <a href="{{$.BaseURL}}repos/{{$.Repo.RepoName}}/categories/{{$catName}}/packages/{{$pkgName}}/ebuild/{{.SnapshotVersion}}/">{{.SnapshotVersion}}</a>{{end}}
             {{if .ReverseVirtuals}}
             <span class="badge" style="background-color: #17a2b8; color: white; padding: 2px 5px; border-radius: 3px; font-size: 0.8em;">Virtual</span>
             {{end}}
@@ -70,14 +73,16 @@
     {{end}}
     {{else}}
     {{range .Category.Packages}}
+        {{$pkgName := .Name}}
+        {{$catName := $.Category.Name}}
         <li>
             {{if eq (len .ReposList) 1}}
                 {{$repo := index .ReposList 0}}
-                <a href="{{$.BaseURL}}repos/{{$repo.RepoName}}/categories/{{$.Category.Name}}/packages/{{.Name}}/">{{.Name}}</a>
+                <a href="{{$.BaseURL}}repos/{{$repo.RepoName}}/categories/{{$catName}}/packages/{{$pkgName}}/">{{formatQualifiedPackage $catName $pkgName "" $repo.RepoName}}</a>
             {{else}}
-                <a href="{{$.BaseURL}}packages/{{$.Category.Name}}/{{.Name}}/">{{.Name}}</a> (ambiguous, available in {{len .ReposList}} overlays)
+                <a href="{{$.BaseURL}}packages/{{$catName}}/{{$pkgName}}/">{{.Name}}</a> (available in: {{range $i, $repo := .ReposList}}{{if $i}}, {{end}}<a href="{{$.BaseURL}}repos/{{$repo.RepoName}}/categories/{{$catName}}/packages/{{$pkgName}}/">{{formatQualifiedPackage $catName $pkgName "" $repo.RepoName}}</a>{{end}})
             {{end}}
-            {{$pkgName := .Name}}- Ebuilds: {{.EbuildCount}}{{if .HighestStableVersion}}, Stable: {{range $i, $v := .HighestStableVersion}}{{if $i}}, {{end}}<span title="{{$v.Archs}}">{{if $.GlobalCategory}}<a href="{{$.BaseURL}}packages/{{$.GlobalCategory.Name}}/{{$pkgName}}/ebuild/{{$v.Version}}/">{{$v.Version}}</a>{{else if $.RepoCategory}}<a href="{{$.BaseURL}}repos/{{$.Repo.RepoName}}/categories/{{$.RepoCategory.Name}}/packages/{{$pkgName}}/ebuild/{{$v.Version}}/">{{$v.Version}}</a>{{else}}<a href="{{$.BaseURL}}packages/{{$.Category.Name}}/{{$pkgName}}/ebuild/{{$v.Version}}/">{{$v.Version}}</a>{{end}}</span>{{end}}{{end}}{{if .HighestTestingVersion}}, Testing: {{range $i, $v := .HighestTestingVersion}}{{if $i}}, {{end}}<span title="{{$v.Archs}}">{{if $.GlobalCategory}}<a href="{{$.BaseURL}}packages/{{$.GlobalCategory.Name}}/{{$pkgName}}/ebuild/{{$v.Version}}/">{{$v.Version}}</a>{{else if $.RepoCategory}}<a href="{{$.BaseURL}}repos/{{$.Repo.RepoName}}/categories/{{$.RepoCategory.Name}}/packages/{{$pkgName}}/ebuild/{{$v.Version}}/">{{$v.Version}}</a>{{else}}<a href="{{$.BaseURL}}packages/{{$.Category.Name}}/{{$pkgName}}/ebuild/{{$v.Version}}/">{{$v.Version}}</a>{{end}}</span>{{end}}{{end}}{{if .SnapshotVersion}}, Snapshot: {{if $.GlobalCategory}}<a href="{{$.BaseURL}}packages/{{$.GlobalCategory.Name}}/{{$pkgName}}/ebuild/{{.SnapshotVersion}}/">{{.SnapshotVersion}}</a>{{else if $.RepoCategory}}<a href="{{$.BaseURL}}repos/{{$.Repo.RepoName}}/categories/{{$.RepoCategory.Name}}/packages/{{$pkgName}}/ebuild/{{.SnapshotVersion}}/">{{.SnapshotVersion}}</a>{{else}}<a href="{{$.BaseURL}}packages/{{$.Category.Name}}/{{$pkgName}}/ebuild/{{.SnapshotVersion}}/">{{.SnapshotVersion}}</a>{{end}}{{end}}
+            - Ebuilds: {{.EbuildCount}}{{if .HighestStableVersion}}, Stable: {{range $i, $v := .HighestStableVersion}}{{if $i}}, {{end}}<span title="{{$v.Archs}}"><a href="{{$.BaseURL}}packages/{{$catName}}/{{$pkgName}}/ebuild/{{$v.Version}}/">{{$v.Version}}</a></span>{{end}}{{end}}{{if .HighestTestingVersion}}, Testing: {{range $i, $v := .HighestTestingVersion}}{{if $i}}, {{end}}<span title="{{$v.Archs}}"><a href="{{$.BaseURL}}packages/{{$catName}}/{{$pkgName}}/ebuild/{{$v.Version}}/">{{$v.Version}}</a></span>{{end}}{{end}}{{if .SnapshotVersion}}, Snapshot: <a href="{{$.BaseURL}}packages/{{$catName}}/{{$pkgName}}/ebuild/{{.SnapshotVersion}}/">{{.SnapshotVersion}}</a>{{end}}
             {{if .ReverseVirtuals}}
             <span class="badge" style="background-color: #17a2b8; color: white; padding: 2px 5px; border-radius: 3px; font-size: 0.8em;">Virtual</span>
             {{end}}
