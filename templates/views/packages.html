@@ -11,12 +11,13 @@
             {{range .GlobalPackages}}
             {{$catName := .Category}}
             {{$pkgName := .Name}}
+            {{$baseURL := $.BaseURL}}
             <tr>
                 <td><a href="{{.Category}}/{{.Name}}/" class="fw-bold">{{.Category}}/{{.Name}}</a></td>
                 <td>
                     <div class="d-flex flex-wrap gap-1">
                         {{range .ReposList}}
-                            <a href="../repos/{{.RepoName}}/categories/{{$catName}}/packages/{{$pkgName}}/">{{formatQualifiedPackage $catName $pkgName "" .RepoName}}</a>
+                            <a href="{{$baseURL}}repos/{{.RepoName}}/categories/{{$catName}}/packages/{{$pkgName}}/">{{formatQualifiedPackage $catName $pkgName "" .RepoName}}</a>
                         {{end}}
                     </div>
                 </td>

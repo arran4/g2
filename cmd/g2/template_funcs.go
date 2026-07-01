@@ -358,8 +358,14 @@ func isPkgLikelyMaskedFunc(pkg any) bool {
 }
 
 func formatQualifiedPackageFunc(category, name, version, overlay string) string {
-	if version != "" {
-		return fmt.Sprintf("=%s/%s-%s::%s", category, name, version, overlay)
+	if overlay != "" {
+		if version != "" {
+			return fmt.Sprintf("=%s/%s-%s::%s", category, name, version, overlay)
+		}
+		return fmt.Sprintf("%s/%s::%s", category, name, overlay)
 	}
-	return fmt.Sprintf("%s/%s::%s", category, name, overlay)
+	if version != "" {
+		return fmt.Sprintf("=%s/%s-%s", category, name, version)
+	}
+	return fmt.Sprintf("%s/%s", category, name)
 }
