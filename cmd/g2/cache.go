@@ -181,10 +181,10 @@ func (cfg *MainArgConfig) cmdCacheGenerate(args []string) error {
 	}
 
 	cfs := NewOsCacheFS(*repoDir)
-	return doCacheGenerate(cfs, ".")
+	return doCacheGenerate(cfs, ".", fsFlags.Args())
 }
 
-func doCacheGenerate(cfs CacheFS, repoDir string) error {
+func doCacheGenerate(cfs CacheFS, repoDir string, targetPkgs []string) error {
 	layoutConfPath := filepath.ToSlash(filepath.Join(repoDir, "metadata", "layout.conf"))
 	var lc *g2.LayoutConf
 	if f, err := cfs.Open(layoutConfPath); err == nil {
@@ -208,6 +208,11 @@ func doCacheGenerate(cfs CacheFS, repoDir string) error {
 		return fmt.Errorf("parsing repo: %w", err)
 	}
 
+	targetMap := make(map[string]bool)
+	for _, p := range targetPkgs {
+		targetMap[p] = true
+	}
+
 	for _, format := range cacheFormats {
 		if format != "md5-dict" {
 			log.Printf("Warning: Cache format '%s' is not supported. Skipping. Only md5-dict is supported.", format)
@@ -218,6 +223,13 @@ func doCacheGenerate(cfs CacheFS, repoDir string) error {
 
 		for _, cat := range siteData.Categories {
 			for _, pkg := range cat.Packages {
+				if len(targetMap) > 0 {
+					qualified := pkg.Category + "/" + pkg.Name
+					if !targetMap[qualified] && !targetMap[pkg.Name] {
+						continue
+					}
+				}
+
 				cacheDir := filepath.ToSlash(filepath.Join(repoDir, "metadata", format, pkg.Category))
 				if err := cfs.MkdirAll(cacheDir, 0755); err != nil {
 					return fmt.Errorf("creating cache directory %s: %w", cacheDir, err)

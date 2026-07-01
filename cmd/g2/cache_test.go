@@ -141,7 +141,7 @@ func TestCacheCommands(t *testing.T) {
 			// The intent (generate, clean, verify) can be determined by the file name
 			baseName := path.Base(fixture)
 			if strings.Contains(baseName, "generate") {
-				err = doCacheGenerate(memFS, ".")
+				err = doCacheGenerate(memFS, ".", nil)
 				if err != nil {
 					t.Fatalf("run cache generate: %v", err)
 				}
