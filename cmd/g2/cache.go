@@ -66,7 +66,7 @@ func (cfg *MainArgConfig) cmdCache(args []string) error {
 		fmt.Printf("Usage:\n")
 		fmt.Printf("\t%s\n", strings.Join(cfg.Args, " "))
 		fmt.Printf("\t\t %s \t\t %s\n", "verify", "To verify cache exists for ebuilds")
-		fmt.Printf("\t\t %s \t\t %s\n", "generate", "To generate cache for ebuilds")
+		fmt.Printf("\t\t %s \t %s\n", "generate [packages...]", "To generate cache for ebuilds. Can optionally specify packages to generate.")
 		fmt.Printf("\t\t %s \t\t %s\n", "set-method", "To set the cache method in layout.conf")
 		fmt.Printf("\t\t %s \t\t %s\n", "list-methods", "To list available cache methods")
 		fmt.Printf("\t\t %s \t\t %s\n", "clean", "To clean up unused cache entries")
@@ -181,10 +181,10 @@ func (cfg *MainArgConfig) cmdCacheGenerate(args []string) error {
 	}
 
 	cfs := NewOsCacheFS(*repoDir)
-	return doCacheGenerate(cfs, ".")
+	return doCacheGenerate(cfs, ".", fsFlags.Args())
 }
 
-func doCacheGenerate(cfs CacheFS, repoDir string) error {
+func doCacheGenerate(cfs CacheFS, repoDir string, targetPkgs []string) error {
 	layoutConfPath := filepath.ToSlash(filepath.Join(repoDir, "metadata", "layout.conf"))
 	var lc *g2.LayoutConf
 	if f, err := cfs.Open(layoutConfPath); err == nil {
@@ -208,6 +208,14 @@ func doCacheGenerate(cfs CacheFS, repoDir string) error {
 		return fmt.Errorf("parsing repo: %w", err)
 	}
 
+	var targetMap map[string]bool
+	if len(targetPkgs) > 0 {
+		targetMap = make(map[string]bool, len(targetPkgs))
+		for _, p := range targetPkgs {
+			targetMap[p] = true
+		}
+	}
+
 	for _, format := range cacheFormats {
 		if format != "md5-dict" {
 			log.Printf("Warning: Cache format '%s' is not supported. Skipping. Only md5-dict is supported.", format)
@@ -218,6 +226,13 @@ func doCacheGenerate(cfs CacheFS, repoDir string) error {
 
 		for _, cat := range siteData.Categories {
 			for _, pkg := range cat.Packages {
+				if len(targetMap) > 0 {
+					qualified := pkg.Category + "/" + pkg.Name
+					if !targetMap[qualified] && !targetMap[pkg.Name] {
+						continue
+					}
+				}
+
 				cacheDir := filepath.ToSlash(filepath.Join(repoDir, "metadata", format, pkg.Category))
 				if err := cfs.MkdirAll(cacheDir, 0755); err != nil {
 					return fmt.Errorf("creating cache directory %s: %w", cacheDir, err)
