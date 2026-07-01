@@ -28,7 +28,7 @@
                 <td>
                     <ul class="list-unstyled mb-0">
                     {{range ($globalPkg.GetVersionsInRepo $repoName)}}
-                        <li>{{.Version}}</li>
+                        <li><a href="{{$baseURL}}repos/{{$repoName}}/categories/{{$catName}}/packages/{{$pkgName}}/ebuild/{{.Version}}/">{{formatQualifiedPackage $catName $pkgName .Version $repoName}}</a></li>
                     {{end}}
                     </ul>
                 </td>

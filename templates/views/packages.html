@@ -9,12 +9,15 @@
         </thead>
         <tbody>
             {{range .GlobalPackages}}
+            {{$catName := .Category}}
+            {{$pkgName := .Name}}
+            {{$baseURL := $.BaseURL}}
             <tr>
                 <td><a href="{{.Category}}/{{.Name}}/" class="fw-bold">{{.Category}}/{{.Name}}</a></td>
                 <td>
                     <div class="d-flex flex-wrap gap-1">
                         {{range .ReposList}}
-                            <span class="badge bg-light text-dark border">{{.RepoName}}</span>
+                            <a href="{{$baseURL}}repos/{{.RepoName}}/categories/{{$catName}}/packages/{{$pkgName}}/">{{formatQualifiedPackage $catName $pkgName "" .RepoName}}</a>
                         {{end}}
                     </div>
                 </td>

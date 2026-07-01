@@ -43,10 +43,11 @@ func getTemplateFuncMap() template.FuncMap {
 			}
 			return 0
 		},
-		"formatDependency":   formatDependencyFunc,
-		"packageLink":        packageLinkFunc,
-		"formatPkgLinkBody":  formatPkgLinkBodyFunc,
-		"resolveBreadcrumbs": resolveBreadcrumbsFunc,
+		"formatDependency":       formatDependencyFunc,
+		"packageLink":            packageLinkFunc,
+		"formatPkgLinkBody":      formatPkgLinkBodyFunc,
+		"formatQualifiedPackage": formatQualifiedPackageFunc,
+		"resolveBreadcrumbs":     resolveBreadcrumbsFunc,
 	}
 }
 
@@ -354,4 +355,17 @@ func isPkgLikelyMaskedFunc(pkg any) bool {
 	}
 
 	return false
+}
+
+func formatQualifiedPackageFunc(category, name, version, overlay string) string {
+	if overlay != "" {
+		if version != "" {
+			return fmt.Sprintf("=%s/%s-%s::%s", category, name, version, overlay)
+		}
+		return fmt.Sprintf("%s/%s::%s", category, name, overlay)
+	}
+	if version != "" {
+		return fmt.Sprintf("=%s/%s-%s", category, name, version)
+	}
+	return fmt.Sprintf("%s/%s", category, name)
 }
