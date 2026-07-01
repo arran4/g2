@@ -208,9 +208,12 @@ func doCacheGenerate(cfs CacheFS, repoDir string, targetPkgs []string) error {
 		return fmt.Errorf("parsing repo: %w", err)
 	}
 
-	targetMap := make(map[string]bool)
-	for _, p := range targetPkgs {
-		targetMap[p] = true
+	var targetMap map[string]bool
+	if len(targetPkgs) > 0 {
+		targetMap = make(map[string]bool, len(targetPkgs))
+		for _, p := range targetPkgs {
+			targetMap[p] = true
+		}
 	}
 
 	for _, format := range cacheFormats {
