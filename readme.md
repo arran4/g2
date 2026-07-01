@@ -320,7 +320,7 @@ g2 cache <subcommand>
 **Subcommands:**
 
 * `verify [location]`: Verify cache exists for ebuilds.
-* `generate [location]`: Generate cache for ebuilds.
+* `generate [target-packages...]`: Generate cache for ebuilds. Optionally specify package atoms to only generate cache for them.
 * `set-method <method>`: Set the cache method in `layout.conf`.
 * `list-methods`: List available cache methods.
 * `clean [location]`: Clean up unused cache entries.
@@ -329,7 +329,12 @@ g2 cache <subcommand>
 
 Generate the ebuild cache for the current overlay:
 ```bash
-g2 cache generate .
+g2 cache generate
+```
+
+Generate the ebuild cache for specific packages:
+```bash
+g2 cache generate app-admin/sudoers-emerge app-test/app
 ```
 
 ### `pkg-desc-index`

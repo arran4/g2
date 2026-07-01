@@ -66,7 +66,7 @@ func (cfg *MainArgConfig) cmdCache(args []string) error {
 		fmt.Printf("Usage:\n")
 		fmt.Printf("\t%s\n", strings.Join(cfg.Args, " "))
 		fmt.Printf("\t\t %s \t\t %s\n", "verify", "To verify cache exists for ebuilds")
-		fmt.Printf("\t\t %s \t\t %s\n", "generate", "To generate cache for ebuilds")
+		fmt.Printf("\t\t %s \t %s\n", "generate [packages...]", "To generate cache for ebuilds. Can optionally specify packages to generate.")
 		fmt.Printf("\t\t %s \t\t %s\n", "set-method", "To set the cache method in layout.conf")
 		fmt.Printf("\t\t %s \t\t %s\n", "list-methods", "To list available cache methods")
 		fmt.Printf("\t\t %s \t\t %s\n", "clean", "To clean up unused cache entries")
