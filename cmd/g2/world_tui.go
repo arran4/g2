@@ -142,11 +142,12 @@ func runWorldTUI(path string, lines []string) error {
 					}
 					mode = "normal"
 				case 127, 8: // Backspace
-					if mode == "insert" {
+					switch mode {
+					case "insert":
 						if len(inputBuffer) > 0 {
 							inputBuffer = inputBuffer[:len(inputBuffer)-1]
 						}
-					} else if mode == "filter" {
+					case "filter":
 						if len(filterQuery) > 0 {
 							filterQuery = filterQuery[:len(filterQuery)-1]
 							cursor = 0
@@ -154,9 +155,10 @@ func runWorldTUI(path string, lines []string) error {
 					}
 				default:
 					if c >= 32 || c > 127 { // Allows ASCII and extended UTF-8 bytes
-						if mode == "insert" {
+						switch mode {
+						case "insert":
 							inputBuffer += string(c)
-						} else if mode == "filter" {
+						case "filter":
 							filterQuery += string(c)
 							cursor = 0
 						}
