@@ -48,10 +48,14 @@ func runWorldTUI(path string, lines []string) error {
 		if mode == "insert" || mode == "filter" || filterQuery != "" {
 			listHeight -= 2
 		}
+		if listHeight < 1 {
+			listHeight = 1
+		}
 
 		filteredIndices = nil
+		filterQueryLower := strings.ToLower(filterQuery)
 		for i, line := range lines {
-			if filterQuery == "" || strings.Contains(strings.ToLower(line), strings.ToLower(filterQuery)) {
+			if filterQuery == "" || strings.Contains(strings.ToLower(line), filterQueryLower) {
 				filteredIndices = append(filteredIndices, i)
 			}
 		}
@@ -144,12 +148,14 @@ func runWorldTUI(path string, lines []string) error {
 				case 127, 8: // Backspace
 					switch mode {
 					case "insert":
-						if len(inputBuffer) > 0 {
-							inputBuffer = inputBuffer[:len(inputBuffer)-1]
+						runes := []rune(inputBuffer)
+						if len(runes) > 0 {
+							inputBuffer = string(runes[:len(runes)-1])
 						}
 					case "filter":
-						if len(filterQuery) > 0 {
-							filterQuery = filterQuery[:len(filterQuery)-1]
+						runes := []rune(filterQuery)
+						if len(runes) > 0 {
+							filterQuery = string(runes[:len(runes)-1])
 							cursor = 0
 						}
 					}
