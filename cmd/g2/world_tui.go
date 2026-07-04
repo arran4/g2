@@ -208,7 +208,11 @@ func runWorldTUI(path string, lines []string) error {
 							inputBuffer = ""
 							mode = "prompt_version"
 						case 2: // Add / remove comment (After on line)
-							if idx := strings.Index(line, "#"); idx != -1 {
+							trimmed := strings.TrimSpace(line)
+							if strings.HasPrefix(trimmed, "#") {
+								inputBuffer = ""
+								mode = "prompt_comment_after"
+							} else if idx := strings.Index(line, "#"); idx != -1 {
 								lines[promptRealIdx] = strings.TrimSpace(line[:idx])
 								mode = "normal"
 							} else {
@@ -255,6 +259,9 @@ func runWorldTUI(path string, lines []string) error {
 				switch c {
 				case 27: // Esc
 					if mode == "insert" || strings.HasPrefix(mode, "prompt_") {
+						if mode == "prompt_comment_before" {
+							lines = append(lines[:promptRealIdx], lines[promptRealIdx+1:]...)
+						}
 						inputBuffer = ""
 					}
 					mode = "normal"
@@ -279,27 +286,34 @@ func runWorldTUI(path string, lines []string) error {
 							pkgStr = strings.TrimSpace(line[:idx])
 							commentStr = " " + strings.TrimSpace(line[idx:])
 						}
-						// Use simple split to get base pkg name (approximate without importing g2 if avoid cyclic, but we can use ExtractPackageNameFromDep)
-						// Actually we don't have g2 imported in world_tui.go directly, let's just do a simple stripping logic or import g2.
-						// world_tui.go is in package main inside cmd/g2, so it CAN import github.com/arran4/g2
-						// Since it's in `package main` we need to be careful with imports. Wait, `world_tui.go` doesn't import g2, let's just add it or parse it inline.
-						// To avoid import cycle or modifying imports if not needed, let's just do basic parsing.
-						// Wait, actually I will add the import or just write the code inline.
-						// We'll write inline basic stripping to avoid messing with imports.
 						basePkg := strings.TrimLeft(pkgStr, "=<>!~")
 						if idx := strings.IndexAny(basePkg, "[:"); idx != -1 {
 							basePkg = basePkg[:idx]
 						}
-						parts := strings.Split(basePkg, "-")
+						category := ""
+						pkgName := basePkg
+						if slashIdx := strings.Index(basePkg, "/"); slashIdx != -1 {
+							category = basePkg[:slashIdx+1]
+							pkgName = basePkg[slashIdx+1:]
+						}
+						parts := strings.Split(pkgName, "-")
 						var resParts []string
-						for _, p := range parts {
-							if len(p) > 0 && p[0] >= '0' && p[0] <= '9' {
-								// Reached version part
-								break
+						for i, p := range parts {
+							if i > 0 && len(p) > 0 && p[0] >= '0' && p[0] <= '9' {
+								isPureInt := true
+								for _, r := range p {
+									if r < '0' || r > '9' {
+										isPureInt = false
+										break
+									}
+								}
+								if strings.Contains(p, ".") || isPureInt || strings.Contains(p, "_") || len(p) >= 4 {
+									break
+								}
 							}
 							resParts = append(resParts, p)
 						}
-						basePkg = strings.Join(resParts, "-")
+						basePkg = category + strings.Join(resParts, "-")
 
 						versions := strings.Fields(inputBuffer)
 						if len(versions) == 0 {
