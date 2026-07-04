@@ -137,15 +137,16 @@ func runWorldTUI(path string, lines []string) error {
 
 			for i := 0; i < modalHeight; i++ {
 				fmt.Printf("\033[%d;%dH", startY+i, startX)
-				if i == 0 || i == modalHeight-1 {
+				switch i {
+				case 0, modalHeight - 1:
 					fmt.Print("+" + strings.Repeat("-", modalWidth-2) + "+")
-				} else if i == 1 {
+				case 1:
 					title := " Edit Entry "
 					padding := (modalWidth - 2 - len(title)) / 2
 					fmt.Print("|" + strings.Repeat(" ", padding) + title + strings.Repeat(" ", modalWidth-2-padding-len(title)) + "|")
-				} else if i == 2 {
+				case 2:
 					fmt.Print("|" + strings.Repeat(" ", modalWidth-2) + "|")
-				} else {
+				default:
 					optIdx := i - 3
 					prefix := "   "
 					if optIdx == editModalCursor {
