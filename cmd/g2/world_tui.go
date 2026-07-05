@@ -20,10 +20,20 @@ func runWorldTUI(path string, lines []string) error {
 	defer func() { _ = term.Restore(int(os.Stdin.Fd()), oldState) }()
 
 	cursor := 0
-	mode := "normal" // "normal", "insert", or "filter"
+	mode := "normal" // "normal", "insert", "filter", "edit_modal", "prompt_version", "prompt_comment_after", "prompt_comment_before", "prompt_replace"
 	inputBuffer := ""
 	filterQuery := ""
 	scrollOffset := 0
+	editModalCursor := 0
+	promptRealIdx := 0
+
+	editModalOptions := []string{
+		"Comment / Uncomment",
+		"Specify version / remove version",
+		"Add / remove comment (After on line)",
+		"Add / remove comment (Line before)",
+		"Modify / replace line",
+	}
 
 	var filteredIndices []int
 	var listHeight int
@@ -33,7 +43,7 @@ func runWorldTUI(path string, lines []string) error {
 		fmt.Print("\033[2J\033[H")
 
 		fmt.Print("Manage Portage World List\r\n")
-		fmt.Print("q: quit | s: save | j/k: down/up | c/Space: toggle comment | d: delete | a: add | /: filter\r\n")
+		fmt.Print("q: quit | s: save | j/k: down/up | c/Space: toggle comment | d: delete | a: add | e: edit | /: filter\r\n")
 		fmt.Print(strings.Repeat("-", 60) + "\r\n")
 
 		termWidth, termHeight, err := term.GetSize(int(os.Stdin.Fd()))
@@ -45,7 +55,7 @@ func runWorldTUI(path string, lines []string) error {
 
 		// 3 header lines, 1 or 2 footer lines depending on mode
 		listHeight = termHeight - 4
-		if mode == "insert" || mode == "filter" || filterQuery != "" {
+		if mode == "insert" || mode == "filter" || strings.HasPrefix(mode, "prompt_") || filterQuery != "" {
 			listHeight -= 2
 		}
 		if listHeight < 1 {
@@ -96,6 +106,18 @@ func runWorldTUI(path string, lines []string) error {
 		if mode == "insert" {
 			fmt.Print(strings.Repeat("-", 60) + "\r\n")
 			fmt.Printf("New entry: %s_\r\n", inputBuffer)
+		} else if mode == "prompt_version" {
+			fmt.Print(strings.Repeat("-", 60) + "\r\n")
+			fmt.Printf("Versions (space-separated, blank for none): %s_\r\n", inputBuffer)
+		} else if mode == "prompt_comment_after" {
+			fmt.Print(strings.Repeat("-", 60) + "\r\n")
+			fmt.Printf("Comment: %s_\r\n", inputBuffer)
+		} else if mode == "prompt_comment_before" {
+			fmt.Print(strings.Repeat("-", 60) + "\r\n")
+			fmt.Printf("Comment: %s_\r\n", inputBuffer)
+		} else if mode == "prompt_replace" {
+			fmt.Print(strings.Repeat("-", 60) + "\r\n")
+			fmt.Printf("Line: %s_\r\n", inputBuffer)
 		} else if mode == "filter" || filterQuery != "" {
 			fmt.Print(strings.Repeat("-", 60) + "\r\n")
 			if mode == "filter" {
@@ -103,6 +125,44 @@ func runWorldTUI(path string, lines []string) error {
 			} else {
 				fmt.Printf("Filter: %s\r\n", filterQuery)
 			}
+		}
+
+		if mode == "edit_modal" {
+			modalWidth := 60
+			modalHeight := len(editModalOptions) + 4
+			startX := (termWidth - modalWidth) / 2 + 1
+			if startX < 1 { startX = 1 }
+			startY := (termHeight - modalHeight) / 2 + 1
+			if startY < 1 { startY = 1 }
+
+			for i := 0; i < modalHeight; i++ {
+				fmt.Printf("\033[%d;%dH", startY+i, startX)
+				switch i {
+				case 0, modalHeight - 1:
+					fmt.Print("+" + strings.Repeat("-", modalWidth-2) + "+")
+				case 1:
+					title := " Edit Entry "
+					padding := (modalWidth - 2 - len(title)) / 2
+					fmt.Print("|" + strings.Repeat(" ", padding) + title + strings.Repeat(" ", modalWidth-2-padding-len(title)) + "|")
+				case 2:
+					fmt.Print("|" + strings.Repeat(" ", modalWidth-2) + "|")
+				default:
+					optIdx := i - 3
+					prefix := "   "
+					if optIdx == editModalCursor {
+						prefix = " > "
+					}
+					text := prefix + editModalOptions[optIdx]
+					padding := modalWidth - 2 - len(text)
+					if padding < 0 {
+						padding = 0
+						text = text[:modalWidth-2]
+					}
+					fmt.Print("|" + text + strings.Repeat(" ", padding) + "|")
+				}
+			}
+			// Reset cursor position to avoid flickering around the modal
+			fmt.Printf("\033[%d;%dH", termHeight, 1)
 		}
 	}
 
@@ -118,14 +178,90 @@ func runWorldTUI(path string, lines []string) error {
 			return err
 		}
 
-		if mode == "insert" || mode == "filter" {
-			// Handle insert/filter mode
+		if mode == "edit_modal" {
+			if n == 1 {
+				switch buf[0] {
+				case 27, 'q': // Esc or q
+					mode = "normal"
+				case 'j':
+					if editModalCursor < len(editModalOptions)-1 {
+						editModalCursor++
+					}
+				case 'k':
+					if editModalCursor > 0 {
+						editModalCursor--
+					}
+				case 13: // Enter
+					if len(filteredIndices) > 0 && cursor < len(filteredIndices) {
+						promptRealIdx = filteredIndices[cursor]
+						line := lines[promptRealIdx]
+						switch editModalCursor {
+						case 0: // Comment / Uncomment
+							trimmed := strings.TrimSpace(line)
+							if strings.HasPrefix(trimmed, "#") {
+								lines[promptRealIdx] = strings.TrimSpace(strings.TrimPrefix(trimmed, "#"))
+							} else {
+								lines[promptRealIdx] = "# " + line
+							}
+							mode = "normal"
+						case 1: // Specify version / remove version
+							inputBuffer = ""
+							mode = "prompt_version"
+						case 2: // Add / remove comment (After on line)
+							trimmed := strings.TrimSpace(line)
+							if strings.HasPrefix(trimmed, "#") {
+								inputBuffer = ""
+								mode = "prompt_comment_after"
+							} else if idx := strings.Index(line, "#"); idx != -1 {
+								lines[promptRealIdx] = strings.TrimSpace(line[:idx])
+								mode = "normal"
+							} else {
+								inputBuffer = ""
+								mode = "prompt_comment_after"
+							}
+						case 3: // Add / remove comment (Line before)
+							if promptRealIdx > 0 && strings.HasPrefix(strings.TrimSpace(lines[promptRealIdx-1]), "#") {
+								lines = append(lines[:promptRealIdx-1], lines[promptRealIdx:]...)
+								mode = "normal"
+							} else {
+								// Insert empty line before
+								lines = append(lines, "")
+								copy(lines[promptRealIdx+1:], lines[promptRealIdx:])
+								lines[promptRealIdx] = ""
+								inputBuffer = ""
+								mode = "prompt_comment_before"
+							}
+						case 4: // Modify / replace line
+							inputBuffer = line
+							mode = "prompt_replace"
+						}
+					} else {
+						mode = "normal"
+					}
+				}
+			} else if n >= 3 && buf[0] == 27 && buf[1] == 91 {
+				switch buf[2] {
+				case 'A': // Up
+					if editModalCursor > 0 {
+						editModalCursor--
+					}
+				case 'B': // Down
+					if editModalCursor < len(editModalOptions)-1 {
+						editModalCursor++
+					}
+				}
+			}
+		} else if mode == "insert" || mode == "filter" || strings.HasPrefix(mode, "prompt_") {
+			// Handle insert/filter/prompt modes
 			// Support UTF-8 multi-byte sequences by converting the entire buffer read
 			for i := 0; i < n; i++ {
 				c := buf[i]
 				switch c {
 				case 27: // Esc
-					if mode == "insert" {
+					if mode == "insert" || strings.HasPrefix(mode, "prompt_") {
+						if mode == "prompt_comment_before" {
+							lines = append(lines[:promptRealIdx], lines[promptRealIdx+1:]...)
+						}
 						inputBuffer = ""
 					}
 					mode = "normal"
@@ -142,12 +278,79 @@ func runWorldTUI(path string, lines []string) error {
 								lines[realIdx] = inputBuffer
 							}
 						}
-						inputBuffer = ""
+					} else if mode == "prompt_version" {
+						line := lines[promptRealIdx]
+						commentStr := ""
+						pkgStr := line
+						if idx := strings.Index(line, "#"); idx != -1 {
+							pkgStr = strings.TrimSpace(line[:idx])
+							commentStr = " " + strings.TrimSpace(line[idx:])
+						}
+						basePkg := strings.TrimLeft(pkgStr, "=<>!~")
+						if idx := strings.IndexAny(basePkg, "[:"); idx != -1 {
+							basePkg = basePkg[:idx]
+						}
+						category := ""
+						pkgName := basePkg
+						if slashIdx := strings.Index(basePkg, "/"); slashIdx != -1 {
+							category = basePkg[:slashIdx+1]
+							pkgName = basePkg[slashIdx+1:]
+						}
+						parts := strings.Split(pkgName, "-")
+						var resParts []string
+						for i, p := range parts {
+							if i > 0 && len(p) > 0 && p[0] >= '0' && p[0] <= '9' {
+								isPureInt := true
+								for _, r := range p {
+									if r < '0' || r > '9' {
+										isPureInt = false
+										break
+									}
+								}
+								if strings.Contains(p, ".") || isPureInt || strings.Contains(p, "_") || len(p) >= 4 {
+									break
+								}
+							}
+							resParts = append(resParts, p)
+						}
+						basePkg = category + strings.Join(resParts, "-")
+
+						versions := strings.Fields(inputBuffer)
+						if len(versions) == 0 {
+							lines[promptRealIdx] = basePkg + commentStr
+						} else {
+							var newLines []string
+							for _, v := range versions {
+								newLines = append(newLines, fmt.Sprintf("=%s-%s%s", basePkg, v, commentStr))
+							}
+							lines = append(lines[:promptRealIdx], append(newLines, lines[promptRealIdx+1:]...)...)
+						}
+					} else if mode == "prompt_comment_after" {
+						if strings.TrimSpace(inputBuffer) != "" {
+							lines[promptRealIdx] = lines[promptRealIdx] + " # " + inputBuffer
+						}
+					} else if mode == "prompt_comment_before" {
+						if strings.TrimSpace(inputBuffer) != "" {
+							lines[promptRealIdx] = "# " + inputBuffer
+						} else {
+							// If empty, remove the line we just inserted
+							lines = append(lines[:promptRealIdx], lines[promptRealIdx+1:]...)
+						}
+					} else if mode == "prompt_replace" {
+						if strings.TrimSpace(inputBuffer) != "" {
+							lines[promptRealIdx] = inputBuffer
+						} else {
+							lines = append(lines[:promptRealIdx], lines[promptRealIdx+1:]...)
+						}
 					}
-					mode = "normal"
+
+					if mode != "filter" {
+						inputBuffer = ""
+						mode = "normal"
+					}
 				case 127, 8: // Backspace
 					switch mode {
-					case "insert":
+					case "insert", "prompt_version", "prompt_comment_after", "prompt_comment_before", "prompt_replace":
 						runes := []rune(inputBuffer)
 						if len(runes) > 0 {
 							inputBuffer = string(runes[:len(runes)-1])
@@ -162,7 +365,7 @@ func runWorldTUI(path string, lines []string) error {
 				default:
 					if c >= 32 || c > 127 { // Allows ASCII and extended UTF-8 bytes
 						switch mode {
-						case "insert":
+						case "insert", "prompt_version", "prompt_comment_after", "prompt_comment_before", "prompt_replace":
 							inputBuffer += string(c)
 						case "filter":
 							filterQuery += string(c)
@@ -210,6 +413,11 @@ func runWorldTUI(path string, lines []string) error {
 					}
 				case 'a': // Add
 					mode = "insert"
+				case 'e': // Edit
+					if len(filteredIndices) > 0 && cursor < len(filteredIndices) {
+						editModalCursor = 0
+						mode = "edit_modal"
+					}
 				case '/': // Filter
 					mode = "filter"
 				}
