@@ -113,15 +113,16 @@ func runConfTUI(path string, lines []string, title string) error {
 			fmt.Printf("Filter: %s\r\n", filterQuery)
 		}
 
-		if mode == "insert" {
+		switch mode {
+		case "insert":
 			fmt.Printf("Add: %s", inputBuffer)
-		} else if mode == "filter" {
+		case "filter":
 			fmt.Printf("Filter: %s", filterQuery)
-		} else if mode == "prompt_comment_after" {
+		case "prompt_comment_after":
 			fmt.Printf("Comment text: %s", inputBuffer)
-		} else if mode == "prompt_comment_before" {
+		case "prompt_comment_before":
 			fmt.Printf("Comment text: %s", inputBuffer)
-		} else if mode == "prompt_replace" {
+		case "prompt_replace":
 			fmt.Printf("Replace line: %s", inputBuffer)
 		}
 
