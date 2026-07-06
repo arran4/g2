@@ -310,25 +310,28 @@ func runConfTUI(path string, lines []string, title string) error {
 			if n == 1 {
 				switch buf[0] {
 				case 27: // Esc
-					if mode == "filter" {
+						switch mode {
+						case "filter":
 						filterQuery = "" // Reset filter on escape
-					} else if mode == "prompt_comment_before" {
+						case "prompt_comment_before":
 						// Remove the empty line we added
 						lines = append(lines[:promptRealIdx], lines[promptRealIdx+1:]...)
 					}
 					mode = "normal"
 				case 127, 8: // Backspace
-					if mode == "filter" {
+						switch mode {
+						case "filter":
 						if len(filterQuery) > 0 {
 							filterQuery = filterQuery[:len(filterQuery)-1]
 						}
-					} else {
+						default:
 						if len(inputBuffer) > 0 {
 							inputBuffer = inputBuffer[:len(inputBuffer)-1]
 						}
 					}
 				case 13: // Enter
-					if mode == "insert" {
+						switch mode {
+						case "insert":
 						if strings.TrimSpace(inputBuffer) != "" {
 							if len(filteredIndices) > 0 && cursor < len(filteredIndices) {
 								idx := filteredIndices[cursor] + 1
@@ -341,26 +344,27 @@ func runConfTUI(path string, lines []string, title string) error {
 								cursor = len(lines) - 1
 							}
 						}
-					} else if mode == "prompt_comment_after" {
+						case "prompt_comment_after":
 						if strings.TrimSpace(inputBuffer) != "" {
 							lines[promptRealIdx] = lines[promptRealIdx] + " # " + inputBuffer
 						}
-					} else if mode == "prompt_comment_before" {
+						case "prompt_comment_before":
 						if strings.TrimSpace(inputBuffer) != "" {
 							lines[promptRealIdx] = "# " + inputBuffer
 						} else {
 							// Remove the empty line we added
 							lines = append(lines[:promptRealIdx], lines[promptRealIdx+1:]...)
 						}
-					} else if mode == "prompt_replace" {
+						case "prompt_replace":
 						lines[promptRealIdx] = inputBuffer
 					}
 					mode = "normal"
 				default:
 					if buf[0] >= 32 && buf[0] <= 126 { // Printable ASCII
-						if mode == "filter" {
+							switch mode {
+							case "filter":
 							filterQuery += string(buf[0])
-						} else {
+							default:
 							inputBuffer += string(buf[0])
 						}
 					}
