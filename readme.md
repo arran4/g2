@@ -359,6 +359,39 @@ Generate the package description index for the current overlay:
 g2 pkg-desc-index generate .
 ```
 
+### `make-conf`
+
+Commands relating to managing `make.conf`.
+
+**Usage:**
+
+```bash
+g2 make-conf <subcommand>|<key>
+```
+
+**Subcommands:**
+* `tui`: Open terminal UI to manage make.conf
+* `<key>`: Get the value of a key in make.conf
+
+### `repos-conf`
+
+Commands relating to managing `repos.conf`.
+
+**Usage:**
+
+```bash
+g2 repos-conf <subcommand>
+```
+
+**Subcommands:**
+* `tui [location]`: Open terminal UI to manage repos.conf
+* `list [location]`: List all parsed sections and files (default: /etc/portage/repos.conf)
+* `set <repo> <key> <value>`: Set a value in a repository section
+* `unset <repo> <key>`: Unset a value in a repository section
+* `disable <repo>`: Disable a repository section
+* `enable <repo>`: Enable a repository section
+* `move <repo> <file>`: Move a repository section to a different file (useful for directory formats)
+
 ### `package`
 
 Commands relating to packages and search indexing.
