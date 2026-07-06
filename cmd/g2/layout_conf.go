@@ -37,10 +37,6 @@ func (cfg *MainArgConfig) cmdLayoutConf(args []string) error {
 
 	element := remainingArgs[0]
 
-	if element == "tui" {
-		return cfg.cmdLayoutConfTUI(layoutConfPath)
-	}
-
 	if element == "list" {
 		for _, entry := range lc.Entries {
 			for _, comment := range entry.Comments {
@@ -86,17 +82,4 @@ func (cfg *MainArgConfig) cmdLayoutConf(args []string) error {
 	}
 
 	return nil
-}
-
-func (cfg *MainArgConfig) cmdLayoutConfTUI(location string) error {
-	content, err := os.ReadFile(location)
-	if err != nil {
-		if !os.IsNotExist(err) {
-			return fmt.Errorf("reading layout.conf: %w", err)
-		}
-		content = []byte{}
-	}
-
-	lines := strings.Split(string(content), "\n")
-	return runConfTUI(location, lines, "layout.conf")
 }

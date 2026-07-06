@@ -7,14 +7,12 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"strings"
 )
 
 func (cfg *MainArgConfig) cmdReposConf(args []string) error {
 	fs := flag.NewFlagSet("repos-conf", flag.ExitOnError)
 	fs.Usage = func() {
 		fmt.Printf("Usage: g2 repos-conf <subcommand>\n")
-		fmt.Printf("\ttui [location]\t\t\tOpen terminal UI to manage repos.conf\n")
 		fmt.Printf("\tlist [location]\t\t\tList all parsed sections and files (default: /etc/portage/repos.conf)\n")
 		fmt.Printf("\tset <repo> <key> <value>\tSet a value in a repository section\n")
 		fmt.Printf("\tunset <repo> <key>\t\tUnset a value in a repository section\n")
@@ -36,8 +34,6 @@ func (cfg *MainArgConfig) cmdReposConf(args []string) error {
 
 	subcmd := fs.Arg(0)
 	switch subcmd {
-	case "tui":
-		return cfg.cmdReposConfTUI(*locationOpt)
 	case "list":
 		return cfg.cmdReposConfList(*locationOpt)
 	case "set":
@@ -270,22 +266,4 @@ func (cfg *MainArgConfig) cmdReposConfMove(location string, args []string) error
 	}
 
 	return nil
-}
-
-func (cfg *MainArgConfig) cmdReposConfTUI(location string) error {
-	info, err := os.Stat(location)
-	if err == nil && info.IsDir() {
-		return fmt.Errorf("location %s is a directory; please specify a file to edit", location)
-	}
-
-	content, err := os.ReadFile(location)
-	if err != nil {
-		if !os.IsNotExist(err) {
-			return fmt.Errorf("reading repos.conf: %w", err)
-		}
-		content = []byte{}
-	}
-
-	lines := strings.Split(string(content), "\n")
-	return runConfTUI(location, lines, "repos.conf")
 }
