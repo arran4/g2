@@ -148,10 +148,26 @@ func (cfg *MainArgConfig) cmdConfAll(args []string) error {
 					}
 				}
 
+				mergedVars := make(map[string]string)
 				for _, parentPath := range orderedParents {
 					if content, ok := makeDefaults[parentPath]; ok {
-						fmt.Printf("\n--- From %s ---\n%s\n", parentPath, content)
+						vars, err := g2.ParseMakeConfContent(content, parentPath+"/make.defaults")
+						if err == nil {
+							for k, v := range vars {
+								mergedVars[k] = v
+							}
+						}
 					}
+				}
+
+				fmt.Println("\n--- Merged Profile Defaults ---")
+				var mKeys []string
+				for k := range mergedVars {
+					mKeys = append(mKeys, k)
+				}
+				sort.Strings(mKeys)
+				for _, k := range mKeys {
+					fmt.Printf("%s=%s\n", k, mergedVars[k])
 				}
 			} else {
 				fmt.Printf("Profile %s (rel: %s) not found in parsed data\n", profileToUse, relProfilePath)
