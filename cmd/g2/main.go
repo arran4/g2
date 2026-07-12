@@ -46,6 +46,7 @@ func main() {
 		fmt.Printf("\t\t %s \t\t %s\n", "profile", "commands relating to profiles")
 		fmt.Printf("\t\t %s \t\t %s\n", "repos-conf", "commands relating to repos.conf")
 		fmt.Printf("\t\t %s \t\t %s\n", "make-conf", "commands relating to make.conf")
+		fmt.Printf("\t\t %s \t\t %s\n", "conf", "commands relating to portage configuration")
 		fmt.Printf("\t\t %s \t\t %s\n", "world", "manage the portage world file via TUI")
 	}
 	if err := fs.Parse(os.Args); err != nil {
@@ -62,6 +63,12 @@ func main() {
 	cmd := fs.Arg(1)
 	cfg.Args = append(cfg.Args, cmd)
 	switch cmd {
+	case "conf":
+		if err := cfg.cmdConf(fs.Args()[2:]); err != nil {
+			log.Printf("conf error: %s", err)
+			os.Exit(-1)
+			return
+		}
 	case "arch":
 		if err := cfg.cmdArch(fs.Args()[2:]); err != nil {
 			log.Printf("arch error: %s", err)

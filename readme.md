@@ -431,6 +431,18 @@ g2 profile <subcommand>
 * `describe`: Describe a profile.
 
 
+### `conf`
+
+Commands relating to portage configuration.
+
+**Usage:**
+
+```bash
+g2 conf all [--repo <path>] [--profile <profile_path>] [--make-conf <make.conf_path>] [--config-root <config_root_path>]
+```
+Outputs a complete overview of the system's Portage configuration, parsing variables from `make.conf` and the active profile's `make.defaults` cascade.
+
+
 ## GitHub Action
 
 You can use the [g2 GitHub Action](https://github.com/arran4/g2-action) to integrate `g2` into your CI/CD workflows. It automatically downloads and installs `g2` for use in your workflow steps.
