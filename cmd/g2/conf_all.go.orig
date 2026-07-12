@@ -50,9 +50,6 @@ func (cfg *MainArgConfig) cmdConfAll(args []string) error {
 		// Read /etc/portage/make.profile symlink
 		target, err := os.Readlink(makeProfilePath)
 		if err == nil {
-			if !filepath.IsAbs(target) {
-				target = filepath.Join(*portageConfDir, target)
-			}
 			profileToUse = target
 		} else {
 			fmt.Printf("Warning: failed to read %s: %v\n", makeProfilePath, err)
