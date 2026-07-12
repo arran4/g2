@@ -1,0 +1,18 @@
+--- README.md
++++ README.md
+@@ -431,6 +431,16 @@
+ * `list`: List profiles.
+ * `describe`: Describe a profile.
+
++### `conf`
++
++Commands relating to portage configuration.
++
++**Usage:**
++
++```bash
++g2 conf all [--repo <path>] [--profile <profile_path>] [--make-conf <make.conf_path>] [--config-root <config_root_path>]
++```
++Outputs a complete overview of the system's Portage configuration, parsing variables from `make.conf` and the active profile's `make.defaults` cascade.
++
+ ## GitHub Action
