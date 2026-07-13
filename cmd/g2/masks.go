@@ -225,9 +225,9 @@ func (cfg *MainArgConfig) cmdMasksMask(args []string) error {
     if err != nil {
         return fmt.Errorf("opening file: %w", err)
     }
-    defer f.Close()
+    defer func() { _ = f.Close() }()
 
-    if _, err := f.WriteString(fmt.Sprintf("%s\n", pkg)); err != nil {
+    if _, err := fmt.Fprintf(f, "%s\n", pkg); err != nil {
         return fmt.Errorf("writing to file: %w", err)
     }
 
@@ -270,9 +270,9 @@ func (cfg *MainArgConfig) cmdMasksUnmask(args []string) error {
     if err != nil {
         return fmt.Errorf("opening file: %w", err)
     }
-    defer f.Close()
+    defer func() { _ = f.Close() }()
 
-    if _, err := f.WriteString(fmt.Sprintf("%s\n", pkg)); err != nil {
+    if _, err := fmt.Fprintf(f, "%s\n", pkg); err != nil {
         return fmt.Errorf("writing to file: %w", err)
     }
 
@@ -331,7 +331,7 @@ func (cfg *MainArgConfig) cmdMasksReset(args []string) error {
             if err != nil {
                 return err
             }
-            defer f.Close()
+            defer func() { _ = f.Close() }()
             if err := g2.SerializePackageMasked(f, newData); err != nil {
                 return err
             }
