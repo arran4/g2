@@ -1,0 +1,39 @@
+<<<<<<< SEARCH
+func printMasks(data []g2.PackageMasked, filter string) {
+	for _, d := range data {
+		for _, entry := range d.Entries {
+			if filter == "" || strings.Contains(entry.Package, filter) {
+				fmt.Printf("%s\n", entry.Package)
+				if d.Reason != "" {
+					fmt.Printf("  Reason: %s\n", d.Reason)
+				}
+				if d.Author != "" {
+					fmt.Printf("  Author: %s <%s> (%s)\n", d.Author, d.AuthorEmail, d.Date)
+				}
+			}
+		}
+	}
+}
+=======
+func printMasks(data []g2.PackageMasked, filter string) {
+	for _, d := range data {
+		var matched []string
+		for _, entry := range d.Entries {
+			if filter == "" || strings.Contains(entry.Package, filter) {
+				matched = append(matched, entry.Package)
+			}
+		}
+		if len(matched) > 0 {
+			for _, pkg := range matched {
+				fmt.Printf("%s\n", pkg)
+			}
+			if d.Reason != "" {
+				fmt.Printf("  Reason: %s\n", d.Reason)
+			}
+			if d.Author != "" {
+				fmt.Printf("  Author: %s <%s> (%s)\n", d.Author, d.AuthorEmail, d.Date)
+			}
+		}
+	}
+}
+>>>>>>> REPLACE

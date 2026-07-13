@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"github.com/arran4/g2"
 	"os"
-    "path/filepath"
+	"path/filepath"
 	"strings"
 )
 
@@ -80,9 +80,9 @@ func (cfg *MainArgConfig) cmdMasksList(args []string) error {
 		return fmt.Errorf("parsing package.unmask: %w", err)
 	}
 
-    // 3. get overlay paths
-    var overlayPaths []string
-    if rc, err := g2.ParseReposConf(*reposConfOpt); err == nil {
+	// 3. get overlay paths
+	var overlayPaths []string
+	if rc, err := g2.ParseReposConf(*reposConfOpt); err == nil {
 		for _, f := range rc.Files {
 			for _, s := range f.Sections {
 				if s.Name == "DEFAULT" || s.Disabled {
@@ -95,99 +95,107 @@ func (cfg *MainArgConfig) cmdMasksList(args []string) error {
 			}
 		}
 	} else {
-        // fallback
+		// fallback
 		reposDir := "/var/db/repos"
 		if entries, err := os.ReadDir(reposDir); err == nil {
-            for _, entry := range entries {
-                if entry.IsDir() {
-                    overlayPaths = append(overlayPaths, filepath.Join(reposDir, entry.Name()))
-                }
-            }
-        }
+			for _, entry := range entries {
+				if entry.IsDir() {
+					overlayPaths = append(overlayPaths, filepath.Join(reposDir, entry.Name()))
+				}
+			}
+		}
 	}
 
-    // 4. Print masks
+	// 4. Print masks
 	fmt.Printf("=== User Masks ===\n")
-    printMasks(userMasked, filter)
+	printMasks(userMasked, filter)
 
 	fmt.Printf("\n=== User Unmasks ===\n")
-    printMasks(userUnmasked, filter)
+	printMasks(userUnmasked, filter)
 
-    fmt.Printf("\n=== Repo Masks ===\n")
-    for _, overlayPath := range overlayPaths {
-        repoMaskPath := filepath.Join(overlayPath, "profiles", "package.mask")
-        repoMasked, err := g2.ParsePackageMasked(repoMaskPath)
-        if err != nil && !os.IsNotExist(err) {
-            fmt.Printf("Error parsing %s: %v\n", repoMaskPath, err)
-            continue
-        }
-        if len(repoMasked) > 0 {
-            // Check if any match before printing repo header
-            hasMatch := false
-            for _, d := range repoMasked {
-                for _, entry := range d.Entries {
-                    if filter == "" || strings.Contains(entry.Package, filter) {
-                        hasMatch = true
-                        break
-                    }
-                }
-                if hasMatch { break }
-            }
-            if hasMatch {
-                fmt.Printf("\n[%s]\n", filepath.Base(overlayPath))
-                printMasks(repoMasked, filter)
-            }
-        }
-    }
+	fmt.Printf("\n=== Repo Masks ===\n")
+	for _, overlayPath := range overlayPaths {
+		repoMaskPath := filepath.Join(overlayPath, "profiles", "package.mask")
+		repoMasked, err := g2.ParsePackageMasked(repoMaskPath)
+		if err != nil && !os.IsNotExist(err) {
+			fmt.Printf("Error parsing %s: %v\n", repoMaskPath, err)
+			continue
+		}
+		if len(repoMasked) > 0 {
+			// Check if any match before printing repo header
+			hasMatch := false
+			for _, d := range repoMasked {
+				for _, entry := range d.Entries {
+					if filter == "" || strings.Contains(entry.Package, filter) {
+						hasMatch = true
+						break
+					}
+				}
+				if hasMatch {
+					break
+				}
+			}
+			if hasMatch {
+				fmt.Printf("\n[%s]\n", filepath.Base(overlayPath))
+				printMasks(repoMasked, filter)
+			}
+		}
+	}
 
 	return nil
 }
 
 func printMasks(data []g2.PackageMasked, filter string) {
-    for _, d := range data {
+	for _, d := range data {
+		var matched []string
 		for _, entry := range d.Entries {
-            if filter == "" || strings.Contains(entry.Package, filter) {
-			    fmt.Printf("%s\n", entry.Package)
-                if d.Reason != "" {
-		            fmt.Printf("  Reason: %s\n", d.Reason)
-                }
-                if d.Author != "" {
-		            fmt.Printf("  Author: %s <%s> (%s)\n", d.Author, d.AuthorEmail, d.Date)
-                }
-            }
+			if filter == "" || strings.Contains(entry.Package, filter) {
+				matched = append(matched, entry.Package)
+			}
+		}
+		if len(matched) > 0 {
+			for _, pkg := range matched {
+				fmt.Printf("%s\n", pkg)
+			}
+			if d.Reason != "" {
+				fmt.Printf("  Reason: %s\n", d.Reason)
+			}
+			if d.Author != "" {
+				fmt.Printf("  Author: %s <%s> (%s)\n", d.Author, d.AuthorEmail, d.Date)
+			}
 		}
 	}
 }
 
 func parsePackageMaskDir(path string) ([]g2.PackageMasked, error) {
-    var allMasks []g2.PackageMasked
+	var allMasks []g2.PackageMasked
 
-    info, err := os.Stat(path)
-    if err != nil {
-        return nil, err
-    }
+	info, err := os.Stat(path)
+	if err != nil {
+		return nil, err
+	}
 
-    if !info.IsDir() {
-        return g2.ParsePackageMasked(path)
-    }
+	if !info.IsDir() {
+		return g2.ParsePackageMasked(path)
+	}
 
-    entries, err := os.ReadDir(path)
-    if err != nil {
-        return nil, err
-    }
+	entries, err := os.ReadDir(path)
+	if err != nil {
+		return nil, err
+	}
 
-    for _, entry := range entries {
-        if entry.IsDir() || strings.HasPrefix(entry.Name(), ".") {
-            continue
-        }
-        masks, err := g2.ParsePackageMasked(filepath.Join(path, entry.Name()))
-        if err != nil {
-            return nil, err
-        }
-        allMasks = append(allMasks, masks...)
-    }
+	for _, entry := range entries {
+		if entry.IsDir() || strings.HasPrefix(entry.Name(), ".") {
+			continue
+		}
+		masks, err := g2.ParsePackageMasked(filepath.Join(path, entry.Name()))
+		if err != nil {
+			return nil, err
+		}
+		allMasks = append(allMasks, masks...)
+	}
 
-    return allMasks, nil
+	return allMasks, nil
 }
 
 func (cfg *MainArgConfig) cmdMasksMask(args []string) error {
@@ -208,30 +216,30 @@ func (cfg *MainArgConfig) cmdMasksMask(args []string) error {
 		return fmt.Errorf("missing package name")
 	}
 
-    pkg := fs.Arg(0)
-    targetFile := filepath.Join(*configRootOpt, "package.mask")
+	pkg := fs.Arg(0)
+	targetFile := filepath.Join(*configRootOpt, "package.mask")
 
-    // Create directory if not exists
-    if err := os.MkdirAll(*configRootOpt, 0755); err != nil {
-        return fmt.Errorf("creating config root: %w", err)
-    }
+	// Create directory if not exists
+	if err := os.MkdirAll(*configRootOpt, 0755); err != nil {
+		return fmt.Errorf("creating config root: %w", err)
+	}
 
-    info, err := os.Stat(targetFile)
-    if err == nil && info.IsDir() {
-        targetFile = filepath.Join(targetFile, "g2.conf")
-    }
+	info, err := os.Stat(targetFile)
+	if err == nil && info.IsDir() {
+		targetFile = filepath.Join(targetFile, "g2.conf")
+	}
 
-    f, err := os.OpenFile(targetFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-    if err != nil {
-        return fmt.Errorf("opening file: %w", err)
-    }
-    defer func() { _ = f.Close() }()
+	f, err := os.OpenFile(targetFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return fmt.Errorf("opening file: %w", err)
+	}
+	defer func() { _ = f.Close() }()
 
-    if _, err := fmt.Fprintf(f, "%s\n", pkg); err != nil {
-        return fmt.Errorf("writing to file: %w", err)
-    }
+	if _, err := fmt.Fprintf(f, "%s\n", pkg); err != nil {
+		return fmt.Errorf("writing to file: %w", err)
+	}
 
-    fmt.Printf("Added %s to %s\n", pkg, targetFile)
+	fmt.Printf("Added %s to %s\n", pkg, targetFile)
 	return nil
 }
 
@@ -253,30 +261,30 @@ func (cfg *MainArgConfig) cmdMasksUnmask(args []string) error {
 		return fmt.Errorf("missing package name")
 	}
 
-    pkg := fs.Arg(0)
-    targetFile := filepath.Join(*configRootOpt, "package.unmask")
+	pkg := fs.Arg(0)
+	targetFile := filepath.Join(*configRootOpt, "package.unmask")
 
-    // Create directory if not exists
-    if err := os.MkdirAll(*configRootOpt, 0755); err != nil {
-        return fmt.Errorf("creating config root: %w", err)
-    }
+	// Create directory if not exists
+	if err := os.MkdirAll(*configRootOpt, 0755); err != nil {
+		return fmt.Errorf("creating config root: %w", err)
+	}
 
-    info, err := os.Stat(targetFile)
-    if err == nil && info.IsDir() {
-        targetFile = filepath.Join(targetFile, "g2.conf")
-    }
+	info, err := os.Stat(targetFile)
+	if err == nil && info.IsDir() {
+		targetFile = filepath.Join(targetFile, "g2.conf")
+	}
 
-    f, err := os.OpenFile(targetFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-    if err != nil {
-        return fmt.Errorf("opening file: %w", err)
-    }
-    defer func() { _ = f.Close() }()
+	f, err := os.OpenFile(targetFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return fmt.Errorf("opening file: %w", err)
+	}
+	defer func() { _ = f.Close() }()
 
-    if _, err := fmt.Fprintf(f, "%s\n", pkg); err != nil {
-        return fmt.Errorf("writing to file: %w", err)
-    }
+	if _, err := fmt.Fprintf(f, "%s\n", pkg); err != nil {
+		return fmt.Errorf("writing to file: %w", err)
+	}
 
-    fmt.Printf("Added %s to %s\n", pkg, targetFile)
+	fmt.Printf("Added %s to %s\n", pkg, targetFile)
 	return nil
 }
 
@@ -298,78 +306,78 @@ func (cfg *MainArgConfig) cmdMasksReset(args []string) error {
 		return fmt.Errorf("missing package name")
 	}
 
-    pkg := fs.Arg(0)
+	pkg := fs.Arg(0)
 
-    // We should probably try to clean up g2.conf files in package.mask and package.unmask
-    maskDir := filepath.Join(*configRootOpt, "package.mask")
-    unmaskDir := filepath.Join(*configRootOpt, "package.unmask")
+	// We should probably try to clean up g2.conf files in package.mask and package.unmask
+	maskDir := filepath.Join(*configRootOpt, "package.mask")
+	unmaskDir := filepath.Join(*configRootOpt, "package.unmask")
 
-    removeFromFile := func(path string) error {
-        data, err := g2.ParsePackageMasked(path)
-        if err != nil {
-            return err
-        }
-        var newData []g2.PackageMasked
-        found := false
-        for _, d := range data {
-            var newEntries []g2.PackageMaskedEntry
-            for _, entry := range d.Entries {
-                if entry.Package == pkg {
-                    found = true
-                } else {
-                    newEntries = append(newEntries, entry)
-                }
-            }
-            if len(newEntries) > 0 {
-                d.Entries = newEntries
-                newData = append(newData, d)
-            }
-        }
+	removeFromFile := func(path string) error {
+		data, err := g2.ParsePackageMasked(path)
+		if err != nil {
+			return err
+		}
+		var newData []g2.PackageMasked
+		found := false
+		for _, d := range data {
+			var newEntries []g2.PackageMaskedEntry
+			for _, entry := range d.Entries {
+				if entry.Package == pkg {
+					found = true
+				} else {
+					newEntries = append(newEntries, entry)
+				}
+			}
+			if len(newEntries) > 0 {
+				d.Entries = newEntries
+				newData = append(newData, d)
+			}
+		}
 
-        if found {
-            f, err := os.Create(path)
-            if err != nil {
-                return err
-            }
-            defer func() { _ = f.Close() }()
-            if err := g2.SerializePackageMasked(f, newData); err != nil {
-                return err
-            }
-            fmt.Printf("Removed %s from %s\n", pkg, path)
-        }
-        return nil
-    }
+		if found {
+			f, err := os.Create(path)
+			if err != nil {
+				return err
+			}
+			defer func() { _ = f.Close() }()
+			if err := g2.SerializePackageMasked(f, newData); err != nil {
+				return err
+			}
+			fmt.Printf("Removed %s from %s\n", pkg, path)
+		}
+		return nil
+	}
 
-    checkDir := func(path string) error {
-        info, err := os.Stat(path)
-        if err != nil {
-            return nil // Ignore if doesn't exist
-        }
+	checkDir := func(path string) error {
+		info, err := os.Stat(path)
+		if err != nil {
+			return nil // Ignore if doesn't exist
+		}
 
-        if !info.IsDir() {
-            return removeFromFile(path)
-        }
+		if !info.IsDir() {
+			return removeFromFile(path)
+		}
 
-        entries, err := os.ReadDir(path)
-        if err != nil {
-            return err
-        }
-        for _, entry := range entries {
-            if !entry.IsDir() && !strings.HasPrefix(entry.Name(), ".") {
-                if err := removeFromFile(filepath.Join(path, entry.Name())); err != nil {
-                    return err
-                }
-            }
-        }
-        return nil
-    }
+		entries, err := os.ReadDir(path)
+		if err != nil {
+			return err
+		}
+		for _, entry := range entries {
+			if !entry.IsDir() && !strings.HasPrefix(entry.Name(), ".") {
+				if err := removeFromFile(filepath.Join(path, entry.Name())); err != nil {
+					return err
+				}
+			}
+		}
+		return nil
+	}
 
-    if err := checkDir(maskDir); err != nil {
-        return fmt.Errorf("resetting mask: %w", err)
-    }
-    if err := checkDir(unmaskDir); err != nil {
-        return fmt.Errorf("resetting unmask: %w", err)
-    }
+	if err := checkDir(maskDir); err != nil {
+		return fmt.Errorf("resetting mask: %w", err)
+	}
+	if err := checkDir(unmaskDir); err != nil {
+		return fmt.Errorf("resetting unmask: %w", err)
+	}
 
 	return nil
 }
