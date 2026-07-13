@@ -383,9 +383,9 @@ g2 package <subcommand>
 The `g2 masks` command provides tools for inspecting and modifying user-level and repository-level package mask configuration (`/etc/portage/package.mask` and `package.unmask`).
 
 * `g2 masks list [<filter>]`: List all currently masked and unmasked packages across user config files and repository `profiles/package.mask` entries. An optional filter (like `::guru` or `sci-libs/onnxruntime`) can be provided.
-* `g2 masks mask <package>`: Add a package to the user's `package.mask` configuration.
-* `g2 masks unmask <package>`: Add a package to the user's `package.unmask` configuration.
-* `g2 masks reset <package>`: Remove all mentions of a package from the user's `package.mask` and `package.unmask` configurations.
+* `g2 masks mask <package>`: Add a package to the user's `package.mask` configuration. If `package.mask` is a directory, it creates or appends to a `g2.conf` file inside it.
+* `g2 masks unmask <package>`: Add a package to the user's `package.unmask` configuration. If `package.unmask` is a directory, it creates or appends to a `g2.conf` file inside it.
+* `g2 masks reset <package>`: Remove all mentions of a package from the user's `package.mask` and `package.unmask` configurations, sweeping through configuration directories as well.
 
 ### `eclass`
 
