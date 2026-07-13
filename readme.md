@@ -377,7 +377,15 @@ g2 package <subcommand>
 * `index`: Index local repositories.
 * `update`: Update the local index from a remote zip file.
 * `deprecated`: Commands relating to deprecated packages.
-* `masked`: Commands relating to masked packages.
+* `masked`: Commands relating to masked packages within a repository.
+
+## Masks Command
+The `g2 masks` command provides tools for inspecting and modifying user-level and repository-level package mask configuration (`/etc/portage/package.mask` and `package.unmask`).
+
+* `g2 masks list [<filter>]`: List all currently masked and unmasked packages across user config files and repository `profiles/package.mask` entries. An optional filter (like `::guru` or `sci-libs/onnxruntime`) can be provided.
+* `g2 masks mask <package>`: Add a package to the user's `package.mask` configuration. If `package.mask` is a directory, it creates or appends to a `g2.conf` file inside it. (e.g. `g2 masks mask sci-libs/onnxruntime::guru`)
+* `g2 masks unmask <package>`: Add a package to the user's `package.unmask` configuration. If `package.unmask` is a directory, it creates or appends to a `g2.conf` file inside it. (e.g. `g2 masks unmask sci-libs/onnxruntime::guru`)
+* `g2 masks reset <package>`: Remove all mentions of a package from the user's `package.mask` and `package.unmask` configurations, sweeping through configuration directories as well.
 
 ### `eclass`
 
