@@ -63,6 +63,12 @@ func main() {
 	cmd := fs.Arg(1)
 	cfg.Args = append(cfg.Args, cmd)
 	switch cmd {
+	case "masks":
+		if err := cfg.cmdMasks(fs.Args()[2:]); err != nil {
+			log.Printf("masks error: %s", err)
+			os.Exit(-1)
+			return
+		}
 	case "conf":
 		if err := cfg.cmdConf(fs.Args()[2:]); err != nil {
 			log.Printf("conf error: %s", err)
