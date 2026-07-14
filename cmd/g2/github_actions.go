@@ -14,6 +14,13 @@ func escapeGithubActions(s string) string {
 	return s
 }
 
+func escapeGithubActionsParam(s string) string {
+	s = escapeGithubActions(s)
+	s = strings.ReplaceAll(s, ",", "%2C")
+	s = strings.ReplaceAll(s, ":", "%3A")
+	return s
+}
+
 func printGithubActionsFormat(warnings []lints.LintResult) {
 	for _, w := range warnings {
 		sev := "notice"
@@ -32,7 +39,7 @@ func printGithubActionsFormat(warnings []lints.LintResult) {
 			parts = append(parts, fmt.Sprintf("line=%d", w.Line))
 		}
 		if w.RuleMetadata.Title != "" {
-			parts = append(parts, fmt.Sprintf("title=%s", escapeGithubActions(w.RuleMetadata.Title)))
+			parts = append(parts, fmt.Sprintf("title=%s", escapeGithubActionsParam(w.RuleMetadata.Title)))
 		}
 
 		msg := escapeGithubActions(w.Message)
