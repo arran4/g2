@@ -516,7 +516,5 @@ func runWorldTUI(path string, lines []string) error {
 			}
 			render()
 		}
-	} // end of select
-
-	return nil
+	}
 }
