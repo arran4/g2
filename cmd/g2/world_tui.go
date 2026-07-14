@@ -130,10 +130,14 @@ func runWorldTUI(path string, lines []string) error {
 		if mode == "edit_modal" {
 			modalWidth := 60
 			modalHeight := len(editModalOptions) + 4
-			startX := (termWidth - modalWidth) / 2 + 1
-			if startX < 1 { startX = 1 }
-			startY := (termHeight - modalHeight) / 2 + 1
-			if startY < 1 { startY = 1 }
+			startX := (termWidth-modalWidth)/2 + 1
+			if startX < 1 {
+				startX = 1
+			}
+			startY := (termHeight-modalHeight)/2 + 1
+			if startY < 1 {
+				startY = 1
+			}
 
 			for i := 0; i < modalHeight; i++ {
 				fmt.Printf("\033[%d;%dH", startY+i, startX)
@@ -168,315 +172,343 @@ func runWorldTUI(path string, lines []string) error {
 
 	render()
 
-	buf := make([]byte, 32)
-	for {
-		n, err := os.Stdin.Read(buf)
-		if err != nil {
-			if err == io.EOF {
+	resizeChan := make(chan struct{}, 1)
+	setupResizeHandler(resizeChan)
+
+	type inputResult struct {
+		n   int
+		buf []byte
+		err error
+	}
+	inputChan := make(chan inputResult)
+	go func() {
+		for {
+			buf := make([]byte, 32)
+			n, err := os.Stdin.Read(buf)
+			inputChan <- inputResult{n: n, buf: buf, err: err}
+			if err != nil {
 				break
 			}
-			return err
 		}
+	}()
 
-		if mode == "edit_modal" {
-			if n == 1 {
-				switch buf[0] {
-				case 27, 'q': // Esc or q
-					mode = "normal"
-				case 'j':
-					if editModalCursor < len(editModalOptions)-1 {
-						editModalCursor++
-					}
-				case 'k':
-					if editModalCursor > 0 {
-						editModalCursor--
-					}
-				case 13: // Enter
-					if len(filteredIndices) > 0 && cursor < len(filteredIndices) {
-						promptRealIdx = filteredIndices[cursor]
-						line := lines[promptRealIdx]
-						switch editModalCursor {
-						case 0: // Comment / Uncomment
-							trimmed := strings.TrimSpace(line)
-							if strings.HasPrefix(trimmed, "#") {
-								lines[promptRealIdx] = strings.TrimSpace(strings.TrimPrefix(trimmed, "#"))
-							} else {
-								lines[promptRealIdx] = "# " + line
-							}
-							mode = "normal"
-						case 1: // Specify version / remove version
-							inputBuffer = ""
-							mode = "prompt_version"
-						case 2: // Add / remove comment (After on line)
-							trimmed := strings.TrimSpace(line)
-							if strings.HasPrefix(trimmed, "#") {
-								inputBuffer = ""
-								mode = "prompt_comment_after"
-							} else if idx := strings.Index(line, "#"); idx != -1 {
-								lines[promptRealIdx] = strings.TrimSpace(line[:idx])
-								mode = "normal"
-							} else {
-								inputBuffer = ""
-								mode = "prompt_comment_after"
-							}
-						case 3: // Add / remove comment (Line before)
-							if promptRealIdx > 0 && strings.HasPrefix(strings.TrimSpace(lines[promptRealIdx-1]), "#") {
-								lines = append(lines[:promptRealIdx-1], lines[promptRealIdx:]...)
-								mode = "normal"
-							} else {
-								// Insert empty line before
-								lines = append(lines, "")
-								copy(lines[promptRealIdx+1:], lines[promptRealIdx:])
-								lines[promptRealIdx] = ""
-								inputBuffer = ""
-								mode = "prompt_comment_before"
-							}
-						case 4: // Modify / replace line
-							inputBuffer = line
-							mode = "prompt_replace"
-						}
-					} else {
-						mode = "normal"
-					}
+	for {
+		select {
+		case <-resizeChan:
+			render()
+			continue
+		case res := <-inputChan:
+			n := res.n
+			buf := res.buf
+			err := res.err
+
+			if err != nil {
+				if err == io.EOF {
+					return nil
 				}
-			} else if n >= 3 && buf[0] == 27 && buf[1] == 91 {
-				switch buf[2] {
-				case 'A': // Up
-					if editModalCursor > 0 {
-						editModalCursor--
-					}
-				case 'B': // Down
-					if editModalCursor < len(editModalOptions)-1 {
-						editModalCursor++
-					}
-				}
+				return err
 			}
-		} else if mode == "insert" || mode == "filter" || strings.HasPrefix(mode, "prompt_") {
-			// Handle insert/filter/prompt modes
-			// Support UTF-8 multi-byte sequences by converting the entire buffer read
-			for i := 0; i < n; i++ {
-				c := buf[i]
-				switch c {
-				case 27: // Esc
-					if mode == "insert" || strings.HasPrefix(mode, "prompt_") {
-						if mode == "prompt_comment_before" {
-							lines = append(lines[:promptRealIdx], lines[promptRealIdx+1:]...)
+
+			if mode == "edit_modal" {
+				if n == 1 {
+					switch buf[0] {
+					case 27, 'q': // Esc or q
+						mode = "normal"
+					case 'j':
+						if editModalCursor < len(editModalOptions)-1 {
+							editModalCursor++
 						}
-						inputBuffer = ""
-					}
-					mode = "normal"
-				case 13: // Enter
-					if mode == "insert" {
-						if strings.TrimSpace(inputBuffer) != "" {
-							if len(filteredIndices) == 0 || cursor >= len(filteredIndices) {
-								lines = append(lines, inputBuffer)
-							} else {
-								realIdx := filteredIndices[cursor]
-								// Add to lines and move cursor
-								lines = append(lines, "")
-								copy(lines[realIdx+1:], lines[realIdx:])
-								lines[realIdx] = inputBuffer
+					case 'k':
+						if editModalCursor > 0 {
+							editModalCursor--
+						}
+					case 13: // Enter
+						if len(filteredIndices) > 0 && cursor < len(filteredIndices) {
+							promptRealIdx = filteredIndices[cursor]
+							line := lines[promptRealIdx]
+							switch editModalCursor {
+							case 0: // Comment / Uncomment
+								trimmed := strings.TrimSpace(line)
+								if strings.HasPrefix(trimmed, "#") {
+									lines[promptRealIdx] = strings.TrimSpace(strings.TrimPrefix(trimmed, "#"))
+								} else {
+									lines[promptRealIdx] = "# " + line
+								}
+								mode = "normal"
+							case 1: // Specify version / remove version
+								inputBuffer = ""
+								mode = "prompt_version"
+							case 2: // Add / remove comment (After on line)
+								trimmed := strings.TrimSpace(line)
+								if strings.HasPrefix(trimmed, "#") {
+									inputBuffer = ""
+									mode = "prompt_comment_after"
+								} else if idx := strings.Index(line, "#"); idx != -1 {
+									lines[promptRealIdx] = strings.TrimSpace(line[:idx])
+									mode = "normal"
+								} else {
+									inputBuffer = ""
+									mode = "prompt_comment_after"
+								}
+							case 3: // Add / remove comment (Line before)
+								if promptRealIdx > 0 && strings.HasPrefix(strings.TrimSpace(lines[promptRealIdx-1]), "#") {
+									lines = append(lines[:promptRealIdx-1], lines[promptRealIdx:]...)
+									mode = "normal"
+								} else {
+									// Insert empty line before
+									lines = append(lines, "")
+									copy(lines[promptRealIdx+1:], lines[promptRealIdx:])
+									lines[promptRealIdx] = ""
+									inputBuffer = ""
+									mode = "prompt_comment_before"
+								}
+							case 4: // Modify / replace line
+								inputBuffer = line
+								mode = "prompt_replace"
 							}
+						} else {
+							mode = "normal"
 						}
-					} else if mode == "prompt_version" {
-						line := lines[promptRealIdx]
-						commentStr := ""
-						pkgStr := line
-						if idx := strings.Index(line, "#"); idx != -1 {
-							pkgStr = strings.TrimSpace(line[:idx])
-							commentStr = " " + strings.TrimSpace(line[idx:])
+					}
+				} else if n >= 3 && buf[0] == 27 && buf[1] == 91 {
+					switch buf[2] {
+					case 'A': // Up
+						if editModalCursor > 0 {
+							editModalCursor--
 						}
-						basePkg := strings.TrimLeft(pkgStr, "=<>!~")
-						if idx := strings.IndexAny(basePkg, "[:"); idx != -1 {
-							basePkg = basePkg[:idx]
+					case 'B': // Down
+						if editModalCursor < len(editModalOptions)-1 {
+							editModalCursor++
 						}
-						category := ""
-						pkgName := basePkg
-						if slashIdx := strings.Index(basePkg, "/"); slashIdx != -1 {
-							category = basePkg[:slashIdx+1]
-							pkgName = basePkg[slashIdx+1:]
+					}
+				}
+			} else if mode == "insert" || mode == "filter" || strings.HasPrefix(mode, "prompt_") {
+				// Handle insert/filter/prompt modes
+				// Support UTF-8 multi-byte sequences by converting the entire buffer read
+				for i := 0; i < n; i++ {
+					c := buf[i]
+					switch c {
+					case 27: // Esc
+						if mode == "insert" || strings.HasPrefix(mode, "prompt_") {
+							if mode == "prompt_comment_before" {
+								lines = append(lines[:promptRealIdx], lines[promptRealIdx+1:]...)
+							}
+							inputBuffer = ""
 						}
-						parts := strings.Split(pkgName, "-")
-						var resParts []string
-						for i, p := range parts {
-							if i > 0 && len(p) > 0 && p[0] >= '0' && p[0] <= '9' {
-								isPureInt := true
-								for _, r := range p {
-									if r < '0' || r > '9' {
-										isPureInt = false
+						mode = "normal"
+					case 13: // Enter
+						if mode == "insert" {
+							if strings.TrimSpace(inputBuffer) != "" {
+								if len(filteredIndices) == 0 || cursor >= len(filteredIndices) {
+									lines = append(lines, inputBuffer)
+								} else {
+									realIdx := filteredIndices[cursor]
+									// Add to lines and move cursor
+									lines = append(lines, "")
+									copy(lines[realIdx+1:], lines[realIdx:])
+									lines[realIdx] = inputBuffer
+								}
+							}
+						} else if mode == "prompt_version" {
+							line := lines[promptRealIdx]
+							commentStr := ""
+							pkgStr := line
+							if idx := strings.Index(line, "#"); idx != -1 {
+								pkgStr = strings.TrimSpace(line[:idx])
+								commentStr = " " + strings.TrimSpace(line[idx:])
+							}
+							basePkg := strings.TrimLeft(pkgStr, "=<>!~")
+							if idx := strings.IndexAny(basePkg, "[:"); idx != -1 {
+								basePkg = basePkg[:idx]
+							}
+							category := ""
+							pkgName := basePkg
+							if slashIdx := strings.Index(basePkg, "/"); slashIdx != -1 {
+								category = basePkg[:slashIdx+1]
+								pkgName = basePkg[slashIdx+1:]
+							}
+							parts := strings.Split(pkgName, "-")
+							var resParts []string
+							for i, p := range parts {
+								if i > 0 && len(p) > 0 && p[0] >= '0' && p[0] <= '9' {
+									isPureInt := true
+									for _, r := range p {
+										if r < '0' || r > '9' {
+											isPureInt = false
+											break
+										}
+									}
+									if strings.Contains(p, ".") || isPureInt || strings.Contains(p, "_") || len(p) >= 4 {
 										break
 									}
 								}
-								if strings.Contains(p, ".") || isPureInt || strings.Contains(p, "_") || len(p) >= 4 {
-									break
+								resParts = append(resParts, p)
+							}
+							basePkg = category + strings.Join(resParts, "-")
+
+							versions := strings.Fields(inputBuffer)
+							if len(versions) == 0 {
+								lines[promptRealIdx] = basePkg + commentStr
+							} else {
+								var newLines []string
+								for _, v := range versions {
+									newLines = append(newLines, fmt.Sprintf("=%s-%s%s", basePkg, v, commentStr))
 								}
+								lines = append(lines[:promptRealIdx], append(newLines, lines[promptRealIdx+1:]...)...)
 							}
-							resParts = append(resParts, p)
-						}
-						basePkg = category + strings.Join(resParts, "-")
-
-						versions := strings.Fields(inputBuffer)
-						if len(versions) == 0 {
-							lines[promptRealIdx] = basePkg + commentStr
-						} else {
-							var newLines []string
-							for _, v := range versions {
-								newLines = append(newLines, fmt.Sprintf("=%s-%s%s", basePkg, v, commentStr))
+						} else if mode == "prompt_comment_after" {
+							if strings.TrimSpace(inputBuffer) != "" {
+								lines[promptRealIdx] = lines[promptRealIdx] + " # " + inputBuffer
 							}
-							lines = append(lines[:promptRealIdx], append(newLines, lines[promptRealIdx+1:]...)...)
+						} else if mode == "prompt_comment_before" {
+							if strings.TrimSpace(inputBuffer) != "" {
+								lines[promptRealIdx] = "# " + inputBuffer
+							} else {
+								// If empty, remove the line we just inserted
+								lines = append(lines[:promptRealIdx], lines[promptRealIdx+1:]...)
+							}
+						} else if mode == "prompt_replace" {
+							if strings.TrimSpace(inputBuffer) != "" {
+								lines[promptRealIdx] = inputBuffer
+							} else {
+								lines = append(lines[:promptRealIdx], lines[promptRealIdx+1:]...)
+							}
 						}
-					} else if mode == "prompt_comment_after" {
-						if strings.TrimSpace(inputBuffer) != "" {
-							lines[promptRealIdx] = lines[promptRealIdx] + " # " + inputBuffer
-						}
-					} else if mode == "prompt_comment_before" {
-						if strings.TrimSpace(inputBuffer) != "" {
-							lines[promptRealIdx] = "# " + inputBuffer
-						} else {
-							// If empty, remove the line we just inserted
-							lines = append(lines[:promptRealIdx], lines[promptRealIdx+1:]...)
-						}
-					} else if mode == "prompt_replace" {
-						if strings.TrimSpace(inputBuffer) != "" {
-							lines[promptRealIdx] = inputBuffer
-						} else {
-							lines = append(lines[:promptRealIdx], lines[promptRealIdx+1:]...)
-						}
-					}
 
-					if mode != "filter" {
-						inputBuffer = ""
-						mode = "normal"
-					}
-				case 127, 8: // Backspace
-					switch mode {
-					case "insert", "prompt_version", "prompt_comment_after", "prompt_comment_before", "prompt_replace":
-						runes := []rune(inputBuffer)
-						if len(runes) > 0 {
-							inputBuffer = string(runes[:len(runes)-1])
+						if mode != "filter" {
+							inputBuffer = ""
+							mode = "normal"
 						}
-					case "filter":
-						runes := []rune(filterQuery)
-						if len(runes) > 0 {
-							filterQuery = string(runes[:len(runes)-1])
-							cursor = 0
-						}
-					}
-				default:
-					if c >= 32 || c > 127 { // Allows ASCII and extended UTF-8 bytes
+					case 127, 8: // Backspace
 						switch mode {
 						case "insert", "prompt_version", "prompt_comment_after", "prompt_comment_before", "prompt_replace":
-							inputBuffer += string(c)
+							runes := []rune(inputBuffer)
+							if len(runes) > 0 {
+								inputBuffer = string(runes[:len(runes)-1])
+							}
 						case "filter":
-							filterQuery += string(c)
-							cursor = 0
+							runes := []rune(filterQuery)
+							if len(runes) > 0 {
+								filterQuery = string(runes[:len(runes)-1])
+								cursor = 0
+							}
+						}
+					default:
+						if c >= 32 || c > 127 { // Allows ASCII and extended UTF-8 bytes
+							switch mode {
+							case "insert", "prompt_version", "prompt_comment_after", "prompt_comment_before", "prompt_replace":
+								inputBuffer += string(c)
+							case "filter":
+								filterQuery += string(c)
+								cursor = 0
+							}
 						}
 					}
 				}
-			}
-		} else {
-			// Handle normal mode
-			if n == 1 {
-				switch buf[0] {
-				case 'q', 27: // q or Esc
-					return nil
-				case 's', 13: // s or Enter
-					return writeWorldFile(path, lines)
-				case 'j':
-					if cursor < len(filteredIndices)-1 {
-						cursor++
-					}
-				case 'k':
-					if cursor > 0 {
-						cursor--
-					}
-				case 'c', ' ': // Toggle comment
-					if len(filteredIndices) > 0 && cursor < len(filteredIndices) {
-						realIdx := filteredIndices[cursor]
-						line := lines[realIdx]
-						trimmed := strings.TrimSpace(line)
-						if strings.HasPrefix(trimmed, "#") {
-							// Uncomment (remove first occurrence of # and leading spaces)
-							lines[realIdx] = strings.TrimSpace(strings.TrimPrefix(trimmed, "#"))
-						} else {
-							// Comment
-							lines[realIdx] = "# " + line
+			} else {
+				// Handle normal mode
+				if n == 1 {
+					switch buf[0] {
+					case 'q', 27: // q or Esc
+						return nil
+					case 's', 13: // s or Enter
+						return writeWorldFile(path, lines)
+					case 'j':
+						if cursor < len(filteredIndices)-1 {
+							cursor++
 						}
-					}
-				case 'd': // Delete
-					if len(filteredIndices) > 0 && cursor < len(filteredIndices) {
-						realIdx := filteredIndices[cursor]
-						lines = append(lines[:realIdx], lines[realIdx+1:]...)
-						if cursor >= len(filteredIndices)-1 && cursor > 0 {
+					case 'k':
+						if cursor > 0 {
 							cursor--
 						}
+					case 'c', ' ': // Toggle comment
+						if len(filteredIndices) > 0 && cursor < len(filteredIndices) {
+							realIdx := filteredIndices[cursor]
+							line := lines[realIdx]
+							trimmed := strings.TrimSpace(line)
+							if strings.HasPrefix(trimmed, "#") {
+								// Uncomment (remove first occurrence of # and leading spaces)
+								lines[realIdx] = strings.TrimSpace(strings.TrimPrefix(trimmed, "#"))
+							} else {
+								// Comment
+								lines[realIdx] = "# " + line
+							}
+						}
+					case 'd': // Delete
+						if len(filteredIndices) > 0 && cursor < len(filteredIndices) {
+							realIdx := filteredIndices[cursor]
+							lines = append(lines[:realIdx], lines[realIdx+1:]...)
+							if cursor >= len(filteredIndices)-1 && cursor > 0 {
+								cursor--
+							}
+						}
+					case 'a': // Add
+						mode = "insert"
+					case 'e': // Edit
+						if len(filteredIndices) > 0 && cursor < len(filteredIndices) {
+							editModalCursor = 0
+							mode = "edit_modal"
+						}
+					case '/': // Filter
+						mode = "filter"
 					}
-				case 'a': // Add
-					mode = "insert"
-				case 'e': // Edit
-					if len(filteredIndices) > 0 && cursor < len(filteredIndices) {
-						editModalCursor = 0
-						mode = "edit_modal"
-					}
-				case '/': // Filter
-					mode = "filter"
-				}
-			} else if n >= 3 && buf[0] == 27 && buf[1] == 91 {
-				// Handle escape sequences
-				switch buf[2] {
-				case 'A': // Up arrow
-					if cursor > 0 {
-						cursor--
-					}
-				case 'B': // Down arrow
-					if cursor < len(filteredIndices)-1 {
-						cursor++
-					}
-				case '5': // Page Up
-					if n >= 4 && buf[3] == '~' {
-						cursor -= listHeight
-						if cursor < 0 {
+				} else if n >= 3 && buf[0] == 27 && buf[1] == 91 {
+					// Handle escape sequences
+					switch buf[2] {
+					case 'A': // Up arrow
+						if cursor > 0 {
+							cursor--
+						}
+					case 'B': // Down arrow
+						if cursor < len(filteredIndices)-1 {
+							cursor++
+						}
+					case '5': // Page Up
+						if n >= 4 && buf[3] == '~' {
+							cursor -= listHeight
+							if cursor < 0 {
+								cursor = 0
+							}
+						}
+					case '6': // Page Down
+						if n >= 4 && buf[3] == '~' {
+							cursor += listHeight
+							if cursor >= len(filteredIndices) && len(filteredIndices) > 0 {
+								cursor = len(filteredIndices) - 1
+							}
+						}
+					case '1', '7': // Home
+						if n >= 4 && buf[3] == '~' {
 							cursor = 0
 						}
-					}
-				case '6': // Page Down
-					if n >= 4 && buf[3] == '~' {
-						cursor += listHeight
-						if cursor >= len(filteredIndices) && len(filteredIndices) > 0 {
-							cursor = len(filteredIndices) - 1
+					case '4', '8': // End
+						if n >= 4 && buf[3] == '~' {
+							if len(filteredIndices) > 0 {
+								cursor = len(filteredIndices) - 1
+							}
 						}
-					}
-				case '1', '7': // Home
-					if n >= 4 && buf[3] == '~' {
+					case 'H': // Home (some terminals)
 						cursor = 0
-					}
-				case '4', '8': // End
-					if n >= 4 && buf[3] == '~' {
+					case 'F': // End (some terminals)
 						if len(filteredIndices) > 0 {
 							cursor = len(filteredIndices) - 1
 						}
 					}
-				case 'H': // Home (some terminals)
-					cursor = 0
-				case 'F': // End (some terminals)
-					if len(filteredIndices) > 0 {
-						cursor = len(filteredIndices) - 1
-					}
-				}
-			} else if n >= 3 && buf[0] == 27 && buf[1] == 'O' {
-				// Handle SS3 escape sequences
-				switch buf[2] {
-				case 'H': // Home
-					cursor = 0
-				case 'F': // End
-					if len(filteredIndices) > 0 {
-						cursor = len(filteredIndices) - 1
+				} else if n >= 3 && buf[0] == 27 && buf[1] == 'O' {
+					// Handle SS3 escape sequences
+					switch buf[2] {
+					case 'H': // Home
+						cursor = 0
+					case 'F': // End
+						if len(filteredIndices) > 0 {
+							cursor = len(filteredIndices) - 1
+						}
 					}
 				}
 			}
+			render()
 		}
-		render()
-	}
+	} // end of select
 
 	return nil
 }
