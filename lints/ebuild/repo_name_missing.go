@@ -30,6 +30,7 @@ func init() {
 
 type RepoNameMissingLintRule struct {
 	mu        sync.RWMutex
+	once      sync.Once
 	repoCache map[string]bool // map[repoDir]hasRepoName
 }
 
@@ -41,45 +42,42 @@ func (r *RepoNameMissingLintRule) LintWithQA(repoDir string, pkg *g2.PackageData
 	var results []lints.LintResult
 	severity := lints.SeverityError
 
+	r.once.Do(func() {
+		r.repoCache = make(map[string]bool)
+	})
+
 	r.mu.RLock()
-	if r.repoCache == nil {
-		r.mu.RUnlock()
-		r.mu.Lock()
-		if r.repoCache == nil {
-			r.repoCache = make(map[string]bool)
-		}
-		r.mu.Unlock()
-		r.mu.RLock()
-	}
 	hasName, cached := r.repoCache[repoDir]
 	r.mu.RUnlock()
 
 	if !cached {
-		r.mu.Lock()
-		hasName, cached = r.repoCache[repoDir]
-		if !cached {
-			hasName = false
-			// Check layout.conf
-			lc, err := g2.ParseLayoutConf(filepath.Join(repoDir, "metadata", "layout.conf"))
-			if err == nil && lc.GetValue("repo-name") != "" {
+		// Perform I/O outside of the lock to avoid blocking other goroutines
+		hasName = false
+		lc, err := g2.ParseLayoutConf(filepath.Join(repoDir, "metadata", "layout.conf"))
+		if err == nil && lc.GetValue("repo-name") != "" {
+			hasName = true
+		} else {
+			// Check profiles/repo_name
+			b, err := os.ReadFile(filepath.Join(repoDir, "profiles", "repo_name"))
+			if err == nil && strings.TrimSpace(string(b)) != "" {
 				hasName = true
-			} else {
-				// Check profiles/repo_name
-				b, err := os.ReadFile(filepath.Join(repoDir, "profiles", "repo_name"))
-				if err == nil && strings.TrimSpace(string(b)) != "" {
-					hasName = true
-				}
 			}
-			r.repoCache[repoDir] = hasName
 		}
+
+		r.mu.Lock()
+		r.repoCache[repoDir] = hasName
 		r.mu.Unlock()
 	}
 
 	if !hasName {
+		var pkgName string
+		if pkg != nil {
+			pkgName = pkg.Category + "/" + pkg.Name
+		}
 		res := lints.LintResult{
 			RuleMetadata: ruleRepoNameMissing,
 			Message:      fmt.Sprintf("[%s] Repository is missing a repo-name in metadata/layout.conf or profiles/repo_name", cases.Title(language.Und, cases.NoLower).String(string(severity))),
-			Package:      pkg.Category + "/" + pkg.Name,
+			Package:      pkgName,
 		}
 		results = append(results, res)
 	}
