@@ -1,0 +1,6 @@
+Hello! We have added a new `--format=github-actions` flag to the `g2` tool. This format outputs lint errors using the standard GitHub Actions log commands (e.g. `::error file=...,title=...::message`), which allows GitHub to inline the errors directly into pull requests and action summaries, including support for multiline markdown!
+
+Please update this `g2-action` repository to utilize this new formatting flag. Specifically:
+
+1. In the script or Action runner where the `g2 lint` or `g2 ebuild check` command is invoked, append `--format=github-actions`.
+2. Ensure that any previous parsing logic that manually attempted to parse text or JSON to output GitHub Actions annotations can be safely simplified or removed.

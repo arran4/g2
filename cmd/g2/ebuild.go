@@ -625,7 +625,7 @@ func (cfg *CmdEbuildArgConfig) cmdEbuildAsJson(args []string) error {
 }
 func (cfg *CmdEbuildArgConfig) cmdEbuildCheck(args []string) error {
 	fs := flag.NewFlagSet("check", flag.ExitOnError)
-	format := fs.String("format", "text", "Output format: text or json")
+	format := fs.String("format", "text", "Output format: text, json, or github-actions")
 	severityFilter := fs.String("severity", "", "Only show warnings of this severity (error, warning, notice, info)")
 	sourceFilter := fs.String("only-source", "", "Only show warnings from this source (g2, pkgcheck)")
 	tagFilter := fs.String("only-tag", "", "Only show warnings with this tag")
@@ -739,6 +739,8 @@ func (cfg *CmdEbuildArgConfig) cmdEbuildCheck(args []string) error {
 			return fmt.Errorf("formatting json: %w", err)
 		}
 		fmt.Println(string(out))
+	} else if *format == "github-actions" {
+		printGithubActionsFormat(filteredWarnings)
 	} else {
 		for _, w := range filteredWarnings {
 			fmt.Printf("%s: [%s] %s\n", w.File, w.RuleMetadata.Severity, w.Message)

@@ -34,7 +34,7 @@ func (cfg *MainArgConfig) cmdLint(args []string) error {
 		return nil
 	}
 	fs := flag.NewFlagSet("lint", flag.ExitOnError)
-	format := fs.String("format", "text", "Output format: text or json")
+	format := fs.String("format", "text", "Output format: text, json, or github-actions")
 	severityFilter := fs.String("severity", "", "Only show warnings of this severity (error, warning, notice, info)")
 	sourceFilter := fs.String("only-source", "", "Only show warnings from this source (g2, pkgcheck)")
 	tagFilter := fs.String("only-tag", "", "Only show warnings with this tag")
@@ -119,6 +119,8 @@ func (cfg *MainArgConfig) cmdLint(args []string) error {
 			return fmt.Errorf("formatting json: %w", err)
 		}
 		fmt.Println(string(out))
+	} else if *format == "github-actions" {
+		printGithubActionsFormat(allResults)
 	}
 
 	if hasErrors {
