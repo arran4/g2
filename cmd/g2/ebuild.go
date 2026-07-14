@@ -733,15 +733,16 @@ func (cfg *CmdEbuildArgConfig) cmdEbuildCheck(args []string) error {
 		hasErrors = true
 	}
 
-	if *format == "json" {
+	switch *format {
+	case "json":
 		out, err := json.MarshalIndent(filteredWarnings, "", "  ")
 		if err != nil {
 			return fmt.Errorf("formatting json: %w", err)
 		}
 		fmt.Println(string(out))
-	} else if *format == "github-actions" {
+	case "github-actions":
 		printGithubActionsFormat(filteredWarnings)
-	} else {
+	default:
 		for _, w := range filteredWarnings {
 			fmt.Printf("%s: [%s] %s\n", w.File, w.RuleMetadata.Severity, w.Message)
 		}

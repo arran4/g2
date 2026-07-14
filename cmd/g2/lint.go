@@ -113,13 +113,14 @@ func (cfg *MainArgConfig) cmdLint(args []string) error {
 		}
 	}
 
-	if *format == "json" {
+	switch *format {
+	case "json":
 		out, err := json.MarshalIndent(allResults, "", "  ")
 		if err != nil {
 			return fmt.Errorf("formatting json: %w", err)
 		}
 		fmt.Println(string(out))
-	} else if *format == "github-actions" {
+	case "github-actions":
 		printGithubActionsFormat(allResults)
 	}
 
