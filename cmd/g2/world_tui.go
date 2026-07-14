@@ -173,19 +173,27 @@ func runWorldTUI(path string, lines []string) error {
 	render()
 
 	resizeChan := make(chan struct{}, 1)
-	setupResizeHandler(resizeChan)
+	cleanupResize := setupResizeHandler(resizeChan)
+	defer cleanupResize()
 
 	type inputResult struct {
 		n   int
 		buf []byte
 		err error
 	}
+	quitChan := make(chan struct{})
+	defer close(quitChan)
+
 	inputChan := make(chan inputResult)
 	go func() {
 		for {
 			buf := make([]byte, 32)
 			n, err := os.Stdin.Read(buf)
-			inputChan <- inputResult{n: n, buf: buf, err: err}
+			select {
+			case inputChan <- inputResult{n: n, buf: buf, err: err}:
+			case <-quitChan:
+				return
+			}
 			if err != nil {
 				break
 			}
