@@ -26,8 +26,8 @@ func TestRepoNameMissingLintRule(t *testing.T) {
 			name: "Missing repo-name",
 			setupRepo: func(repoDir string) {
 				// Create metadata and profiles dirs, but leave them empty
-				os.MkdirAll(filepath.Join(repoDir, "metadata"), 0755)
-				os.MkdirAll(filepath.Join(repoDir, "profiles"), 0755)
+				_ = os.MkdirAll(filepath.Join(repoDir, "metadata"), 0755)
+				_ = os.MkdirAll(filepath.Join(repoDir, "profiles"), 0755)
 			},
 			expectErrors: 1,
 		},
@@ -35,9 +35,9 @@ func TestRepoNameMissingLintRule(t *testing.T) {
 			name: "Present in layout.conf",
 			setupRepo: func(repoDir string) {
 				metadataDir := filepath.Join(repoDir, "metadata")
-				os.MkdirAll(metadataDir, 0755)
+				_ = os.MkdirAll(metadataDir, 0755)
 				layoutConf := "repo-name = test-overlay\nmasters = gentoo\n"
-				os.WriteFile(filepath.Join(metadataDir, "layout.conf"), []byte(layoutConf), 0644)
+				_ = os.WriteFile(filepath.Join(metadataDir, "layout.conf"), []byte(layoutConf), 0644)
 			},
 			expectErrors: 0,
 		},
@@ -45,8 +45,8 @@ func TestRepoNameMissingLintRule(t *testing.T) {
 			name: "Present in profiles/repo_name",
 			setupRepo: func(repoDir string) {
 				profilesDir := filepath.Join(repoDir, "profiles")
-				os.MkdirAll(profilesDir, 0755)
-				os.WriteFile(filepath.Join(profilesDir, "repo_name"), []byte("test-overlay\n"), 0644)
+				_ = os.MkdirAll(profilesDir, 0755)
+				_ = os.WriteFile(filepath.Join(profilesDir, "repo_name"), []byte("test-overlay\n"), 0644)
 			},
 			expectErrors: 0,
 		},
@@ -54,9 +54,9 @@ func TestRepoNameMissingLintRule(t *testing.T) {
 			name: "Empty layout.conf repo-name",
 			setupRepo: func(repoDir string) {
 				metadataDir := filepath.Join(repoDir, "metadata")
-				os.MkdirAll(metadataDir, 0755)
+				_ = os.MkdirAll(metadataDir, 0755)
 				layoutConf := "repo-name =\nmasters = gentoo\n"
-				os.WriteFile(filepath.Join(metadataDir, "layout.conf"), []byte(layoutConf), 0644)
+				_ = os.WriteFile(filepath.Join(metadataDir, "layout.conf"), []byte(layoutConf), 0644)
 			},
 			expectErrors: 1,
 		},
@@ -68,7 +68,9 @@ func TestRepoNameMissingLintRule(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to create temp dir: %v", err)
 			}
-			defer os.RemoveAll(tempDir)
+			defer func() {
+				_ = os.RemoveAll(tempDir)
+			}()
 
 			tt.setupRepo(tempDir)
 
