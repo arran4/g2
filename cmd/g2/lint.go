@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/arran4/g2"
@@ -44,13 +45,51 @@ func (cfg *MainArgConfig) cmdLint(args []string) error {
 	}
 
 	location := "."
+	var targetPkgs []string
+
 	if fs.NArg() > 0 {
-		location = fs.Arg(0)
+		firstArg := fs.Arg(0)
+		isRepo := false
+		if _, err := os.Stat(filepath.Join(firstArg, "profiles")); err == nil {
+			isRepo = true
+		} else if _, err := os.Stat(filepath.Join(firstArg, "metadata", "layout.conf")); err == nil {
+			isRepo = true
+		} else if firstArg == "." {
+			isRepo = true
+		} else if len(fs.Args()) == 1 {
+			_, errProfiles := os.Stat("profiles")
+			_, errMetadata := os.Stat(filepath.Join("metadata", "layout.conf"))
+			if errProfiles == nil || errMetadata == nil {
+				isRepo = false
+			} else {
+				cleanArg := filepath.ToSlash(filepath.Clean(firstArg))
+				if !strings.Contains(cleanArg, "/") {
+					isRepo = true
+				}
+			}
+		}
+
+		if isRepo {
+			location = firstArg
+			targetPkgs = fs.Args()[1:]
+		} else {
+			targetPkgs = fs.Args()
+		}
 	}
 
 	siteData, err := parseRepo(os.DirFS(location), ".", "Linting", true, nil)
 	if err != nil {
 		return fmt.Errorf("parsing repo: %w", err)
+	}
+
+	var targetMap map[string]bool
+	if len(targetPkgs) > 0 {
+		targetMap = make(map[string]bool)
+		for _, p := range targetPkgs {
+			cleanP := filepath.ToSlash(filepath.Clean(p))
+			targetMap[cleanP] = true
+			targetMap[filepath.Base(cleanP)] = true
+		}
 	}
 
 	hasErrors := false
@@ -59,6 +98,12 @@ func (cfg *MainArgConfig) cmdLint(args []string) error {
 
 	for _, cat := range siteData.Categories {
 		for _, pkg := range cat.Packages {
+			if len(targetMap) > 0 {
+				qualified := pkg.Category + "/" + pkg.Name
+				if !targetMap[qualified] && !targetMap[pkg.Name] && !targetMap[pkg.Category] {
+					continue
+				}
+			}
 			pkgCopy := g2.PackageData{
 				Name:          pkg.Name,
 				Category:      pkg.Category,
