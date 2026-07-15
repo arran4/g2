@@ -56,17 +56,6 @@ func (cfg *MainArgConfig) cmdLint(args []string) error {
 			isRepo = true
 		} else if firstArg == "." {
 			isRepo = true
-		} else if len(fs.Args()) == 1 {
-			_, errProfiles := os.Stat("profiles")
-			_, errMetadata := os.Stat(filepath.Join("metadata", "layout.conf"))
-			if errProfiles == nil || errMetadata == nil {
-				isRepo = false
-			} else {
-				cleanArg := filepath.ToSlash(filepath.Clean(firstArg))
-				if !strings.Contains(cleanArg, "/") {
-					isRepo = true
-				}
-			}
 		}
 
 		if isRepo {
@@ -88,7 +77,6 @@ func (cfg *MainArgConfig) cmdLint(args []string) error {
 		for _, p := range targetPkgs {
 			cleanP := filepath.ToSlash(filepath.Clean(p))
 			targetMap[cleanP] = true
-			targetMap[filepath.Base(cleanP)] = true
 		}
 	}
 
