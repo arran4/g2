@@ -276,6 +276,8 @@ g2 lint . app-misc/foo
 g2 lint /var/db/repos/my-overlay app-misc/foo dev-util/bar
 ```
 
+*(Note: In the future, this command may be split into separate subcommands like `g2 lint repo`, `g2 lint package`, and `g2 lint query` for clarity. It does not currently support full package queries like `<pn>::guru`, `app-misc/foo-v3`, or `>=`)*
+
 ### `use`
 
 Manage and discover USE flags, `use.desc`, and `use.local.desc`.
