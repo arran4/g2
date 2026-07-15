@@ -260,18 +260,23 @@ Checks the repository for errors such as ebuild `IUSE` variables missing in `met
 **Usage:**
 
 ```bash
-g2 lint [<location>]
+g2 lint [<location>] [<target_package>...]
 ```
 
 **Arguments:**
 
-* `<location>`: Path to the overlay directory (defaults to `.`).
+* `<location>`: Path to the overlay directory (defaults to `.`). Detected automatically if it's a valid repo.
+* `<target_package>`: Optional specific packages or categories to lint instead of the entire repository (e.g. `app-misc/foo` or just `foo`).
 
 **Example:**
 
 ```bash
 g2 lint /var/db/repos/my-overlay
+g2 lint . app-misc/foo
+g2 lint /var/db/repos/my-overlay app-misc/foo dev-util/bar
 ```
+
+*(Note: In the future, this command may be split into separate subcommands like `g2 lint repo`, `g2 lint package`, and `g2 lint query` for clarity. It does not currently support full package queries like `<pn>::guru`, `app-misc/foo-v3`, or `>=`)*
 
 ### `use`
 

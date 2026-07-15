@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/arran4/g2"
@@ -34,6 +35,13 @@ func (cfg *MainArgConfig) cmdLint(args []string) error {
 		return nil
 	}
 	fs := flag.NewFlagSet("lint", flag.ExitOnError)
+	fs.Usage = func() {
+		fmt.Printf("Usage: g2 lint [flags] [<location>] [<target_package>...]\n\n")
+		fmt.Printf("  <location>\tOptional path to the overlay directory (defaults to '.'). Detected automatically if it's a valid repo.\n")
+		fmt.Printf("  <target_package>\tOptional specific packages or categories to lint instead of the entire repository (e.g. app-misc/foo or just foo).\n\n")
+		fmt.Printf("Flags:\n")
+		fs.PrintDefaults()
+	}
 	format := fs.String("format", "text", "Output format: text or json")
 	severityFilter := fs.String("severity", "", "Only show warnings of this severity (error, warning, notice, info)")
 	sourceFilter := fs.String("only-source", "", "Only show warnings from this source (g2, pkgcheck)")
@@ -44,13 +52,39 @@ func (cfg *MainArgConfig) cmdLint(args []string) error {
 	}
 
 	location := "."
+	var targetPkgs []string
+
 	if fs.NArg() > 0 {
-		location = fs.Arg(0)
+		firstArg := fs.Arg(0)
+		isRepo := false
+		if _, err := os.Stat(filepath.Join(firstArg, "profiles")); err == nil {
+			isRepo = true
+		} else if _, err := os.Stat(filepath.Join(firstArg, "metadata", "layout.conf")); err == nil {
+			isRepo = true
+		} else if firstArg == "." {
+			isRepo = true
+		}
+
+		if isRepo {
+			location = firstArg
+			targetPkgs = fs.Args()[1:]
+		} else {
+			targetPkgs = fs.Args()
+		}
 	}
 
 	siteData, err := parseRepo(os.DirFS(location), ".", "Linting", true, nil)
 	if err != nil {
 		return fmt.Errorf("parsing repo: %w", err)
+	}
+
+	var targetMap map[string]bool
+	if len(targetPkgs) > 0 {
+		targetMap = make(map[string]bool)
+		for _, p := range targetPkgs {
+			cleanP := filepath.ToSlash(filepath.Clean(p))
+			targetMap[cleanP] = true
+		}
 	}
 
 	hasErrors := false
@@ -59,6 +93,12 @@ func (cfg *MainArgConfig) cmdLint(args []string) error {
 
 	for _, cat := range siteData.Categories {
 		for _, pkg := range cat.Packages {
+			if len(targetMap) > 0 {
+				qualified := pkg.Category + "/" + pkg.Name
+				if !targetMap[qualified] && !targetMap[pkg.Name] && !targetMap[pkg.Category] {
+					continue
+				}
+			}
 			pkgCopy := g2.PackageData{
 				Name:          pkg.Name,
 				Category:      pkg.Category,
