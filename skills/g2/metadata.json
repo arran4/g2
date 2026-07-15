@@ -1,0 +1,6 @@
+{
+  "name": "g2-cli-assistant",
+  "description": "Agent skill for operating the g2 Gentoo overlay toolkit",
+  "target_agent": "common",
+  "scope": "project"
+}

@@ -514,3 +514,50 @@ Lists all available lint rules.
 ```bash
 g2 lint list
 ```
+
+## Agent Skills
+
+`g2` supports an agent-skill subcommand system to let users install, inspect, update, remove, and manage AI agent skills that teach coding agents (like Claude, Cursor, Copilot) how to use this CLI correctly.
+
+### Installation Syntax
+
+Skills can be installed from a local path:
+```bash
+g2 skill install ./skills/g2
+```
+
+### Scopes and Agents
+By default, skills are installed into the `project` scope (the current working directory) under `.agents/skills`.
+
+You can modify the scope and agent target using flags:
+```bash
+# Install to the global user home directory (~/.agents/skills/g2)
+g2 skill install --scope user ./skills/g2
+
+# Install specifically for a given agent tool (e.g. ~/.cursor/skills/g2)
+g2 skill install --scope user ./skills/g2 --agent cursor
+```
+
+### Managing Skills
+List installed skills:
+```bash
+g2 skill list --scope all
+```
+
+Inspect an installed skill's metadata:
+```bash
+g2 skill inspect g2
+```
+
+Update an installed skill (uses source checksums to detect manual modifications):
+```bash
+g2 skill update g2
+
+# Overwrite local modifications
+g2 skill update --force g2
+```
+
+Remove a skill:
+```bash
+g2 skill remove g2
+```
