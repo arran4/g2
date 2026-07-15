@@ -35,6 +35,13 @@ func (cfg *MainArgConfig) cmdLint(args []string) error {
 		return nil
 	}
 	fs := flag.NewFlagSet("lint", flag.ExitOnError)
+	fs.Usage = func() {
+		fmt.Printf("Usage: g2 lint [flags] [<location>] [<target_package>...]\n\n")
+		fmt.Printf("  <location>\tOptional path to the overlay directory (defaults to '.'). Detected automatically if it's a valid repo.\n")
+		fmt.Printf("  <target_package>\tOptional specific packages or categories to lint instead of the entire repository (e.g. app-misc/foo or just foo).\n\n")
+		fmt.Printf("Flags:\n")
+		fs.PrintDefaults()
+	}
 	format := fs.String("format", "text", "Output format: text or json")
 	severityFilter := fs.String("severity", "", "Only show warnings of this severity (error, warning, notice, info)")
 	sourceFilter := fs.String("only-source", "", "Only show warnings from this source (g2, pkgcheck)")
