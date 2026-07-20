@@ -1,6 +1,18 @@
 <h2>{{.Title}}</h2>
 <div class="news-dashboard">
     <p>Subscribe to the News feed: <a href="index.rss">RSS</a> | <a href="index.atom">Atom</a></p>
+    {{range .RecentGlobalNews}}
+    <article class="news-item">
+        <h3><a href="archive/{{.ArchivePath}}/">{{.Title}}</a></h3>
+        <div class="news-meta">
+            <span class="news-date">Posted: {{.Posted.Format "2006-01-02"}}</span>
+            {{if .RepoName}}<span class="news-repo"> in {{.RepoName}}</span>{{end}}
+            {{if .Author}}<span class="news-author"> by {{.Author}}</span>{{end}}
+        </div>
+        <div class="news-body">{{.ToHTMLTemplate}}</div>
+    </article>
+    <hr/>
+    {{end}}
     {{range .RecentRepoNews}}
     <article class="news-item">
         <h3><a href="archive/{{.DirName}}/">{{.Title}}</a></h3>

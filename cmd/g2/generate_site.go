@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/xml"
 	"fmt"
 	"html/template"
@@ -117,14 +118,14 @@ func generateGlobalPages(outDir string, tmpl *template.Template, sites []*g2.Sit
 
 		// Global News Articles
 		for _, n := range data.GlobalNews {
-			newsDir := filepath.Join(outDir, "news", "archive", n.DirName)
+			newsDir := filepath.Join(outDir, "news", "archive", filepath.FromSlash(n.ArchivePath))
 			if err := os.MkdirAll(newsDir, 0755); err != nil {
 				return fmt.Errorf("creating directory %s: %w", newsDir, err)
 			}
 			if err := renderPage(filepath.Join(newsDir, "index.html"), tmpl, "news_article.html", GenericPageContext{
 				Title:          n.Title,
-				BaseURL:        "../../../",
-				Breadcrumbs:    []g2.Breadcrumb{{Name: title, URL: "../../../"}, {Name: "News", URL: "../../"}, {Name: "Archive", URL: "../"}, {Name: n.Title}},
+				BaseURL:        "../../../../",
+				Breadcrumbs:    []g2.Breadcrumb{{Name: title, URL: "../../../../"}, {Name: "News", URL: "../../../"}, {Name: "Archive", URL: "../../"}, {Name: n.Title}},
 				GlobalNewsItem: &n,
 				Version:        version,
 				GenInfo:        genInfo,
@@ -1113,7 +1114,7 @@ func generateGlobalNewsFeeds(dir, siteTitle string, news []AggNewsItem) error {
 		if item.RepoName != "" {
 			description = fmt.Sprintf("Repository: %s\n\n%s", item.RepoName, description)
 		}
-		items = append(items, newsFeedItem(item.NewsItem, "archive/"+item.DirName+"/", description))
+		items = append(items, newsFeedItem(item.NewsItem, "archive/"+item.ArchivePath+"/", description, item.RepoName))
 	}
 	return renderNewsFeeds(dir, g2.Feed{
 		Title:       siteTitle + " News",
@@ -1126,7 +1127,7 @@ func generateGlobalNewsFeeds(dir, siteTitle string, news []AggNewsItem) error {
 func generateRepoNewsFeeds(dir string, site *g2.SiteData) error {
 	items := make([]g2.FeedItem, 0, len(site.News))
 	for _, item := range site.News {
-		items = append(items, newsFeedItem(item, "archive/"+item.DirName+"/", item.Body))
+		items = append(items, newsFeedItem(item, "archive/"+item.DirName+"/", item.Body, site.RepoName))
 	}
 	return renderNewsFeeds(dir, g2.Feed{
 		Title:       site.RepoName + " News",
@@ -1143,8 +1144,9 @@ func newsAlternates(siteTitle string) []AlternateFeed {
 	}
 }
 
-func newsFeedItem(item g2.NewsItem, link, description string) g2.FeedItem {
+func newsFeedItem(item g2.NewsItem, link, description, repoName string) g2.FeedItem {
 	return g2.FeedItem{
+		ID:          stableURN("news", repoName, item.DirName),
 		Title:       item.Title,
 		Link:        link,
 		Description: description,
@@ -1154,6 +1156,7 @@ func newsFeedItem(item g2.NewsItem, link, description string) g2.FeedItem {
 }
 
 func renderNewsFeeds(dir string, feed g2.Feed) error {
+	feed.ID = stableURN("feed", feed.Title)
 	if len(feed.Items) > 0 {
 		feed.LastBuildDate = feed.Items[0].PubDate
 		feed.Updated = feed.Items[0].Updated
@@ -1169,6 +1172,15 @@ func renderNewsFeeds(dir string, feed g2.Feed) error {
 		return fmt.Errorf("rendering Atom feed: %w", err)
 	}
 	return nil
+}
+
+func stableURN(namespace string, parts ...string) string {
+	digest := sha256.New()
+	for _, part := range parts {
+		_, _ = digest.Write([]byte(part))
+		_, _ = digest.Write([]byte{0})
+	}
+	return fmt.Sprintf("urn:g2:%s:%x", namespace, digest.Sum(nil))
 }
 
 func renderXMLFeed(path, templateName string, feed g2.Feed) error {

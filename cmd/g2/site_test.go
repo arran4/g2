@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/xml"
+	"net/url"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -117,19 +118,26 @@ func TestGenerateSite(t *testing.T) {
 			Title         string `xml:"title"`
 			LastBuildDate string `xml:"lastBuildDate"`
 			Items         []struct {
-				Title       string `xml:"title"`
-				Link        string `xml:"link"`
+				Title string `xml:"title"`
+				Link  string `xml:"link"`
+				GUID  struct {
+					Value       string `xml:",chardata"`
+					IsPermaLink string `xml:"isPermaLink,attr"`
+				} `xml:"guid"`
 				Description string `xml:"description"`
 				PubDate     string `xml:"pubDate"`
 			} `xml:"item"`
 		} `xml:"channel"`
 	}
-	for _, feedPath := range []string{
-		filepath.Join(outDir, "news", "index.rss"),
-		filepath.Join(outDir, "repos", siteData.RepoName, "news", "index.rss"),
+	for _, test := range []struct {
+		path     string
+		itemLink string
+	}{
+		{filepath.Join(outDir, "news", "index.rss"), "archive/" + siteData.RepoName + "/" + siteData.News[0].DirName + "/"},
+		{filepath.Join(outDir, "repos", siteData.RepoName, "news", "index.rss"), "archive/" + siteData.News[0].DirName + "/"},
 	} {
-		t.Run(feedPath, func(t *testing.T) {
-			contents, err := os.ReadFile(feedPath)
+		t.Run(test.path, func(t *testing.T) {
+			contents, err := os.ReadFile(test.path)
 			if err != nil {
 				t.Fatalf("reading generated RSS feed: %v", err)
 			}
@@ -150,8 +158,14 @@ func TestGenerateSite(t *testing.T) {
 			if first.Title != siteData.News[0].Title {
 				t.Errorf("first RSS title = %q, want %q", first.Title, siteData.News[0].Title)
 			}
-			if first.Link != "archive/"+siteData.News[0].DirName+"/" {
+			if first.Link != test.itemLink {
 				t.Errorf("first RSS link = %q", first.Link)
+			}
+			if first.GUID.Value == "" {
+				t.Error("first RSS guid is empty")
+			}
+			if first.GUID.IsPermaLink != "false" {
+				t.Errorf("first RSS guid isPermaLink = %q, want false", first.GUID.IsPermaLink)
 			}
 			if _, err := time.Parse(time.RFC1123Z, first.PubDate); err != nil {
 				t.Errorf("first RSS pubDate %q is invalid: %v", first.PubDate, err)
@@ -160,12 +174,14 @@ func TestGenerateSite(t *testing.T) {
 	}
 
 	type atomDocument struct {
+		ID      string `xml:"id"`
 		Title   string `xml:"title"`
 		Updated string `xml:"updated"`
 		Author  struct {
 			Name string `xml:"name"`
 		} `xml:"author"`
 		Entries []struct {
+			ID      string `xml:"id"`
 			Title   string `xml:"title"`
 			Updated string `xml:"updated"`
 		} `xml:"entry"`
@@ -192,6 +208,12 @@ func TestGenerateSite(t *testing.T) {
 			if feed.Author.Name == "" {
 				t.Error("Atom feed author name is empty")
 			}
+			if parsed, err := url.Parse(feed.ID); err != nil || parsed.Scheme == "" {
+				t.Errorf("Atom feed id %q is not an absolute IRI: %v", feed.ID, err)
+			}
+			if parsed, err := url.Parse(feed.Entries[0].ID); err != nil || parsed.Scheme == "" {
+				t.Errorf("first Atom entry id %q is not an absolute IRI: %v", feed.Entries[0].ID, err)
+			}
 			if _, err := time.Parse(time.RFC3339, feed.Updated); err != nil {
 				t.Errorf("Atom updated value %q is invalid: %v", feed.Updated, err)
 			}
@@ -199,6 +221,43 @@ func TestGenerateSite(t *testing.T) {
 				t.Errorf("first Atom title = %q, want %q", feed.Entries[0].Title, siteData.News[0].Title)
 			}
 		})
+	}
+}
+
+func TestAggregateGlobalNewsUsesRepositoryPaths(t *testing.T) {
+	news := g2.NewsItem{DirName: "2026-01-01-shared-notice", Title: "Shared notice", Posted: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)}
+	sites := []*g2.SiteData{
+		{RepoName: "repo-one", News: []g2.NewsItem{news}},
+		{RepoName: "repo-two", News: []g2.NewsItem{news}},
+	}
+	got := aggregateGlobalNews(sites)
+	if len(got) != 2 {
+		t.Fatalf("aggregateGlobalNews returned %d items, want 2", len(got))
+	}
+	if got[0].ArchivePath == got[1].ArchivePath {
+		t.Fatalf("colliding global archive paths: %q", got[0].ArchivePath)
+	}
+	if got[0].ArchivePath != "repo-one/2026-01-01-shared-notice" {
+		t.Errorf("first archive path = %q", got[0].ArchivePath)
+	}
+	if got[1].ArchivePath != "repo-two/2026-01-01-shared-notice" {
+		t.Errorf("second archive path = %q", got[1].ArchivePath)
+	}
+	firstID := newsFeedItem(got[0].NewsItem, got[0].ArchivePath, got[0].Body, got[0].RepoName).ID
+	secondID := newsFeedItem(got[1].NewsItem, got[1].ArchivePath, got[1].Body, got[1].RepoName).ID
+	if firstID == secondID {
+		t.Fatalf("colliding feed item IDs: %q", firstID)
+	}
+
+	outDir := t.TempDir()
+	if err := generateSite(outDir, sites, 90*24*time.Hour, "3 months", GenerationInfo{}); err != nil {
+		t.Fatalf("generating site with colliding news directory names: %v", err)
+	}
+	for _, item := range got {
+		articlePath := filepath.Join(outDir, "news", "archive", filepath.FromSlash(item.ArchivePath), "index.html")
+		if _, err := os.Stat(articlePath); err != nil {
+			t.Errorf("global news article %s was not generated: %v", item.ArchivePath, err)
+		}
 	}
 }
 

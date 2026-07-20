@@ -9,6 +9,7 @@
   <item>
     <title>{{.Title | xml}}</title>
     <link>{{.Link | xml}}</link>
+    <guid isPermaLink="false">{{.ID | xml}}</guid>
     <description>{{.Description | xml}}</description>
     <pubDate>{{.PubDate | xml}}</pubDate>
   </item>
