@@ -1,7 +1,9 @@
 package main
 
 import (
+	"encoding/xml"
 	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -108,6 +110,97 @@ func TestGenerateSite(t *testing.T) {
 	err = generateSite(outDir, []*g2.SiteData{siteData}, 90*24*time.Hour, "3 months", GenerationInfo{})
 	if err != nil {
 		t.Fatalf("generateSite failed: %v", err)
+	}
+
+	type rssDocument struct {
+		Channel struct {
+			Title         string `xml:"title"`
+			LastBuildDate string `xml:"lastBuildDate"`
+			Items         []struct {
+				Title       string `xml:"title"`
+				Link        string `xml:"link"`
+				Description string `xml:"description"`
+				PubDate     string `xml:"pubDate"`
+			} `xml:"item"`
+		} `xml:"channel"`
+	}
+	for _, feedPath := range []string{
+		filepath.Join(outDir, "news", "index.rss"),
+		filepath.Join(outDir, "repos", siteData.RepoName, "news", "index.rss"),
+	} {
+		t.Run(feedPath, func(t *testing.T) {
+			contents, err := os.ReadFile(feedPath)
+			if err != nil {
+				t.Fatalf("reading generated RSS feed: %v", err)
+			}
+			var feed rssDocument
+			if err := xml.Unmarshal(contents, &feed); err != nil {
+				t.Fatalf("parsing generated RSS feed: %v", err)
+			}
+			if len(feed.Channel.Items) != len(siteData.News) {
+				t.Fatalf("RSS item count = %d, want %d", len(feed.Channel.Items), len(siteData.News))
+			}
+			if !strings.Contains(feed.Channel.Title, "News RSS Feed") {
+				t.Errorf("RSS channel title %q does not identify the news RSS feed", feed.Channel.Title)
+			}
+			if feed.Channel.LastBuildDate == "" {
+				t.Error("RSS lastBuildDate is empty")
+			}
+			first := feed.Channel.Items[0]
+			if first.Title != siteData.News[0].Title {
+				t.Errorf("first RSS title = %q, want %q", first.Title, siteData.News[0].Title)
+			}
+			if first.Link != "archive/"+siteData.News[0].DirName+"/" {
+				t.Errorf("first RSS link = %q", first.Link)
+			}
+			if _, err := time.Parse(time.RFC1123Z, first.PubDate); err != nil {
+				t.Errorf("first RSS pubDate %q is invalid: %v", first.PubDate, err)
+			}
+		})
+	}
+
+	type atomDocument struct {
+		Title   string `xml:"title"`
+		Updated string `xml:"updated"`
+		Entries []struct {
+			Title   string `xml:"title"`
+			Updated string `xml:"updated"`
+		} `xml:"entry"`
+	}
+	for _, feedPath := range []string{
+		filepath.Join(outDir, "news", "index.atom"),
+		filepath.Join(outDir, "repos", siteData.RepoName, "news", "index.atom"),
+	} {
+		t.Run(feedPath, func(t *testing.T) {
+			contents, err := os.ReadFile(feedPath)
+			if err != nil {
+				t.Fatalf("reading generated Atom feed: %v", err)
+			}
+			var feed atomDocument
+			if err := xml.Unmarshal(contents, &feed); err != nil {
+				t.Fatalf("parsing generated Atom feed: %v", err)
+			}
+			if len(feed.Entries) != len(siteData.News) {
+				t.Fatalf("Atom entry count = %d, want %d", len(feed.Entries), len(siteData.News))
+			}
+			if !strings.Contains(feed.Title, "News Atom Feed") {
+				t.Errorf("Atom feed title %q does not identify the news Atom feed", feed.Title)
+			}
+			if _, err := time.Parse(time.RFC3339, feed.Updated); err != nil {
+				t.Errorf("Atom updated value %q is invalid: %v", feed.Updated, err)
+			}
+			if feed.Entries[0].Title != siteData.News[0].Title {
+				t.Errorf("first Atom title = %q, want %q", feed.Entries[0].Title, siteData.News[0].Title)
+			}
+		})
+	}
+}
+
+func TestEscapeXML(t *testing.T) {
+	const input = `News & updates <today> "quoted"`
+	const want = `News &amp; updates &lt;today&gt; &#34;quoted&#34;`
+	if got := escapeXML(input); got != want {
+		t.Errorf("escapeXML(%q) = %q, want %q", input, got, want)
 	}
 }
 

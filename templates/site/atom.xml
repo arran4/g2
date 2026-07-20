@@ -1,16 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <feed xmlns="http://www.w3.org/2005/Atom">
-  <title>{{.Title}}</title>
-  <link href="{{.Link}}"/>
-  <updated>{{.Updated}}</updated>
-  <id>{{.Link}}</id>
+  <title>{{.Title | xml}}</title>
+  <link href="{{.Link | xml}}"/>
+  <updated>{{.Updated | xml}}</updated>
+  <id>{{.Link | xml}}</id>
   {{range .Items}}
   <entry>
-    <title>{{.Title}}</title>
-    <link href="{{.Link}}"/>
-    <id>{{.Link}}</id>
-    <updated>{{.Updated}}</updated>
-    <summary>{{.Description}}</summary>
+    <title>{{.Title | xml}}</title>
+    <link href="{{.Link | xml}}"/>
+    <id>{{.Link | xml}}</id>
+    <updated>{{.Updated | xml}}</updated>
+    <summary>{{.Description | xml}}</summary>
   </entry>
   {{end}}
 </feed>

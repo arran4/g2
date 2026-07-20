@@ -7,12 +7,13 @@ import (
 )
 
 type GenericPageContext struct {
-	Title       string
-	BaseURL     string
-	Breadcrumbs []g2.Breadcrumb
-	Version     string
-	GenInfo     GenerationInfo
-	Content     template.HTML
+	Title          string
+	BaseURL        string
+	Breadcrumbs    []g2.Breadcrumb
+	Version        string
+	GenInfo        GenerationInfo
+	Content        template.HTML
+	AlternateFeeds []AlternateFeed
 
 	// Additional data fields used by various templates
 	Repos                 []*g2.SiteData
@@ -81,4 +82,13 @@ type GenericPageContext struct {
 
 	// Redirect
 	TargetURL string
+}
+
+// AlternateFeed describes a syndication feed advertised by a page. A slice is
+// used so a page can advertise separate news, package, or differently formatted
+// feeds without changing the shared layout.
+type AlternateFeed struct {
+	Type  string
+	Title string
+	Href  string
 }

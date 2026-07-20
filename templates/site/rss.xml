@@ -1,16 +1,16 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <rss version="2.0">
 <channel>
-  <title>{{.Title}}</title>
-  <link>{{.Link}}</link>
-  <description>{{.Description}}</description>
-  <lastBuildDate>{{.LastBuildDate}}</lastBuildDate>
+  <title>{{.Title | xml}}</title>
+  <link>{{.Link | xml}}</link>
+  <description>{{.Description | xml}}</description>
+  <lastBuildDate>{{.LastBuildDate | xml}}</lastBuildDate>
   {{range .Items}}
   <item>
-    <title>{{.Title}}</title>
-    <link>{{.Link}}</link>
-    <description>{{.Description}}</description>
-    <pubDate>{{.PubDate}}</pubDate>
+    <title>{{.Title | xml}}</title>
+    <link>{{.Link | xml}}</link>
+    <description>{{.Description | xml}}</description>
+    <pubDate>{{.PubDate | xml}}</pubDate>
   </item>
   {{end}}
 </channel>

@@ -1,15 +1,20 @@
 package main
 
 import (
+	"bytes"
+	"encoding/xml"
 	"fmt"
 	"html/template"
+	"io/fs"
 	"log"
 	"os"
 	"path/filepath"
 	"strings"
+	texttemplate "text/template"
 	"time"
 
 	"github.com/arran4/g2"
+	sitetemplates "github.com/arran4/g2/templates"
 	"golang.org/x/sync/errgroup"
 	"sort"
 )
@@ -78,11 +83,15 @@ func generateGlobalPages(outDir string, tmpl *template.Template, sites []*g2.Sit
 			Title:            "News Dashboard",
 			BaseURL:          "../",
 			Breadcrumbs:      []g2.Breadcrumb{{Name: title, URL: "../"}, {Name: "News"}},
+			AlternateFeeds:   newsAlternates(title),
 			RecentGlobalNews: data.RecentNews,
 			Version:          version,
 			GenInfo:          genInfo,
 		}); err != nil {
 			return fmt.Errorf("rendering page: %w", err)
+		}
+		if err := generateGlobalNewsFeeds(filepath.Join(outDir, "news"), title, data.GlobalNews); err != nil {
+			return fmt.Errorf("generating global news feeds: %w", err)
 		}
 
 		// Global News Archive
@@ -1044,11 +1053,15 @@ func generateRepoNewsPages(repoDir string, tmpl *template.Template, site *g2.Sit
 			Title:          site.RepoName + " - News Dashboard",
 			BaseURL:        "../../../",
 			Breadcrumbs:    []g2.Breadcrumb{{Name: title, URL: "../../../"}, {Name: "Overlays", URL: "../../../overlays/"}, {Name: site.RepoName, URL: "../"}, {Name: "News"}},
+			AlternateFeeds: newsAlternates(site.RepoName),
 			RecentRepoNews: repoRecentNews,
 			Version:        version,
 			GenInfo:        genInfo,
 		}); err != nil {
 			return fmt.Errorf("rendering page: %w", err)
+		}
+		if err := generateRepoNewsFeeds(filepath.Join(repoDir, "news"), site); err != nil {
+			return fmt.Errorf("generating news feeds for repository %q: %w", site.RepoName, err)
 		}
 
 		// Repo News Archive
@@ -1085,6 +1098,101 @@ func generateRepoNewsPages(repoDir string, tmpl *template.Template, site *g2.Sit
 		}
 	}
 	return nil
+}
+
+func generateGlobalNewsFeeds(dir, siteTitle string, news []AggNewsItem) error {
+	items := make([]g2.FeedItem, 0, len(news))
+	for _, item := range news {
+		description := item.Body
+		if item.RepoName != "" {
+			description = fmt.Sprintf("Repository: %s\n\n%s", item.RepoName, description)
+		}
+		items = append(items, newsFeedItem(item.NewsItem, "archive/"+item.DirName+"/", description))
+	}
+	return renderNewsFeeds(dir, g2.Feed{
+		Title:       siteTitle + " News",
+		Link:        "./",
+		Description: "News from " + siteTitle,
+		Items:       items,
+	})
+}
+
+func generateRepoNewsFeeds(dir string, site *g2.SiteData) error {
+	items := make([]g2.FeedItem, 0, len(site.News))
+	for _, item := range site.News {
+		items = append(items, newsFeedItem(item, "archive/"+item.DirName+"/", item.Body))
+	}
+	return renderNewsFeeds(dir, g2.Feed{
+		Title:       site.RepoName + " News",
+		Link:        "./",
+		Description: "News from the " + site.RepoName + " repository",
+		Items:       items,
+	})
+}
+
+func newsAlternates(siteTitle string) []AlternateFeed {
+	return []AlternateFeed{
+		{Type: "application/rss+xml", Title: siteTitle + " News RSS Feed", Href: "index.rss"},
+		{Type: "application/atom+xml", Title: siteTitle + " News Atom Feed", Href: "index.atom"},
+	}
+}
+
+func newsFeedItem(item g2.NewsItem, link, description string) g2.FeedItem {
+	return g2.FeedItem{
+		Title:       item.Title,
+		Link:        link,
+		Description: description,
+		PubDate:     item.Posted.Format(time.RFC1123Z),
+		Updated:     item.Posted.Format(time.RFC3339),
+	}
+}
+
+func renderNewsFeeds(dir string, feed g2.Feed) error {
+	if len(feed.Items) > 0 {
+		feed.LastBuildDate = feed.Items[0].PubDate
+		feed.Updated = feed.Items[0].Updated
+	}
+	rssFeed := feed
+	rssFeed.Title += " RSS Feed"
+	if err := renderXMLFeed(filepath.Join(dir, "index.rss"), "rss.xml", rssFeed); err != nil {
+		return fmt.Errorf("rendering RSS feed: %w", err)
+	}
+	atomFeed := feed
+	atomFeed.Title += " Atom Feed"
+	if err := renderXMLFeed(filepath.Join(dir, "index.atom"), "atom.xml", atomFeed); err != nil {
+		return fmt.Errorf("rendering Atom feed: %w", err)
+	}
+	return nil
+}
+
+func renderXMLFeed(path, templateName string, feed g2.Feed) error {
+	b, err := fs.ReadFile(sitetemplates.SiteFS, "site/"+templateName)
+	if err != nil {
+		return fmt.Errorf("reading %s template: %w", templateName, err)
+	}
+	feedTemplate, err := texttemplate.New(templateName).Funcs(texttemplate.FuncMap{"xml": escapeXML}).Parse(string(b))
+	if err != nil {
+		return fmt.Errorf("parsing %s template: %w", templateName, err)
+	}
+	f, err := os.Create(path)
+	if err != nil {
+		return fmt.Errorf("creating RSS feed %s: %w", path, err)
+	}
+	if err := feedTemplate.Execute(f, feed); err != nil {
+		_ = f.Close()
+		return fmt.Errorf("executing RSS template for %s: %w", path, err)
+	}
+	if err := f.Close(); err != nil {
+		return fmt.Errorf("closing RSS feed %s: %w", path, err)
+	}
+	log.Printf("Generated %s news feed with %d items at %s", templateName, len(feed.Items), path)
+	return nil
+}
+
+func escapeXML(value string) string {
+	var escaped bytes.Buffer
+	_ = xml.EscapeText(&escaped, []byte(value))
+	return escaped.String()
 }
 
 func generateRepoCategoriesPages(repoDir string, tmpl *template.Template, site *g2.SiteData, title, version string, genInfo GenerationInfo) error {

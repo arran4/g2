@@ -4,8 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{$pageTitle := .Title}}{{if .Breadcrumbs}}{{$pageTitle = ""}}{{range $i, $bc := .Breadcrumbs}}{{if $i}}{{$pageTitle = printf "%s | %s" $pageTitle $bc.Name}}{{else}}{{$pageTitle = $bc.Name}}{{end}}{{end}}{{end}}{{$pageTitle}}</title>
-    <link rel="alternate" type="application/rss+xml" title="RSS" href="index.rss" />
-    <link rel="alternate" type="application/atom+xml" title="Atom" href="index.atom" />
+    {{range .AlternateFeeds}}<link rel="alternate" type="{{.Type}}" title="{{.Title}}" href="{{.Href}}" />
+    {{end}}
     <style>
         body { font-family: sans-serif; margin: 2em; line-height: 1.6; color: #333; }
         h1, h2, h3 { color: #5c4f85; } /* Tyrian purple-ish */

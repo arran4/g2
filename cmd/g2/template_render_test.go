@@ -2,8 +2,11 @@ package main
 
 import (
 	"bytes"
-	"github.com/arran4/g2"
+	"html"
+	"strings"
 	"testing"
+
+	"github.com/arran4/g2"
 )
 
 type GenericPageContextOption func(*GenericPageContext)
@@ -235,6 +238,33 @@ func TestAllTemplatesRender(t *testing.T) {
 					t.Errorf("template %s failed to render with %s: %v", name, tc.name, err)
 				}
 			})
+		}
+	}
+}
+
+func TestLayoutAdvertisesMultipleAlternateFeeds(t *testing.T) {
+	tmpl, err := GetSiteTemplates()
+	if err != nil {
+		t.Fatalf("getting site templates: %v", err)
+	}
+	var output bytes.Buffer
+	context := GenericPageContext{
+		Title: "News",
+		AlternateFeeds: []AlternateFeed{
+			{Type: "application/rss+xml", Title: "News RSS Feed", Href: "news.rss"},
+			{Type: "application/atom+xml", Title: "News Atom Feed", Href: "news.atom"},
+		},
+	}
+	if err := tmpl.ExecuteTemplate(&output, "layout_header.html", context); err != nil {
+		t.Fatalf("rendering layout header: %v", err)
+	}
+	rendered := html.UnescapeString(output.String())
+	for _, metadata := range []string{
+		`<link rel="alternate" type="application/rss+xml" title="News RSS Feed" href="news.rss" />`,
+		`<link rel="alternate" type="application/atom+xml" title="News Atom Feed" href="news.atom" />`,
+	} {
+		if !strings.Contains(rendered, metadata) {
+			t.Errorf("layout header does not contain %q; output:\n%s", metadata, rendered)
 		}
 	}
 }
