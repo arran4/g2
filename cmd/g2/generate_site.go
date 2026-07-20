@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	texttemplate "text/template"
 	"time"
 
@@ -17,6 +18,11 @@ import (
 	sitetemplates "github.com/arran4/g2/templates"
 	"golang.org/x/sync/errgroup"
 	"sort"
+)
+
+var (
+	xmlTemplates   = make(map[string]*texttemplate.Template)
+	xmlTemplatesMu sync.RWMutex
 )
 
 func generateGlobalPages(outDir string, tmpl *template.Template, sites []*g2.SiteData, data *AggregatedData, title, version, recentDurationStr string, genInfo GenerationInfo) error {
@@ -1166,27 +1172,49 @@ func renderNewsFeeds(dir string, feed g2.Feed) error {
 }
 
 func renderXMLFeed(path, templateName string, feed g2.Feed) error {
-	b, err := fs.ReadFile(sitetemplates.SiteFS, "site/"+templateName)
+	feedTemplate, err := getXMLTemplate(templateName)
 	if err != nil {
-		return fmt.Errorf("reading %s template: %w", templateName, err)
-	}
-	feedTemplate, err := texttemplate.New(templateName).Funcs(texttemplate.FuncMap{"xml": escapeXML}).Parse(string(b))
-	if err != nil {
-		return fmt.Errorf("parsing %s template: %w", templateName, err)
+		return fmt.Errorf("loading feed template %s: %w", templateName, err)
 	}
 	f, err := os.Create(path)
 	if err != nil {
-		return fmt.Errorf("creating RSS feed %s: %w", path, err)
+		return fmt.Errorf("creating feed %s: %w", path, err)
 	}
+	defer func() { _ = f.Close() }()
 	if err := feedTemplate.Execute(f, feed); err != nil {
-		_ = f.Close()
-		return fmt.Errorf("executing RSS template for %s: %w", path, err)
+		return fmt.Errorf("executing %s template for %s: %w", templateName, path, err)
 	}
 	if err := f.Close(); err != nil {
-		return fmt.Errorf("closing RSS feed %s: %w", path, err)
+		return fmt.Errorf("closing feed %s: %w", path, err)
 	}
 	log.Printf("Generated %s news feed with %d items at %s", templateName, len(feed.Items), path)
 	return nil
+}
+
+func getXMLTemplate(templateName string) (*texttemplate.Template, error) {
+	xmlTemplatesMu.RLock()
+	feedTemplate, ok := xmlTemplates[templateName]
+	xmlTemplatesMu.RUnlock()
+	if ok {
+		return feedTemplate, nil
+	}
+
+	xmlTemplatesMu.Lock()
+	defer xmlTemplatesMu.Unlock()
+	if feedTemplate, ok = xmlTemplates[templateName]; ok {
+		return feedTemplate, nil
+	}
+
+	b, err := fs.ReadFile(sitetemplates.SiteFS, "site/"+templateName)
+	if err != nil {
+		return nil, fmt.Errorf("reading %s template: %w", templateName, err)
+	}
+	feedTemplate, err = texttemplate.New(templateName).Funcs(texttemplate.FuncMap{"xml": escapeXML}).Parse(string(b))
+	if err != nil {
+		return nil, fmt.Errorf("parsing %s template: %w", templateName, err)
+	}
+	xmlTemplates[templateName] = feedTemplate
+	return feedTemplate, nil
 }
 
 func escapeXML(value string) string {

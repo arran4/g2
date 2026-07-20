@@ -162,6 +162,9 @@ func TestGenerateSite(t *testing.T) {
 	type atomDocument struct {
 		Title   string `xml:"title"`
 		Updated string `xml:"updated"`
+		Author  struct {
+			Name string `xml:"name"`
+		} `xml:"author"`
 		Entries []struct {
 			Title   string `xml:"title"`
 			Updated string `xml:"updated"`
@@ -186,6 +189,9 @@ func TestGenerateSite(t *testing.T) {
 			if !strings.Contains(feed.Title, "News Atom Feed") {
 				t.Errorf("Atom feed title %q does not identify the news Atom feed", feed.Title)
 			}
+			if feed.Author.Name == "" {
+				t.Error("Atom feed author name is empty")
+			}
 			if _, err := time.Parse(time.RFC3339, feed.Updated); err != nil {
 				t.Errorf("Atom updated value %q is invalid: %v", feed.Updated, err)
 			}
@@ -193,6 +199,20 @@ func TestGenerateSite(t *testing.T) {
 				t.Errorf("first Atom title = %q, want %q", feed.Entries[0].Title, siteData.News[0].Title)
 			}
 		})
+	}
+}
+
+func TestGetXMLTemplateCachesTemplates(t *testing.T) {
+	first, err := getXMLTemplate("atom.xml")
+	if err != nil {
+		t.Fatalf("getting Atom template: %v", err)
+	}
+	second, err := getXMLTemplate("atom.xml")
+	if err != nil {
+		t.Fatalf("getting cached Atom template: %v", err)
+	}
+	if first != second {
+		t.Error("getXMLTemplate did not return the cached template")
 	}
 }
 

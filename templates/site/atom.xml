@@ -4,6 +4,9 @@
   <link href="{{.Link | xml}}"/>
   <updated>{{.Updated | xml}}</updated>
   <id>{{.Link | xml}}</id>
+  <author>
+    <name>{{.Title | xml}}</name>
+  </author>
   {{range .Items}}
   <entry>
     <title>{{.Title | xml}}</title>
