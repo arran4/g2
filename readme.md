@@ -194,6 +194,8 @@ g2 overlay site generate [-out <dir>] [-clear] [<location>]
 * `-fast-git-modtime`: Use fast (O(1)) but potentially less reliable go-git file log lookup.
 * `-recent-duration`: Duration to consider an update 'recent' (e.g., 3mo, 14d, 72h) (default "3mo").
 
+When the overlay contains news items, the generated news dashboard includes RSS 2.0 and Atom feeds at `news/index.rss` and `news/index.atom`. Aggregated sites also provide combined feeds there, while each repository has its own feeds under `repos/<repository>/news/`.
+
 **Example:**
 
 ```bash

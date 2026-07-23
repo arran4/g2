@@ -1361,7 +1361,8 @@ type AggPackageMove struct {
 
 type AggNewsItem struct {
 	g2.NewsItem
-	RepoName string
+	RepoName    string
+	ArchivePath string
 }
 
 type AggArch struct {
@@ -1505,8 +1506,9 @@ func aggregateGlobalNews(sites []*g2.SiteData) []AggNewsItem {
 	for _, site := range sites {
 		for _, news := range site.News {
 			globalNews = append(globalNews, AggNewsItem{
-				NewsItem: news,
-				RepoName: site.RepoName,
+				NewsItem:    news,
+				RepoName:    site.RepoName,
+				ArchivePath: path2.Join(site.RepoName, news.DirName),
 			})
 		}
 	}

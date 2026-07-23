@@ -2,6 +2,11 @@
 
 <div class="news-archive">
     <ul>
+        {{range .GlobalNews}}
+        <li>
+            <a href="{{.ArchivePath}}/">{{.Title}}</a> - {{.Posted.Format "2006-01-02"}}{{if .RepoName}} ({{.RepoName}}){{end}}
+        </li>
+        {{end}}
         {{range .News}}
         <li>
             <a href="{{.DirName}}/">{{.Title}}</a> - {{.Posted.Format "2006-01-02"}}

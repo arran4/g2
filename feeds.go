@@ -1,6 +1,7 @@
 package g2
 
 type FeedItem struct {
+	ID          string
 	Title       string
 	Link        string
 	Description string
@@ -9,6 +10,7 @@ type FeedItem struct {
 }
 
 type Feed struct {
+	ID            string
 	Title         string
 	Link          string
 	Description   string
