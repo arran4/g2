@@ -78,9 +78,12 @@ func (c *MainArgConfig) cmdSkillUpdate(args []string) error {
 
 			// Validate source still exists
 			skillMdPath := filepath.Join(srcPath, "SKILL.md")
-			if _, err := os.Stat(skillMdPath); os.IsNotExist(err) {
-				fmt.Printf("skill %q source no longer exists at %s\n", skillName, srcPath)
-				continue
+			if _, err := os.Stat(skillMdPath); err != nil {
+				if os.IsNotExist(err) {
+					fmt.Printf("skill %q source no longer exists at %s\n", skillName, srcPath)
+					continue
+				}
+				return fmt.Errorf("failed to check SKILL.md for %s: %w", skillName, err)
 			}
 
 			// Re-calculate source digest

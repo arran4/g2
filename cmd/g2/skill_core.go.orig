@@ -103,6 +103,7 @@ func calculateDirDigest(dir string) (string, error) {
 		}
 
 		h.Write([]byte(relPath))
+		h.Write([]byte{0})
 
 		if _, err := io.Copy(h, f); err != nil {
 			f.Close()
@@ -175,7 +176,7 @@ func copyDir(src, dst string) error {
 		if err != nil {
 			return err
 		}
-		defer s.Close()
+		defer func() { _ = s.Close() }()
 
 		dFile, err := os.Create(dstPath)
 		if err != nil {

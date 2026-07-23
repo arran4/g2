@@ -106,10 +106,10 @@ func calculateDirDigest(dir string) (string, error) {
 		h.Write([]byte{0})
 
 		if _, err := io.Copy(h, f); err != nil {
-			f.Close()
+			_ = f.Close()
 			return "", err
 		}
-		f.Close()
+		_ = f.Close()
 	}
 
 	return fmt.Sprintf("%x", h.Sum(nil)), nil
@@ -176,7 +176,7 @@ func copyDir(src, dst string) error {
 		if err != nil {
 			return err
 		}
-		defer s.Close()
+		defer func() { _ = s.Close() }()
 
 		dFile, err := os.Create(dstPath)
 		if err != nil {
@@ -189,4 +189,11 @@ func copyDir(src, dst string) error {
 		}
 		return nil
 	})
+}
+
+func isValidSkillName(name string) bool {
+	if name == "" || name == "." || name == ".." {
+		return false
+	}
+	return filepath.Base(name) == name
 }

@@ -21,9 +21,6 @@ func (c *MainArgConfig) cmdSkillRemove(args []string) error {
 	}
 
 	skillName := fs.Arg(0)
-	if !isValidSkillName(skillName) {
-		return fmt.Errorf("invalid skill name: %q", skillName)
-	}
 
 	basePath, err := getSkillBasePath(*scope, *agent)
 	if err != nil {

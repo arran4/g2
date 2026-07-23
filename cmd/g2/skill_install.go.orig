@@ -35,11 +35,7 @@ func (c *MainArgConfig) cmdSkillInstall(args []string) error {
 		return err
 	}
 
-	skillName := filepath.Base(skillNameOrPath)
-	if !isValidSkillName(skillName) {
-		return fmt.Errorf("invalid skill name: %q", skillNameOrPath)
-	}
-	destDir := filepath.Join(basePath, skillName)
+	destDir := filepath.Join(basePath, filepath.Base(skillNameOrPath))
 
 	// Ensure destination directory is clean
 	if err := os.RemoveAll(destDir); err != nil {

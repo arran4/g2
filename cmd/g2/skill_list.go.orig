@@ -81,10 +81,10 @@ func (c *MainArgConfig) cmdSkillList(args []string) error {
 	}
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	_, _ = fmt.Fprintln(w, "NAME\tSCOPE\tAGENT\tREVISION\tSOURCE")
+	fmt.Fprintln(w, "NAME\tSCOPE\tAGENT\tREVISION\tSOURCE")
 
 	for _, skill := range allSkills {
-		_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n",
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n",
 			skill.Name,
 			skill.Scope,
 			skill.Agent,
@@ -92,7 +92,7 @@ func (c *MainArgConfig) cmdSkillList(args []string) error {
 			skill.Source,
 		)
 	}
-	_ = w.Flush()
+	w.Flush()
 
 	return nil
 }
