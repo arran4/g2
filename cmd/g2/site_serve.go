@@ -529,7 +529,6 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			"Repos":                  s.Sites,
 			"GlobalCategories":       s.AggCategories,
 			"GlobalPackages":         s.AggPackages,
-			"Licenses":               s.AggLicenses,
 			"SupportedLicenses":      s.AggSupportedLicenses,
 			"UnsupportedLicenses":    s.AggUnsupportedLicenses,
 			"UseFlags":               s.AggUseFlags,
