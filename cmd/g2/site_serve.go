@@ -249,14 +249,16 @@ func isOverlayDir(dir string) bool {
 }
 
 type SiteServer struct {
-	GenInfo       GenerationInfo
-	tmpl          *template.Template
-	Title         string
-	Sites         []*g2.SiteData
-	AggCategories []*AggCategory
-	AggPackages   []*AggPackage
-	AggLicenses   []*AggLicense
-	AggProjects   []*AggProject
+	GenInfo                GenerationInfo
+	tmpl                   *template.Template
+	Title                  string
+	Sites                  []*g2.SiteData
+	AggCategories          []*AggCategory
+	AggPackages            []*AggPackage
+	AggLicenses            []*AggLicense
+	AggSupportedLicenses   []*AggLicense
+	AggUnsupportedLicenses []*AggLicense
+	AggProjects            []*AggProject
 
 	// Mappings for faster lookup
 	CatMap      map[string]*AggCategory
@@ -522,17 +524,20 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// 1. Root Dashboard
 	if len(parts) == 0 {
 		s.renderPageHTTP(w, "dashboard.html", map[string]interface{}{
-			"Title":            s.Title,
-			"BaseURL":          "",
-			"Repos":            s.Sites,
-			"GlobalCategories": s.AggCategories,
-			"GlobalPackages":   s.AggPackages,
-			"Licenses":         s.AggLicenses,
-			"UseFlags":         s.AggUseFlags,
-			"Projects":         s.AggProjects,
-			"Profiles":         []interface{}{},
-			"Version":          version,
-			"GenInfo":          s.GenInfo,
+			"Title":                  s.Title,
+			"BaseURL":                "",
+			"Repos":                  s.Sites,
+			"GlobalCategories":       s.AggCategories,
+			"GlobalPackages":         s.AggPackages,
+			"Licenses":               s.AggLicenses,
+			"SupportedLicenses":      s.AggSupportedLicenses,
+			"UnsupportedLicenses":    s.AggUnsupportedLicenses,
+			"UseFlags":               s.AggUseFlags,
+			"Projects":               s.AggProjects,
+			"Eclasses":               []*AggEclass{},
+			"Profiles":               []interface{}{},
+			"Version":                version,
+			"GenInfo":                s.GenInfo,
 		})
 		return
 	}
