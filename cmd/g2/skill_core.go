@@ -26,19 +26,20 @@ type SkillMetadata struct {
 
 func getSkillBasePath(scope, agent string) (string, error) {
 	var baseDir string
-	if scope == "user" {
+	switch scope {
+	case "user":
 		home, err := os.UserHomeDir()
 		if err != nil {
 			return "", err
 		}
 		baseDir = home
-	} else if scope == "project" {
+		case "project":
 		pwd, err := os.Getwd()
 		if err != nil {
 			return "", err
 		}
 		baseDir = pwd
-	} else {
+		default:
 		return "", fmt.Errorf("invalid scope: %s", scope)
 	}
 
@@ -182,7 +183,7 @@ func copyDir(src, dst string) error {
 		if err != nil {
 			return err
 		}
-		defer dFile.Close()
+		defer func() { _ = dFile.Close() }()
 
 		if _, err := io.Copy(dFile, s); err != nil {
 			return err
