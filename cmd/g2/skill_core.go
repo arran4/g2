@@ -1,0 +1,200 @@
+package main
+
+import (
+	"crypto/sha256"
+	"encoding/json"
+	"fmt"
+	"io"
+	"io/fs"
+	"os"
+	"path/filepath"
+	"sort"
+	"strings"
+	"time"
+)
+
+type SkillMetadata struct {
+	Name             string    `json:"name"`
+	Source           string    `json:"source"`
+	Subpath          string    `json:"subpath"`
+	Revision         string    `json:"revision"`
+	Digest           string    `json:"digest"`
+	InstallationTime time.Time `json:"installation_time"`
+	Scope            string    `json:"scope"`
+	Agent            string    `json:"agent"`
+}
+
+func getSkillBasePath(scope, agent string) (string, error) {
+	var baseDir string
+	switch scope {
+	case "user":
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "", err
+		}
+		baseDir = home
+		case "project":
+		pwd, err := os.Getwd()
+		if err != nil {
+			return "", err
+		}
+		baseDir = pwd
+		default:
+		return "", fmt.Errorf("invalid scope: %s", scope)
+	}
+
+	var path string
+	switch agent {
+	case "codex":
+		path = filepath.Join(baseDir, ".codex", "skills")
+	case "claude":
+		path = filepath.Join(baseDir, ".claude", "skills")
+	case "copilot":
+		path = filepath.Join(baseDir, ".copilot", "skills")
+	case "cursor":
+		path = filepath.Join(baseDir, ".cursor", "skills")
+	case "common":
+		path = filepath.Join(baseDir, ".agents", "skills")
+	default:
+		// Default to common if not specified or unknown
+		path = filepath.Join(baseDir, ".agents", "skills")
+	}
+
+	return path, nil
+}
+
+func calculateDirDigest(dir string) (string, error) {
+	h := sha256.New()
+
+	var files []string
+	err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			if d.Name() == ".git" {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+
+		relPath, err := filepath.Rel(dir, path)
+		if err != nil {
+			return err
+		}
+
+		if relPath == "skill-metadata.json" {
+			return nil // Don't include metadata in its own digest
+		}
+
+		files = append(files, relPath)
+		return nil
+	})
+	if err != nil {
+		return "", err
+	}
+
+	sort.Strings(files)
+
+	for _, relPath := range files {
+		path := filepath.Join(dir, relPath)
+		f, err := os.Open(path)
+		if err != nil {
+			return "", err
+		}
+
+		h.Write([]byte(relPath))
+		h.Write([]byte{0})
+
+		if _, err := io.Copy(h, f); err != nil {
+			_ = f.Close()
+			return "", err
+		}
+		_ = f.Close()
+	}
+
+	return fmt.Sprintf("%x", h.Sum(nil)), nil
+}
+
+func writeSkillMetadata(dir string, meta *SkillMetadata) error {
+	data, err := json.MarshalIndent(meta, "", "  ")
+	if err != nil {
+		return err
+	}
+
+	return os.WriteFile(filepath.Join(dir, "skill-metadata.json"), data, 0644)
+}
+
+func readSkillMetadata(dir string) (*SkillMetadata, error) {
+	data, err := os.ReadFile(filepath.Join(dir, "skill-metadata.json"))
+	if err != nil {
+		return nil, err
+	}
+
+	var meta SkillMetadata
+	if err := json.Unmarshal(data, &meta); err != nil {
+		return nil, err
+	}
+
+	return &meta, nil
+}
+
+func copyDir(src, dst string) error {
+	src = filepath.Clean(src)
+	dst = filepath.Clean(dst)
+
+	return filepath.WalkDir(src, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+
+		if d.IsDir() {
+			if d.Name() == ".git" {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+
+		relPath, err := filepath.Rel(src, path)
+		if err != nil {
+			return err
+		}
+
+		if relPath == "skill-metadata.json" {
+			return nil // don't copy existing metadata
+		}
+
+		if strings.Contains(relPath, "..") {
+			return fmt.Errorf("invalid path traversal: %s", relPath)
+		}
+
+		dstPath := filepath.Join(dst, relPath)
+		if err := os.MkdirAll(filepath.Dir(dstPath), 0755); err != nil {
+			return err
+		}
+
+		s, err := os.Open(path)
+		if err != nil {
+			return err
+		}
+		defer func() { _ = s.Close() }()
+
+		dFile, err := os.Create(dstPath)
+		if err != nil {
+			return err
+		}
+		defer func() { _ = dFile.Close() }()
+
+		if _, err := io.Copy(dFile, s); err != nil {
+			return err
+		}
+		return nil
+	})
+}
+
+func isValidSkillName(name string) bool {
+	if name == "" || name == "." || name == ".." {
+		return false
+	}
+	return filepath.Base(name) == name
+}
