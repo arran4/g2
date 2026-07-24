@@ -31,3 +31,10 @@
     <li><a href="licenses/{{slugify .Name}}/packages/">{{.Name}} ({{.Count}})</a></li>
     {{end}}
 </ul>
+
+<h2>Unsupported Licenses</h2>
+<ul>
+    {{range .UnsupportedLicenses}}
+    <li><a href="unsupported-licenses/{{slugify .Name}}/packages/">{{.Name}} ({{.Count}})</a></li>
+    {{end}}
+</ul>

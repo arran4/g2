@@ -249,14 +249,15 @@ func isOverlayDir(dir string) bool {
 }
 
 type SiteServer struct {
-	GenInfo       GenerationInfo
-	tmpl          *template.Template
-	Title         string
-	Sites         []*g2.SiteData
-	AggCategories []*AggCategory
-	AggPackages   []*AggPackage
-	AggLicenses   []*AggLicense
-	AggProjects   []*AggProject
+	GenInfo                GenerationInfo
+	tmpl                   *template.Template
+	Title                  string
+	Sites                  []*g2.SiteData
+	AggCategories          []*AggCategory
+	AggPackages            []*AggPackage
+	AggLicenses            []*AggLicense
+	AggUnsupportedLicenses []*AggLicense
+	AggProjects            []*AggProject
 
 	// Mappings for faster lookup
 	CatMap      map[string]*AggCategory
@@ -459,9 +460,14 @@ func newSiteServer(sites []*g2.SiteData, genInfo GenerationInfo) (*SiteServer, e
 
 	for _, l := range aggLicenses {
 		sort.Strings(l.Aliases)
-		server.AggLicenses = append(server.AggLicenses, l)
+		if len(l.ProvidedByRepos) > 0 {
+			server.AggLicenses = append(server.AggLicenses, l)
+		} else {
+			server.AggUnsupportedLicenses = append(server.AggUnsupportedLicenses, l)
+		}
 	}
 	sort.Slice(server.AggLicenses, func(i, j int) bool { return server.AggLicenses[i].Name < server.AggLicenses[j].Name })
+	sort.Slice(server.AggUnsupportedLicenses, func(i, j int) bool { return server.AggUnsupportedLicenses[i].Name < server.AggUnsupportedLicenses[j].Name })
 
 	for _, p := range aggProjects {
 		server.AggProjects = append(server.AggProjects, p)
@@ -522,17 +528,19 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// 1. Root Dashboard
 	if len(parts) == 0 {
 		s.renderPageHTTP(w, "dashboard.html", map[string]interface{}{
-			"Title":            s.Title,
-			"BaseURL":          "",
-			"Repos":            s.Sites,
-			"GlobalCategories": s.AggCategories,
-			"GlobalPackages":   s.AggPackages,
-			"Licenses":         s.AggLicenses,
-			"UseFlags":         s.AggUseFlags,
-			"Projects":         s.AggProjects,
-			"Profiles":         []interface{}{},
-			"Version":          version,
-			"GenInfo":          s.GenInfo,
+			"Title":                  s.Title,
+			"BaseURL":                "",
+			"Repos":                  s.Sites,
+			"GlobalCategories":       s.AggCategories,
+			"GlobalPackages":         s.AggPackages,
+			"Licenses":               s.AggLicenses,
+			"UnsupportedLicenses":    s.AggUnsupportedLicenses,
+			"UseFlags":               s.AggUseFlags,
+			"Projects":               s.AggProjects,
+			"Eclasses":               []*AggEclass{},
+			"Profiles":               []interface{}{},
+			"Version":                version,
+			"GenInfo":                s.GenInfo,
 		})
 		return
 	}
@@ -714,6 +722,42 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				"Title":       "License: " + lic.Name,
 				"BaseURL":     baseURL,
 				"Breadcrumbs": []g2.Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: "Licenses", URL: "../"}, {Name: lic.Name}},
+				"License":     lic,
+				"Version":     version,
+				"GenInfo":     s.GenInfo,
+			})
+			return
+		}
+
+	case "unsupported-licenses":
+		if len(parts) == 1 {
+			s.renderPageHTTP(w, "licenses.html", map[string]interface{}{
+				"Title":       "Unsupported Licenses",
+				"BaseURL":     baseURL,
+				"Breadcrumbs": []g2.Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: "Unsupported Licenses"}},
+				"Licenses":    s.AggUnsupportedLicenses,
+				"Version":     version,
+				"GenInfo":     s.GenInfo,
+			})
+			return
+		} else if len(parts) == 2 {
+			licNameSlug := parts[1]
+			var lic *AggLicense
+			for _, l := range s.AggUnsupportedLicenses {
+				if sanitizeFilename(l.Name) == licNameSlug {
+					lic = l
+					break
+				}
+			}
+			if lic == nil {
+				http.NotFound(w, r)
+				return
+			}
+
+			s.renderPageHTTP(w, "license.html", map[string]interface{}{
+				"Title":       "Unsupported License: " + lic.Name,
+				"BaseURL":     baseURL,
+				"Breadcrumbs": []g2.Breadcrumb{{Name: s.Title, URL: baseURL}, {Name: "Unsupported Licenses", URL: "../"}, {Name: lic.Name}},
 				"License":     lic,
 				"Version":     version,
 				"GenInfo":     s.GenInfo,

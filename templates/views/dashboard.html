@@ -23,6 +23,9 @@
         {{if and .Licenses (gt (len .Licenses) 0)}}
         <li><a href="licenses/">Licenses ({{len .Licenses}})</a></li>
         {{end}}
+        {{if and .UnsupportedLicenses (gt (len .UnsupportedLicenses) 0)}}
+        <li><a href="unsupported-licenses/">Unsupported Licenses ({{len .UnsupportedLicenses}})</a></li>
+        {{end}}
         {{if and .UseFlags (gt (len .UseFlags) 0)}}
         <li><a href="uses/">USE Flags ({{len .UseFlags}})</a></li>
         {{end}}
