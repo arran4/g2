@@ -509,8 +509,16 @@ func resolveDependencies(node g2.DepNode, pkgMap map[string]bool) ResolvedDepNod
 	return ResolvedDepNode{}
 }
 
-// isValidLicense checks if a license string contains at least one alphanumeric character
+// isValidLicense checks if a license string is a valid identifier
 func isValidLicense(s string) bool {
+	if strings.Contains(s, "/") {
+		return false
+	}
+	sLower := strings.ToLower(s)
+	if strings.Contains(sLower, "copyright (c)") || strings.Contains(sLower, "all rights reserved") || len(strings.Fields(s)) > 20 {
+		return false
+	}
+
 	for _, r := range s {
 		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') {
 			return true
@@ -1378,10 +1386,11 @@ type RepoGroup struct {
 }
 
 type AggregatedData struct {
-	Categories      []*AggCategory
-	Packages        []*AggPackage
-	Licenses        []*AggLicense
-	Projects        []*AggProject
+	Categories          []*AggCategory
+	Packages            []*AggPackage
+	Licenses            []*AggLicense
+	UnsupportedLicenses []*AggLicense
+	Projects            []*AggProject
 	Profiles        []*g2.AggProfile
 	Arches          []*AggArch
 	Moves           map[string]*AggPackageMove
@@ -1797,16 +1806,22 @@ func aggregateValidUseExpands(sites []*g2.SiteData) map[string]bool {
 	return validUseExpands
 }
 
-func sortLicenses(aggLicenses map[string]*AggLicense) ([]*AggLicense, map[string]bool) {
+func sortLicenses(aggLicenses map[string]*AggLicense) ([]*AggLicense, []*AggLicense, map[string]bool) {
 	validLicenses := make(map[string]bool)
-	var sortedLicenses []*AggLicense
+	var supportedLicenses []*AggLicense
+	var unsupportedLicenses []*AggLicense
 	for _, l := range aggLicenses {
 		sort.Strings(l.Aliases)
-		sortedLicenses = append(sortedLicenses, l)
+		if len(l.ProvidedByRepos) > 0 {
+			supportedLicenses = append(supportedLicenses, l)
+		} else {
+			unsupportedLicenses = append(unsupportedLicenses, l)
+		}
 		validLicenses[l.Name] = true
 	}
-	sort.Slice(sortedLicenses, func(i, j int) bool { return sortedLicenses[i].Name < sortedLicenses[j].Name })
-	return sortedLicenses, validLicenses
+	sort.Slice(supportedLicenses, func(i, j int) bool { return supportedLicenses[i].Name < supportedLicenses[j].Name })
+	sort.Slice(unsupportedLicenses, func(i, j int) bool { return unsupportedLicenses[i].Name < unsupportedLicenses[j].Name })
+	return supportedLicenses, unsupportedLicenses, validLicenses
 }
 
 func sortProjects(aggProjects map[string]*AggProject) []*AggProject {
@@ -1902,7 +1917,7 @@ func prepareAggregatedData(sites []*g2.SiteData) *AggregatedData {
 	sortedCategories := sortCategories(aggCategories)
 	sortedPackages := sortPackages(aggPackages)
 	validUseExpands := aggregateValidUseExpands(sites)
-	sortedLicenses, validLicenses := sortLicenses(aggLicenses)
+	sortedLicenses, unsupportedLicenses, validLicenses := sortLicenses(aggLicenses)
 	sortedProjects := sortProjects(aggProjects)
 	sortedProfiles := sortProfiles(aggProfiles)
 	sortedArches := sortArches(aggArches)
@@ -1913,10 +1928,11 @@ func prepareAggregatedData(sites []*g2.SiteData) *AggregatedData {
 	sortedUseFlags, _ := AggregateUseFlags(sites, aggPackages)
 
 	return &AggregatedData{
-		Categories:      sortedCategories,
-		Packages:        sortedPackages,
-		Licenses:        sortedLicenses,
-		Projects:        sortedProjects,
+		Categories:          sortedCategories,
+		Packages:            sortedPackages,
+		Licenses:            sortedLicenses,
+		UnsupportedLicenses: unsupportedLicenses,
+		Projects:            sortedProjects,
 		Profiles:        sortedProfiles,
 		Arches:          sortedArches,
 		Moves:           aggMoves,

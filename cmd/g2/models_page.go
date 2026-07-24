@@ -23,6 +23,7 @@ type GenericPageContext struct {
 	GlobalPackages        []*AggPackage
 	RepoPackages          []g2.PackageData
 	Licenses              []*AggLicense
+	UnsupportedLicenses   []*AggLicense
 	RepoLicenses          []*AggLicense
 	UseFlags              []*AggUseFlag
 	UseExpandDescs        map[string]*g2.UseExpandDesc

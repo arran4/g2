@@ -539,6 +539,42 @@ func generateOtherGlobalPages(outDir string, tmpl *template.Template, data *Aggr
 		}
 	}
 
+	if err := os.MkdirAll(filepath.Join(outDir, "unsupported-licenses"), 0755); err != nil {
+		return fmt.Errorf("creating directory: %w", err)
+	}
+	if err := renderPage(filepath.Join(outDir, "unsupported-licenses", "index.html"), tmpl, "licenses.html", GenericPageContext{
+		Title:       "Unsupported Licenses",
+		BaseURL:     "../",
+		Breadcrumbs: []g2.Breadcrumb{{Name: title, URL: "../"}, {Name: "Unsupported Licenses"}},
+		Licenses:    data.UnsupportedLicenses,
+		Version:     version,
+		GenInfo:     genInfo,
+	}); err != nil {
+		return fmt.Errorf("rendering page: %w", err)
+	}
+
+	for _, lic := range data.UnsupportedLicenses {
+		licDirName := sanitizeFilename(lic.Name)
+		if licDirName == "" {
+			continue // Skip licenses that sanitize down to nothing
+		}
+		licDir := filepath.Join(outDir, "unsupported-licenses", licDirName)
+		if err := os.MkdirAll(licDir, 0755); err != nil {
+			return fmt.Errorf("creating directory %s: %w", licDir, err)
+		}
+
+		if err := renderPage(filepath.Join(licDir, "index.html"), tmpl, "license.html", GenericPageContext{
+			Title:       "Unsupported License: " + lic.Name,
+			BaseURL:     "../../",
+			Breadcrumbs: []g2.Breadcrumb{{Name: title, URL: "../../"}, {Name: "Unsupported Licenses", URL: "../"}, {Name: lic.Name}},
+			License:     lic,
+			Version:     version,
+			GenInfo:     genInfo,
+		}); err != nil {
+			return fmt.Errorf("rendering page: %w", err)
+		}
+	}
+
 	// 5b. Global Projects
 	if len(data.Projects) > 0 {
 		if err := os.MkdirAll(filepath.Join(outDir, "projects"), 0755); err != nil {
