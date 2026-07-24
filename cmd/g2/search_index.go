@@ -417,7 +417,13 @@ func generateSearchData(outDir, outZip string, sites []*g2.SiteData, maxChunkSiz
 		if err := mEncoder.Encode(manifest); err != nil {
 			return fmt.Errorf("encoding search manifest: %w", err)
 		}
-		return nil
+
+		if err := z.Close(); err != nil {
+			return fmt.Errorf("closing zip writer: %w", err)
+		}
+		if err := f.Close(); err != nil {
+			return fmt.Errorf("closing zip file: %w", err)
+		}
 	}
 
 	if outDir != "" {
