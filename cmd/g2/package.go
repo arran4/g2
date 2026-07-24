@@ -165,19 +165,36 @@ func LoadSearchEngine(searchPath string, engine *SearchEngine) error {
 			return fmt.Errorf("decoding manifest: %w", err)
 		}
 
-		for _, file := range manifest.DataFiles {
-			dataURL := fmt.Sprintf("%s/data/%s", strings.TrimRight(searchPath, "/"), file)
-			dataResp, err := http.Get(dataURL)
-			if err != nil {
-				return fmt.Errorf("fetching data file %s: %w", file, err)
+		if len(manifest.DataFiles) > 0 {
+			for _, file := range manifest.DataFiles {
+				dataURL := fmt.Sprintf("%s/data/%s", strings.TrimRight(searchPath, "/"), file)
+				dataResp, err := http.Get(dataURL)
+				if err != nil {
+					return fmt.Errorf("fetching data file %s: %w", file, err)
+				}
+				var docs []SearchDocument
+				if err := json.NewDecoder(dataResp.Body).Decode(&docs); err != nil {
+					_ = dataResp.Body.Close()
+					return fmt.Errorf("decoding data file %s: %w", file, err)
+				}
+				_ = dataResp.Body.Close()
+				engine.LoadDocuments(docs)
 			}
-			defer func() { _ = dataResp.Body.Close() }()
-
-			var docs []SearchDocument
-			if err := json.NewDecoder(dataResp.Body).Decode(&docs); err != nil {
-				return fmt.Errorf("decoding data file %s: %w", file, err)
+		} else {
+			for i := 1; i <= manifest.DocumentCount; i++ {
+				dataURL := fmt.Sprintf("%s/data/docs/%d.json", strings.TrimRight(searchPath, "/"), i)
+				dataResp, err := http.Get(dataURL)
+				if err != nil {
+					return fmt.Errorf("fetching doc %d: %w", i, err)
+				}
+				var doc SearchDocument
+				if err := json.NewDecoder(dataResp.Body).Decode(&doc); err != nil {
+					_ = dataResp.Body.Close()
+					return fmt.Errorf("decoding doc %d: %w", i, err)
+				}
+				_ = dataResp.Body.Close()
+				engine.LoadDocuments([]SearchDocument{doc})
 			}
-			engine.LoadDocuments(docs)
 		}
 	} else if strings.HasSuffix(searchPath, ".zip") {
 		z, err := zip.OpenReader(searchPath)
@@ -212,32 +229,54 @@ func LoadSearchEngine(searchPath string, engine *SearchEngine) error {
 			return fmt.Errorf("manifest.json not found in zip")
 		}
 
-		prefix := manifestPath[:len(manifestPath)-len("manifest.json")]
-		var matchingFiles []*zip.File
-		for _, mf := range manifest.DataFiles {
-			if f, ok := filesMap[prefix+mf]; ok {
-				matchingFiles = append(matchingFiles, f)
-			} else {
-				for name, f := range filesMap {
-					if strings.HasSuffix(name, mf) {
-						matchingFiles = append(matchingFiles, f)
+		if len(manifest.DataFiles) > 0 {
+			prefix := manifestPath[:len(manifestPath)-len("manifest.json")]
+			var matchingFiles []*zip.File
+			for _, mf := range manifest.DataFiles {
+				if f, ok := filesMap[prefix+mf]; ok {
+					matchingFiles = append(matchingFiles, f)
+				} else {
+					for name, f := range filesMap {
+						if strings.HasSuffix(name, mf) {
+							matchingFiles = append(matchingFiles, f)
+						}
 					}
 				}
 			}
-		}
 
-		for _, f := range matchingFiles {
-			rc, err := f.Open()
-			if err != nil {
-				return err
+			for _, f := range matchingFiles {
+				rc, err := f.Open()
+				if err != nil {
+					return err
+				}
+				var docs []SearchDocument
+				err = json.NewDecoder(rc).Decode(&docs)
+				_ = rc.Close()
+				if err != nil {
+					return fmt.Errorf("decoding data file %s from zip: %w", f.Name, err)
+				}
+				engine.LoadDocuments(docs)
 			}
-			var docs []SearchDocument
-			err = json.NewDecoder(rc).Decode(&docs)
-			_ = rc.Close()
-			if err != nil {
-				return fmt.Errorf("decoding data file %s from zip: %w", f.Name, err)
+		} else {
+			prefix := manifestPath[:len(manifestPath)-len("manifest.json")]
+			for i := 1; i <= manifest.DocumentCount; i++ {
+				docPath := fmt.Sprintf("%sdocs/%d.json", prefix, i)
+				f, ok := filesMap[docPath]
+				if !ok {
+					return fmt.Errorf("document file %s not found in zip", docPath)
+				}
+				rc, err := f.Open()
+				if err != nil {
+					return err
+				}
+				var doc SearchDocument
+				err = json.NewDecoder(rc).Decode(&doc)
+				_ = rc.Close()
+				if err != nil {
+					return fmt.Errorf("decoding doc %d from zip: %w", i, err)
+				}
+				engine.LoadDocuments([]SearchDocument{doc})
 			}
-			engine.LoadDocuments(docs)
 		}
 	} else if strings.HasSuffix(searchPath, ".tar") || strings.HasSuffix(searchPath, ".tar.gz") {
 		f, err := os.Open(searchPath)
@@ -293,29 +332,45 @@ func LoadSearchEngine(searchPath string, engine *SearchEngine) error {
 			return fmt.Errorf("manifest.json not found in tar")
 		}
 
-		prefix := manifestPath[:len(manifestPath)-len("manifest.json")]
-		var matchingData [][]byte
-		var matchingNames []string
-		for _, mf := range manifest.DataFiles {
-			if data, ok := filesData[prefix+mf]; ok {
-				matchingData = append(matchingData, data)
-				matchingNames = append(matchingNames, prefix+mf)
-			} else {
-				for name, data := range filesData {
-					if strings.HasSuffix(name, mf) {
-						matchingData = append(matchingData, data)
-						matchingNames = append(matchingNames, name)
+		if len(manifest.DataFiles) > 0 {
+			prefix := manifestPath[:len(manifestPath)-len("manifest.json")]
+			var matchingData [][]byte
+			var matchingNames []string
+			for _, mf := range manifest.DataFiles {
+				if data, ok := filesData[prefix+mf]; ok {
+					matchingData = append(matchingData, data)
+					matchingNames = append(matchingNames, prefix+mf)
+				} else {
+					for name, data := range filesData {
+						if strings.HasSuffix(name, mf) {
+							matchingData = append(matchingData, data)
+							matchingNames = append(matchingNames, name)
+						}
 					}
 				}
 			}
-		}
 
-		for i, data := range matchingData {
-			var docs []SearchDocument
-			if err := json.Unmarshal(data, &docs); err != nil {
-				return fmt.Errorf("decoding data file %s from tar: %w", matchingNames[i], err)
+			for i, data := range matchingData {
+				var docs []SearchDocument
+				if err := json.Unmarshal(data, &docs); err != nil {
+					return fmt.Errorf("decoding data file %s from tar: %w", matchingNames[i], err)
+				}
+				engine.LoadDocuments(docs)
 			}
-			engine.LoadDocuments(docs)
+		} else {
+			prefix := manifestPath[:len(manifestPath)-len("manifest.json")]
+			for i := 1; i <= manifest.DocumentCount; i++ {
+				docPath := fmt.Sprintf("%sdocs/%d.json", prefix, i)
+				data, ok := filesData[docPath]
+				if !ok {
+					return fmt.Errorf("document file %s not found in tar", docPath)
+				}
+				var doc SearchDocument
+				if err := json.Unmarshal(data, &doc); err != nil {
+					return fmt.Errorf("decoding doc %d from tar: %w", i, err)
+				}
+				engine.LoadDocuments([]SearchDocument{doc})
+			}
 		}
 	} else if strings.HasSuffix(searchPath, ".txtar") {
 		archive, err := txtar.ParseFile(searchPath)
@@ -343,29 +398,45 @@ func LoadSearchEngine(searchPath string, engine *SearchEngine) error {
 			return fmt.Errorf("manifest.json not found in txtar")
 		}
 
-		prefix := manifestPath[:len(manifestPath)-len("manifest.json")]
-		var matchingData [][]byte
-		var matchingNames []string
-		for _, mf := range manifest.DataFiles {
-			if data, ok := filesData[prefix+mf]; ok {
-				matchingData = append(matchingData, data)
-				matchingNames = append(matchingNames, prefix+mf)
-			} else {
-				for name, data := range filesData {
-					if strings.HasSuffix(name, mf) {
-						matchingData = append(matchingData, data)
-						matchingNames = append(matchingNames, name)
+		if len(manifest.DataFiles) > 0 {
+			prefix := manifestPath[:len(manifestPath)-len("manifest.json")]
+			var matchingData [][]byte
+			var matchingNames []string
+			for _, mf := range manifest.DataFiles {
+				if data, ok := filesData[prefix+mf]; ok {
+					matchingData = append(matchingData, data)
+					matchingNames = append(matchingNames, prefix+mf)
+				} else {
+					for name, data := range filesData {
+						if strings.HasSuffix(name, mf) {
+							matchingData = append(matchingData, data)
+							matchingNames = append(matchingNames, name)
+						}
 					}
 				}
 			}
-		}
 
-		for i, data := range matchingData {
-			var docs []SearchDocument
-			if err := json.Unmarshal(data, &docs); err != nil {
-				return fmt.Errorf("decoding data file %s from txtar: %w", matchingNames[i], err)
+			for i, data := range matchingData {
+				var docs []SearchDocument
+				if err := json.Unmarshal(data, &docs); err != nil {
+					return fmt.Errorf("decoding data file %s from txtar: %w", matchingNames[i], err)
+				}
+				engine.LoadDocuments(docs)
 			}
-			engine.LoadDocuments(docs)
+		} else {
+			prefix := manifestPath[:len(manifestPath)-len("manifest.json")]
+			for i := 1; i <= manifest.DocumentCount; i++ {
+				docPath := fmt.Sprintf("%sdocs/%d.json", prefix, i)
+				data, ok := filesData[docPath]
+				if !ok {
+					return fmt.Errorf("document file %s not found in txtar", docPath)
+				}
+				var doc SearchDocument
+				if err := json.Unmarshal(data, &doc); err != nil {
+					return fmt.Errorf("decoding doc %d from txtar: %w", i, err)
+				}
+				engine.LoadDocuments([]SearchDocument{doc})
+			}
 		}
 	} else {
 		// Directory
@@ -388,19 +459,36 @@ func LoadSearchEngine(searchPath string, engine *SearchEngine) error {
 			return fmt.Errorf("decoding manifest: %w", err)
 		}
 
-		for _, file := range manifest.DataFiles {
-			dataPath := filepath.Join(dataDir, file)
-			df, err := os.Open(dataPath)
-			if err != nil {
-				return fmt.Errorf("opening data file %s: %w", file, err)
-			}
-			var docs []SearchDocument
-			if err := json.NewDecoder(df).Decode(&docs); err != nil {
+		if len(manifest.DataFiles) > 0 {
+			for _, file := range manifest.DataFiles {
+				dataPath := filepath.Join(dataDir, file)
+				df, err := os.Open(dataPath)
+				if err != nil {
+					return fmt.Errorf("opening data file %s: %w", file, err)
+				}
+				var docs []SearchDocument
+				if err := json.NewDecoder(df).Decode(&docs); err != nil {
+					_ = df.Close()
+					return fmt.Errorf("decoding data file %s: %w", file, err)
+				}
 				_ = df.Close()
-				return fmt.Errorf("decoding data file %s: %w", file, err)
+				engine.LoadDocuments(docs)
 			}
-			_ = df.Close()
-			engine.LoadDocuments(docs)
+		} else {
+			for i := 1; i <= manifest.DocumentCount; i++ {
+				dataPath := filepath.Join(dataDir, "docs", fmt.Sprintf("%d.json", i))
+				df, err := os.Open(dataPath)
+				if err != nil {
+					return fmt.Errorf("opening doc %d: %w", i, err)
+				}
+				var doc SearchDocument
+				if err := json.NewDecoder(df).Decode(&doc); err != nil {
+					_ = df.Close()
+					return fmt.Errorf("decoding doc %d: %w", i, err)
+				}
+				_ = df.Close()
+				engine.LoadDocuments([]SearchDocument{doc})
+			}
 		}
 	}
 
