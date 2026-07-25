@@ -2,6 +2,8 @@ package main
 
 import (
 	"strings"
+
+	"github.com/arran4/g2"
 )
 
 type SearchEngine struct {
@@ -208,13 +210,13 @@ func (e *SearchEngine) matchSequence(doc SearchDocument, seq string) bool {
 }
 
 func (e *SearchEngine) matchVersion(doc SearchDocument, queryVersion string) bool {
-	v, op := splitVersionOpGlobal(queryVersion)
+	v, op := g2.SplitVersionOp(queryVersion)
 
 	docVersionPadded := doc.VersionSortKey
 	if docVersionPadded == "" {
-		docVersionPadded = padVersionGlobal(doc.Version)
+		docVersionPadded = g2.PadVersion(doc.Version)
 	}
-	queryVersionPadded := padVersionGlobal(v)
+	queryVersionPadded := g2.PadVersion(v)
 
 	switch op {
 	case "==":
