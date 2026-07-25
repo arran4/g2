@@ -49,11 +49,14 @@ func PadVersion(ver string) string {
 	return sb.String()
 }
 
-// SplitVersionOp extracts the operator (>=, <=, >, <, ~, =) and the remaining version string
+// SplitVersionOp extracts the operator (>=, <=, >, <, ~, =, ==) and the remaining version string
 func SplitVersionOp(queryVersion string) (version string, op string) {
 	op = "=="
 	v := queryVersion
-	if strings.HasPrefix(queryVersion, ">=") {
+	if strings.HasPrefix(queryVersion, "==") {
+		op = "=="
+		v = queryVersion[2:]
+	} else if strings.HasPrefix(queryVersion, ">=") {
 		op = ">="
 		v = queryVersion[2:]
 	} else if strings.HasPrefix(queryVersion, "<=") {
@@ -69,7 +72,7 @@ func SplitVersionOp(queryVersion string) (version string, op string) {
 		op = "~"
 		v = queryVersion[1:]
 	} else if strings.HasPrefix(queryVersion, "=") {
-		op = "="
+		op = "=="
 		v = queryVersion[1:]
 	}
 	return v, op

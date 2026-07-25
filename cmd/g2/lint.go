@@ -311,8 +311,8 @@ func (cfg *MainArgConfig) runLintCore(location string, targetMap map[string]bool
 						}
 					}
 					if query.VersionOp != "" && query.Version != "" {
-						vPadded := padVersionGlobal(v.Version)
-						qPadded := padVersionGlobal(query.Version)
+						vPadded := g2.PadVersion(v.Version)
+						qPadded := g2.PadVersion(query.Version)
 
 						match := false
 						switch query.VersionOp {
