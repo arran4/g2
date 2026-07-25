@@ -493,7 +493,7 @@ func (cfg *MainArgConfig) cmdLintPackage(args []string) error {
 	}
 
 	if len(targetPkgs) == 0 {
-		return fmt.Errorf("usage: g2 lint package [flags] [<location>] <target_package>...")
+		return fmt.Errorf("usage: g2 lint package [flags] [<location>] <target_package>")
 	}
 
 	targetMap := make(map[string]bool)
