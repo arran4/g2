@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 
 	"github.com/arran4/g2"
@@ -278,18 +277,6 @@ func (cfg *MainArgConfig) runLintCore(location string, targetMap map[string]bool
 	hasErrors := false
 	var allResults []lints.LintResult
 
-	reVersionRev := regexp.MustCompile(`-r(\d+)$`)
-	reDigits := regexp.MustCompile(`\d+`)
-	padVersion := func(ver string) string {
-		if ver == "" {
-			return ""
-		}
-		pVer := reVersionRev.ReplaceAllString(ver, "+r$1")
-		return reDigits.ReplaceAllStringFunc(pVer, func(s string) string {
-			return fmt.Sprintf("%010s", s)
-		})
-	}
-
 	for _, cat := range siteData.Categories {
 		if query != nil && query.Category != "" && query.Category != cat.Name {
 			continue
@@ -324,8 +311,8 @@ func (cfg *MainArgConfig) runLintCore(location string, targetMap map[string]bool
 						}
 					}
 					if query.VersionOp != "" && query.Version != "" {
-						vPadded := padVersion(v.Version)
-						qPadded := padVersion(query.Version)
+						vPadded := padVersionGlobal(v.Version)
+						qPadded := padVersionGlobal(query.Version)
 
 						match := false
 						switch query.VersionOp {

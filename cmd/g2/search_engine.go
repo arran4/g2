@@ -1,8 +1,6 @@
 package main
 
 import (
-	"fmt"
-	"regexp"
 	"strings"
 )
 
@@ -209,45 +207,14 @@ func (e *SearchEngine) matchSequence(doc SearchDocument, seq string) bool {
 	return true
 }
 
-var (
-	reVersionRev = regexp.MustCompile(`-r(\d+)$`)
-	reDigits     = regexp.MustCompile(`\d+`)
-)
-
 func (e *SearchEngine) matchVersion(doc SearchDocument, queryVersion string) bool {
-	op := "=="
-	v := queryVersion
-	if strings.HasPrefix(queryVersion, ">=") {
-		op = ">="
-		v = queryVersion[2:]
-	} else if strings.HasPrefix(queryVersion, "<=") {
-		op = "<="
-		v = queryVersion[2:]
-	} else if strings.HasPrefix(queryVersion, ">") {
-		op = ">"
-		v = queryVersion[1:]
-	} else if strings.HasPrefix(queryVersion, "<") {
-		op = "<"
-		v = queryVersion[1:]
-	}
-
-	padVersion := func(ver string) string {
-		if ver == "" {
-			return ""
-		}
-
-		pVer := reVersionRev.ReplaceAllString(ver, "+r$1")
-
-		return reDigits.ReplaceAllStringFunc(pVer, func(s string) string {
-			return fmt.Sprintf("%010s", s)
-		})
-	}
+	v, op := splitVersionOpGlobal(queryVersion)
 
 	docVersionPadded := doc.VersionSortKey
 	if docVersionPadded == "" {
-		docVersionPadded = padVersion(doc.Version)
+		docVersionPadded = padVersionGlobal(doc.Version)
 	}
-	queryVersionPadded := padVersion(v)
+	queryVersionPadded := padVersionGlobal(v)
 
 	switch op {
 	case "==":
