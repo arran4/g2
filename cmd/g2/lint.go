@@ -42,7 +42,7 @@ func (cfg *MainArgConfig) cmdLint(args []string) error {
 		fmt.Printf("Flags:\n")
 		fs.PrintDefaults()
 	}
-	format := fs.String("format", "text", "Output format: text or json")
+	format := fs.String("format", "text", "Output format: text, json, or github-actions")
 	severityFilter := fs.String("severity", "", "Only show warnings of this severity (error, warning, notice, info)")
 	sourceFilter := fs.String("only-source", "", "Only show warnings from this source (g2, pkgcheck)")
 	tagFilter := fs.String("only-tag", "", "Only show warnings with this tag")
@@ -140,6 +140,10 @@ func (cfg *MainArgConfig) cmdLint(args []string) error {
 				filteredWarnings = append(filteredWarnings, w)
 			}
 
+			for i := range filteredWarnings {
+				filteredWarnings[i].Package = pkg.Category + "/" + pkg.Name
+			}
+
 			if len(filteredWarnings) > 0 {
 				hasErrors = true
 				if *format == "text" {
@@ -159,6 +163,8 @@ func (cfg *MainArgConfig) cmdLint(args []string) error {
 			return fmt.Errorf("formatting json: %w", err)
 		}
 		fmt.Println(string(out))
+	} else if *format == "github-actions" {
+		printGithubActions(allResults)
 	}
 
 	if hasErrors {
@@ -169,4 +175,58 @@ func (cfg *MainArgConfig) cmdLint(args []string) error {
 		fmt.Println("Linting passed successfully.")
 	}
 	return nil
+}
+
+func printGithubActions(results []lints.LintResult) {
+	for _, res := range results {
+		level := "error"
+		if res.RuleMetadata.Severity == lints.SeverityWarning {
+			level = "warning"
+		} else if res.RuleMetadata.Severity == lints.SeverityNotice {
+			level = "notice"
+		} else if res.RuleMetadata.Severity == lints.SeverityInfo {
+			level = "notice" // GitHub actions doesn't have info, map to notice
+		}
+
+		msg := escapeGithubActions(res.Message)
+		title := escapeGithubProperty(res.RuleMetadata.Title)
+		file := res.File
+		if file == "" {
+			file = res.Package
+		}
+
+		var props []string
+		if file != "" {
+			props = append(props, fmt.Sprintf("file=%s", escapeGithubProperty(file)))
+		}
+		if res.Line > 0 {
+			props = append(props, fmt.Sprintf("line=%d", res.Line))
+		}
+		if title != "" {
+			props = append(props, fmt.Sprintf("title=%s", title)) // don't strictly need to escape if we know title format, but let's be safe
+		}
+
+		propStr := ""
+		if len(props) > 0 {
+			propStr = " " + strings.Join(props, ",")
+		}
+
+		fmt.Printf("::%s%s::%s\n", level, propStr, msg)
+	}
+}
+
+func escapeGithubActions(s string) string {
+	s = strings.ReplaceAll(s, "%", "%25")
+	s = strings.ReplaceAll(s, "\r", "%0D")
+	s = strings.ReplaceAll(s, "\n", "%0A")
+	return s
+}
+
+func escapeGithubProperty(s string) string {
+	s = strings.ReplaceAll(s, "%", "%25")
+	s = strings.ReplaceAll(s, "\r", "%0D")
+	s = strings.ReplaceAll(s, "\n", "%0A")
+	s = strings.ReplaceAll(s, ":", "%3A")
+	s = strings.ReplaceAll(s, ",", "%2C")
+	return s
 }
