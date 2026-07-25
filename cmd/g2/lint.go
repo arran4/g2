@@ -530,9 +530,13 @@ func parseLintQuery(queryStr string, defaultLocation string) (*LintQuery, error)
 							}
 						}
 					}
-					if found { break }
+					if found {
+						break
+					}
 				}
-				if found { break }
+				if found {
+					break
+				}
 			}
 			if !found && q.RepoPath == defaultLocation {
 				// Fallback if not found but we know they asked for a repo
