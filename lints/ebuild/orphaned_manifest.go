@@ -56,7 +56,8 @@ func (r *OrphanedManifestLintRule) LintWithQA(repoDir string, pkg *g2.PackageDat
 
 	pkgDir := filepath.Join(repoDir, pkg.Category, pkg.Name)
 	for _, entry := range pkg.Manifest.Entries {
-		if entry.Type == "DIST" {
+		switch entry.Type {
+		case "DIST":
 			if !usedFiles[entry.Filename] {
 				res := lints.LintResult{
 					RuleMetadata: ruleOrphanedManifest,
@@ -65,7 +66,7 @@ func (r *OrphanedManifestLintRule) LintWithQA(repoDir string, pkg *g2.PackageDat
 				}
 				results = append(results, res)
 			}
-		} else if entry.Type == "EBUILD" || entry.Type == "MISC" || entry.Type == "AUX" {
+		case "EBUILD", "MISC", "AUX":
 			var filePath string
 			if entry.Type == "AUX" {
 				filePath = filepath.Join(pkgDir, "files", entry.Filename)
