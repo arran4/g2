@@ -1,9 +1,9 @@
 package main
 
 import (
-	"fmt"
-	"regexp"
 	"strings"
+
+	"github.com/arran4/g2"
 )
 
 type SearchEngine struct {
@@ -209,45 +209,14 @@ func (e *SearchEngine) matchSequence(doc SearchDocument, seq string) bool {
 	return true
 }
 
-var (
-	reVersionRev = regexp.MustCompile(`-r(\d+)$`)
-	reDigits     = regexp.MustCompile(`\d+`)
-)
-
 func (e *SearchEngine) matchVersion(doc SearchDocument, queryVersion string) bool {
-	op := "=="
-	v := queryVersion
-	if strings.HasPrefix(queryVersion, ">=") {
-		op = ">="
-		v = queryVersion[2:]
-	} else if strings.HasPrefix(queryVersion, "<=") {
-		op = "<="
-		v = queryVersion[2:]
-	} else if strings.HasPrefix(queryVersion, ">") {
-		op = ">"
-		v = queryVersion[1:]
-	} else if strings.HasPrefix(queryVersion, "<") {
-		op = "<"
-		v = queryVersion[1:]
-	}
-
-	padVersion := func(ver string) string {
-		if ver == "" {
-			return ""
-		}
-
-		pVer := reVersionRev.ReplaceAllString(ver, "+r$1")
-
-		return reDigits.ReplaceAllStringFunc(pVer, func(s string) string {
-			return fmt.Sprintf("%010s", s)
-		})
-	}
+	v, op := g2.SplitVersionOp(queryVersion)
 
 	docVersionPadded := doc.VersionSortKey
 	if docVersionPadded == "" {
-		docVersionPadded = padVersion(doc.Version)
+		docVersionPadded = g2.PadVersion(doc.Version)
 	}
-	queryVersionPadded := padVersion(v)
+	queryVersionPadded := g2.PadVersion(v)
 
 	switch op {
 	case "==":
