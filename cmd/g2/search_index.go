@@ -99,7 +99,14 @@ func generateSearchData(outDir, outZip string, sites []*g2.SiteData, maxChunkSiz
 						desc = ver.Ebuild.Vars["DESCRIPTION"]
 
 						homepage := ver.Ebuild.Vars["HOMEPAGE"]
-						urls = append(urls, strings.Fields(homepage)...)
+						sHomepage := homepage
+						for len(sHomepage) > 0 {
+							var tok string
+							tok, sHomepage = nextToken(sHomepage)
+							if tok != "" {
+								urls = append(urls, tok)
+							}
+						}
 
 						licenseStr := ver.Ebuild.Vars["LICENSE"]
 						for _, l := range g2.ParseLicense(licenseStr) {
@@ -115,7 +122,13 @@ func generateSearchData(outDir, outZip string, sites []*g2.SiteData, maxChunkSiz
 						}
 
 						keywordStr := ver.Ebuild.Vars["KEYWORDS"]
-						forEachToken(keywordStr, func(kw string) {
+						s := keywordStr
+						for len(s) > 0 {
+							var kw string
+							kw, s = nextToken(s)
+							if kw == "" {
+								break
+							}
 							keywords = append(keywords, kw)
 							arch := kw
 							if len(arch) > 0 && arch[0] == '~' {
@@ -127,10 +140,16 @@ func generateSearchData(outDir, outZip string, sites []*g2.SiteData, maxChunkSiz
 							if len(arch) > 0 {
 								arches = append(arches, arch)
 							}
-						})
+						}
 
 						iuseStr := ver.Ebuild.Vars["IUSE"]
-						forEachToken(iuseStr, func(u string) {
+						sIuse := iuseStr
+						for len(sIuse) > 0 {
+							var u string
+							u, sIuse = nextToken(sIuse)
+							if u == "" {
+								break
+							}
 							if len(u) > 0 && u[0] == '+' {
 								u = u[1:]
 							}
@@ -138,7 +157,7 @@ func generateSearchData(outDir, outZip string, sites []*g2.SiteData, maxChunkSiz
 								u = u[1:]
 							}
 							uses = append(uses, u)
-						})
+						}
 
 						if d := ver.Ebuild.Vars["DEPEND"]; d != "" {
 							rawDepends = d
@@ -181,7 +200,15 @@ func generateSearchData(outDir, outZip string, sites []*g2.SiteData, maxChunkSiz
 						}
 
 						if inh := ver.Ebuild.Vars["INHERITED"]; inh != "" {
-							inherits = strings.Fields(inh)
+							s := inh
+							inherits = inherits[:0] // Clear the slice
+							for len(s) > 0 {
+								var tok string
+								tok, s = nextToken(s)
+								if tok != "" {
+									inherits = append(inherits, tok)
+								}
+							}
 						}
 					}
 
@@ -539,22 +566,19 @@ func generateSearchIndex(outDir string, sites []*g2.SiteData) error {
 	return nil
 }
 
-// forEachToken acts as a zero-allocation split by whitespace, calling fn for each non-empty token.
-func forEachToken(s string, fn func(string)) {
-	for len(s) > 0 {
-		for len(s) > 0 && s[0] <= ' ' {
-			s = s[1:]
-		}
-		if s == "" {
-			break
-		}
-		end := 0
-		for end < len(s) && s[end] > ' ' {
-			end++
-		}
-		fn(s[:end])
-		s = s[end:]
+// nextToken acts as a zero-allocation split by whitespace, returning the token and the rest of the string.
+func nextToken(s string) (token, rest string) {
+	for len(s) > 0 && s[0] <= ' ' {
+		s = s[1:]
 	}
+	if s == "" {
+		return "", ""
+	}
+	end := 0
+	for end < len(s) && s[end] > ' ' {
+		end++
+	}
+	return s[:end], s[end:]
 }
 
 func getBucket(token string) string {
@@ -594,11 +618,13 @@ func tokenizeDocument(doc SearchDocument) []string {
 	}
 
 	// Text fields
-	words := strings.Fields(doc.SearchText)
-	for _, w := range words {
-		// Just basic stripping of common punctuation from ends could be useful,
-		// but since earlier code didn't do much stripping, we just add the word.
-		addToken(w)
+	sText := doc.SearchText
+	for len(sText) > 0 {
+		var tok string
+		tok, sText = nextToken(sText)
+		if tok != "" {
+			addToken(tok)
+		}
 	}
 	// Fullname split by /
 	parts := strings.Split(doc.FullName, "/")
