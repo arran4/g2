@@ -3,8 +3,8 @@ package main
 import (
 	"os"
 	"path/filepath"
-	"testing"
 	"strings"
+	"testing"
 )
 
 func TestSkillInstallLocal(t *testing.T) {
@@ -70,7 +70,9 @@ func TestSkillUpdateLocal(t *testing.T) {
 	}
 
 	cwd, _ := os.Getwd()
-	if err := os.Chdir(projectDir); err != nil { t.Fatal(err) }
+	if err := os.Chdir(projectDir); err != nil {
+		t.Fatal(err)
+	}
 	defer func() { _ = os.Chdir(cwd) }()
 
 	c := &MainArgConfig{Args: []string{"g2"}}
@@ -149,7 +151,9 @@ func TestSkillRemove(t *testing.T) {
 	}
 
 	cwd, _ := os.Getwd()
-	if err := os.Chdir(projectDir); err != nil { t.Fatal(err) }
+	if err := os.Chdir(projectDir); err != nil {
+		t.Fatal(err)
+	}
 	defer func() { _ = os.Chdir(cwd) }()
 
 	c := &MainArgConfig{Args: []string{"g2"}}
@@ -191,7 +195,9 @@ func TestSkillList(t *testing.T) {
 	}
 
 	cwd, _ := os.Getwd()
-	if err := os.Chdir(projectDir); err != nil { t.Fatal(err) }
+	if err := os.Chdir(projectDir); err != nil {
+		t.Fatal(err)
+	}
 	defer func() { _ = os.Chdir(cwd) }()
 
 	c := &MainArgConfig{Args: []string{"g2"}}
@@ -228,7 +234,9 @@ func TestSkillInspect(t *testing.T) {
 	}
 
 	cwd, _ := os.Getwd()
-	if err := os.Chdir(projectDir); err != nil { t.Fatal(err) }
+	if err := os.Chdir(projectDir); err != nil {
+		t.Fatal(err)
+	}
 	defer func() { _ = os.Chdir(cwd) }()
 
 	c := &MainArgConfig{Args: []string{"g2"}}
@@ -263,7 +271,9 @@ func TestSkillInstallInvalid(t *testing.T) {
 	}
 
 	cwd, _ := os.Getwd()
-	if err := os.Chdir(projectDir); err != nil { t.Fatal(err) }
+	if err := os.Chdir(projectDir); err != nil {
+		t.Fatal(err)
+	}
 	defer func() { _ = os.Chdir(cwd) }()
 
 	c := &MainArgConfig{Args: []string{"g2"}}

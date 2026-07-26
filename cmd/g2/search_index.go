@@ -673,7 +673,7 @@ func deduplicateStrings(s []string) []string {
 		return []string{}
 	}
 	seen := make(map[string]bool)
-	var res []string
+	res := make([]string, 0, len(s))
 	for _, v := range s {
 		if !seen[v] {
 			seen[v] = true
