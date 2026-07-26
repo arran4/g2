@@ -33,13 +33,13 @@ func getSkillBasePath(scope, agent string) (string, error) {
 			return "", err
 		}
 		baseDir = home
-		case "project":
+	case "project":
 		pwd, err := os.Getwd()
 		if err != nil {
 			return "", err
 		}
 		baseDir = pwd
-		default:
+	default:
 		return "", fmt.Errorf("invalid scope: %s", scope)
 	}
 

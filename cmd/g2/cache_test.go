@@ -7,8 +7,7 @@ import (
 	"io/fs"
 	"os"
 	"path"
-	"path/filepath"
-	"sort"
+		"sort"
 	"strings"
 	"testing"
 	"testing/fstest"
@@ -65,7 +64,7 @@ func (m *MemCacheFS) Remove(name string) error {
 	return nil
 }
 
-func (m *MemCacheFS) Walk(root string, fn filepath.WalkFunc) error {
+func (m *MemCacheFS) Walk(root string, fn fs.WalkDirFunc) error {
 	// Basic walk implementation for MapFS
 	var files []string
 	for k := range m.Map {
@@ -77,7 +76,7 @@ func (m *MemCacheFS) Walk(root string, fn filepath.WalkFunc) error {
 
 	for _, file := range files {
 		info, _ := m.Stat(file)
-		err := fn(file, info, nil)
+		err := fn(file, fs.FileInfoToDirEntry(info), nil)
 		if err != nil {
 			return err
 		}

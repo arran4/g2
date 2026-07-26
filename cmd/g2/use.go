@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"github.com/arran4/g2"
+	"io/fs"
 	"log"
 	"os"
 	"path/filepath"
@@ -12,8 +13,8 @@ import (
 )
 
 func (cfg *MainArgConfig) cmdUse(args []string) error {
-	fs := flag.NewFlagSet("use", flag.ExitOnError)
-	fs.Usage = func() {
+	fset := flag.NewFlagSet("use", flag.ExitOnError)
+	fset.Usage = func() {
 		fmt.Printf("Usage:\n")
 		fmt.Printf("\t%s\n", strings.Join(cfg.Args, " "))
 		fmt.Printf("\t\t %s \t\t %s\n", "discover", "Discover USE flags from ebuilds and metadata.xml files to regenerate use.desc, use.local.desc, and metadata.xml.")
@@ -30,56 +31,56 @@ func (cfg *MainArgConfig) cmdUse(args []string) error {
 		fmt.Printf("\t\t %s \t\t %s\n", "expand-desc-list", "List all USE_EXPAND flag descriptions")
 	}
 
-	if err := fs.Parse(args); err != nil {
+	if err := fset.Parse(args); err != nil {
 		return err
 	}
 
-	if fs.NArg() == 0 {
-		fs.Usage()
+	if fset.NArg() == 0 {
+		fset.Usage()
 		return fmt.Errorf("missing subcommand")
 	}
 
-	cmd := fs.Arg(0)
+	cmd := fset.Arg(0)
 	cfg.Args = append(cfg.Args, cmd)
 
 	switch cmd {
 	case "desc-add", "desc-edit":
-		return cfg.cmdUseDescAdd(fs.Args()[1:])
+		return cfg.cmdUseDescAdd(fset.Args()[1:])
 	case "desc-remove":
-		return cfg.cmdUseDescRemove(fs.Args()[1:])
+		return cfg.cmdUseDescRemove(fset.Args()[1:])
 	case "desc-list":
-		return cfg.cmdUseDescList(fs.Args()[1:])
+		return cfg.cmdUseDescList(fset.Args()[1:])
 	case "local-desc-add", "local-desc-edit":
-		return cfg.cmdUseLocalDescAdd(fs.Args()[1:])
+		return cfg.cmdUseLocalDescAdd(fset.Args()[1:])
 	case "local-desc-remove":
-		return cfg.cmdUseLocalDescRemove(fs.Args()[1:])
+		return cfg.cmdUseLocalDescRemove(fset.Args()[1:])
 	case "local-desc-list":
-		return cfg.cmdUseLocalDescList(fs.Args()[1:])
+		return cfg.cmdUseLocalDescList(fset.Args()[1:])
 	case "expand-desc-add", "expand-desc-edit":
-		return cfg.cmdUseExpandDescAdd(fs.Args()[1:])
+		return cfg.cmdUseExpandDescAdd(fset.Args()[1:])
 	case "expand-desc-remove":
-		return cfg.cmdUseExpandDescRemove(fs.Args()[1:])
+		return cfg.cmdUseExpandDescRemove(fset.Args()[1:])
 	case "expand-desc-list":
-		return cfg.cmdUseExpandDescList(fs.Args()[1:])
+		return cfg.cmdUseExpandDescList(fset.Args()[1:])
 	case "discover":
-		return cfg.cmdUseDiscover(fs.Args()[1:])
+		return cfg.cmdUseDiscover(fset.Args()[1:])
 	default:
-		fs.Usage()
+		fset.Usage()
 		return fmt.Errorf("unknown subcommand %s", cmd)
 	}
 }
 
 func (cfg *MainArgConfig) cmdUseDiscover(args []string) error {
-	fs := flag.NewFlagSet("discover", flag.ExitOnError)
-	repo := fs.String("repo", ".", "Path to gentoo repository")
-	useDescFile := fs.String("file-desc", "profiles/use.desc", "Path to use.desc file")
-	useLocalDescFile := fs.String("file-local-desc", "profiles/use.local.desc", "Path to use.local.desc file")
+	fset := flag.NewFlagSet("discover", flag.ExitOnError)
+	repo := fset.String("repo", ".", "Path to gentoo repository")
+	useDescFile := fset.String("file-desc", "profiles/use.desc", "Path to use.desc file")
+	useLocalDescFile := fset.String("file-local-desc", "profiles/use.local.desc", "Path to use.local.desc file")
 
-	updateDesc := fs.Bool("use-desc", true, "Update the use.desc file")
-	updateLocalDesc := fs.Bool("use-local-desc", true, "Update the use.local.desc file")
-	updateMetadata := fs.Bool("metadata", true, "Update the metadata.xml files")
+	updateDesc := fset.Bool("use-desc", true, "Update the use.desc file")
+	updateLocalDesc := fset.Bool("use-local-desc", true, "Update the use.local.desc file")
+	updateMetadata := fset.Bool("metadata", true, "Update the metadata.xml files")
 
-	if err := fs.Parse(args); err != nil {
+	if err := fset.Parse(args); err != nil {
 		return err
 	}
 
@@ -113,19 +114,19 @@ func (cfg *MainArgConfig) cmdUseDiscover(args []string) error {
 	addedLocalDesc := 0
 	updatedMetadata := 0
 
-	err = filepath.Walk(*repo, func(path string, info os.FileInfo, err error) error {
+	err = filepath.WalkDir(*repo, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
-		if info.IsDir() {
-			if info.Name() == "profiles" || info.Name() == "eclass" || strings.HasPrefix(info.Name(), ".") {
+		if d.IsDir() {
+			if d.Name() == "profiles" || d.Name() == "eclass" || strings.HasPrefix(d.Name(), ".") {
 				return filepath.SkipDir
 			}
 			return nil
 		}
 
-		isMetadata := info.Name() == "metadata.xml"
-		isEbuild := strings.HasSuffix(info.Name(), ".ebuild")
+		isMetadata := d.Name() == "metadata.xml"
+		isEbuild := strings.HasSuffix(d.Name(), ".ebuild")
 
 		if !isMetadata && !isEbuild {
 			return nil
@@ -178,7 +179,7 @@ func (cfg *MainArgConfig) cmdUseDiscover(args []string) error {
 				return nil
 			}
 
-			ebuild, parseErr := g2.ParseEbuild(os.DirFS(filepath.Dir(path)), info.Name(), g2.ParseVariables)
+			ebuild, parseErr := g2.ParseEbuild(os.DirFS(filepath.Dir(path)), d.Name(), g2.ParseVariables)
 			if parseErr != nil {
 				return nil
 			}
@@ -299,12 +300,12 @@ func (cfg *MainArgConfig) cmdUseDiscover(args []string) error {
 }
 
 func (cfg *MainArgConfig) cmdUseDescAdd(args []string) error {
-	fs := flag.NewFlagSet("desc-add/edit", flag.ExitOnError)
-	file := fs.String("file", "profiles/use.desc", "Path to use.desc file")
-	flagName := fs.String("flag", "", "USE flag name")
-	desc := fs.String("desc", "", "USE flag description")
+	fset := flag.NewFlagSet("desc-add/edit", flag.ExitOnError)
+	file := fset.String("file", "profiles/use.desc", "Path to use.desc file")
+	flagName := fset.String("flag", "", "USE flag name")
+	desc := fset.String("desc", "", "USE flag description")
 
-	if err := fs.Parse(args); err != nil {
+	if err := fset.Parse(args); err != nil {
 		return err
 	}
 
@@ -331,11 +332,11 @@ func (cfg *MainArgConfig) cmdUseDescAdd(args []string) error {
 }
 
 func (cfg *MainArgConfig) cmdUseDescRemove(args []string) error {
-	fs := flag.NewFlagSet("desc-remove", flag.ExitOnError)
-	file := fs.String("file", "profiles/use.desc", "Path to use.desc file")
-	flagName := fs.String("flag", "", "USE flag name to remove")
+	fset := flag.NewFlagSet("desc-remove", flag.ExitOnError)
+	file := fset.String("file", "profiles/use.desc", "Path to use.desc file")
+	flagName := fset.String("flag", "", "USE flag name to remove")
 
-	if err := fs.Parse(args); err != nil {
+	if err := fset.Parse(args); err != nil {
 		return err
 	}
 
@@ -362,10 +363,10 @@ func (cfg *MainArgConfig) cmdUseDescRemove(args []string) error {
 }
 
 func (cfg *MainArgConfig) cmdUseDescList(args []string) error {
-	fs := flag.NewFlagSet("desc-list", flag.ExitOnError)
-	file := fs.String("file", "profiles/use.desc", "Path to use.desc file")
+	fset := flag.NewFlagSet("desc-list", flag.ExitOnError)
+	file := fset.String("file", "profiles/use.desc", "Path to use.desc file")
 
-	if err := fs.Parse(args); err != nil {
+	if err := fset.Parse(args); err != nil {
 		return err
 	}
 
@@ -382,13 +383,13 @@ func (cfg *MainArgConfig) cmdUseDescList(args []string) error {
 }
 
 func (cfg *MainArgConfig) cmdUseLocalDescAdd(args []string) error {
-	fs := flag.NewFlagSet("local-desc-add/edit", flag.ExitOnError)
-	file := fs.String("file", "profiles/use.local.desc", "Path to use.local.desc file")
-	pkgName := fs.String("pkg", "", "Package name (e.g., app-admin/conky)")
-	flagName := fs.String("flag", "", "USE flag name")
-	desc := fs.String("desc", "", "USE flag description")
+	fset := flag.NewFlagSet("local-desc-add/edit", flag.ExitOnError)
+	file := fset.String("file", "profiles/use.local.desc", "Path to use.local.desc file")
+	pkgName := fset.String("pkg", "", "Package name (e.g., app-admin/conky)")
+	flagName := fset.String("flag", "", "USE flag name")
+	desc := fset.String("desc", "", "USE flag description")
 
-	if err := fs.Parse(args); err != nil {
+	if err := fset.Parse(args); err != nil {
 		return err
 	}
 
@@ -418,12 +419,12 @@ func (cfg *MainArgConfig) cmdUseLocalDescAdd(args []string) error {
 }
 
 func (cfg *MainArgConfig) cmdUseLocalDescRemove(args []string) error {
-	fs := flag.NewFlagSet("local-desc-remove", flag.ExitOnError)
-	file := fs.String("file", "profiles/use.local.desc", "Path to use.local.desc file")
-	pkgName := fs.String("pkg", "", "Package name (e.g., app-admin/conky)")
-	flagName := fs.String("flag", "", "USE flag name to remove")
+	fset := flag.NewFlagSet("local-desc-remove", flag.ExitOnError)
+	file := fset.String("file", "profiles/use.local.desc", "Path to use.local.desc file")
+	pkgName := fset.String("pkg", "", "Package name (e.g., app-admin/conky)")
+	flagName := fset.String("flag", "", "USE flag name to remove")
 
-	if err := fs.Parse(args); err != nil {
+	if err := fset.Parse(args); err != nil {
 		return err
 	}
 
@@ -456,10 +457,10 @@ func (cfg *MainArgConfig) cmdUseLocalDescRemove(args []string) error {
 }
 
 func (cfg *MainArgConfig) cmdUseLocalDescList(args []string) error {
-	fs := flag.NewFlagSet("local-desc-list", flag.ExitOnError)
-	file := fs.String("file", "profiles/use.local.desc", "Path to use.local.desc file")
+	fset := flag.NewFlagSet("local-desc-list", flag.ExitOnError)
+	file := fset.String("file", "profiles/use.local.desc", "Path to use.local.desc file")
 
-	if err := fs.Parse(args); err != nil {
+	if err := fset.Parse(args); err != nil {
 		return err
 	}
 
@@ -478,12 +479,12 @@ func (cfg *MainArgConfig) cmdUseLocalDescList(args []string) error {
 }
 
 func (cfg *MainArgConfig) cmdUseExpandDescAdd(args []string) error {
-	fs := flag.NewFlagSet("expand-desc-add/edit", flag.ExitOnError)
-	file := fs.String("file", "", "Path to desc file (e.g. profiles/desc/abi_mips.desc)")
-	flagName := fs.String("flag", "", "USE_EXPAND flag name")
-	desc := fs.String("desc", "", "USE_EXPAND flag description")
+	fset := flag.NewFlagSet("expand-desc-add/edit", flag.ExitOnError)
+	file := fset.String("file", "", "Path to desc file (e.g. profiles/desc/abi_mips.desc)")
+	flagName := fset.String("flag", "", "USE_EXPAND flag name")
+	desc := fset.String("desc", "", "USE_EXPAND flag description")
 
-	if err := fs.Parse(args); err != nil {
+	if err := fset.Parse(args); err != nil {
 		return err
 	}
 
@@ -512,11 +513,11 @@ func (cfg *MainArgConfig) cmdUseExpandDescAdd(args []string) error {
 }
 
 func (cfg *MainArgConfig) cmdUseExpandDescRemove(args []string) error {
-	fs := flag.NewFlagSet("expand-desc-remove", flag.ExitOnError)
-	file := fs.String("file", "", "Path to desc file (e.g. profiles/desc/abi_mips.desc)")
-	flagName := fs.String("flag", "", "USE_EXPAND flag name to remove")
+	fset := flag.NewFlagSet("expand-desc-remove", flag.ExitOnError)
+	file := fset.String("file", "", "Path to desc file (e.g. profiles/desc/abi_mips.desc)")
+	flagName := fset.String("flag", "", "USE_EXPAND flag name to remove")
 
-	if err := fs.Parse(args); err != nil {
+	if err := fset.Parse(args); err != nil {
 		return err
 	}
 
@@ -545,10 +546,10 @@ func (cfg *MainArgConfig) cmdUseExpandDescRemove(args []string) error {
 }
 
 func (cfg *MainArgConfig) cmdUseExpandDescList(args []string) error {
-	fs := flag.NewFlagSet("expand-desc-list", flag.ExitOnError)
-	file := fs.String("file", "", "Path to desc file (e.g. profiles/desc/abi_mips.desc)")
+	fset := flag.NewFlagSet("expand-desc-list", flag.ExitOnError)
+	file := fset.String("file", "", "Path to desc file (e.g. profiles/desc/abi_mips.desc)")
 
-	if err := fs.Parse(args); err != nil {
+	if err := fset.Parse(args); err != nil {
 		return err
 	}
 

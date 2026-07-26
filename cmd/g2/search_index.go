@@ -131,11 +131,11 @@ func generateSearchData(outDir, outZip string, sites []*g2.SiteData, maxChunkSiz
 							}
 							keywords = append(keywords, kw)
 							arch := kw
-							if len(arch) > 0 && arch[0] == '~' {
-								arch = arch[1:]
-							}
-							if len(arch) > 0 && arch[0] == '-' {
-								arch = arch[1:]
+							if len(arch) > 0 {
+								switch arch[0] {
+								case '~', '-':
+									arch = arch[1:]
+								}
 							}
 							if len(arch) > 0 {
 								arches = append(arches, arch)
@@ -150,11 +150,11 @@ func generateSearchData(outDir, outZip string, sites []*g2.SiteData, maxChunkSiz
 							if u == "" {
 								break
 							}
-							if len(u) > 0 && u[0] == '+' {
-								u = u[1:]
-							}
-							if len(u) > 0 && u[0] == '-' {
-								u = u[1:]
+							if len(u) > 0 {
+								switch u[0] {
+								case '+', '-':
+									u = u[1:]
+								}
 							}
 							uses = append(uses, u)
 						}
@@ -698,8 +698,8 @@ func deduplicateStrings(s []string) []string {
 	if len(s) == 0 {
 		return []string{}
 	}
-	seen := make(map[string]bool)
-	var res []string
+	seen := make(map[string]bool, len(s))
+	res := make([]string, 0, len(s))
 	for _, v := range s {
 		if !seen[v] {
 			seen[v] = true

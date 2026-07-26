@@ -799,7 +799,7 @@ func buildManifestData(manifest *g2.Manifest, versions []g2.VersionData, thirdPa
 								if mirrors, ok := thirdPartyMirrors[mirrorName]; ok {
 									for _, mirrorURL := range mirrors {
 										var resolvedURL string
-										if strings.HasSuffix(mirrorURL, "/") {
+										if len(mirrorURL) > 0 && mirrorURL[len(mirrorURL)-1] == '/' {
 											resolvedURL = mirrorURL + filePath
 										} else {
 											resolvedURL = mirrorURL + "/" + filePath
@@ -1391,18 +1391,18 @@ type AggregatedData struct {
 	Licenses            []*AggLicense
 	UnsupportedLicenses []*AggLicense
 	Projects            []*AggProject
-	Profiles        []*g2.AggProfile
-	Arches          []*AggArch
-	Moves           map[string]*AggPackageMove
-	GlobalNews      []AggNewsItem
-	RecentNews      []AggNewsItem
-	TotalPackages   int
-	UseFlags        []*AggUseFlag
-	Eclasses        []*AggEclass
-	UseExpandDescs  map[string]*g2.UseExpandDesc
-	ValidLicenses   map[string]bool
-	ValidUseExpands map[string]bool
-	GroupedRepos    []RepoGroup
+	Profiles            []*g2.AggProfile
+	Arches              []*AggArch
+	Moves               map[string]*AggPackageMove
+	GlobalNews          []AggNewsItem
+	RecentNews          []AggNewsItem
+	TotalPackages       int
+	UseFlags            []*AggUseFlag
+	Eclasses            []*AggEclass
+	UseExpandDescs      map[string]*g2.UseExpandDesc
+	ValidLicenses       map[string]bool
+	ValidUseExpands     map[string]bool
+	GroupedRepos        []RepoGroup
 }
 
 func aggregateGroupedRepos(sites []*g2.SiteData) map[string]*RepoGroup {
@@ -1933,18 +1933,18 @@ func prepareAggregatedData(sites []*g2.SiteData) *AggregatedData {
 		Licenses:            sortedLicenses,
 		UnsupportedLicenses: unsupportedLicenses,
 		Projects:            sortedProjects,
-		Profiles:        sortedProfiles,
-		Arches:          sortedArches,
-		Moves:           aggMoves,
-		GlobalNews:      globalNews,
-		RecentNews:      recentNews,
-		TotalPackages:   totalPackages,
-		UseFlags:        sortedUseFlags,
-		ValidLicenses:   validLicenses,
-		Eclasses:        sortedEclasses,
-		UseExpandDescs:  aggUseExpandDescs,
-		ValidUseExpands: validUseExpands,
-		GroupedRepos:    sortedGroupedRepos,
+		Profiles:            sortedProfiles,
+		Arches:              sortedArches,
+		Moves:               aggMoves,
+		GlobalNews:          globalNews,
+		RecentNews:          recentNews,
+		TotalPackages:       totalPackages,
+		UseFlags:            sortedUseFlags,
+		ValidLicenses:       validLicenses,
+		Eclasses:            sortedEclasses,
+		UseExpandDescs:      aggUseExpandDescs,
+		ValidUseExpands:     validUseExpands,
+		GroupedRepos:        sortedGroupedRepos,
 	}
 }
 
