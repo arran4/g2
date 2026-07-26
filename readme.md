@@ -257,7 +257,7 @@ g2 site serve -port 8080 .
 
 ### `lint`
 
-Checks the repository for errors such as ebuild `IUSE` variables missing in `metadata.xml` and missing `md5-cache` files.
+Checks the repository for errors such as ebuild `IUSE` variables missing in `metadata.xml`, missing `md5-cache` files, and orphaned `Manifest` entries.
 
 **Usage:**
 
