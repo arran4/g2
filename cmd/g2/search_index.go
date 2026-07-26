@@ -9,7 +9,6 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"sort"
 	"strings"
 
 	"github.com/arran4/g2"
@@ -63,6 +62,16 @@ func generateSearchData(outDir, outZip string, sites []*g2.SiteData, maxChunkSiz
 
 	dependedBy := make(map[string][]string)
 	rdependedBy := make(map[string][]string)
+	dependedBySeen := make(map[[2]string]struct{})
+	rdependedBySeen := make(map[[2]string]struct{})
+	appendUnique := func(entries map[string][]string, seen map[[2]string]struct{}, dependency, dependent string) {
+		edge := [2]string{dependency, dependent}
+		if _, ok := seen[edge]; ok {
+			return
+		}
+		seen[edge] = struct{}{}
+		entries[dependency] = append(entries[dependency], dependent)
+	}
 
 	for _, site := range sites {
 		overlayName := site.RepoName
@@ -145,7 +154,7 @@ func generateSearchData(outDir, outZip string, sites []*g2.SiteData, maxChunkSiz
 							matches := pkgRegex.FindAllString(d, -1)
 							for _, m := range matches {
 								depends = append(depends, m)
-								dependedBy[m] = append(dependedBy[m], fullName)
+								appendUnique(dependedBy, dependedBySeen, m, fullName)
 							}
 						}
 
@@ -154,7 +163,7 @@ func generateSearchData(outDir, outZip string, sites []*g2.SiteData, maxChunkSiz
 							matches := pkgRegex.FindAllString(d, -1)
 							for _, m := range matches {
 								rdepends = append(rdepends, m)
-								rdependedBy[m] = append(rdependedBy[m], fullName)
+								appendUnique(rdependedBy, rdependedBySeen, m, fullName)
 							}
 						}
 
@@ -311,28 +320,12 @@ func generateSearchData(outDir, outZip string, sites []*g2.SiteData, maxChunkSiz
 		}
 	}
 
-	// Deduplicate in place
-	dedupInPlace := func(s []string) []string {
-		if len(s) < 2 {
-			return s
-		}
-		sort.Strings(s)
-		j := 0
-		for i := 1; i < len(s); i++ {
-			if s[i] != s[j] {
-				j++
-				s[j] = s[i]
-			}
-		}
-		return s[:j+1]
-	}
-
 	for i := range documents {
 		if deps, ok := dependedBy[documents[i].FullName]; ok {
-			documents[i].DependedBy = dedupInPlace(deps)
+			documents[i].DependedBy = deps
 		}
 		if deps, ok := rdependedBy[documents[i].FullName]; ok {
-			documents[i].RdependedBy = dedupInPlace(deps)
+			documents[i].RdependedBy = deps
 		}
 	}
 
