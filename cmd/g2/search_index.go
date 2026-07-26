@@ -118,11 +118,11 @@ func generateSearchData(outDir, outZip string, sites []*g2.SiteData, maxChunkSiz
 						forEachToken(keywordStr, func(kw string) {
 							keywords = append(keywords, kw)
 							arch := kw
-							if len(arch) > 0 && arch[0] == '~' {
-								arch = arch[1:]
-							}
-							if len(arch) > 0 && arch[0] == '-' {
-								arch = arch[1:]
+							if len(arch) > 0 {
+								switch arch[0] {
+								case '~', '-':
+									arch = arch[1:]
+								}
 							}
 							if len(arch) > 0 {
 								arches = append(arches, arch)
@@ -131,11 +131,11 @@ func generateSearchData(outDir, outZip string, sites []*g2.SiteData, maxChunkSiz
 
 						iuseStr := ver.Ebuild.Vars["IUSE"]
 						forEachToken(iuseStr, func(u string) {
-							if len(u) > 0 && u[0] == '+' {
-								u = u[1:]
-							}
-							if len(u) > 0 && u[0] == '-' {
-								u = u[1:]
+							if len(u) > 0 {
+								switch u[0] {
+								case '+', '-':
+									u = u[1:]
+								}
 							}
 							uses = append(uses, u)
 						})
