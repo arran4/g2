@@ -3,7 +3,7 @@ package ebuild_test
 import (
 	"embed"
 	"testing"
-    "testing/fstest"
+	"testing/fstest"
 
 	"github.com/arran4/g2"
 	"github.com/arran4/g2/lints/ebuild"
@@ -33,7 +33,7 @@ func TestNetworkSandboxLintRule(t *testing.T) {
 				t.Fatalf("failed to read %s: %v", tt.filename, err)
 			}
 
-            memFS := fstest.MapFS{
+			memFS := fstest.MapFS{
 				tt.filename: {Data: content},
 			}
 
