@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/arran4/g2"
 	"github.com/arran4/g2/lints"
@@ -36,25 +37,22 @@ func (r *OrphanedManifestLintRule) LintWithQA(repoDir string, pkg *g2.PackageDat
 		return results
 	}
 
+	pkgDir := filepath.Join(repoDir, pkg.Category, pkg.Name)
 	usedFiles := make(map[string]bool)
-	for _, ver := range pkg.Versions {
-		// Try to read ebuild to extract URIs
-		ebuildPath := filepath.Join(repoDir, pkg.Category, pkg.Name, fmt.Sprintf("%s-%s.ebuild", pkg.Name, ver.Version))
-		content, err := os.ReadFile(ebuildPath)
-		if err != nil {
-			continue // If we can't read it, skip
-		}
-
-		vars := ver.Ebuild.Vars
-		uris, err := g2.ExtractURIs(string(content), vars)
-		if err == nil {
-			for _, uri := range uris {
-				usedFiles[uri.Filename] = true
+	entries, err := os.ReadDir(pkgDir)
+	if err == nil {
+		for _, entry := range entries {
+			if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".ebuild") {
+				parsedEbuild, err := g2.ParseEbuild(os.DirFS(pkgDir), entry.Name(), g2.ParseFull)
+				if err == nil {
+					for _, uri := range parsedEbuild.SrcUri {
+						usedFiles[uri.Filename] = true
+					}
+				}
 			}
 		}
 	}
 
-	pkgDir := filepath.Join(repoDir, pkg.Category, pkg.Name)
 	for _, entry := range pkg.Manifest.Entries {
 		switch entry.Type {
 		case "DIST":
