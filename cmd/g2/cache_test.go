@@ -7,7 +7,7 @@ import (
 	"io/fs"
 	"os"
 	"path"
-		"sort"
+	"sort"
 	"strings"
 	"testing"
 	"testing/fstest"
