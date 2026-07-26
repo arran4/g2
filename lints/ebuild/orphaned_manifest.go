@@ -45,7 +45,7 @@ func (r *OrphanedManifestLintRule) LintWithQA(repoDir string, pkg *g2.PackageDat
 			continue // If we can't read it, skip
 		}
 
-		vars := g2.ParseEbuildVariables(ebuildPath)
+		vars := ver.Ebuild.Vars
 		uris, err := g2.ExtractURIs(string(content), vars)
 		if err == nil {
 			for _, uri := range uris {
