@@ -589,10 +589,16 @@ func (cfg *CmdManifestArgConfig) cleanLogic(manifestPath string, usedFiles map[s
 		return fmt.Errorf("reading manifest: %w", err)
 	}
 
+	directory := filepath.Dir(manifestPath)
 	var filesToRemove []string
 	for _, entry := range manifest.Entries {
 		if entry.Type == "DIST" && !usedFiles[entry.Filename] {
 			filesToRemove = append(filesToRemove, entry.Filename)
+		} else if entry.Type == "EBUILD" {
+			_, err := os.Stat(filepath.Join(directory, entry.Filename))
+			if os.IsNotExist(err) {
+				filesToRemove = append(filesToRemove, entry.Filename)
+			}
 		}
 	}
 
@@ -602,7 +608,7 @@ func (cfg *CmdManifestArgConfig) cleanLogic(manifestPath string, usedFiles map[s
 	}
 
 	for _, filename := range filesToRemove {
-		log.Printf("  Unused entry: %s", filename)
+		log.Printf("  Unused/Missing entry: %s", filename)
 		manifest.Remove(filename)
 	}
 
