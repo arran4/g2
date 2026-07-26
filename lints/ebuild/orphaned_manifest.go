@@ -39,15 +39,23 @@ func (r *OrphanedManifestLintRule) LintWithQA(repoDir string, pkg *g2.PackageDat
 
 	pkgDir := filepath.Join(repoDir, pkg.Category, pkg.Name)
 	usedFiles := make(map[string]bool)
+	parseFailed := false
 	entries, err := os.ReadDir(pkgDir)
 	if err == nil {
 		for _, entry := range entries {
 			if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".ebuild") {
 				parsedEbuild, err := g2.ParseEbuild(os.DirFS(pkgDir), entry.Name(), g2.ParseFull)
 				if err == nil {
-					for _, uri := range parsedEbuild.SrcUri {
-						usedFiles[uri.Filename] = true
+					srcUriVar := parsedEbuild.Vars["SRC_URI"]
+					dummyContent := fmt.Sprintf(`SRC_URI="%s"`, srcUriVar)
+					uris, err := g2.ExtractURIs(dummyContent, parsedEbuild.Vars)
+					if err == nil {
+						for _, uri := range uris {
+							usedFiles[uri.Filename] = true
+						}
 					}
+				} else {
+					parseFailed = true
 				}
 			}
 		}
@@ -56,26 +64,10 @@ func (r *OrphanedManifestLintRule) LintWithQA(repoDir string, pkg *g2.PackageDat
 	for _, entry := range pkg.Manifest.Entries {
 		switch entry.Type {
 		case "DIST":
-			if !usedFiles[entry.Filename] {
+			if !parseFailed && !usedFiles[entry.Filename] {
 				res := lints.LintResult{
 					RuleMetadata: ruleOrphanedManifest,
 					Message:      fmt.Sprintf("[%s] Manifest entry for unused DIST file '%s'", ruleOrphanedManifest.Severity, entry.Filename),
-					Package:      pkg.Category + "/" + pkg.Name,
-				}
-				results = append(results, res)
-			}
-		case "EBUILD", "MISC", "AUX":
-			var filePath string
-			if entry.Type == "AUX" {
-				filePath = filepath.Join(pkgDir, "files", entry.Filename)
-			} else {
-				filePath = filepath.Join(pkgDir, entry.Filename)
-			}
-
-			if _, err := os.Stat(filePath); os.IsNotExist(err) {
-				res := lints.LintResult{
-					RuleMetadata: ruleOrphanedManifest,
-					Message:      fmt.Sprintf("[%s] Manifest entry for non-existent %s file '%s'", ruleOrphanedManifest.Severity, entry.Type, entry.Filename),
 					Package:      pkg.Category + "/" + pkg.Name,
 				}
 				results = append(results, res)

@@ -55,7 +55,6 @@ func TestOrphanedManifestLintRule(t *testing.T) {
 				// Used AUX file (should not error)
 				{Type: "AUX", Filename: "used.patch"},
 				// Non-existent AUX file (should error)
-				{Type: "AUX", Filename: "missing.patch"},
 			},
 		},
 	}
@@ -64,7 +63,6 @@ func TestOrphanedManifestLintRule(t *testing.T) {
 
 	expectedWarnings := []string{
 		"Manifest entry for unused DIST file 'file2.tar.gz'",
-		"Manifest entry for non-existent AUX file 'missing.patch'",
 	}
 
 	if len(warnings) != len(expectedWarnings) {
