@@ -61,8 +61,8 @@ func generateSearchData(outDir, outZip string, sites []*g2.SiteData, maxChunkSiz
 	var documents []SearchDocument
 	docID := 0
 
-	dependedBy := make(map[string]map[string]bool)
-	rdependedBy := make(map[string]map[string]bool)
+	dependedBy := make(map[string][]string)
+	rdependedBy := make(map[string][]string)
 
 	for _, site := range sites {
 		overlayName := site.RepoName
@@ -145,10 +145,7 @@ func generateSearchData(outDir, outZip string, sites []*g2.SiteData, maxChunkSiz
 							matches := pkgRegex.FindAllString(d, -1)
 							for _, m := range matches {
 								depends = append(depends, m)
-								if dependedBy[m] == nil {
-									dependedBy[m] = make(map[string]bool)
-								}
-								dependedBy[m][fullName] = true
+								dependedBy[m] = append(dependedBy[m], fullName)
 							}
 						}
 
@@ -157,10 +154,7 @@ func generateSearchData(outDir, outZip string, sites []*g2.SiteData, maxChunkSiz
 							matches := pkgRegex.FindAllString(d, -1)
 							for _, m := range matches {
 								rdepends = append(rdepends, m)
-								if rdependedBy[m] == nil {
-									rdependedBy[m] = make(map[string]bool)
-								}
-								rdependedBy[m][fullName] = true
+								rdependedBy[m] = append(rdependedBy[m], fullName)
 							}
 						}
 
@@ -317,18 +311,28 @@ func generateSearchData(outDir, outZip string, sites []*g2.SiteData, maxChunkSiz
 		}
 	}
 
+	// Deduplicate in place
+	dedupInPlace := func(s []string) []string {
+		if len(s) < 2 {
+			return s
+		}
+		sort.Strings(s)
+		j := 0
+		for i := 1; i < len(s); i++ {
+			if s[i] != s[j] {
+				j++
+				s[j] = s[i]
+			}
+		}
+		return s[:j+1]
+	}
+
 	for i := range documents {
 		if deps, ok := dependedBy[documents[i].FullName]; ok {
-			for dep := range deps {
-				documents[i].DependedBy = append(documents[i].DependedBy, dep)
-			}
-			sort.Strings(documents[i].DependedBy)
+			documents[i].DependedBy = dedupInPlace(deps)
 		}
 		if deps, ok := rdependedBy[documents[i].FullName]; ok {
-			for dep := range deps {
-				documents[i].RdependedBy = append(documents[i].RdependedBy, dep)
-			}
-			sort.Strings(documents[i].RdependedBy)
+			documents[i].RdependedBy = dedupInPlace(deps)
 		}
 	}
 

@@ -467,7 +467,9 @@ func newSiteServer(sites []*g2.SiteData, genInfo GenerationInfo) (*SiteServer, e
 		}
 	}
 	sort.Slice(server.AggLicenses, func(i, j int) bool { return server.AggLicenses[i].Name < server.AggLicenses[j].Name })
-	sort.Slice(server.AggUnsupportedLicenses, func(i, j int) bool { return server.AggUnsupportedLicenses[i].Name < server.AggUnsupportedLicenses[j].Name })
+	sort.Slice(server.AggUnsupportedLicenses, func(i, j int) bool {
+		return server.AggUnsupportedLicenses[i].Name < server.AggUnsupportedLicenses[j].Name
+	})
 
 	for _, p := range aggProjects {
 		server.AggProjects = append(server.AggProjects, p)
@@ -528,19 +530,19 @@ func (s *SiteServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// 1. Root Dashboard
 	if len(parts) == 0 {
 		s.renderPageHTTP(w, "dashboard.html", map[string]interface{}{
-			"Title":                  s.Title,
-			"BaseURL":                "",
-			"Repos":                  s.Sites,
-			"GlobalCategories":       s.AggCategories,
-			"GlobalPackages":         s.AggPackages,
-			"Licenses":               s.AggLicenses,
-			"UnsupportedLicenses":    s.AggUnsupportedLicenses,
-			"UseFlags":               s.AggUseFlags,
-			"Projects":               s.AggProjects,
-			"Eclasses":               []*AggEclass{},
-			"Profiles":               []interface{}{},
-			"Version":                version,
-			"GenInfo":                s.GenInfo,
+			"Title":               s.Title,
+			"BaseURL":             "",
+			"Repos":               s.Sites,
+			"GlobalCategories":    s.AggCategories,
+			"GlobalPackages":      s.AggPackages,
+			"Licenses":            s.AggLicenses,
+			"UnsupportedLicenses": s.AggUnsupportedLicenses,
+			"UseFlags":            s.AggUseFlags,
+			"Projects":            s.AggProjects,
+			"Eclasses":            []*AggEclass{},
+			"Profiles":            []interface{}{},
+			"Version":             version,
+			"GenInfo":             s.GenInfo,
 		})
 		return
 	}
