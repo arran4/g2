@@ -20,7 +20,7 @@ type CacheFS interface {
 	MkdirAll(path string, perm os.FileMode) error
 	Create(name string) (io.WriteCloser, error)
 	Remove(name string) error
-	Walk(root string, fn filepath.WalkFunc) error
+	Walk(root string, fn fs.WalkDirFunc) error
 	Stat(name string) (fs.FileInfo, error)
 }
 
@@ -49,10 +49,10 @@ func (o *OsCacheFS) Remove(name string) error {
 	return os.Remove(filepath.Join(o.base, name))
 }
 
-func (o *OsCacheFS) Walk(root string, fn filepath.WalkFunc) error {
-	return filepath.Walk(filepath.Join(o.base, root), func(path string, info fs.FileInfo, err error) error {
+func (o *OsCacheFS) Walk(root string, fn fs.WalkDirFunc) error {
+	return filepath.WalkDir(filepath.Join(o.base, root), func(path string, d fs.DirEntry, err error) error {
 		relPath, _ := filepath.Rel(o.base, path)
-		return fn(relPath, info, err)
+		return fn(relPath, d, err)
 	})
 }
 
@@ -393,11 +393,11 @@ func doCacheClean(cfs CacheFS, repoDir string) error {
 			continue
 		}
 
-		err = cfs.Walk(formatDir, func(path string, info fs.FileInfo, err error) error {
+		err = cfs.Walk(formatDir, func(path string, d fs.DirEntry, err error) error {
 			if err != nil {
 				return err
 			}
-			if info.IsDir() {
+			if d.IsDir() {
 				return nil
 			}
 
