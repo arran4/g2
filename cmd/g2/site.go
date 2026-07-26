@@ -797,14 +797,19 @@ func buildManifestData(manifest *g2.Manifest, versions []g2.VersionData, thirdPa
 								mirrorName := parts[0]
 								filePath := parts[1]
 								if mirrors, ok := thirdPartyMirrors[mirrorName]; ok {
+									var sb strings.Builder
 									for _, mirrorURL := range mirrors {
-										var resolvedURL string
+										sb.Reset()
 										if len(mirrorURL) > 0 && mirrorURL[len(mirrorURL)-1] == '/' {
-											resolvedURL = mirrorURL + filePath
+											sb.Grow(len(mirrorURL) + len(filePath))
+											sb.WriteString(mirrorURL)
 										} else {
-											resolvedURL = mirrorURL + "/" + filePath
+											sb.Grow(len(mirrorURL) + 1 + len(filePath))
+											sb.WriteString(mirrorURL)
+											sb.WriteByte('/')
 										}
-										md.ResolvedURLs = append(md.ResolvedURLs, resolvedURL)
+										sb.WriteString(filePath)
+										md.ResolvedURLs = append(md.ResolvedURLs, sb.String())
 									}
 								} else {
 									md.ResolvedURLs = append(md.ResolvedURLs, uri.URL)
