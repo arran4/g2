@@ -9,7 +9,6 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"sort"
 	"strings"
 
 	"github.com/arran4/g2"
@@ -61,8 +60,18 @@ func generateSearchData(outDir, outZip string, sites []*g2.SiteData, maxChunkSiz
 	var documents []SearchDocument
 	docID := 0
 
-	dependedBy := make(map[string]map[string]bool)
-	rdependedBy := make(map[string]map[string]bool)
+	dependedBy := make(map[string][]string)
+	rdependedBy := make(map[string][]string)
+	dependedBySeen := make(map[[2]string]struct{})
+	rdependedBySeen := make(map[[2]string]struct{})
+	appendUnique := func(entries map[string][]string, seen map[[2]string]struct{}, dependency, dependent string) {
+		edge := [2]string{dependency, dependent}
+		if _, ok := seen[edge]; ok {
+			return
+		}
+		seen[edge] = struct{}{}
+		entries[dependency] = append(entries[dependency], dependent)
+	}
 
 	for _, site := range sites {
 		overlayName := site.RepoName
@@ -164,10 +173,7 @@ func generateSearchData(outDir, outZip string, sites []*g2.SiteData, maxChunkSiz
 							matches := pkgRegex.FindAllString(d, -1)
 							for _, m := range matches {
 								depends = append(depends, m)
-								if dependedBy[m] == nil {
-									dependedBy[m] = make(map[string]bool)
-								}
-								dependedBy[m][fullName] = true
+								appendUnique(dependedBy, dependedBySeen, m, fullName)
 							}
 						}
 
@@ -176,10 +182,7 @@ func generateSearchData(outDir, outZip string, sites []*g2.SiteData, maxChunkSiz
 							matches := pkgRegex.FindAllString(d, -1)
 							for _, m := range matches {
 								rdepends = append(rdepends, m)
-								if rdependedBy[m] == nil {
-									rdependedBy[m] = make(map[string]bool)
-								}
-								rdependedBy[m][fullName] = true
+								appendUnique(rdependedBy, rdependedBySeen, m, fullName)
 							}
 						}
 
@@ -346,16 +349,10 @@ func generateSearchData(outDir, outZip string, sites []*g2.SiteData, maxChunkSiz
 
 	for i := range documents {
 		if deps, ok := dependedBy[documents[i].FullName]; ok {
-			for dep := range deps {
-				documents[i].DependedBy = append(documents[i].DependedBy, dep)
-			}
-			sort.Strings(documents[i].DependedBy)
+			documents[i].DependedBy = deps
 		}
 		if deps, ok := rdependedBy[documents[i].FullName]; ok {
-			for dep := range deps {
-				documents[i].RdependedBy = append(documents[i].RdependedBy, dep)
-			}
-			sort.Strings(documents[i].RdependedBy)
+			documents[i].RdependedBy = deps
 		}
 	}
 
