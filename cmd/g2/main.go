@@ -464,7 +464,12 @@ func (cfg *CmdManifestArgConfig) cmdVerify(args []string, hashes []string) error
 		}
 
 		ebuildName := entry.Name()
+		foundFiles[ebuildName] = true
 		log.Printf("  Parsing %s...", ebuildName)
+
+		if manifestEntry := manifest.GetEntry(ebuildName); manifestEntry == nil {
+			log.Printf("    MISSING in manifest: %s", ebuildName)
+		}
 
 		variables := g2.ParseEbuildVariables(ebuildName)
 		if variables == nil {
@@ -508,6 +513,14 @@ func (cfg *CmdManifestArgConfig) cmdVerify(args []string, hashes []string) error
 						log.Printf("    Error updating manifest for %s: %v", uri.URL, err)
 					}
 				}
+			}
+		}
+	}
+
+	for _, entry := range manifest.Entries {
+		if entry.Type == "DIST" || entry.Type == "EBUILD" {
+			if !foundFiles[entry.Filename] {
+				log.Printf("    EXTRA in manifest: %s", entry.Filename)
 			}
 		}
 	}
@@ -559,6 +572,7 @@ func (cfg *CmdManifestArgConfig) cmdClean(args []string) error {
 		}
 
 		ebuildName := entry.Name()
+		foundFiles[ebuildName] = true
 
 		variables := g2.ParseEbuildVariables(ebuildName)
 		if variables == nil {
@@ -589,16 +603,10 @@ func (cfg *CmdManifestArgConfig) cleanLogic(manifestPath string, usedFiles map[s
 		return fmt.Errorf("reading manifest: %w", err)
 	}
 
-	directory := filepath.Dir(manifestPath)
 	var filesToRemove []string
 	for _, entry := range manifest.Entries {
-		if entry.Type == "DIST" && !usedFiles[entry.Filename] {
+		if (entry.Type == "DIST" || entry.Type == "EBUILD") && !usedFiles[entry.Filename] {
 			filesToRemove = append(filesToRemove, entry.Filename)
-		} else if entry.Type == "EBUILD" {
-			_, err := os.Stat(filepath.Join(directory, entry.Filename))
-			if os.IsNotExist(err) {
-				filesToRemove = append(filesToRemove, entry.Filename)
-			}
 		}
 	}
 
