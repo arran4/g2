@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -106,7 +105,31 @@ func (r *NewsValidityLintRule) LintWithQA(repoDir string, pkg *g2.PackageData, q
 	return results
 }
 
-var emailRegex = regexp.MustCompile(`^.+ <.+@.+>$`)
+func checkEmailFormat(val string) bool {
+	// Simple manual check for "^.+ <.+@.+>$" logic to avoid complex regex as per guidelines
+	startBracket := strings.Index(val, "<")
+	endBracket := strings.LastIndex(val, ">")
+	if startBracket == -1 || endBracket == -1 || startBracket >= endBracket {
+		return false
+	}
+
+	namePart := strings.TrimSpace(val[:startBracket])
+	if len(namePart) == 0 {
+		return false
+	}
+
+	emailPart := val[startBracket+1 : endBracket]
+	atIndex := strings.Index(emailPart, "@")
+	if atIndex == -1 || atIndex == 0 || atIndex == len(emailPart)-1 {
+		return false
+	}
+
+	if endBracket != len(val)-1 {
+		return false
+	}
+
+	return true
+}
 
 func (r *NewsValidityLintRule) lintNewsItem(content string, relPath string) []lints.LintResult {
 	var results []lints.LintResult
@@ -159,13 +182,13 @@ func (r *NewsValidityLintRule) lintNewsItem(content string, relPath string) []li
 			}
 		case "Author":
 			hasAuthor = true
-			if !emailRegex.MatchString(val) {
+			if !checkEmailFormat(val) {
 				res := lints.LintResult{RuleMetadata: ruleNewsValidity, Message: fmt.Sprintf("[%s] Invalid Author format, expected 'Name <email@domain.com>': '%s'", lints.SeverityError, val), File: relPath, Line: lineNum + 1}
 				res.RuleMetadata.Severity = lints.SeverityError
 				results = append(results, res)
 			}
 		case "Translator":
-			if !emailRegex.MatchString(val) {
+			if !checkEmailFormat(val) {
 				res := lints.LintResult{RuleMetadata: ruleNewsValidity, Message: fmt.Sprintf("[%s] Invalid Translator format, expected 'Name <email@domain.com>': '%s'", lints.SeverityError, val), File: relPath, Line: lineNum + 1}
 				res.RuleMetadata.Severity = lints.SeverityError
 				results = append(results, res)
