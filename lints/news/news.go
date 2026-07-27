@@ -2,6 +2,7 @@ package news
 
 import (
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -31,6 +32,27 @@ func init() {
 type NewsValidityLintRule struct {
 	mu           sync.RWMutex
 	checkedRepos map[string]bool
+
+	// optional injection for testing
+	fs fs.FS
+}
+
+// WithFS allows injecting a custom filesystem for testing.
+func WithFS(fsys fs.FS) func(*NewsValidityLintRule) {
+	return func(r *NewsValidityLintRule) {
+		r.fs = fsys
+	}
+}
+
+// NewNewsValidityLintRule creates a new rule instance with optional configuration.
+func NewNewsValidityLintRule(opts ...func(*NewsValidityLintRule)) *NewsValidityLintRule {
+	rule := &NewsValidityLintRule{
+		checkedRepos: make(map[string]bool),
+	}
+	for _, opt := range opts {
+		opt(rule)
+	}
+	return rule
 }
 
 // SkipForSiteGen disables this rule when it is already pre-calculated manually by site.go.
@@ -63,7 +85,17 @@ func (r *NewsValidityLintRule) LintWithQA(repoDir string, pkg *g2.PackageData, q
 	var results []lints.LintResult
 
 	newsDir := filepath.Join(repoDir, "metadata", "news")
-	entries, err := os.ReadDir(newsDir)
+
+	var entries []fs.DirEntry
+	var err error
+
+	// Determine the filesystem to use
+	if r.fs != nil {
+		entries, err = fs.ReadDir(r.fs, "metadata/news")
+	} else {
+		entries, err = os.ReadDir(newsDir)
+	}
+
 	if err != nil {
 		return nil
 	}
@@ -73,8 +105,22 @@ func (r *NewsValidityLintRule) LintWithQA(repoDir string, pkg *g2.PackageData, q
 			continue
 		}
 		dirName := entry.Name()
-		txtFiles, err := filepath.Glob(filepath.Join(newsDir, dirName, "*.txt"))
-		if err != nil || len(txtFiles) == 0 {
+
+		var txtFiles []string
+
+		if r.fs != nil {
+			matches, err := fs.Glob(r.fs, filepath.Join("metadata", "news", dirName, "*.txt"))
+			if err == nil {
+				txtFiles = matches
+			}
+		} else {
+			matches, err := filepath.Glob(filepath.Join(newsDir, dirName, "*.txt"))
+			if err == nil {
+				txtFiles = matches
+			}
+		}
+
+		if len(txtFiles) == 0 {
 			res := lints.LintResult{
 				RuleMetadata: ruleNewsValidity,
 				Message:      fmt.Sprintf("[%s] News directory '%s' has no .txt files", lints.SeverityError, dirName),
@@ -86,12 +132,22 @@ func (r *NewsValidityLintRule) LintWithQA(repoDir string, pkg *g2.PackageData, q
 		}
 
 		for _, txtFile := range txtFiles {
-			content, err := os.ReadFile(txtFile)
+			var content []byte
+			if r.fs != nil {
+				content, err = fs.ReadFile(r.fs, filepath.ToSlash(txtFile))
+			} else {
+				content, err = os.ReadFile(txtFile)
+			}
+
 			if err != nil {
 				continue
 			}
 
 			relPath, _ := filepath.Rel(repoDir, txtFile)
+			if r.fs != nil {
+				// in test mode relPath is exactly the matched file path because repoDir is essentially root
+				relPath = txtFile
+			}
 
 			res := r.lintNewsItem(string(content), relPath)
 			// Associate package with the result so that we can distinguish this rule
