@@ -18,7 +18,11 @@ func TestNewsValidityLintRule(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer func() {
+		if err := os.RemoveAll(tempDir); err != nil {
+			t.Errorf("failed to remove temp directory: %v", err)
+		}
+	}()
 
 	newsDir := filepath.Join(tempDir, "metadata", "news")
 	if err := os.MkdirAll(newsDir, 0755); err != nil {
