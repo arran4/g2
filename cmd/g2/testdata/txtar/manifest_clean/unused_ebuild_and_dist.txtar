@@ -1,0 +1,13 @@
+test: cleanup of unused EBUILD and DIST entries
+Ensures that missing .ebuilds and unreferenced DIST files are removed from the manifest.
+
+-- input/Manifest --
+DIST test-1.0.tar.gz 1024 SHA256 abc
+DIST unused-1.0.tar.gz 2048 SHA256 def
+EBUILD test-1.0.ebuild 512 SHA256 ghi
+EBUILD unused-1.0.ebuild 512 SHA256 jkl
+-- input/test-1.0.ebuild --
+SRC_URI="https://example.com/test-1.0.tar.gz"
+-- expected/Manifest --
+DIST test-1.0.tar.gz 1024 SHA256 abc
+EBUILD test-1.0.ebuild 512 SHA256 ghi

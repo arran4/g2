@@ -527,8 +527,14 @@ func (cfg *CmdManifestArgConfig) cmdVerify(args []string, hashes []string) error
 
 	if *clean {
 		// Run clean logic
-		if err := cfg.cleanLogic(manifestPath, foundFiles); err != nil {
+		err = CleanManifest(os.DirFS(directory), ".", manifest)
+		if err != nil {
 			return fmt.Errorf("cleaning manifest: %w", err)
+		}
+
+		err = os.WriteFile(manifestPath, []byte(manifest.String()), 0644)
+		if err != nil {
+			return fmt.Errorf("writing clean manifest: %w", err)
 		}
 	}
 
@@ -558,66 +564,14 @@ func (cfg *CmdManifestArgConfig) cmdClean(args []string) error {
 
 	log.Printf("Processing directory: %s", directory)
 
-	// Parse all ebuilds to find used files
-	foundFiles := make(map[string]bool)
-
-	entries, err := os.ReadDir(directory)
-	if err != nil {
-		return fmt.Errorf("reading directory: %w", err)
-	}
-
-	for _, entry := range entries {
-		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".ebuild") {
-			continue
-		}
-
-		ebuildName := entry.Name()
-		foundFiles[ebuildName] = true
-
-		variables := g2.ParseEbuildVariables(ebuildName)
-		if variables == nil {
-			continue
-		}
-
-		content, err := os.ReadFile(filepath.Join(directory, ebuildName))
-		if err != nil {
-			return fmt.Errorf("reading ebuild %s: %w", ebuildName, err)
-		}
-
-		uris, err := g2.ExtractURIs(string(content), variables)
-		if err != nil {
-			continue
-		}
-
-		for _, uri := range uris {
-			foundFiles[uri.Filename] = true
-		}
-	}
-
-	return cfg.cleanLogic(manifestPath, foundFiles)
-}
-
-func (cfg *CmdManifestArgConfig) cleanLogic(manifestPath string, usedFiles map[string]bool) error {
 	manifest, err := g2.ParseManifest(manifestPath)
 	if err != nil {
 		return fmt.Errorf("reading manifest: %w", err)
 	}
 
-	var filesToRemove []string
-	for _, entry := range manifest.Entries {
-		if (entry.Type == "DIST" || entry.Type == "EBUILD") && !usedFiles[entry.Filename] {
-			filesToRemove = append(filesToRemove, entry.Filename)
-		}
-	}
-
-	if len(filesToRemove) == 0 {
-		log.Println("Nothing to clean.")
-		return nil
-	}
-
-	for _, filename := range filesToRemove {
-		log.Printf("  Unused/Missing entry: %s", filename)
-		manifest.Remove(filename)
+	err = CleanManifest(os.DirFS(directory), ".", manifest)
+	if err != nil {
+		return fmt.Errorf("cleaning manifest: %w", err)
 	}
 
 	return os.WriteFile(manifestPath, []byte(manifest.String()), 0644)
