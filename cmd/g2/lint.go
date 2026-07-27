@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/arran4/g2"
@@ -14,6 +15,7 @@ import (
 	_ "github.com/arran4/g2/lints/ebuild"
 	_ "github.com/arran4/g2/lints/md5cache"
 	_ "github.com/arran4/g2/lints/metadata"
+	_ "github.com/arran4/g2/lints/news"
 )
 
 func (cfg *MainArgConfig) cmdLint(args []string) error {
@@ -169,15 +171,31 @@ func (cfg *MainArgConfig) runOldLint(args []string) error {
 			}
 
 			for i := range filteredWarnings {
-				filteredWarnings[i].Package = pkg.Category + "/" + pkg.Name
+				if filteredWarnings[i].Package == "" {
+					filteredWarnings[i].Package = pkg.Category + "/" + pkg.Name
+				}
 			}
 
 			if len(filteredWarnings) > 0 {
 				hasErrors = true
 				if *format == "text" {
-					fmt.Printf("[%s/%s]\n", pkg.Category, pkg.Name)
+					packageGroups := make(map[string][]lints.LintResult)
 					for _, w := range filteredWarnings {
-						fmt.Printf("  - %s\n", w.Message)
+						packageGroups[w.Package] = append(packageGroups[w.Package], w)
+					}
+
+					var pkgNames []string
+					for k := range packageGroups {
+						pkgNames = append(pkgNames, k)
+					}
+					sort.Strings(pkgNames)
+
+					for _, pkgName := range pkgNames {
+						warnings := packageGroups[pkgName]
+						fmt.Printf("[%s]\n", pkgName)
+						for _, w := range warnings {
+							fmt.Printf("  - %s\n", w.Message)
+						}
 					}
 				}
 				allResults = append(allResults, filteredWarnings...)
@@ -377,15 +395,23 @@ func (cfg *MainArgConfig) runLintCore(location string, targetMap map[string]bool
 			}
 
 			for i := range filteredWarnings {
-				filteredWarnings[i].Package = pkg.Category + "/" + pkg.Name
+				if filteredWarnings[i].Package == "" {
+					filteredWarnings[i].Package = pkg.Category + "/" + pkg.Name
+				}
 			}
 
 			if len(filteredWarnings) > 0 {
 				hasErrors = true
 				if format == "text" {
-					fmt.Printf("[%s/%s]\n", pkg.Category, pkg.Name)
+					packageGroups := make(map[string][]lints.LintResult)
 					for _, w := range filteredWarnings {
-						fmt.Printf("  - %s\n", w.Message)
+						packageGroups[w.Package] = append(packageGroups[w.Package], w)
+					}
+					for pkgName, warnings := range packageGroups {
+						fmt.Printf("[%s]\n", pkgName)
+						for _, w := range warnings {
+							fmt.Printf("  - %s\n", w.Message)
+						}
 					}
 				}
 				allResults = append(allResults, filteredWarnings...)
