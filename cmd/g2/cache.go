@@ -273,6 +273,22 @@ func doCacheGenerate(cfs CacheFS, repoDir string, targetPkgs []string) error {
 						_, _ = fmt.Fprintf(f, "_md5_=%s\n", md5sum)
 					}
 
+					if inherited, ok := ver.Ebuild.Vars["INHERITED"]; ok && inherited != "" {
+						eclasses := strings.Fields(inherited)
+						var eclassParts []string
+						for _, ec := range eclasses {
+							eclassPath := filepath.ToSlash(filepath.Join("eclass", ec+".eclass"))
+							ecContent, err := fs.ReadFile(cfs, eclassPath)
+							if err == nil {
+								ecMd5 := fmt.Sprintf("%x", md5.Sum(ecContent))
+								eclassParts = append(eclassParts, ec, ecMd5)
+							}
+						}
+						if len(eclassParts) > 0 {
+							_, _ = fmt.Fprintf(f, "_eclasses_=%s\n", strings.Join(eclassParts, "\t"))
+						}
+					}
+
 					_ = f.Close()
 				}
 			}
@@ -444,6 +460,7 @@ func isCacheVariable(key string) bool {
 		"RESTRICT":       true,
 		"SLOT":           true,
 		"SRC_URI":        true,
+		"_eclasses_":     true,
 		"DEFINED_PHASES": true,
 	}
 	return validKeys[key]
