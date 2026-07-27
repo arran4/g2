@@ -22,4 +22,4 @@ INHERITED="test another"
 DESCRIPTION=A test ebuild with eclasses
 INHERITED=test another
 _eclasses_=test	cc6fb8635f44bdc4b1069586c582db43
-_md5_=cbfa61da1230113c415ccfa7d2d3ad48
+_md5_=dbfd834f6fbf844fc205c39728b331b1

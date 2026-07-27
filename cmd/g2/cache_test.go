@@ -140,7 +140,7 @@ func TestCacheCommands(t *testing.T) {
 			// The intent (generate, clean, verify) can be determined by the file name
 			baseName := path.Base(fixture)
 			if strings.Contains(baseName, "generate") {
-				err = doCacheGenerate(memFS, ".", nil)
+				err = doCacheGenerate(memFS, ".", nil, true)
 				if err != nil {
 					t.Fatalf("run cache generate: %v", err)
 				}
@@ -188,10 +188,7 @@ func TestCacheCommands(t *testing.T) {
 					// We're verifying generate, so the md5 sum is generated dynamically based on the exact ebuild string
 					// Since it generated successfully, we just verify the exact string it produced: `8a0cb2db1a7d82e9b53aaa062277608f`
 					wantStr = strings.ReplaceAll(wantStr, "50b18ec4900a68e27c001cfbc8cd5ed3", "8a0cb2db1a7d82e9b53aaa062277608f")
-					wantStr = strings.ReplaceAll(wantStr, "cbfa61da1230113c415ccfa7d2d3ad48", "dbfd834f6fbf844fc205c39728b331b1")
 				}
-
-				// We don't have eclasses in the basic txtar tests right now, so they shouldn't change.
 
 				if gotStr != wantStr {
 					t.Fatalf("file %s mismatch\nwant:\n%s\n\ngot:\n%s", name, wantStr, gotStr)
