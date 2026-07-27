@@ -176,15 +176,16 @@ func doCacheVerify(cfs CacheFS, repoDir string) error {
 func (cfg *MainArgConfig) cmdCacheGenerate(args []string) error {
 	fsFlags := flag.NewFlagSet("generate", flag.ExitOnError)
 	repoDir := fsFlags.String("repo", ".", "Path to the repository root")
+	eclasses := fsFlags.Bool("eclasses", false, "Generate eclasses metadata in cache (off by default)")
 	if err := fsFlags.Parse(args); err != nil {
 		return err
 	}
 
 	cfs := NewOsCacheFS(*repoDir)
-	return doCacheGenerate(cfs, ".", fsFlags.Args())
+	return doCacheGenerate(cfs, ".", fsFlags.Args(), *eclasses)
 }
 
-func doCacheGenerate(cfs CacheFS, repoDir string, targetPkgs []string) error {
+func doCacheGenerate(cfs CacheFS, repoDir string, targetPkgs []string, genEclasses bool) error {
 	layoutConfPath := filepath.ToSlash(filepath.Join(repoDir, "metadata", "layout.conf"))
 	var lc *g2.LayoutConf
 	if f, err := cfs.Open(layoutConfPath); err == nil {
@@ -271,6 +272,24 @@ func doCacheGenerate(cfs CacheFS, repoDir string, targetPkgs []string) error {
 						// eclass handling is omitted for this simple cache generation
 						md5sum := fmt.Sprintf("%x", md5.Sum(ebuildContent))
 						_, _ = fmt.Fprintf(f, "_md5_=%s\n", md5sum)
+					}
+
+					if genEclasses {
+						if inherited, ok := ver.Ebuild.Vars["INHERITED"]; ok && inherited != "" {
+							eclasses := strings.Fields(inherited)
+							var eclassParts []string
+							for _, ec := range eclasses {
+								eclassPath := filepath.ToSlash(filepath.Join("eclass", ec+".eclass"))
+								ecContent, err := fs.ReadFile(cfs, eclassPath)
+								if err == nil {
+									ecMd5 := fmt.Sprintf("%x", md5.Sum(ecContent))
+									eclassParts = append(eclassParts, ec, ecMd5)
+								}
+							}
+							if len(eclassParts) > 0 {
+								_, _ = fmt.Fprintf(f, "_eclasses_=%s\n", strings.Join(eclassParts, "\t"))
+							}
+						}
 					}
 
 					_ = f.Close()
@@ -444,6 +463,7 @@ func isCacheVariable(key string) bool {
 		"RESTRICT":       true,
 		"SLOT":           true,
 		"SRC_URI":        true,
+		"_eclasses_":     true,
 		"DEFINED_PHASES": true,
 	}
 	return validKeys[key]

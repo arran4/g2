@@ -1,0 +1,25 @@
+-- input/metadata/layout.conf --
+cache-formats = md5-dict
+-- input/eclass/test.eclass --
+# A test eclass
+-- input/eclass/missing.eclass --
+# This eclass will not be found in INHERITED
+-- input/sys-apps/test/test-1.0.ebuild --
+DESCRIPTION="A test ebuild with eclasses"
+INHERITED="test another"
+
+-- expected/metadata/layout.conf --
+cache-formats = md5-dict
+-- expected/sys-apps/test/test-1.0.ebuild --
+DESCRIPTION="A test ebuild with eclasses"
+INHERITED="test another"
+-- expected/eclass/test.eclass --
+# A test eclass
+-- expected/eclass/missing.eclass --
+# This eclass will not be found in INHERITED
+
+-- expected/metadata/md5-dict/sys-apps/test-1.0 --
+DESCRIPTION=A test ebuild with eclasses
+INHERITED=test another
+_eclasses_=test	cc6fb8635f44bdc4b1069586c582db43
+_md5_=dbfd834f6fbf844fc205c39728b331b1
