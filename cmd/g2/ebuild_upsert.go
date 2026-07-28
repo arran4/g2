@@ -19,7 +19,7 @@ func compareContent(file1 string, content []byte, ignoreComments bool) (bool, er
 	if err != nil {
 		return false, err
 	}
-	defer f1.Close()
+	defer func() { _ = f1.Close() }()
 
 	scanner1 := bufio.NewScanner(f1)
 	scanner2 := bufio.NewScanner(bytes.NewReader(content))
