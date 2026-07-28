@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"github.com/arran4/g2"
@@ -16,6 +17,15 @@ var version = "dev"
 
 type MainArgConfig struct {
 	Args []string
+}
+
+// ExitError is a custom error that can be returned by commands to exit with a specific code silently.
+type ExitError struct {
+	Code int
+}
+
+func (e *ExitError) Error() string {
+	return fmt.Sprintf("exit status %d", e.Code)
 }
 
 func main() {
@@ -132,6 +142,10 @@ func main() {
 		}
 	case "ebuild":
 		if err := cfg.cmdEbuild(fs.Args()[2:]); err != nil {
+			var exitErr *ExitError
+			if errors.As(err, &exitErr) {
+				os.Exit(exitErr.Code)
+			}
 			log.Printf("ebuild error: %s", err)
 			os.Exit(-1)
 			return

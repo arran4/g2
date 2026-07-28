@@ -155,6 +155,8 @@ g2 ebuild <subcommand>
 * `check <ebuild_file>`: A lightweight structural validator for ebuild files (alias: lint).
 * `deps <ebuild_file>`: Extract and format dependency fields.
 * `query <ebuild_file> --key <key> [--format lines]`: Query specific fields from a parsed ebuild.
+* `check-exists <ebuildDir> <version>`: Determine if any revision of a given version exists, returning exit code 0 if found and 1 if not.
+* `next-revision [--inspect <new_ebuild_file>] <ebuildDir> <version>`: Generate the next revision name and optionally inspect contents for changes.
 
 **Example Usage:**
 
