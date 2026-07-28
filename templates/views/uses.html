@@ -1,9 +1,62 @@
-<h2>All USE Flags</h2>
-<ul>
-    {{range .UseFlags}}
-    <li>
-        <a href="{{.Name}}/">{{.Name}}</a> - {{.Count}} package(s)
-        {{if .Desc}}<br><small>{{.Desc}}</small>{{end}}
-    </li>
+{{$groups := groupUseFlags .UseFlags}}
+
+{{if $groups.GlobalFlags}}
+<h2>Global USE flags</h2>
+<table>
+    <tr>
+        <th>Flag</th>
+        <th>Description</th>
+        <th>Packages</th>
+    </tr>
+    {{range $groups.GlobalFlags}}
+    <tr>
+        <td><a href="{{.Name}}/">{{.Name}}</a></td>
+        <td>{{.Desc}}</td>
+        <td>{{.Count}}</td>
+    </tr>
     {{end}}
-</ul>
+</table>
+{{end}}
+
+{{if $groups.CategoryGroups}}
+<h2>Category USE flags</h2>
+{{range $groups.CategoryGroups}}
+<h3>{{.Category}}</h3>
+<table>
+    <tr>
+        <th>Flag</th>
+        <th>Description</th>
+        <th>Packages</th>
+    </tr>
+    {{range .Flags}}
+    <tr>
+        <td><a href="{{.Name}}/">{{.Name}}</a></td>
+        <td>{{.Desc}}</td>
+        <td>{{.Count}}</td>
+    </tr>
+    {{end}}
+</table>
+{{end}}
+{{end}}
+
+{{if $groups.PackageGroups}}
+<h2>Local USE flags</h2>
+{{range $groups.PackageGroups}}
+<h3>{{.Category}}</h3>
+{{range .Packages}}
+<h4>{{.Package}}</h4>
+<table>
+    <tr>
+        <th>Flag</th>
+        <th>Description</th>
+    </tr>
+    {{range .Flags}}
+    <tr>
+        <td><a href="{{.Name}}/">{{.Name}}</a></td>
+        <td>{{.Desc}}</td>
+    </tr>
+    {{end}}
+</table>
+{{end}}
+{{end}}
+{{end}}
