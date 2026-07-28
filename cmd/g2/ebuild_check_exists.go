@@ -65,7 +65,7 @@ func (cfg *CmdEbuildArgConfig) cmdEbuildCheckExists(args []string) error {
 	}
 
 	if exists {
-		return &ExitError{Code: 0}
+		return nil
 	} else {
 		return &ExitError{Code: 1}
 	}

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"github.com/arran4/g2"
@@ -141,7 +142,8 @@ func main() {
 		}
 	case "ebuild":
 		if err := cfg.cmdEbuild(fs.Args()[2:]); err != nil {
-			if exitErr, ok := err.(*ExitError); ok {
+			var exitErr *ExitError
+			if errors.As(err, &exitErr) {
 				os.Exit(exitErr.Code)
 			}
 			log.Printf("ebuild error: %s", err)

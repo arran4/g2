@@ -26,11 +26,15 @@ func TestGetNextRevision(t *testing.T) {
 
 	// Create inspection file with identical significant content to 1.0-r1
 	inspectMatch := filepath.Join(tmpDir, "inspect_match.ebuild")
-	os.WriteFile(inspectMatch, []byte("\n# new comment\nEAPI=8\n\nDEPEND=\"a/b\"\n"), 0644)
+	if err := os.WriteFile(inspectMatch, []byte("\n# new comment\nEAPI=8\n\nDEPEND=\"a/b\"\n"), 0644); err != nil {
+		t.Fatalf("Failed to write inspectMatch: %v", err)
+	}
 
 	// Create inspection file with different content
 	inspectDiffer := filepath.Join(tmpDir, "inspect_differ.ebuild")
-	os.WriteFile(inspectDiffer, []byte("EAPI=8\nDEPEND=\"a/c\"\n"), 0644)
+	if err := os.WriteFile(inspectDiffer, []byte("EAPI=8\nDEPEND=\"a/c\"\n"), 0644); err != nil {
+		t.Fatalf("Failed to write inspectDiffer: %v", err)
+	}
 
 	tests := []struct {
 		name        string

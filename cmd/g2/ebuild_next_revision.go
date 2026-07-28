@@ -17,13 +17,13 @@ func compareEbuilds(file1, file2 string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	defer f1.Close()
+	defer func() { _ = f1.Close() }()
 
 	f2, err := os.Open(file2)
 	if err != nil {
 		return false, err
 	}
-	defer f2.Close()
+	defer func() { _ = f2.Close() }()
 
 	scanner1 := bufio.NewScanner(f1)
 	scanner2 := bufio.NewScanner(f2)
@@ -151,5 +151,8 @@ func (cfg *CmdEbuildArgConfig) cmdEbuildNextRevision(args []string) error {
 	}
 
 	fmt.Println(nextRev)
+	if exitCode == 0 {
+		return nil
+	}
 	return &ExitError{Code: exitCode}
 }
