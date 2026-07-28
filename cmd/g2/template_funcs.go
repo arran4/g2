@@ -48,6 +48,8 @@ func getTemplateFuncMap() template.FuncMap {
 		"formatPkgLinkBody":      formatPkgLinkBodyFunc,
 		"formatQualifiedPackage": formatQualifiedPackageFunc,
 		"resolveBreadcrumbs":     resolveBreadcrumbsFunc,
+		"groupUseFlags":          groupUseFlagsFunc,
+		"getBestDesc":            getBestDescFunc,
 	}
 }
 
@@ -368,4 +370,167 @@ func formatQualifiedPackageFunc(category, name, version, overlay string) string 
 		return fmt.Sprintf("=%s/%s-%s", category, name, version)
 	}
 	return fmt.Sprintf("%s/%s", category, name)
+}
+type UseFlagGroups struct {
+	GlobalFlags []UseFlagDisplay
+	CategoryGroups []CategoryUseFlagGroup
+	PackageGroups []CategoryPackageUseFlagGroup
+}
+
+type UseFlagDisplay struct {
+	Name string
+	Desc string
+	Count int
+}
+
+type CategoryUseFlagGroup struct {
+	Category string
+	Flags []UseFlagDisplay
+}
+
+type CategoryPackageUseFlagGroup struct {
+	Category string
+	Packages []PackageUseFlagGroup
+}
+
+type PackageUseFlagGroup struct {
+	Package string
+	Flags []UseFlagDisplay
+}
+
+func getBestDescFunc(flag *AggUseFlag, preferredPkg string) string {
+	if preferredPkg != "" {
+		if desc, ok := flag.MetadataDescs[preferredPkg]; ok && desc != "" {
+			return desc
+		}
+		if desc, ok := flag.LocalDescs[preferredPkg]; ok && desc != "" {
+			return desc
+		}
+	}
+	if flag.GlobalDesc != "" {
+		return flag.GlobalDesc
+	}
+
+	// Fallback to any local description if it exists
+	if len(flag.MetadataDescs) > 0 {
+		for _, desc := range flag.MetadataDescs {
+			if desc != "" {
+				return desc
+			}
+		}
+	}
+	if len(flag.LocalDescs) > 0 {
+		for _, desc := range flag.LocalDescs {
+			if desc != "" {
+				return desc
+			}
+		}
+	}
+	return ""
+}
+
+func groupUseFlagsFunc(flags []*AggUseFlag) UseFlagGroups {
+	var globalFlags []UseFlagDisplay
+
+	catFlagsMap := make(map[string][]UseFlagDisplay)
+	pkgFlagsCatMap := make(map[string]map[string][]UseFlagDisplay)
+
+	for _, flag := range flags {
+		uniqueCats := make(map[string]bool)
+		for _, pkg := range flag.Packages {
+			uniqueCats[pkg.Category] = true
+		}
+
+		if len(uniqueCats) > 1 || (len(uniqueCats) == 0 && flag.GlobalDesc != "") {
+			// Global flag
+			globalFlags = append(globalFlags, UseFlagDisplay{
+				Name: flag.Name,
+				Desc: getBestDescFunc(flag, ""),
+				Count: flag.Count,
+			})
+		} else if len(uniqueCats) == 1 {
+			// Used in exactly 1 category
+			var catName string
+			for c := range uniqueCats {
+				catName = c
+			}
+
+			if len(flag.Packages) > 1 {
+				// Multiple packages in the same category
+				catFlagsMap[catName] = append(catFlagsMap[catName], UseFlagDisplay{
+					Name: flag.Name,
+					// For category-level, we can just grab a representative description
+					Desc: getBestDescFunc(flag, ""),
+					Count: flag.Count,
+				})
+			} else if len(flag.Packages) == 1 {
+				// Single package in a single category
+				pkg := flag.Packages[0]
+				if pkgFlagsCatMap[pkg.Category] == nil {
+					pkgFlagsCatMap[pkg.Category] = make(map[string][]UseFlagDisplay)
+				}
+				pkgKey := pkg.Category + "/" + pkg.Name
+				pkgFlagsCatMap[pkg.Category][pkg.Name] = append(pkgFlagsCatMap[pkg.Category][pkg.Name], UseFlagDisplay{
+					Name: flag.Name,
+					Desc: getBestDescFunc(flag, pkgKey),
+					Count: flag.Count,
+				})
+			}
+		} else {
+			// Used in 0 packages but no global desc. Still add it to global list for visibility?
+			globalFlags = append(globalFlags, UseFlagDisplay{
+				Name: flag.Name,
+				Desc: getBestDescFunc(flag, ""),
+				Count: flag.Count,
+			})
+		}
+	}
+
+	sort.Slice(globalFlags, func(i, j int) bool {
+		return globalFlags[i].Name < globalFlags[j].Name
+	})
+
+	var catGroups []CategoryUseFlagGroup
+	for cat, cFlags := range catFlagsMap {
+		sort.Slice(cFlags, func(i, j int) bool {
+			return cFlags[i].Name < cFlags[j].Name
+		})
+		catGroups = append(catGroups, CategoryUseFlagGroup{
+			Category: cat,
+			Flags: cFlags,
+		})
+	}
+	sort.Slice(catGroups, func(i, j int) bool {
+		return catGroups[i].Category < catGroups[j].Category
+	})
+
+	var pkgGroups []CategoryPackageUseFlagGroup
+	for cat, pMap := range pkgFlagsCatMap {
+		var pkgList []PackageUseFlagGroup
+		for pkg, pFlags := range pMap {
+			sort.Slice(pFlags, func(i, j int) bool {
+				return pFlags[i].Name < pFlags[j].Name
+			})
+			pkgList = append(pkgList, PackageUseFlagGroup{
+				Package: pkg,
+				Flags: pFlags,
+			})
+		}
+		sort.Slice(pkgList, func(i, j int) bool {
+			return pkgList[i].Package < pkgList[j].Package
+		})
+		pkgGroups = append(pkgGroups, CategoryPackageUseFlagGroup{
+			Category: cat,
+			Packages: pkgList,
+		})
+	}
+	sort.Slice(pkgGroups, func(i, j int) bool {
+		return pkgGroups[i].Category < pkgGroups[j].Category
+	})
+
+	return UseFlagGroups{
+		GlobalFlags: globalFlags,
+		CategoryGroups: catGroups,
+		PackageGroups: pkgGroups,
+	}
 }
