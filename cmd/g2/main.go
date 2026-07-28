@@ -18,6 +18,15 @@ type MainArgConfig struct {
 	Args []string
 }
 
+// ExitError is a custom error that can be returned by commands to exit with a specific code silently.
+type ExitError struct {
+	Code int
+}
+
+func (e *ExitError) Error() string {
+	return fmt.Sprintf("exit status %d", e.Code)
+}
+
 func main() {
 	go func() {
 		log.Println(http.ListenAndServe("localhost:6060", nil))
@@ -132,6 +141,9 @@ func main() {
 		}
 	case "ebuild":
 		if err := cfg.cmdEbuild(fs.Args()[2:]); err != nil {
+			if exitErr, ok := err.(*ExitError); ok {
+				os.Exit(exitErr.Code)
+			}
 			log.Printf("ebuild error: %s", err)
 			os.Exit(-1)
 			return

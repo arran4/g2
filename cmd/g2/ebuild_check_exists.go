@@ -65,10 +65,8 @@ func (cfg *CmdEbuildArgConfig) cmdEbuildCheckExists(args []string) error {
 	}
 
 	if exists {
-		os.Exit(0)
+		return &ExitError{Code: 0}
 	} else {
-		os.Exit(1)
+		return &ExitError{Code: 1}
 	}
-
-	return nil
 }

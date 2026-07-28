@@ -38,6 +38,7 @@ func (cfg *MainArgConfig) cmdEbuild(args []string) error {
 		fmt.Printf("\t\t %s \t\t %s\n", "bump-version", "Rename ebuild to a new version and fix references")
 		fmt.Printf("\t\t %s \t\t %s\n", "tag", "Ebuild specific tag subcommand supporting version comparisons")
 		fmt.Printf("\t\t %s \t\t %s\n", "check-exists", "Determine if any revision of a given version exists")
+		fmt.Printf("\t\t %s \t\t %s\n", "next-revision", "Generate the next revision name and optionally inspect contents")
 	}
 
 	config := &CmdEbuildArgConfig{
@@ -100,6 +101,10 @@ func (cfg *MainArgConfig) cmdEbuild(args []string) error {
 	case "check-exists":
 		if err := config.cmdEbuildCheckExists(fs.Args()[1:]); err != nil {
 			return fmt.Errorf("ebuild check-exists: %w", err)
+		}
+	case "next-revision":
+		if err := config.cmdEbuildNextRevision(fs.Args()[1:]); err != nil {
+			return fmt.Errorf("ebuild next-revision: %w", err)
 		}
 	case "help", "-help", "--help":
 		fs.Usage()
