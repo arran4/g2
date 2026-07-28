@@ -962,3 +962,41 @@ func TestParsePackageAtom(t *testing.T) {
 		})
 	}
 }
+
+func TestGetLatestMatchingPackageRevision(t *testing.T) {
+	mockFS := fstest.MapFS{
+		"app-misc/goreleaser-bin/goreleaser-bin-2.17.0.ebuild":    {},
+		"app-misc/goreleaser-bin/goreleaser-bin-2.17.0-r1.ebuild": {},
+		"app-misc/goreleaser-bin/goreleaser-bin-2.17.0-r3.ebuild": {},
+		"app-misc/goreleaser-bin/goreleaser-bin-2.17.0-r2.ebuild": {},
+		"app-misc/goreleaser-bin/goreleaser-bin-1.0.0.ebuild":     {},
+		"app-misc/goreleaser-bin/metadata.xml":                    {},
+	}
+
+	tests := []struct {
+		name     string
+		category string
+		pkgName  string
+		version  string
+		want     string
+		wantErr  bool
+	}{
+		{"latest_revision", "app-misc", "goreleaser-bin", "2.17.0", "2.17.0-r3", false},
+		{"no_revision", "app-misc", "goreleaser-bin", "1.0.0", "1.0.0", false},
+		{"not_found_version", "app-misc", "goreleaser-bin", "9.9.9", "", false},
+		{"not_found_pkg", "app-misc", "not-exist", "1.0", "", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := GetLatestMatchingPackageRevision(mockFS, tt.category, tt.pkgName, tt.version)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("GetLatestMatchingPackageRevision() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if got != tt.want {
+				t.Errorf("GetLatestMatchingPackageRevision() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}

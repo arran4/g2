@@ -968,3 +968,53 @@ func ExtractPackageNameFromDep(dep string) string {
 	}
 	return atom.Name
 }
+
+// GetLatestMatchingPackageRevision finds the highest revision for a given package and base version.
+// It looks for ebuilds in `category/pkgName` directory within the provided `fs.FS`.
+// The version argument is the base version to match against (e.g. "2.17.0").
+// Returns the full version string (including the highest revision, e.g. "2.17.0-r2").
+func GetLatestMatchingPackageRevision(overlayFS fs.FS, category, pkgName, version string) (string, error) {
+	dir := filepath.Join(category, pkgName)
+	entries, err := fs.ReadDir(overlayFS, dir)
+	if err != nil {
+		return "", fmt.Errorf("failed to read directory %s: %w", dir, err)
+	}
+
+	var highestRevGV GentooVersion
+	found := false
+
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+
+		name := entry.Name()
+		if !strings.HasSuffix(name, ".ebuild") {
+			continue
+		}
+
+		vars := ParseEbuildVariables(name)
+		if vars == nil || vars["PV"] == "" {
+			continue
+		}
+
+		gv := ParseGentooVersion(vars["PV"])
+		origRev := gv.Revision
+		gv.Revision = 0
+		base := gv.String()
+		gv.Revision = origRev
+
+		if base == version {
+			if !found || gv.Revision > highestRevGV.Revision {
+				highestRevGV = gv
+				found = true
+			}
+		}
+	}
+
+	if !found {
+		return "", nil
+	}
+
+	return highestRevGV.String(), nil
+}
