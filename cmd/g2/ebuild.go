@@ -106,6 +106,10 @@ func (cfg *MainArgConfig) cmdEbuild(args []string) error {
 		if err := config.cmdEbuildNextRevision(fs.Args()[1:]); err != nil {
 			return fmt.Errorf("ebuild next-revision: %w", err)
 		}
+	case "upsert":
+		if err := config.cmdEbuildUpsert(fs.Args()[1:]); err != nil {
+			return fmt.Errorf("ebuild upsert: %w", err)
+		}
 	case "help", "-help", "--help":
 		fs.Usage()
 		os.Exit(-1)
