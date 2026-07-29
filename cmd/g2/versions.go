@@ -10,7 +10,7 @@ import (
 
 func (cfg *MainArgConfig) cmdVersions(args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: versions <convert> ...")
+		return fmt.Errorf("usage: versions <convert>")
 	}
 
 	subcmd := args[0]
@@ -23,12 +23,13 @@ func (cfg *MainArgConfig) cmdVersions(args []string) error {
 		input := args[2]
 
 		var processFunc func(string) string
-		if mode == "semantic-to-gentoo" {
+		switch mode {
+		case "semantic-to-gentoo":
 			processFunc = SemanticToGentoo
-		} else if mode == "gentoo-to-semantic" {
+		case "gentoo-to-semantic":
 			processFunc = GentooToSemantic
-		} else {
-			return fmt.Errorf("unknown convert mode: %s. Must be semantic-to-gentoo or gentoo-to-semantic", mode)
+		default:
+			return fmt.Errorf("unknown convert mode: %s, must be semantic-to-gentoo or gentoo-to-semantic", mode)
 		}
 
 		if input == "-" {
