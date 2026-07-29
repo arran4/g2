@@ -184,3 +184,37 @@ func TestEbuildUpsert_FromFile(t *testing.T) {
 		t.Fatalf("Unexpected content: %s", string(content))
 	}
 }
+
+func TestEbuildUpsert_WithoutVersionFlag(t *testing.T) {
+	dir := t.TempDir()
+
+	inputFile := filepath.Join(dir, "input.ebuild")
+	_ = os.WriteFile(inputFile, []byte("PV=2.0\nsome content"), 0644)
+
+	cfg := &CmdEbuildArgConfig{}
+
+	oldStdout := os.Stdout
+	defer func() { os.Stdout = oldStdout }()
+	outR, outW, _ := os.Pipe()
+	os.Stdout = outW
+
+	err := cfg.cmdEbuildUpsert([]string{
+		"--dir", dir,
+		"--package", "dummy",
+		inputFile,
+	})
+
+	_ = outW.Close()
+
+	if err != nil {
+		t.Fatalf("cmdEbuildUpsert failed: %v", err)
+	}
+
+	var buf bytes.Buffer
+	_, _ = buf.ReadFrom(outR)
+
+	expectedFile := filepath.Join(dir, "dummy-2.0.ebuild")
+	if _, err := os.Stat(expectedFile); os.IsNotExist(err) {
+		t.Fatalf("Expected file %s was not created", expectedFile)
+	}
+}

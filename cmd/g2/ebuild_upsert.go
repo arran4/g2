@@ -82,10 +82,6 @@ func (cfg *CmdEbuildArgConfig) cmdEbuildUpsert(args []string) error {
 		return err
 	}
 
-	if *dirFlag == "" || *pkgFlag == "" || *verFlag == "" {
-		return fmt.Errorf("usage: g2 ebuild upsert --dir <ebuildDir> --package <pkgName> --version <version> [--ignore-comments] [filename|-]")
-	}
-
 	var inputContent []byte
 	filename := "-"
 	if fs.NArg() > 0 {
@@ -99,6 +95,20 @@ func (cfg *CmdEbuildArgConfig) cmdEbuildUpsert(args []string) error {
 	}
 	if readErr != nil {
 		return fmt.Errorf("failed to read input: %w", readErr)
+	}
+
+	var versionToUse string
+	if *verFlag != "" {
+		versionToUse = *verFlag
+	} else {
+		parsedVars := g2.ParseEbuildVariablesFromReader(bytes.NewReader(inputContent))
+		if parsedVars != nil && parsedVars["PV"] != "" {
+			versionToUse = parsedVars["PV"]
+		}
+	}
+
+	if *dirFlag == "" || *pkgFlag == "" || versionToUse == "" {
+		return fmt.Errorf("usage: g2 ebuild upsert --dir <ebuildDir> --package <pkgName> [--version <version>] [--ignore-comments] [filename|-]")
 	}
 
 	entries, err := os.ReadDir(*dirFlag)
@@ -137,7 +147,7 @@ func (cfg *CmdEbuildArgConfig) cmdEbuildUpsert(args []string) error {
 		base := gv.String()
 		gv.Revision = origRev
 
-		if base == *verFlag {
+		if base == versionToUse {
 			if !found || gv.Revision > highestRevGV.Revision {
 				highestRevGV = gv
 				highestRevFile = filepath.Join(*dirFlag, name)
@@ -150,7 +160,7 @@ func (cfg *CmdEbuildArgConfig) cmdEbuildUpsert(args []string) error {
 
 	if !found {
 		// No existing files, write to base
-		targetFile = filepath.Join(*dirFlag, fmt.Sprintf("%s-%s.ebuild", *pkgFlag, *verFlag))
+		targetFile = filepath.Join(*dirFlag, fmt.Sprintf("%s-%s.ebuild", *pkgFlag, versionToUse))
 	} else {
 		// Compare
 		match, err := compareContent(highestRevFile, inputContent, *ignoreComments)
