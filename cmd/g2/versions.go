@@ -15,6 +15,7 @@ func (cfg *MainArgConfig) cmdVersions(args []string) error {
 
 	subcmd := args[0]
 	switch subcmd {
+
 	case "convert":
 		if len(args) < 3 {
 			return fmt.Errorf("usage: versions convert <semantic-to-gentoo|gentoo-to-semantic> <version string | ->")
