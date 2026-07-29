@@ -197,14 +197,6 @@ func (cfg *CmdEbuildArgConfig) cmdEbuildUpsert(args []string) error {
 	return nil
 }
 
-func fileExists(filename string) bool {
-	info, err := os.Stat(filename)
-	if os.IsNotExist(err) {
-		return false
-	}
-	return !info.IsDir()
-}
-
 func isBumpType(s string) bool {
 	return s == "major" || s == "minor" || s == "patch" || s == "revision"
 }
