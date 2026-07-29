@@ -82,22 +82,10 @@ func (cfg *CmdEbuildArgConfig) cmdEbuildUpsert(args []string) error {
 		return err
 	}
 
-	var newVersionOrBumpType string
 	var inputContent []byte
 	filename := "-"
-
 	if fs.NArg() > 0 {
-		arg0 := fs.Arg(0)
-		if fs.NArg() == 1 {
-			if arg0 == "-" || strings.HasSuffix(arg0, ".ebuild") || fileExists(arg0) {
-				filename = arg0
-			} else {
-				newVersionOrBumpType = arg0
-			}
-		} else if fs.NArg() >= 2 {
-			newVersionOrBumpType = fs.Arg(0)
-			filename = fs.Arg(1)
-		}
+		filename = fs.Arg(0)
 	}
 	var readErr error
 	if filename == "-" {
@@ -112,8 +100,6 @@ func (cfg *CmdEbuildArgConfig) cmdEbuildUpsert(args []string) error {
 	var versionToUse string
 	if *verFlag != "" {
 		versionToUse = *verFlag
-	} else if newVersionOrBumpType != "" && !isBumpType(newVersionOrBumpType) {
-		versionToUse = newVersionOrBumpType
 	} else {
 		parsedVars := g2.ParseEbuildVariablesFromReader(bytes.NewReader(inputContent))
 		if parsedVars != nil && parsedVars["PV"] != "" {
@@ -188,11 +174,7 @@ func (cfg *CmdEbuildArgConfig) cmdEbuildUpsert(args []string) error {
 		}
 
 		// Differ, bump revision
-		if newVersionOrBumpType == "revision" || newVersionOrBumpType == "" || isBumpType(newVersionOrBumpType) {
-			highestRevGV.IncrementRevision()
-		} else {
-			highestRevGV = g2.ParseGentooVersion(newVersionOrBumpType)
-		}
+		highestRevGV.IncrementRevision()
 		targetFile = filepath.Join(*dirFlag, fmt.Sprintf("%s-%s.ebuild", *pkgFlag, highestRevGV.String()))
 	}
 
@@ -202,16 +184,4 @@ func (cfg *CmdEbuildArgConfig) cmdEbuildUpsert(args []string) error {
 
 	fmt.Println(targetFile)
 	return nil
-}
-
-func fileExists(filename string) bool {
-	info, err := os.Stat(filename)
-	if os.IsNotExist(err) {
-		return false
-	}
-	return !info.IsDir()
-}
-
-func isBumpType(s string) bool {
-	return s == "major" || s == "minor" || s == "patch" || s == "revision"
 }

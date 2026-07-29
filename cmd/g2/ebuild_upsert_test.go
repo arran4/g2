@@ -218,3 +218,48 @@ func TestEbuildUpsert_WithoutVersionFlag(t *testing.T) {
 		t.Fatalf("Expected file %s was not created", expectedFile)
 	}
 }
+
+func TestEbuildUpsert_WithExplicitVersionBumpType(t *testing.T) {
+	dir := t.TempDir()
+
+	expectedFile := filepath.Join(dir, "dummy-1.2.ebuild")
+	_ = os.WriteFile(expectedFile, []byte("old content"), 0644)
+
+	cfg := &CmdEbuildArgConfig{}
+
+	oldStdin := os.Stdin
+	defer func() { os.Stdin = oldStdin }()
+
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.Stdin = r
+	go func() {
+		_, _ = w.Write([]byte("PV=1.2\nnew content"))
+		_ = w.Close()
+	}()
+
+	oldStdout := os.Stdout
+	defer func() { os.Stdout = oldStdout }()
+	_, outW, _ := os.Pipe()
+	os.Stdout = outW
+
+	err = cfg.cmdEbuildUpsert([]string{
+		"--dir", dir,
+		"--package", "dummy",
+		"1.3",
+		"-",
+	})
+
+	_ = outW.Close()
+
+	if err != nil {
+		t.Fatalf("cmdEbuildUpsert failed: %v", err)
+	}
+
+	newFile := filepath.Join(dir, "dummy-1.3.ebuild")
+	if _, err := os.Stat(newFile); os.IsNotExist(err) {
+		t.Fatalf("Expected %s to be created", newFile)
+	}
+}
