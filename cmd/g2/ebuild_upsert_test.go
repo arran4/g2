@@ -22,8 +22,8 @@ func TestEbuildUpsert_NoFiles(t *testing.T) {
 	}
 	os.Stdin = r
 	go func() {
-		w.Write([]byte("some ebuild content"))
-		w.Close()
+		_, _ = w.Write([]byte("some ebuild content"))
+		_ = w.Close()
 	}()
 
 	oldStdout := os.Stdout
@@ -37,14 +37,14 @@ func TestEbuildUpsert_NoFiles(t *testing.T) {
 		"--version", "1.2",
 	})
 
-	outW.Close()
+	_ = outW.Close()
 
 	if err != nil {
 		t.Fatalf("cmdEbuildUpsert failed: %v", err)
 	}
 
 	var buf bytes.Buffer
-	buf.ReadFrom(outR)
+	_, _ = buf.ReadFrom(outR)
 
 	expectedFile := filepath.Join(dir, "dummy-1.2.ebuild")
 	if _, err := os.Stat(expectedFile); os.IsNotExist(err) {
@@ -61,7 +61,7 @@ func TestEbuildUpsert_ContentMatches(t *testing.T) {
 	dir := t.TempDir()
 
 	expectedFile := filepath.Join(dir, "dummy-1.2.ebuild")
-	os.WriteFile(expectedFile, []byte("same content"), 0644)
+	_ = os.WriteFile(expectedFile, []byte("same content"), 0644)
 
 	cfg := &CmdEbuildArgConfig{}
 
@@ -74,8 +74,8 @@ func TestEbuildUpsert_ContentMatches(t *testing.T) {
 	}
 	os.Stdin = r
 	go func() {
-		w.Write([]byte("same content"))
-		w.Close()
+		_, _ = w.Write([]byte("same content"))
+		_ = w.Close()
 	}()
 
 	oldStdout := os.Stdout
@@ -89,7 +89,7 @@ func TestEbuildUpsert_ContentMatches(t *testing.T) {
 		"--version", "1.2",
 	})
 
-	outW.Close()
+	_ = outW.Close()
 
 	if err != nil {
 		t.Fatalf("cmdEbuildUpsert failed: %v", err)
@@ -104,7 +104,7 @@ func TestEbuildUpsert_ContentDiffers(t *testing.T) {
 	dir := t.TempDir()
 
 	expectedFile := filepath.Join(dir, "dummy-1.2.ebuild")
-	os.WriteFile(expectedFile, []byte("old content"), 0644)
+	_ = os.WriteFile(expectedFile, []byte("old content"), 0644)
 
 	cfg := &CmdEbuildArgConfig{}
 
@@ -117,8 +117,8 @@ func TestEbuildUpsert_ContentDiffers(t *testing.T) {
 	}
 	os.Stdin = r
 	go func() {
-		w.Write([]byte("new content"))
-		w.Close()
+		_, _ = w.Write([]byte("new content"))
+		_ = w.Close()
 	}()
 
 	oldStdout := os.Stdout
@@ -132,7 +132,7 @@ func TestEbuildUpsert_ContentDiffers(t *testing.T) {
 		"--version", "1.2",
 	})
 
-	outW.Close()
+	_ = outW.Close()
 
 	if err != nil {
 		t.Fatalf("cmdEbuildUpsert failed: %v", err)
