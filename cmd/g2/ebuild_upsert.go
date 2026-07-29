@@ -108,7 +108,7 @@ func (cfg *CmdEbuildArgConfig) cmdEbuildUpsert(args []string) error {
 	}
 
 	if *dirFlag == "" || *pkgFlag == "" || versionToUse == "" {
-		return fmt.Errorf("usage: g2 ebuild upsert --dir <ebuildDir> --package <pkgName> [--version <version>] [--ignore-comments] [filename|-]")
+		return fmt.Errorf("usage: g2 ebuild upsert --dir <ebuildDir> --package <pkgName> [--version <version>] [--ignore-comments] [new version|version bump type] [filename|-]")
 	}
 
 	entries, err := os.ReadDir(*dirFlag)
