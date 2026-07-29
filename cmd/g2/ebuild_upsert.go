@@ -87,16 +87,11 @@ func (cfg *CmdEbuildArgConfig) cmdEbuildUpsert(args []string) error {
 	filename := "-"
 
 	if fs.NArg() > 0 {
-		arg0 := fs.Arg(0)
-		if fs.NArg() == 1 {
-			if arg0 == "-" || strings.HasSuffix(arg0, ".ebuild") || fileExists(arg0) {
-				filename = arg0
-			} else {
-				newVersionOrBumpType = arg0
-			}
-		} else if fs.NArg() >= 2 {
+		if fs.NArg() >= 2 {
 			newVersionOrBumpType = fs.Arg(0)
 			filename = fs.Arg(1)
+		} else if fs.NArg() == 1 {
+			filename = fs.Arg(0)
 		}
 	}
 	var readErr error
@@ -112,8 +107,6 @@ func (cfg *CmdEbuildArgConfig) cmdEbuildUpsert(args []string) error {
 	var versionToUse string
 	if *verFlag != "" {
 		versionToUse = *verFlag
-	} else if newVersionOrBumpType != "" && !isBumpType(newVersionOrBumpType) {
-		versionToUse = newVersionOrBumpType
 	} else {
 		parsedVars := g2.ParseEbuildVariablesFromReader(bytes.NewReader(inputContent))
 		if parsedVars != nil && parsedVars["PV"] != "" {
