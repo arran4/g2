@@ -39,6 +39,7 @@ func (cfg *MainArgConfig) cmdEbuild(args []string) error {
 		fmt.Printf("\t\t %s \t\t %s\n", "tag", "Ebuild specific tag subcommand supporting version comparisons")
 		fmt.Printf("\t\t %s \t\t %s\n", "check-exists", "Determine if any revision of a given version exists")
 		fmt.Printf("\t\t %s \t\t %s\n", "next-revision", "Generate the next revision name and optionally inspect contents")
+		fmt.Printf("\t\t %s \t\t %s\n", "upsert", "Upsert an ebuild revision from stdin or file")
 	}
 
 	config := &CmdEbuildArgConfig{

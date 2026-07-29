@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"io/fs"
+	"io"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -1017,4 +1018,26 @@ func GetLatestMatchingPackageRevision(overlayFS fs.FS, category, pkgName, versio
 	}
 
 	return highestRevGV.String(), nil
+}
+
+// ParseEbuildVariablesFromReader parses an ebuild file from a reader and extracts simple variables defined in the top level.
+func ParseEbuildVariablesFromReader(r io.Reader) map[string]string {
+	vars := make(map[string]string)
+	scanner := bufio.NewScanner(r)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if strings.HasPrefix(line, "#") {
+			continue
+		}
+		if strings.Contains(line, "=") {
+			parts := strings.SplitN(line, "=", 2)
+			if len(parts) == 2 {
+				key := strings.TrimSpace(parts[0])
+				val := strings.TrimSpace(parts[1])
+				val = strings.Trim(val, `"'`)
+				vars[key] = val
+			}
+		}
+	}
+	return vars
 }

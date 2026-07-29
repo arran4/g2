@@ -82,13 +82,40 @@ func (cfg *CmdEbuildArgConfig) cmdEbuildUpsert(args []string) error {
 		return err
 	}
 
-	if *dirFlag == "" || *pkgFlag == "" || *verFlag == "" {
-		return fmt.Errorf("usage: g2 ebuild upsert --dir <ebuildDir> --package <pkgName> --version <version> [--ignore-comments]")
+	var newVersionOrBumpType string
+	var inputContent []byte
+	filename := "-"
+
+	if fs.NArg() > 0 {
+		if fs.NArg() >= 2 {
+			newVersionOrBumpType = fs.Arg(0)
+			filename = fs.Arg(1)
+		} else if fs.NArg() == 1 {
+			filename = fs.Arg(0)
+		}
+	}
+	var readErr error
+	if filename == "-" {
+		inputContent, readErr = io.ReadAll(os.Stdin)
+	} else {
+		inputContent, readErr = os.ReadFile(filename)
+	}
+	if readErr != nil {
+		return fmt.Errorf("failed to read input: %w", readErr)
 	}
 
-	stdinContent, err := io.ReadAll(os.Stdin)
-	if err != nil {
-		return fmt.Errorf("failed to read stdin: %w", err)
+	var versionToUse string
+	if *verFlag != "" {
+		versionToUse = *verFlag
+	} else {
+		parsedVars := g2.ParseEbuildVariablesFromReader(bytes.NewReader(inputContent))
+		if parsedVars != nil && parsedVars["PV"] != "" {
+			versionToUse = parsedVars["PV"]
+		}
+	}
+
+	if *dirFlag == "" || *pkgFlag == "" || versionToUse == "" {
+		return fmt.Errorf("usage: g2 ebuild upsert --dir <ebuildDir> --package <pkgName> [--version <version>] [--ignore-comments] [new version|version bump type] [filename|-]")
 	}
 
 	entries, err := os.ReadDir(*dirFlag)
@@ -127,7 +154,7 @@ func (cfg *CmdEbuildArgConfig) cmdEbuildUpsert(args []string) error {
 		base := gv.String()
 		gv.Revision = origRev
 
-		if base == *verFlag {
+		if base == versionToUse {
 			if !found || gv.Revision > highestRevGV.Revision {
 				highestRevGV = gv
 				highestRevFile = filepath.Join(*dirFlag, name)
@@ -140,10 +167,10 @@ func (cfg *CmdEbuildArgConfig) cmdEbuildUpsert(args []string) error {
 
 	if !found {
 		// No existing files, write to base
-		targetFile = filepath.Join(*dirFlag, fmt.Sprintf("%s-%s.ebuild", *pkgFlag, *verFlag))
+		targetFile = filepath.Join(*dirFlag, fmt.Sprintf("%s-%s.ebuild", *pkgFlag, versionToUse))
 	} else {
 		// Compare
-		match, err := compareContent(highestRevFile, stdinContent, *ignoreComments)
+		match, err := compareContent(highestRevFile, inputContent, *ignoreComments)
 		if err != nil {
 			return fmt.Errorf("failed to compare contents: %w", err)
 		}
@@ -154,14 +181,22 @@ func (cfg *CmdEbuildArgConfig) cmdEbuildUpsert(args []string) error {
 		}
 
 		// Differ, bump revision
-		highestRevGV.IncrementRevision()
+		if newVersionOrBumpType == "revision" || newVersionOrBumpType == "" || isBumpType(newVersionOrBumpType) {
+			highestRevGV.IncrementRevision()
+		} else {
+			highestRevGV = g2.ParseGentooVersion(newVersionOrBumpType)
+		}
 		targetFile = filepath.Join(*dirFlag, fmt.Sprintf("%s-%s.ebuild", *pkgFlag, highestRevGV.String()))
 	}
 
-	if err := os.WriteFile(targetFile, stdinContent, 0644); err != nil {
+	if err := os.WriteFile(targetFile, inputContent, 0644); err != nil {
 		return fmt.Errorf("failed to write ebuild file %s: %w", targetFile, err)
 	}
 
 	fmt.Println(targetFile)
 	return nil
+}
+
+func isBumpType(s string) bool {
+	return s == "major" || s == "minor" || s == "patch" || s == "revision"
 }
