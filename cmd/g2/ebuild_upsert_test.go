@@ -143,3 +143,44 @@ func TestEbuildUpsert_ContentDiffers(t *testing.T) {
 		t.Fatalf("Expected %s to be created", r1File)
 	}
 }
+
+
+func TestEbuildUpsert_FromFile(t *testing.T) {
+	dir := t.TempDir()
+
+	inputFile := filepath.Join(dir, "input.ebuild")
+	_ = os.WriteFile(inputFile, []byte("some file content"), 0644)
+
+	cfg := &CmdEbuildArgConfig{}
+
+	oldStdout := os.Stdout
+	defer func() { os.Stdout = oldStdout }()
+	outR, outW, _ := os.Pipe()
+	os.Stdout = outW
+
+	err := cfg.cmdEbuildUpsert([]string{
+		"--dir", dir,
+		"--package", "dummy",
+		"--version", "1.2",
+		inputFile,
+	})
+
+	_ = outW.Close()
+
+	if err != nil {
+		t.Fatalf("cmdEbuildUpsert failed: %v", err)
+	}
+
+	var buf bytes.Buffer
+	_, _ = buf.ReadFrom(outR)
+
+	expectedFile := filepath.Join(dir, "dummy-1.2.ebuild")
+	if _, err := os.Stat(expectedFile); os.IsNotExist(err) {
+		t.Fatalf("Expected file %s was not created", expectedFile)
+	}
+
+	content, _ := os.ReadFile(expectedFile)
+	if string(content) != "some file content" {
+		t.Fatalf("Unexpected content: %s", string(content))
+	}
+}

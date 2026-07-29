@@ -83,12 +83,22 @@ func (cfg *CmdEbuildArgConfig) cmdEbuildUpsert(args []string) error {
 	}
 
 	if *dirFlag == "" || *pkgFlag == "" || *verFlag == "" {
-		return fmt.Errorf("usage: g2 ebuild upsert --dir <ebuildDir> --package <pkgName> --version <version> [--ignore-comments]")
+		return fmt.Errorf("usage: g2 ebuild upsert --dir <ebuildDir> --package <pkgName> --version <version> [--ignore-comments] [filename|-]")
 	}
 
-	stdinContent, err := io.ReadAll(os.Stdin)
-	if err != nil {
-		return fmt.Errorf("failed to read stdin: %w", err)
+	var inputContent []byte
+	filename := "-"
+	if fs.NArg() > 0 {
+		filename = fs.Arg(0)
+	}
+	var readErr error
+	if filename == "-" {
+		inputContent, readErr = io.ReadAll(os.Stdin)
+	} else {
+		inputContent, readErr = os.ReadFile(filename)
+	}
+	if readErr != nil {
+		return fmt.Errorf("failed to read input: %w", readErr)
 	}
 
 	entries, err := os.ReadDir(*dirFlag)
@@ -143,7 +153,7 @@ func (cfg *CmdEbuildArgConfig) cmdEbuildUpsert(args []string) error {
 		targetFile = filepath.Join(*dirFlag, fmt.Sprintf("%s-%s.ebuild", *pkgFlag, *verFlag))
 	} else {
 		// Compare
-		match, err := compareContent(highestRevFile, stdinContent, *ignoreComments)
+		match, err := compareContent(highestRevFile, inputContent, *ignoreComments)
 		if err != nil {
 			return fmt.Errorf("failed to compare contents: %w", err)
 		}
@@ -158,7 +168,7 @@ func (cfg *CmdEbuildArgConfig) cmdEbuildUpsert(args []string) error {
 		targetFile = filepath.Join(*dirFlag, fmt.Sprintf("%s-%s.ebuild", *pkgFlag, highestRevGV.String()))
 	}
 
-	if err := os.WriteFile(targetFile, stdinContent, 0644); err != nil {
+	if err := os.WriteFile(targetFile, inputContent, 0644); err != nil {
 		return fmt.Errorf("failed to write ebuild file %s: %w", targetFile, err)
 	}
 
