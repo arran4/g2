@@ -1,0 +1,145 @@
+package main
+
+import (
+	"bytes"
+	"os"
+	"path/filepath"
+	"testing"
+)
+
+func TestEbuildUpsert_NoFiles(t *testing.T) {
+	dir := t.TempDir()
+
+	cfg := &CmdEbuildArgConfig{}
+
+	// Mock stdin
+	oldStdin := os.Stdin
+	defer func() { os.Stdin = oldStdin }()
+
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.Stdin = r
+	go func() {
+		w.Write([]byte("some ebuild content"))
+		w.Close()
+	}()
+
+	oldStdout := os.Stdout
+	defer func() { os.Stdout = oldStdout }()
+	outR, outW, _ := os.Pipe()
+	os.Stdout = outW
+
+	err = cfg.cmdEbuildUpsert([]string{
+		"--dir", dir,
+		"--package", "dummy",
+		"--version", "1.2",
+	})
+
+	outW.Close()
+
+	if err != nil {
+		t.Fatalf("cmdEbuildUpsert failed: %v", err)
+	}
+
+	var buf bytes.Buffer
+	buf.ReadFrom(outR)
+
+	expectedFile := filepath.Join(dir, "dummy-1.2.ebuild")
+	if _, err := os.Stat(expectedFile); os.IsNotExist(err) {
+		t.Fatalf("Expected file %s was not created", expectedFile)
+	}
+
+	content, _ := os.ReadFile(expectedFile)
+	if string(content) != "some ebuild content" {
+		t.Fatalf("Unexpected content: %s", string(content))
+	}
+}
+
+func TestEbuildUpsert_ContentMatches(t *testing.T) {
+	dir := t.TempDir()
+
+	expectedFile := filepath.Join(dir, "dummy-1.2.ebuild")
+	os.WriteFile(expectedFile, []byte("same content"), 0644)
+
+	cfg := &CmdEbuildArgConfig{}
+
+	oldStdin := os.Stdin
+	defer func() { os.Stdin = oldStdin }()
+
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.Stdin = r
+	go func() {
+		w.Write([]byte("same content"))
+		w.Close()
+	}()
+
+	oldStdout := os.Stdout
+	defer func() { os.Stdout = oldStdout }()
+	_, outW, _ := os.Pipe()
+	os.Stdout = outW
+
+	err = cfg.cmdEbuildUpsert([]string{
+		"--dir", dir,
+		"--package", "dummy",
+		"--version", "1.2",
+	})
+
+	outW.Close()
+
+	if err != nil {
+		t.Fatalf("cmdEbuildUpsert failed: %v", err)
+	}
+
+	if _, err := os.Stat(filepath.Join(dir, "dummy-1.2-r1.ebuild")); !os.IsNotExist(err) {
+		t.Fatalf("Expected dummy-1.2-r1.ebuild to not be created")
+	}
+}
+
+func TestEbuildUpsert_ContentDiffers(t *testing.T) {
+	dir := t.TempDir()
+
+	expectedFile := filepath.Join(dir, "dummy-1.2.ebuild")
+	os.WriteFile(expectedFile, []byte("old content"), 0644)
+
+	cfg := &CmdEbuildArgConfig{}
+
+	oldStdin := os.Stdin
+	defer func() { os.Stdin = oldStdin }()
+
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.Stdin = r
+	go func() {
+		w.Write([]byte("new content"))
+		w.Close()
+	}()
+
+	oldStdout := os.Stdout
+	defer func() { os.Stdout = oldStdout }()
+	_, outW, _ := os.Pipe()
+	os.Stdout = outW
+
+	err = cfg.cmdEbuildUpsert([]string{
+		"--dir", dir,
+		"--package", "dummy",
+		"--version", "1.2",
+	})
+
+	outW.Close()
+
+	if err != nil {
+		t.Fatalf("cmdEbuildUpsert failed: %v", err)
+	}
+
+	r1File := filepath.Join(dir, "dummy-1.2-r1.ebuild")
+	if _, err := os.Stat(r1File); os.IsNotExist(err) {
+		t.Fatalf("Expected %s to be created", r1File)
+	}
+}
