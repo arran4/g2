@@ -88,9 +88,7 @@ func ParseSemanticVersion(v string) SemanticVersion {
 	}
 
 	// 1. Strip 'v' prefix if present
-	if strings.HasPrefix(v, "v") {
-		v = v[1:]
-	}
+	v = strings.TrimPrefix(v, "v")
 
 	// 2. Extract base numbers and letter
 	i := 0
@@ -330,7 +328,8 @@ func bumpVersionString(target string, bumpType string, suffix string, forceNum i
 		return "", fmt.Errorf("invalid version string: %s", target)
 	}
 
-	if bumpType == "major" {
+	switch bumpType {
+	case "major":
 		if len(v.Nums) > 0 {
 			v.Nums[0]++
 			v.NumStrs[0] = strconv.Itoa(v.Nums[0])
@@ -343,7 +342,7 @@ func bumpVersionString(target string, bumpType string, suffix string, forceNum i
 		v.Letter = ""
 		v.Suffix = ""
 		v.SuffixNoStr = ""
-	} else if bumpType == "minor" {
+	case "minor":
 		if len(v.Nums) > 1 {
 			v.Nums[1]++
 			v.NumStrs[1] = strconv.Itoa(v.Nums[1])
@@ -356,7 +355,7 @@ func bumpVersionString(target string, bumpType string, suffix string, forceNum i
 		v.Letter = ""
 		v.Suffix = ""
 		v.SuffixNoStr = ""
-	} else if bumpType == "patch" {
+	case "patch":
 		if len(v.Nums) > 2 {
 			v.Nums[2]++
 			v.NumStrs[2] = strconv.Itoa(v.Nums[2])
@@ -369,7 +368,7 @@ func bumpVersionString(target string, bumpType string, suffix string, forceNum i
 		v.Letter = ""
 		v.Suffix = ""
 		v.SuffixNoStr = ""
-	} else if bumpType == "revision" || bumpType == "rev" {
+	case "revision", "rev":
 		v.Revision++
 	}
 
