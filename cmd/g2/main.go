@@ -134,6 +134,12 @@ func main() {
 			os.Exit(-1)
 			return
 		}
+	case "versions":
+		if err := cfg.CmdVersions(fs.Args()[2:]); err != nil {
+			log.Printf("versions error: %s", err)
+			os.Exit(-1)
+			return
+		}
 	case "metadata":
 		if err := cfg.cmdMetadata(fs.Args()[2:]); err != nil {
 			log.Printf("metadata error: %s", err)

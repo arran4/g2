@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-func (cfg *MainArgConfig) cmdVersions(args []string) error {
+func (cfg *MainArgConfig) CmdVersions(args []string) error {
 	if len(args) == 0 {
 		return fmt.Errorf("usage: versions <subcommand>")
 	}
