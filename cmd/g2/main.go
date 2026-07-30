@@ -40,7 +40,6 @@ func main() {
 		fmt.Printf("Usage:\n")
 		fmt.Printf("\t%s\n", strings.Join(cfg.Args, " "))
 		fmt.Printf("\t\t %s \t\t %s\n", "manifest", "commands relating to Manifest files")
-		fmt.Printf("\t\t %s \t\t %s\n", "versions", "commands relating to version conversion")
 		fmt.Printf("\t\t %s \t\t %s\n", "metadata", "commands relating to metadata.xml files")
 		fmt.Printf("\t\t %s \t\t %s\n", "ebuild", "commands relating to ebuild files")
 		fmt.Printf("\t\t %s \t\t %s\n", "overlay", "commands relating to a single overlay")
@@ -132,12 +131,6 @@ func main() {
 	case "layout-conf":
 		if err := cfg.cmdLayoutConf(fs.Args()[2:]); err != nil {
 			log.Printf("layout-conf error: %s", err)
-			os.Exit(-1)
-			return
-		}
-	case "versions":
-		if err := cfg.cmdVersions(fs.Args()[2:]); err != nil {
-			log.Printf("versions error: %s", err)
 			os.Exit(-1)
 			return
 		}

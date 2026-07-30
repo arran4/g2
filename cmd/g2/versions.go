@@ -10,12 +10,11 @@ import (
 
 func (cfg *MainArgConfig) cmdVersions(args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: versions <convert>")
+		return fmt.Errorf("usage: versions <subcommand>")
 	}
 
 	subcmd := args[0]
 	switch subcmd {
-
 	case "convert":
 		if len(args) < 3 {
 			return fmt.Errorf("usage: versions convert <semantic-to-gentoo|gentoo-to-semantic> <version string | ->")
