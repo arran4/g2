@@ -17,3 +17,4 @@ testrepo/
 playwright-script.js
 doc/g2.1
 /*.exe
+_site
