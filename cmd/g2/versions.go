@@ -1,0 +1,410 @@
+package main
+
+import (
+	"bufio"
+	"fmt"
+	"os"
+	"strconv"
+	"strings"
+	"unicode"
+
+	"github.com/arran4/g2"
+)
+
+func (cfg *MainArgConfig) CmdVersions(args []string) error {
+	if len(args) == 0 {
+		return fmt.Errorf("usage: versions <subcommand>")
+	}
+
+	subcmd := args[0]
+	switch subcmd {
+
+
+	case "bump":
+		if len(args) < 3 {
+			return fmt.Errorf("usage: versions bump <ebuild filepath|version|- (stdin)|category/package directory> <major|minor|patch|revision|rev> [alpha, beta, pre, rc or p] [number]")
+		}
+		return bumpVersion(args[1:])
+	case "compare":
+		if len(args) < 4 {
+			return fmt.Errorf("usage: versions compare <ebuild|version-string> <operator> <ebuild|version-string>")
+		}
+		return compareVersions(args[1:])
+	case "convert":
+		if len(args) < 3 {
+			return fmt.Errorf("usage: versions convert <semantic-to-gentoo|gentoo-to-semantic> <version string | ->")
+		}
+		mode := args[1]
+		input := args[2]
+
+		var processFunc func(string) string
+		switch mode {
+		case "semantic-to-gentoo":
+			processFunc = SemanticToGentoo
+		case "gentoo-to-semantic":
+			processFunc = GentooToSemantic
+		default:
+			return fmt.Errorf("unknown convert mode: %s, must be semantic-to-gentoo or gentoo-to-semantic", mode)
+		}
+
+		if input == "-" {
+			scanner := bufio.NewScanner(os.Stdin)
+			for scanner.Scan() {
+				fmt.Println(processFunc(scanner.Text()))
+			}
+			if err := scanner.Err(); err != nil {
+				return fmt.Errorf("error reading stdin: %w", err)
+			}
+		} else {
+			fmt.Println(processFunc(input))
+		}
+	default:
+		return fmt.Errorf("unknown versions subcommand: %s", subcmd)
+	}
+
+	return nil
+}
+
+// SemanticVersion represents a structured semantic version.
+type SemanticVersion struct {
+	Nums        []int
+	NumStrs     []string
+	Letter      string // optional trailing letter like 'b'
+	PreRelease  string // e.g., alpha, beta, pre, rc, p
+	PreReleaseN string // numeric part of pre-release
+	Revision    int    // gentoo revision usually added like -r1
+	IsValid     bool
+}
+
+// ParseSemanticVersion parses a version string loosely following semantic versioning,
+// with awareness of Gentoo-specific suffixes like -r1 or -alpha1 that might appear
+// out of standard semantic order.
+func ParseSemanticVersion(v string) SemanticVersion {
+	sv := SemanticVersion{IsValid: true}
+
+	if v == "" {
+		sv.IsValid = false
+		return sv
+	}
+
+	// 1. Strip 'v' prefix if present
+	v = strings.TrimPrefix(v, "v")
+
+	// 2. Extract base numbers and letter
+	i := 0
+	for ; i < len(v); i++ {
+		c := v[i]
+		if unicode.IsDigit(rune(c)) || c == '.' {
+			continue
+		}
+		if unicode.IsLetter(rune(c)) && (i+1 == len(v) || v[i+1] == '-' || v[i+1] == '_') {
+			// Trailing letter in base like 1.2.3b
+			sv.Letter = string(c)
+			i++
+			break
+		}
+		break
+	}
+
+	baseStr := v[:i]
+	if sv.Letter != "" {
+		baseStr = v[:i-1]
+	}
+
+	parts := strings.Split(baseStr, ".")
+	for _, p := range parts {
+		if p == "" {
+			continue
+		}
+		num, err := strconv.Atoi(p)
+		if err == nil {
+			sv.Nums = append(sv.Nums, num)
+			sv.NumStrs = append(sv.NumStrs, p)
+		}
+	}
+
+	rem := v[i:]
+
+	// 3. Extract Revision and PreRelease components
+	// We parse by tokens separated by '-' or '_'
+	tokens := strings.FieldsFunc(rem, func(r rune) bool {
+		return r == '-' || r == '_'
+	})
+
+	for _, token := range tokens {
+		if strings.HasPrefix(token, "r") && len(token) > 1 {
+			// Check if it's a revision -rX
+			isRev := true
+			for j := 1; j < len(token); j++ {
+				if !unicode.IsDigit(rune(token[j])) {
+					isRev = false
+					break
+				}
+			}
+			if isRev {
+				revNum, _ := strconv.Atoi(token[1:])
+				sv.Revision = revNum
+				continue
+			}
+		}
+
+		// Check for pre-release
+		preTypes := []string{"alpha", "beta", "pre", "rc", "p"}
+		foundPre := false
+		for _, pt := range preTypes {
+			if strings.HasPrefix(token, pt) {
+				sv.PreRelease = pt
+				sv.PreReleaseN = token[len(pt):]
+				foundPre = true
+				break
+			}
+		}
+		if !foundPre {
+			// Unknown token
+			sv.IsValid = false
+		}
+	}
+
+	return sv
+}
+
+// SemanticToGentoo converts a semantic version string to a Gentoo version string.
+func SemanticToGentoo(v string) string {
+	sv := ParseSemanticVersion(v)
+	if !sv.IsValid {
+		return v // Fallback
+	}
+
+	res := strings.Join(sv.NumStrs, ".")
+	if sv.Letter != "" {
+		res += sv.Letter
+	}
+	if sv.PreRelease != "" {
+		res += "_" + sv.PreRelease + sv.PreReleaseN
+	}
+	if sv.Revision > 0 {
+		res += fmt.Sprintf("-r%d", sv.Revision)
+	}
+
+	return res
+}
+
+// GentooToSemantic converts a Gentoo version string to a semantic version string.
+func GentooToSemantic(v string) string {
+	gv := g2.ParseGentooVersion(v)
+	if !gv.IsValid {
+		return strings.ReplaceAll(v, "_", "-")
+	}
+
+	res := strings.Join(gv.NumStrs, ".")
+	if gv.Letter != "" {
+		res += gv.Letter
+	}
+	if gv.Suffix != "" {
+		res += "-" + gv.Suffix
+		if gv.SuffixNoStr != "" {
+			res += gv.SuffixNoStr
+		}
+	}
+	if gv.Revision > 0 {
+		res += fmt.Sprintf("-r%d", gv.Revision)
+	}
+
+	return res
+}
+
+func compareVersions(args []string) error {
+	v1Str := args[0]
+	op := args[1]
+	v2Str := args[2]
+
+	// handle if args are filepaths
+	if strings.HasSuffix(v1Str, ".ebuild") {
+		vars := g2.ParseEbuildVariables(v1Str)
+		if vars != nil {
+			if pv, ok := vars["PV"]; ok {
+				v1Str = pv
+				if pr, ok := vars["PR"]; ok && pr != "r0" {
+					v1Str += "-" + pr
+				}
+			}
+		}
+	}
+	if strings.HasSuffix(v2Str, ".ebuild") {
+		vars := g2.ParseEbuildVariables(v2Str)
+		if vars != nil {
+			if pv, ok := vars["PV"]; ok {
+				v2Str = pv
+				if pr, ok := vars["PR"]; ok && pr != "r0" {
+					v2Str += "-" + pr
+				}
+			}
+		}
+	}
+
+	cmp := g2.CompareVersions(v1Str, v2Str)
+
+	isTrue := false
+	switch op {
+	case "<", "lt", "older", "less-than":
+		isTrue = cmp < 0
+	case "<=", "le":
+		isTrue = cmp <= 0
+	case "==", "=", "eq", "equal":
+		isTrue = cmp == 0
+	case ">=", "ge":
+		isTrue = cmp >= 0
+	case ">", "gt", "newer", "greater-than":
+		isTrue = cmp > 0
+	default:
+		return fmt.Errorf("unknown operator: %s", op)
+	}
+
+	fmt.Println(isTrue)
+	if !isTrue {
+		os.Exit(1)
+	}
+	return nil
+}
+
+func parseBumpTarget(target string) string {
+	if target == "-" {
+		scanner := bufio.NewScanner(os.Stdin)
+		if scanner.Scan() {
+			return scanner.Text()
+		}
+		return ""
+	}
+
+	stat, err := os.Stat(target)
+	if err == nil {
+		if stat.IsDir() {
+			// Find the highest ebuild in the directory
+			entries, err := os.ReadDir(target)
+			if err == nil {
+				var highestVersion string
+				for _, entry := range entries {
+					if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".ebuild") {
+						continue
+					}
+					vars := g2.ParseEbuildVariables(entry.Name())
+					if vars != nil {
+						if pv, ok := vars["PV"]; ok {
+							vStr := pv
+							if pr, ok := vars["PR"]; ok && pr != "r0" {
+								vStr += "-" + pr
+							}
+							if highestVersion == "" || g2.CompareVersions(vStr, highestVersion) > 0 {
+								highestVersion = vStr
+							}
+						}
+					}
+				}
+				if highestVersion != "" {
+					return highestVersion
+				}
+			}
+		} else if strings.HasSuffix(target, ".ebuild") {
+			vars := g2.ParseEbuildVariables(target)
+			if vars != nil {
+				if pv, ok := vars["PV"]; ok {
+					res := pv
+					if pr, ok := vars["PR"]; ok && pr != "r0" {
+						res += "-" + pr
+					}
+					return res
+				}
+			}
+		}
+	}
+
+	return target // assume it's a raw version string
+}
+
+
+func bumpVersionString(target string, bumpType string, suffix string, forceNum int) (string, error) {
+	v := g2.ParseGentooVersion(target)
+	if !v.IsValid {
+		return "", fmt.Errorf("invalid version string: %s", target)
+	}
+
+	switch bumpType {
+	case "major":
+		if len(v.Nums) > 0 {
+			v.Nums[0]++
+			v.NumStrs[0] = strconv.Itoa(v.Nums[0])
+		}
+		for i := 1; i < len(v.Nums); i++ {
+			v.Nums[i] = 0
+			v.NumStrs[i] = "0"
+		}
+		v.Revision = 0
+		v.Letter = ""
+		v.Suffix = ""
+		v.SuffixNoStr = ""
+	case "minor":
+		if len(v.Nums) > 1 {
+			v.Nums[1]++
+			v.NumStrs[1] = strconv.Itoa(v.Nums[1])
+		}
+		for i := 2; i < len(v.Nums); i++ {
+			v.Nums[i] = 0
+			v.NumStrs[i] = "0"
+		}
+		v.Revision = 0
+		v.Letter = ""
+		v.Suffix = ""
+		v.SuffixNoStr = ""
+	case "patch":
+		if len(v.Nums) > 2 {
+			v.Nums[2]++
+			v.NumStrs[2] = strconv.Itoa(v.Nums[2])
+		}
+		for i := 3; i < len(v.Nums); i++ {
+			v.Nums[i] = 0
+			v.NumStrs[i] = "0"
+		}
+		v.Revision = 0
+		v.Letter = ""
+		v.Suffix = ""
+		v.SuffixNoStr = ""
+	case "revision", "rev":
+		v.Revision++
+	}
+
+	if suffix != "" {
+		v.Suffix = suffix
+		if forceNum != -1 {
+			v.SuffixNo = forceNum
+			v.SuffixNoStr = strconv.Itoa(forceNum)
+		} else {
+			v.SuffixNo = 1 // default
+			v.SuffixNoStr = "1"
+		}
+	}
+
+	return v.String(), nil
+}
+
+func bumpVersion(args []string) error {
+	target := parseBumpTarget(args[0])
+	bumpType := args[1]
+
+	suffix := ""
+	forceNum := -1
+
+	if len(args) > 2 {
+		suffix = args[2]
+	}
+	if len(args) > 3 {
+		forceNum, _ = strconv.Atoi(args[3])
+	}
+
+	res, err := bumpVersionString(target, bumpType, suffix, forceNum)
+	if err != nil {
+		return err
+	}
+
+	fmt.Println(res)
+	return nil
+}
