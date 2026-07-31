@@ -19,7 +19,7 @@ import (
 //go:embed testdata/cache/*.txtar
 var cacheTestdataFS embed.FS
 
-// MemCacheFS implements CacheFS for testing
+// MemCacheFS implements g2.CacheFS for testing
 type MemCacheFS struct {
 	fs.FS
 	Map fstest.MapFS

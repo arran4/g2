@@ -282,28 +282,3 @@ func doCacheClean(cfs g2.CacheFS, repoDir string) error {
 	fmt.Printf("Cleaned %d unused cache entries.\n", cleanedCount)
 	return nil
 }
-
-func isCacheVariable(key string) bool {
-	validKeys := map[string]bool{
-		"BDEPEND":        true,
-		"DEPEND":         true,
-		"DESCRIPTION":    true,
-		"EAPI":           true,
-		"HOMEPAGE":       true,
-		"INHERITED":      true,
-		"IUSE":           true,
-		"KEYWORDS":       true,
-		"LICENSE":        true,
-		"PDEPEND":        true,
-		"PROPERTIES":     true,
-		"PROVIDE":        true,
-		"RDEPEND":        true,
-		"REQUIRED_USE":   true,
-		"RESTRICT":       true,
-		"SLOT":           true,
-		"SRC_URI":        true,
-		"_eclasses_":     true,
-		"DEFINED_PHASES": true,
-	}
-	return validKeys[key]
-}

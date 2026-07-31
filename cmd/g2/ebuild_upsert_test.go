@@ -144,6 +144,7 @@ func TestEbuildUpsert_ContentDiffers(t *testing.T) {
 	}
 }
 
+
 func TestEbuildUpsert_FromFile(t *testing.T) {
 	dir := t.TempDir()
 

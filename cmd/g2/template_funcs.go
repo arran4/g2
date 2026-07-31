@@ -371,22 +371,21 @@ func formatQualifiedPackageFunc(category, name, version, overlay string) string 
 	}
 	return fmt.Sprintf("%s/%s", category, name)
 }
-
 type UseFlagGroups struct {
-	GlobalFlags    []UseFlagDisplay
+	GlobalFlags []UseFlagDisplay
 	CategoryGroups []CategoryUseFlagGroup
-	PackageGroups  []CategoryPackageUseFlagGroup
+	PackageGroups []CategoryPackageUseFlagGroup
 }
 
 type UseFlagDisplay struct {
-	Name  string
-	Desc  string
+	Name string
+	Desc string
 	Count int
 }
 
 type CategoryUseFlagGroup struct {
 	Category string
-	Flags    []UseFlagDisplay
+	Flags []UseFlagDisplay
 }
 
 type CategoryPackageUseFlagGroup struct {
@@ -396,7 +395,7 @@ type CategoryPackageUseFlagGroup struct {
 
 type PackageUseFlagGroup struct {
 	Package string
-	Flags   []UseFlagDisplay
+	Flags []UseFlagDisplay
 }
 
 func getBestDescFunc(flag *AggUseFlag, preferredPkg string) string {
@@ -445,8 +444,8 @@ func groupUseFlagsFunc(flags []*AggUseFlag) UseFlagGroups {
 		if len(uniqueCats) > 1 || (len(uniqueCats) == 0 && flag.GlobalDesc != "") {
 			// Global flag
 			globalFlags = append(globalFlags, UseFlagDisplay{
-				Name:  flag.Name,
-				Desc:  getBestDescFunc(flag, ""),
+				Name: flag.Name,
+				Desc: getBestDescFunc(flag, ""),
 				Count: flag.Count,
 			})
 		} else if len(uniqueCats) == 1 {
@@ -461,7 +460,7 @@ func groupUseFlagsFunc(flags []*AggUseFlag) UseFlagGroups {
 				catFlagsMap[catName] = append(catFlagsMap[catName], UseFlagDisplay{
 					Name: flag.Name,
 					// For category-level, we can just grab a representative description
-					Desc:  getBestDescFunc(flag, ""),
+					Desc: getBestDescFunc(flag, ""),
 					Count: flag.Count,
 				})
 			} else if len(flag.Packages) == 1 {
@@ -472,16 +471,16 @@ func groupUseFlagsFunc(flags []*AggUseFlag) UseFlagGroups {
 				}
 				pkgKey := pkg.Category + "/" + pkg.Name
 				pkgFlagsCatMap[pkg.Category][pkg.Name] = append(pkgFlagsCatMap[pkg.Category][pkg.Name], UseFlagDisplay{
-					Name:  flag.Name,
-					Desc:  getBestDescFunc(flag, pkgKey),
+					Name: flag.Name,
+					Desc: getBestDescFunc(flag, pkgKey),
 					Count: flag.Count,
 				})
 			}
 		} else {
 			// Used in 0 packages but no global desc. Still add it to global list for visibility?
 			globalFlags = append(globalFlags, UseFlagDisplay{
-				Name:  flag.Name,
-				Desc:  getBestDescFunc(flag, ""),
+				Name: flag.Name,
+				Desc: getBestDescFunc(flag, ""),
 				Count: flag.Count,
 			})
 		}
@@ -498,7 +497,7 @@ func groupUseFlagsFunc(flags []*AggUseFlag) UseFlagGroups {
 		})
 		catGroups = append(catGroups, CategoryUseFlagGroup{
 			Category: cat,
-			Flags:    cFlags,
+			Flags: cFlags,
 		})
 	}
 	sort.Slice(catGroups, func(i, j int) bool {
@@ -514,7 +513,7 @@ func groupUseFlagsFunc(flags []*AggUseFlag) UseFlagGroups {
 			})
 			pkgList = append(pkgList, PackageUseFlagGroup{
 				Package: pkg,
-				Flags:   pFlags,
+				Flags: pFlags,
 			})
 		}
 		sort.Slice(pkgList, func(i, j int) bool {
@@ -530,8 +529,8 @@ func groupUseFlagsFunc(flags []*AggUseFlag) UseFlagGroups {
 	})
 
 	return UseFlagGroups{
-		GlobalFlags:    globalFlags,
+		GlobalFlags: globalFlags,
 		CategoryGroups: catGroups,
-		PackageGroups:  pkgGroups,
+		PackageGroups: pkgGroups,
 	}
 }

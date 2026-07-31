@@ -28,6 +28,7 @@ func ArchiveToMapFS(ar *txtar.Archive) fstest.MapFS {
 	return out
 }
 
+
 func TestCleanManifest(t *testing.T) {
 	var cases []string
 	err := fs.WalkDir(cleanManifestCases, "testdata/txtar/manifest_clean", func(p string, d fs.DirEntry, err error) error {
