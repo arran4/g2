@@ -28,7 +28,6 @@ func ArchiveToMapFS(ar *txtar.Archive) fstest.MapFS {
 	return out
 }
 
-
 func TestCleanManifest(t *testing.T) {
 	var cases []string
 	err := fs.WalkDir(cleanManifestCases, "testdata/txtar/manifest_clean", func(p string, d fs.DirEntry, err error) error {
@@ -54,7 +53,7 @@ func TestCleanManifest(t *testing.T) {
 				t.Fatalf("failed to read testcase %s: %v", tc, err)
 			}
 			ar := txtar.Parse(raw)
-			inputFS, expectedFS := SplitInputExpected(ar)
+			inputFS, expectedFS := g2.SplitInputExpected(ar)
 
 			manifestData, err := inputFS.ReadFile("Manifest")
 			if err != nil {

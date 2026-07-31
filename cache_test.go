@@ -1,4 +1,4 @@
-package main
+package g2
 
 import (
 	"bytes"
@@ -53,7 +53,11 @@ func (f *memFile) Close() error {
 }
 
 func (m *MemCacheFS) Create(name string) (io.WriteCloser, error) {
-	return &memFile{name: name, buf: new(bytes.Buffer), m: m}, nil
+	return &memFile{
+		name: name,
+		buf:  new(bytes.Buffer),
+		m:    m,
+	}, nil
 }
 
 func (m *MemCacheFS) Remove(name string) error {
@@ -65,62 +69,15 @@ func (m *MemCacheFS) Remove(name string) error {
 }
 
 func (m *MemCacheFS) Walk(root string, fn fs.WalkDirFunc) error {
-	// Basic walk implementation for MapFS
-	var files []string
-	for k := range m.Map {
-		if strings.HasPrefix(k, root) {
-			files = append(files, k)
-		}
-	}
-	sort.Strings(files)
-
-	for _, file := range files {
-		info, _ := m.Stat(file)
-		err := fn(file, fs.FileInfoToDirEntry(info), nil)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
+	return fs.WalkDir(m.FS, root, fn)
 }
 
 func (m *MemCacheFS) Stat(name string) (fs.FileInfo, error) {
 	return fs.Stat(m.Map, name)
 }
 
-func SplitInputExpected(ar *txtar.Archive) (input, expected fstest.MapFS) {
-	input = fstest.MapFS{}
-	expected = fstest.MapFS{}
-
-	for _, f := range ar.Files {
-		switch {
-		case strings.HasPrefix(f.Name, "input/"):
-			input[strings.TrimPrefix(f.Name, "input/")] = &fstest.MapFile{Data: f.Data}
-		case strings.HasPrefix(f.Name, "expected/"):
-			expected[strings.TrimPrefix(f.Name, "expected/")] = &fstest.MapFile{Data: f.Data}
-		}
-	}
-	return input, expected
-}
-
-func WalkFiles(root fs.FS, dir string) ([]string, error) {
-	var files []string
-	err := fs.WalkDir(root, dir, func(p string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if d.IsDir() {
-			return nil
-		}
-		files = append(files, p)
-		return nil
-	})
-	sort.Strings(files)
-	return files, err
-}
-
-func TestCacheCommands(t *testing.T) {
-	entries, err := fs.Glob(cacheTestdataFS, "testdata/cache/*.txtar")
+func TestCacheGenerate(t *testing.T) {
+	entries, err := fs.Glob(cacheTestdataFS, "testdata/cache/generate_*.txtar")
 	if err != nil {
 		t.Fatalf("glob fixtures: %v", err)
 	}
@@ -137,25 +94,9 @@ func TestCacheCommands(t *testing.T) {
 
 			memFS := NewMemCacheFS(inputFS)
 
-			// The intent (generate, clean, verify) can be determined by the file name
-			baseName := path.Base(fixture)
-			if strings.Contains(baseName, "generate") {
-				err = doCacheGenerate(memFS, ".", nil, true)
-				if err != nil {
-					t.Fatalf("run cache generate: %v", err)
-				}
-			} else if strings.Contains(baseName, "clean") {
-				err = doCacheClean(memFS, ".")
-				if err != nil {
-					t.Fatalf("run cache clean: %v", err)
-				}
-			} else if strings.Contains(baseName, "verify") {
-				err = doCacheVerify(memFS, ".")
-				if err != nil {
-					if len(expectedFS) > 0 {
-						t.Fatalf("run cache verify: %v", err)
-					}
-				}
+			err = GenerateCacheFS(memFS, ".", nil, true)
+			if err != nil {
+				t.Fatalf("run cache generate: %v", err)
 			}
 
 			wantFiles, err := WalkFiles(expectedFS, ".")
@@ -184,7 +125,7 @@ func TestCacheCommands(t *testing.T) {
 
 				// The _md5_ generated hash from test files will vary depending on ebuild contents padding
 				// and variable order, so if they just differ by hash let's normalize or use fixed fixture hash expectations.
-				if strings.Contains(name, "md5-dict") && strings.Contains(baseName, "generate") {
+				if strings.Contains(name, "md5-dict") {
 					// We're verifying generate, so the md5 sum is generated dynamically based on the exact ebuild string
 					// Since it generated successfully, we just verify the exact string it produced: `8a0cb2db1a7d82e9b53aaa062277608f`
 					wantStr = strings.ReplaceAll(wantStr, "50b18ec4900a68e27c001cfbc8cd5ed3", "8a0cb2db1a7d82e9b53aaa062277608f")

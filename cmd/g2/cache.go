@@ -1,10 +1,8 @@
 package main
 
 import (
-	"crypto/md5"
 	"flag"
 	"fmt"
-	"io"
 	"io/fs"
 	"log"
 	"os"
@@ -13,52 +11,6 @@ import (
 
 	"github.com/arran4/g2"
 )
-
-// CacheFS interface provides read and write abstraction for testability
-type CacheFS interface {
-	fs.FS
-	MkdirAll(path string, perm os.FileMode) error
-	Create(name string) (io.WriteCloser, error)
-	Remove(name string) error
-	Walk(root string, fn fs.WalkDirFunc) error
-	Stat(name string) (fs.FileInfo, error)
-}
-
-// OsCacheFS is a CacheFS implementation that interacts with the real OS filesystem
-type OsCacheFS struct {
-	base string
-	fs.FS
-}
-
-func NewOsCacheFS(base string) *OsCacheFS {
-	return &OsCacheFS{
-		base: base,
-		FS:   os.DirFS(base),
-	}
-}
-
-func (o *OsCacheFS) MkdirAll(path string, perm os.FileMode) error {
-	return os.MkdirAll(filepath.Join(o.base, path), perm)
-}
-
-func (o *OsCacheFS) Create(name string) (io.WriteCloser, error) {
-	return os.Create(filepath.Join(o.base, name))
-}
-
-func (o *OsCacheFS) Remove(name string) error {
-	return os.Remove(filepath.Join(o.base, name))
-}
-
-func (o *OsCacheFS) Walk(root string, fn fs.WalkDirFunc) error {
-	return filepath.WalkDir(filepath.Join(o.base, root), func(path string, d fs.DirEntry, err error) error {
-		relPath, _ := filepath.Rel(o.base, path)
-		return fn(relPath, d, err)
-	})
-}
-
-func (o *OsCacheFS) Stat(name string) (fs.FileInfo, error) {
-	return os.Stat(filepath.Join(o.base, name))
-}
 
 func (cfg *MainArgConfig) cmdCache(args []string) error {
 	fs := flag.NewFlagSet("cache", flag.ExitOnError)
@@ -112,11 +64,11 @@ func (cfg *MainArgConfig) cmdCacheVerify(args []string) error {
 		return err
 	}
 
-	cfs := NewOsCacheFS(*repoDir)
+	cfs := g2.NewOsCacheFS(*repoDir)
 	return doCacheVerify(cfs, ".")
 }
 
-func doCacheVerify(cfs CacheFS, repoDir string) error {
+func doCacheVerify(cfs g2.CacheFS, repoDir string) error {
 	layoutConfPath := filepath.ToSlash(filepath.Join(repoDir, "metadata", "layout.conf"))
 	var lc *g2.LayoutConf
 	if f, err := cfs.Open(layoutConfPath); err == nil {
@@ -181,125 +133,12 @@ func (cfg *MainArgConfig) cmdCacheGenerate(args []string) error {
 		return err
 	}
 
-	cfs := NewOsCacheFS(*repoDir)
-	return doCacheGenerate(cfs, ".", fsFlags.Args(), *eclasses)
-}
-
-func doCacheGenerate(cfs CacheFS, repoDir string, targetPkgs []string, genEclasses bool) error {
-	layoutConfPath := filepath.ToSlash(filepath.Join(repoDir, "metadata", "layout.conf"))
-	var lc *g2.LayoutConf
-	if f, err := cfs.Open(layoutConfPath); err == nil {
-		_ = f.Close()
-		lc, err = parseLayoutConfFromFS(cfs, layoutConfPath)
-		if err != nil {
-			log.Printf("Warning: failed to parse layout.conf: %v", err)
-			lc = nil
-		}
+	cfs := g2.NewOsCacheFS(*repoDir)
+	err := g2.GenerateCacheFS(cfs, ".", fsFlags.Args(), *eclasses)
+	if err == nil {
+		fmt.Println("Cache generation completed successfully.")
 	}
-
-	cacheFormats := []string{"md5-dict"} // Default if not found
-	if lc != nil {
-		if formats := lc.GetValuesAsSlice("cache-formats"); len(formats) > 0 {
-			cacheFormats = formats
-		}
-	}
-
-	siteData, err := parseRepo(cfs, repoDir, "Cache Generation", false, nil)
-	if err != nil {
-		return fmt.Errorf("parsing repo: %w", err)
-	}
-
-	var targetMap map[string]bool
-	if len(targetPkgs) > 0 {
-		targetMap = make(map[string]bool, len(targetPkgs))
-		for _, p := range targetPkgs {
-			targetMap[p] = true
-		}
-	}
-
-	for _, format := range cacheFormats {
-		if format != "md5-dict" {
-			log.Printf("Warning: Cache format '%s' is not supported. Skipping. Only md5-dict is supported.", format)
-			continue
-		}
-
-		log.Printf("Generating cache for format: %s", format)
-
-		for _, cat := range siteData.Categories {
-			for _, pkg := range cat.Packages {
-				if len(targetMap) > 0 {
-					qualified := pkg.Category + "/" + pkg.Name
-					if !targetMap[qualified] && !targetMap[pkg.Name] {
-						continue
-					}
-				}
-
-				cacheDir := filepath.ToSlash(filepath.Join(repoDir, "metadata", format, pkg.Category))
-				if err := cfs.MkdirAll(cacheDir, 0755); err != nil {
-					return fmt.Errorf("creating cache directory %s: %w", cacheDir, err)
-				}
-
-				for _, ver := range pkg.Versions {
-					if ver.Ebuild == nil || ver.Ebuild.Vars == nil {
-						continue // skip if not properly parsed
-					}
-
-					verCachePath := filepath.ToSlash(filepath.Join(cacheDir, fmt.Sprintf("%s-%s", pkg.Name, ver.Version)))
-
-					f, err := cfs.Create(verCachePath)
-					if err != nil {
-						return fmt.Errorf("creating cache file %s: %w", verCachePath, err)
-					}
-
-					// We write variables directly as K=V. Or K=V... Wait, it's just K=V according to devmanual.
-					// e.g. DESCRIPTION=...
-					for k, v := range ver.Ebuild.Vars {
-						// Don't output variables that are empty to match standard md5-dict
-						if v != "" {
-							// For multi-line or complex things, we might just write as is
-							// We can filter to known metadata keys to avoid noise, but for now we write what ParseEbuild extracted.
-							// Important ones: DEPEND, RDEPEND, SLOT, SRC_URI, DESCRIPTION, LICENSE, IUSE, KEYWORDS, EAPI
-							if isCacheVariable(k) {
-								_, _ = fmt.Fprintf(f, "%s=%s\n", k, v)
-							}
-						}
-					}
-
-					// Add an md5 entry. To calculate _md5_, we need the md5 of the ebuild file.
-					ebuildPath := filepath.ToSlash(filepath.Join(repoDir, pkg.Category, pkg.Name, fmt.Sprintf("%s-%s.ebuild", pkg.Name, ver.Version)))
-					ebuildContent, err := fs.ReadFile(cfs, ebuildPath)
-					if err == nil {
-						// eclass handling is omitted for this simple cache generation
-						md5sum := fmt.Sprintf("%x", md5.Sum(ebuildContent))
-						_, _ = fmt.Fprintf(f, "_md5_=%s\n", md5sum)
-					}
-
-					if genEclasses {
-						if inherited, ok := ver.Ebuild.Vars["INHERITED"]; ok && inherited != "" {
-							eclasses := strings.Fields(inherited)
-							var eclassParts []string
-							for _, ec := range eclasses {
-								eclassPath := filepath.ToSlash(filepath.Join("eclass", ec+".eclass"))
-								ecContent, err := fs.ReadFile(cfs, eclassPath)
-								if err == nil {
-									ecMd5 := fmt.Sprintf("%x", md5.Sum(ecContent))
-									eclassParts = append(eclassParts, ec, ecMd5)
-								}
-							}
-							if len(eclassParts) > 0 {
-								_, _ = fmt.Fprintf(f, "_eclasses_=%s\n", strings.Join(eclassParts, "\t"))
-							}
-						}
-					}
-
-					_ = f.Close()
-				}
-			}
-		}
-	}
-
-	fmt.Println("Cache generation completed successfully.")
-	return nil
+	return err
 }
 
 func (cfg *MainArgConfig) cmdCacheSetMethod(args []string) error {
@@ -361,11 +200,11 @@ func (cfg *MainArgConfig) cmdCacheClean(args []string) error {
 		return err
 	}
 
-	cfs := NewOsCacheFS(*repoDir)
+	cfs := g2.NewOsCacheFS(*repoDir)
 	return doCacheClean(cfs, ".")
 }
 
-func doCacheClean(cfs CacheFS, repoDir string) error {
+func doCacheClean(cfs g2.CacheFS, repoDir string) error {
 	layoutConfPath := filepath.ToSlash(filepath.Join(repoDir, "metadata", "layout.conf"))
 	var lc *g2.LayoutConf
 	if f, err := cfs.Open(layoutConfPath); err == nil {
@@ -442,29 +281,4 @@ func doCacheClean(cfs CacheFS, repoDir string) error {
 
 	fmt.Printf("Cleaned %d unused cache entries.\n", cleanedCount)
 	return nil
-}
-
-func isCacheVariable(key string) bool {
-	validKeys := map[string]bool{
-		"BDEPEND":        true,
-		"DEPEND":         true,
-		"DESCRIPTION":    true,
-		"EAPI":           true,
-		"HOMEPAGE":       true,
-		"INHERITED":      true,
-		"IUSE":           true,
-		"KEYWORDS":       true,
-		"LICENSE":        true,
-		"PDEPEND":        true,
-		"PROPERTIES":     true,
-		"PROVIDE":        true,
-		"RDEPEND":        true,
-		"REQUIRED_USE":   true,
-		"RESTRICT":       true,
-		"SLOT":           true,
-		"SRC_URI":        true,
-		"_eclasses_":     true,
-		"DEFINED_PHASES": true,
-	}
-	return validKeys[key]
 }
