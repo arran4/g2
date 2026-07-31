@@ -1,4 +1,4 @@
-package main
+package g2
 
 import (
 	"embed"
@@ -9,7 +9,6 @@ import (
 	"testing"
 	"testing/fstest"
 
-	"github.com/arran4/g2"
 	"golang.org/x/tools/txtar"
 )
 
@@ -53,14 +52,14 @@ func TestCleanManifest(t *testing.T) {
 				t.Fatalf("failed to read testcase %s: %v", tc, err)
 			}
 			ar := txtar.Parse(raw)
-			inputFS, expectedFS := g2.SplitInputExpected(ar)
+			inputFS, expectedFS := SplitInputExpected(ar)
 
 			manifestData, err := inputFS.ReadFile("Manifest")
 			if err != nil {
 				t.Fatalf("could not read input Manifest: %v", err)
 			}
 
-			manifest, err := g2.ParseManifestContent(string(manifestData))
+			manifest, err := ParseManifestContent(string(manifestData))
 			if err != nil {
 				t.Fatalf("could not parse input Manifest: %v", err)
 			}

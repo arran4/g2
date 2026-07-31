@@ -1,17 +1,15 @@
-package main
+package g2
 
 import (
 	"fmt"
 	"io/fs"
 	"path"
 	"strings"
-
-	"github.com/arran4/g2"
 )
 
 // CleanManifest removes unused DIST and EBUILD entries from a Manifest object
 // based on the `.ebuild` files found in the given filesystem directory.
-func CleanManifest(sysFS fs.FS, directory string, manifest *g2.Manifest) error {
+func CleanManifest(sysFS fs.FS, directory string, manifest *Manifest) error {
 	entries, err := fs.ReadDir(sysFS, directory)
 	if err != nil {
 		return fmt.Errorf("reading directory: %w", err)
@@ -27,7 +25,7 @@ func CleanManifest(sysFS fs.FS, directory string, manifest *g2.Manifest) error {
 		ebuildName := entry.Name()
 		foundFiles[ebuildName] = true
 
-		variables := g2.ParseEbuildVariables(ebuildName)
+		variables := ParseEbuildVariables(ebuildName)
 		if variables == nil {
 			continue
 		}
@@ -37,7 +35,7 @@ func CleanManifest(sysFS fs.FS, directory string, manifest *g2.Manifest) error {
 			return fmt.Errorf("reading ebuild %s: %w", ebuildName, err)
 		}
 
-		uris, err := g2.ExtractURIs(string(content), variables)
+		uris, err := ExtractURIs(string(content), variables)
 		if err != nil {
 			continue
 		}

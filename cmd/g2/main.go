@@ -548,7 +548,7 @@ func (cfg *CmdManifestArgConfig) cmdVerify(args []string, hashes []string) error
 
 	if *clean {
 		// Run clean logic
-		err = CleanManifest(os.DirFS(directory), ".", manifest)
+		err = g2.CleanManifest(os.DirFS(directory), ".", manifest)
 		if err != nil {
 			return fmt.Errorf("cleaning manifest: %w", err)
 		}
@@ -590,7 +590,7 @@ func (cfg *CmdManifestArgConfig) cmdClean(args []string) error {
 		return fmt.Errorf("reading manifest: %w", err)
 	}
 
-	err = CleanManifest(os.DirFS(directory), ".", manifest)
+	err = g2.CleanManifest(os.DirFS(directory), ".", manifest)
 	if err != nil {
 		return fmt.Errorf("cleaning manifest: %w", err)
 	}
