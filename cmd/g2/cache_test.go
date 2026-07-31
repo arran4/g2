@@ -12,6 +12,7 @@ import (
 	"testing"
 	"testing/fstest"
 
+	"github.com/arran4/g2"
 	"golang.org/x/tools/txtar"
 )
 
@@ -140,7 +141,7 @@ func TestCacheCommands(t *testing.T) {
 			// The intent (generate, clean, verify) can be determined by the file name
 			baseName := path.Base(fixture)
 			if strings.Contains(baseName, "generate") {
-				err = doCacheGenerate(memFS, ".", nil, true)
+				err = g2.GenerateCacheFS(memFS, ".", nil, true)
 				if err != nil {
 					t.Fatalf("run cache generate: %v", err)
 				}

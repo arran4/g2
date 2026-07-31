@@ -19,7 +19,6 @@ func (cfg *MainArgConfig) CmdVersions(args []string) error {
 	subcmd := args[0]
 	switch subcmd {
 
-
 	case "bump":
 		if len(args) < 3 {
 			return fmt.Errorf("usage: versions bump <ebuild filepath|version|- (stdin)|category/package directory> <major|minor|patch|revision|rev> [alpha, beta, pre, rc or p] [number]")
@@ -320,7 +319,6 @@ func parseBumpTarget(target string) string {
 
 	return target // assume it's a raw version string
 }
-
 
 func bumpVersionString(target string, bumpType string, suffix string, forceNum int) (string, error) {
 	v := g2.ParseGentooVersion(target)

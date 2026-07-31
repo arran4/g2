@@ -31,12 +31,12 @@ func TestCheckEbuildExists(t *testing.T) {
 		version  string
 		expected bool
 	}{
-		{"1.2", true},           // Exact match base version
-		{"1.3", true},           // Matches with -r1 revision
-		{"2.0.0", true},         // Matches with -r10 revision
-		{"1.4", false},          // Does not exist
-		{"2.0", false},          // Substring of 2.0.0, shouldn't match
-		{"bar-1.2", false},      // It's a package name part, not version
+		{"1.2", true},      // Exact match base version
+		{"1.3", true},      // Matches with -r1 revision
+		{"2.0.0", true},    // Matches with -r10 revision
+		{"1.4", false},     // Does not exist
+		{"2.0", false},     // Substring of 2.0.0, shouldn't match
+		{"bar-1.2", false}, // It's a package name part, not version
 	}
 
 	for _, tt := range tests {
