@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/arran4/g2"
 	"golang.org/x/tools/txtar"
 )
 
@@ -36,7 +37,7 @@ func TestEbuildDeps(t *testing.T) {
 			}
 			ar := txtar.Parse(raw)
 
-			inputFS, expectedFS := SplitInputExpected(ar)
+			inputFS, expectedFS := g2.SplitInputExpected(ar)
 
 			// read options if any
 			var opts depsTestOptions
@@ -51,7 +52,7 @@ func TestEbuildDeps(t *testing.T) {
 
 			// write inputFS to a temp directory because our command logic relies on real files via flag.Args()
 			tmpDir := t.TempDir()
-			inputFiles, _ := WalkFiles(inputFS, ".")
+			inputFiles, _ := g2.WalkFiles(inputFS, ".")
 			var ebuildFiles []string
 			for _, name := range inputFiles {
 				data, _ := fs.ReadFile(inputFS, name)
@@ -83,7 +84,7 @@ func TestEbuildDeps(t *testing.T) {
 			}
 
 			// Compare against expected
-			wantFiles, _ := WalkFiles(expectedFS, ".")
+			wantFiles, _ := g2.WalkFiles(expectedFS, ".")
 			if len(wantFiles) == 0 {
 				t.Fatalf("no expected files found in fixture")
 			}
