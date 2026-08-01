@@ -199,11 +199,9 @@ func GentooToSemantic(v string) string {
 	if gv.Letter != "" {
 		res += gv.Letter
 	}
-	if gv.Suffix != "" {
-		res += "-" + gv.Suffix
-		if gv.SuffixNoStr != "" {
-			res += gv.SuffixNoStr
-		}
+	for _, s := range gv.Suffixes {
+		res += "-" + s.Name
+		res += s.ValueStr
 	}
 	if gv.Revision > 0 {
 		res += fmt.Sprintf("-r%d", gv.Revision)
@@ -338,8 +336,7 @@ func bumpVersionString(target string, bumpType string, suffix string, forceNum i
 		}
 		v.Revision = 0
 		v.Letter = ""
-		v.Suffix = ""
-		v.SuffixNoStr = ""
+		v.Suffixes = nil
 	case "minor":
 		if len(v.Nums) > 1 {
 			v.Nums[1]++
@@ -351,8 +348,7 @@ func bumpVersionString(target string, bumpType string, suffix string, forceNum i
 		}
 		v.Revision = 0
 		v.Letter = ""
-		v.Suffix = ""
-		v.SuffixNoStr = ""
+		v.Suffixes = nil
 	case "patch":
 		if len(v.Nums) > 2 {
 			v.Nums[2]++
@@ -364,20 +360,21 @@ func bumpVersionString(target string, bumpType string, suffix string, forceNum i
 		}
 		v.Revision = 0
 		v.Letter = ""
-		v.Suffix = ""
-		v.SuffixNoStr = ""
+		v.Suffixes = nil
 	case "revision", "rev":
 		v.Revision++
 	}
 
 	if suffix != "" {
-		v.Suffix = suffix
+		v.Suffixes = []g2.GentooSuffix{
+			{Name: suffix},
+		}
 		if forceNum != -1 {
-			v.SuffixNo = forceNum
-			v.SuffixNoStr = strconv.Itoa(forceNum)
+			v.Suffixes[0].Value = forceNum
+			v.Suffixes[0].ValueStr = strconv.Itoa(forceNum)
 		} else {
-			v.SuffixNo = 1 // default
-			v.SuffixNoStr = "1"
+			v.Suffixes[0].Value = 1 // default
+			v.Suffixes[0].ValueStr = "1"
 		}
 	}
 

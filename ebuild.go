@@ -580,16 +580,19 @@ func ExtractURIs(content string, variables map[string]string) ([]URIEntry, error
 	return uris, nil
 }
 
-var versionRegex = regexp.MustCompile(`^(\d+(?:\.\d+)*)(?:([a-z]))?(?:_(alpha|beta|pre|rc|p)(\d*))?(?:-r(\d+))?$`)
 
 // GentooVersion represents a parsed Gentoo package version strictly adhering to PMS rules.
+type GentooSuffix struct {
+	Name     string
+	Value    int
+	ValueStr string
+}
+
 type GentooVersion struct {
 	Nums        []int
 	NumStrs     []string
 	Letter      string
-	Suffix      string
-	SuffixNoStr string
-	SuffixNo    int
+	Suffixes    []GentooSuffix
 	Revision    int
 	IsValid     bool
 }
@@ -608,12 +611,10 @@ func (gv *GentooVersion) String() string {
 		sb.WriteString(gv.Letter)
 	}
 
-	if gv.Suffix != "" {
+	for _, s := range gv.Suffixes {
 		sb.WriteString("_")
-		sb.WriteString(gv.Suffix)
-		if gv.SuffixNoStr != "" {
-			sb.WriteString(gv.SuffixNoStr)
-		}
+		sb.WriteString(s.Name)
+		sb.WriteString(s.ValueStr)
 	}
 
 	if gv.Revision > 0 {
@@ -666,9 +667,7 @@ func (gv *GentooVersion) IncrementPart(parts ...any) {
 			}
 			gv.Revision = 0
 			gv.Letter = ""
-			gv.Suffix = ""
-			gv.SuffixNoStr = ""
-			gv.SuffixNo = 0
+			gv.Suffixes = nil
 		case "minor":
 			if len(gv.Nums) > 1 {
 				gv.Nums[1]++
@@ -684,9 +683,7 @@ func (gv *GentooVersion) IncrementPart(parts ...any) {
 			}
 			gv.Revision = 0
 			gv.Letter = ""
-			gv.Suffix = ""
-			gv.SuffixNoStr = ""
-			gv.SuffixNo = 0
+			gv.Suffixes = nil
 		case "patch":
 			if len(gv.Nums) > 2 {
 				gv.Nums[2]++
@@ -705,13 +702,12 @@ func (gv *GentooVersion) IncrementPart(parts ...any) {
 			}
 			gv.Revision = 0
 			gv.Letter = ""
-			gv.Suffix = ""
-			gv.SuffixNoStr = ""
-			gv.SuffixNo = 0
+			gv.Suffixes = nil
 		case "suffix":
-			if gv.Suffix != "" {
-				gv.SuffixNo++
-				gv.SuffixNoStr = strconv.Itoa(gv.SuffixNo)
+			if len(gv.Suffixes) > 0 {
+				lastIdx := len(gv.Suffixes) - 1
+				gv.Suffixes[lastIdx].Value++
+				gv.Suffixes[lastIdx].ValueStr = strconv.Itoa(gv.Suffixes[lastIdx].Value)
 			}
 			gv.Revision = 0
 		case "revision":
@@ -727,8 +723,7 @@ func (gv *GentooVersion) IncrementRevision() {
 
 // ParseGentooVersion parses a gentoo version into parts
 func ParseGentooVersion(v string) GentooVersion {
-	m := versionRegex.FindStringSubmatch(v)
-	if m == nil {
+	if v == "" {
 		return GentooVersion{IsValid: false}
 	}
 
@@ -740,20 +735,92 @@ func ParseGentooVersion(v string) GentooVersion {
 		return i
 	}
 
-	numStrs := strings.Split(m[1], ".")
 	var nums []int
-	for _, n := range numStrs {
-		nums = append(nums, toInt(n))
+	var numStrs []string
+
+	// Start parsing Nums
+	i := 0
+	for ; i < len(v); i++ {
+		start := i
+		for i < len(v) && v[i] >= '0' && v[i] <= '9' {
+			i++
+		}
+		if i == start {
+			return GentooVersion{IsValid: false}
+		}
+		numStrs = append(numStrs, v[start:i])
+		nums = append(nums, toInt(v[start:i]))
+
+		if i < len(v) && v[i] == '.' {
+			// Expect another number part
+            // But if it's the last character, it's invalid
+            if i + 1 == len(v) {
+                return GentooVersion{IsValid: false}
+            }
+			continue
+		} else {
+			break
+		}
+	}
+
+	var letter string
+	if i < len(v) && v[i] >= 'a' && v[i] <= 'z' {
+		letter = string(v[i])
+		i++
+	}
+
+	var suffixes []GentooSuffix
+	for i < len(v) && v[i] == '_' {
+		i++
+		start := i
+		var suffixName string
+		// valid suffixes: alpha, beta, pre, rc, p
+		validSuffixes := []string{"alpha", "beta", "pre", "rc", "p"}
+		for _, s := range validSuffixes {
+			if strings.HasPrefix(v[start:], s) {
+				suffixName = s
+				i += len(s)
+				break
+			}
+		}
+		if suffixName == "" {
+			return GentooVersion{IsValid: false}
+		}
+		startNum := i
+		for i < len(v) && v[i] >= '0' && v[i] <= '9' {
+			i++
+		}
+		valStr := v[startNum:i]
+		suffixes = append(suffixes, GentooSuffix{
+			Name:     suffixName,
+			Value:    toInt(valStr),
+			ValueStr: valStr,
+		})
+	}
+
+	var revision int
+	if i < len(v) && strings.HasPrefix(v[i:], "-r") {
+		i += 2
+		start := i
+		for i < len(v) && v[i] >= '0' && v[i] <= '9' {
+			i++
+		}
+		if i == start {
+			return GentooVersion{IsValid: false}
+		}
+		revision = toInt(v[start:i])
+	}
+
+	if i < len(v) {
+		return GentooVersion{IsValid: false} // Trailing characters
 	}
 
 	return GentooVersion{
 		Nums:        nums,
 		NumStrs:     numStrs,
-		Letter:      m[2],
-		Suffix:      m[3],
-		SuffixNoStr: m[4],
-		SuffixNo:    toInt(m[4]),
-		Revision:    toInt(m[5]),
+		Letter:      letter,
+		Suffixes:    suffixes,
+		Revision:    revision,
 		IsValid:     true,
 	}
 }
@@ -848,16 +915,40 @@ func compareGentooVersionParts(v1, v2 GentooVersion) int {
 		"beta":  2,
 		"pre":   3,
 		"rc":    4,
-		"":      5, // no suffix
 		"p":     6,
 	}
 
-	if c := cmpInt(suffixOrder[v1.Suffix], suffixOrder[v2.Suffix]); c != 0 {
-		return c
+	maxSuffixLen := len(v1.Suffixes)
+	if len(v2.Suffixes) > maxSuffixLen {
+		maxSuffixLen = len(v2.Suffixes)
 	}
 
-	if c := cmpInt(v1.SuffixNo, v2.SuffixNo); c != 0 {
-		return c
+	for i := 0; i < maxSuffixLen; i++ {
+		var s1, s2 GentooSuffix
+
+		if i >= len(v1.Suffixes) {
+			s2 = v2.Suffixes[i]
+			if s2.Name == "p" {
+				return -1
+			}
+			return 1
+		} else if i >= len(v2.Suffixes) {
+			s1 = v1.Suffixes[i]
+			if s1.Name == "p" {
+				return 1
+			}
+			return -1
+		}
+
+		s1 = v1.Suffixes[i]
+		s2 = v2.Suffixes[i]
+
+		if c := cmpInt(suffixOrder[s1.Name], suffixOrder[s2.Name]); c != 0 {
+			return c
+		}
+		if c := cmpInt(s1.Value, s2.Value); c != 0 {
+			return c
+		}
 	}
 
 	if c := cmpInt(v1.Revision, v2.Revision); c != 0 {
