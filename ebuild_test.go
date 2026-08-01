@@ -634,6 +634,25 @@ func TestCompareVersions(t *testing.T) {
 		// Unparseable versions fallback to string compare
 		{"invalid1", "invalid2", -1},
 		{"invalid2", "invalid1", 1},
+		{"1.0_alpha1_beta2_p3-r1", "1.0_alpha1_beta2_p3-r1", 0},
+		{"1.0_alpha1_beta2_p3-r1", "1.0_alpha1_beta2_p4-r1", -1},
+		{"1.0_alpha1_beta2_p3-r1", "1.0_alpha1_beta2_p3-r2", -1},
+		{"1.0_alpha", "1.0_alpha_beta", 1},
+		{"1.0_alpha_beta", "1.0_alpha", -1},
+		{"1.0_alpha_p1", "1.0_alpha", 1},
+		{"1.0_alpha", "1.0_alpha_p1", -1},
+		{"1.0_alpha1_beta2", "1.0_alpha1_beta3", -1},
+		{"1.2.3_alpha1", "1.2.3_alpha1", 0},
+		{"1.2.3_alpha1", "1.2.3_alpha2", -1},
+		{"1.2.3_beta1", "1.2.3_alpha2", 1},
+		{"1.2.3_pre1", "1.2.3_beta2", 1},
+		{"1.2.3_rc1", "1.2.3_pre2", 1},
+		{"1.2.3_p1", "1.2.3", 1},
+		{"1.2.3", "1.2.3_p1", -1},
+		{"1.2.3-r1", "1.2.3", 1},
+		{"1.2.3", "1.2.3-r1", -1},
+		{"1.000.2", "1.0.2", 0},
+		{"1.000.2-r1", "1.0.2-r1", 0},
 	}
 
 	for _, tt := range tests {
@@ -998,5 +1017,29 @@ func TestGetLatestMatchingPackageRevision(t *testing.T) {
 				t.Errorf("GetLatestMatchingPackageRevision() = %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestGentooVersion_Roundtrip(t *testing.T) {
+	versions := []string{
+		"1.2.3",
+		"1.2.3-r1",
+		"1.2.3_alpha1",
+		"1.2.3_beta2-r1",
+		"1.2.3-alpha1",
+		"1.2.3_alpha1_beta2_p3-r4",
+	}
+
+	for _, v := range versions {
+		parsed := ParseGentooVersion(v)
+		if !parsed.IsValid {
+			// Some of these might be invalid Gentoo versions but valid semver,
+			// like 1.2.3-alpha1. Let's just test if String() matches original for valid ones.
+			continue
+		}
+		str := parsed.String()
+		if str != v {
+			t.Errorf("Roundtrip failed for %s: got %s", v, str)
+		}
 	}
 }
