@@ -11,7 +11,7 @@ func TestCmdEbuildDeduplicate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	pkgDir := filepath.Join(tmpDir, "app-test", "dummy")
 	if err := os.MkdirAll(pkgDir, 0755); err != nil {
