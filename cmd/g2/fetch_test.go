@@ -157,3 +157,46 @@ malicious
 		t.Errorf("expected zip slip error message, got: %v", err)
 	}
 }
+
+func TestGitUrlValidation(t *testing.T) {
+	ctx := context.Background()
+	destDir := "/tmp/test-dest"
+
+	tests := []struct {
+		url      string
+		wantErr  bool
+		errMatch string
+	}{
+		{"--upload-pack=sleep 10", true, "invalid git url: cannot start with '-'"},
+		{"-foo", true, "invalid git url: cannot start with '-'"},
+		{"invalid://foo", true, "invalid git url protocol: invalid://foo"},
+		{"http://github.com/foo/bar", false, ""},
+		{"https://github.com/foo/bar", false, ""},
+		{"git://github.com/foo/bar", false, ""},
+		{"ssh://git@github.com/foo/bar", false, ""},
+		{"git@github.com:foo/bar", false, ""},
+		{"file:///path/to/repo", false, ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.url, func(t *testing.T) {
+			// We only want to test validation, not actual cloning
+			// fetchRepoAttempt with valid url will try to run 'git clone' and fail since the url is fake/unreachable
+			err := fetchRepoAttempt(ctx, tt.url, destDir, false, "")
+			if tt.wantErr {
+				if err == nil {
+					t.Errorf("expected error, got nil")
+				} else if !strings.Contains(err.Error(), tt.errMatch) {
+					t.Errorf("expected error containing %q, got: %v", tt.errMatch, err)
+				}
+			} else {
+				if err != nil {
+					// Since it's a dummy valid URL, git clone will likely fail, but it shouldn't fail due to our validation
+					if strings.Contains(err.Error(), "invalid git url") {
+						t.Errorf("did not expect validation error, got: %v", err)
+					}
+				}
+			}
+		})
+	}
+}

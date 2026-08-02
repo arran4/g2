@@ -171,6 +171,13 @@ func fetchRepoAttempt(ctx context.Context, gitUrl string, destDir string, useZip
 		}
 	}
 
+	if strings.HasPrefix(gitUrl, "-") {
+		return fmt.Errorf("invalid git url: cannot start with '-'")
+	}
+	if !strings.HasPrefix(gitUrl, "http://") && !strings.HasPrefix(gitUrl, "https://") && !strings.HasPrefix(gitUrl, "git://") && !strings.HasPrefix(gitUrl, "ssh://") && !strings.HasPrefix(gitUrl, "git@") && !strings.HasPrefix(gitUrl, "file://") {
+		return fmt.Errorf("invalid git url protocol: %s", gitUrl)
+	}
+
 	cmd := exec.CommandContext(ctx, "git", "clone", "--depth", "1", gitUrl, destDir)
 	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
 	cmd.Stdout = os.Stdout
