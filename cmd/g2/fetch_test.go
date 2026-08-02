@@ -157,3 +157,39 @@ malicious
 		t.Errorf("expected zip slip error message, got: %v", err)
 	}
 }
+
+func TestFetchRepoAttemptValidation(t *testing.T) {
+	ctx := context.Background()
+	destDir := "/tmp/mock-dest"
+
+	invalidUrls := []string{
+		"--upload-pack=malicious",
+		"-ext::malicious",
+		"ftp://malicious.com",
+		"smb://network/share",
+	}
+
+	for _, u := range invalidUrls {
+		err := fetchRepoAttempt(ctx, u, destDir, false, "")
+		if err == nil {
+			t.Errorf("Expected error for URL: %s, got nil", u)
+		} else if !strings.Contains(err.Error(), "invalid git URL scheme") && !strings.Contains(err.Error(), "invalid git URL: cannot start with '-'") {
+			t.Errorf("Unexpected error for URL: %s, got %v", u, err)
+		}
+	}
+
+	// Just for test, check a valid-looking but unresolvable one doesn't fail early with our custom error
+	validUrls := []string{
+		"http://github.com/a/b",
+		"git://github.com/a/b",
+		"ssh://github.com/a/b",
+	}
+
+	for _, u := range validUrls {
+		err := fetchRepoAttempt(ctx, u, destDir, false, "")
+		// We expect an error from the actual git clone failing, but NOT our custom validation error
+		if err != nil && (strings.Contains(err.Error(), "invalid git URL scheme") || strings.Contains(err.Error(), "invalid git URL: cannot start with '-'")) {
+			t.Errorf("Unexpected validation error for valid URL: %s, got %v", u, err)
+		}
+	}
+}

@@ -580,7 +580,6 @@ func ExtractURIs(content string, variables map[string]string) ([]URIEntry, error
 	return uris, nil
 }
 
-
 // GentooVersion represents a parsed Gentoo package version strictly adhering to PMS rules.
 type GentooSuffix struct {
 	Name     string
@@ -589,12 +588,12 @@ type GentooSuffix struct {
 }
 
 type GentooVersion struct {
-	Nums        []int
-	NumStrs     []string
-	Letter      string
-	Suffixes    []GentooSuffix
-	Revision    int
-	IsValid     bool
+	Nums     []int
+	NumStrs  []string
+	Letter   string
+	Suffixes []GentooSuffix
+	Revision int
+	IsValid  bool
 }
 
 // String reassembles and serializes the parsed GentooVersion back into a string.
@@ -753,10 +752,10 @@ func ParseGentooVersion(v string) GentooVersion {
 
 		if i < len(v) && v[i] == '.' {
 			// Expect another number part
-            // But if it's the last character, it's invalid
-            if i + 1 == len(v) {
-                return GentooVersion{IsValid: false}
-            }
+			// But if it's the last character, it's invalid
+			if i+1 == len(v) {
+				return GentooVersion{IsValid: false}
+			}
 			continue
 		} else {
 			break
@@ -816,12 +815,12 @@ func ParseGentooVersion(v string) GentooVersion {
 	}
 
 	return GentooVersion{
-		Nums:        nums,
-		NumStrs:     numStrs,
-		Letter:      letter,
-		Suffixes:    suffixes,
-		Revision:    revision,
-		IsValid:     true,
+		Nums:     nums,
+		NumStrs:  numStrs,
+		Letter:   letter,
+		Suffixes: suffixes,
+		Revision: revision,
+		IsValid:  true,
 	}
 }
 

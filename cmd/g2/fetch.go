@@ -132,6 +132,34 @@ func (osWriteFS) MkdirAll(path string, perm os.FileMode) error { return os.Mkdir
 func (osWriteFS) Create(name string) (io.WriteCloser, error)   { return os.Create(name) }
 
 func fetchRepoAttempt(ctx context.Context, gitUrl string, destDir string, useZip bool, workMode string) error {
+	if strings.HasPrefix(gitUrl, "-") {
+		return fmt.Errorf("invalid git URL: cannot start with '-'")
+	}
+
+	isValidScheme := false
+	validPrefixes := []string{"http://", "https://", "git://", "ssh://", "git@", "file://"}
+	for _, p := range validPrefixes {
+		if strings.HasPrefix(gitUrl, p) {
+			isValidScheme = true
+			break
+		}
+	}
+
+	// For local paths, we must be careful not to allow ext:: or similar schemes.
+	// We allow absolute paths (/) or explicit relative paths (./ or ../).
+	if !isValidScheme {
+		if strings.HasPrefix(gitUrl, "/") || strings.HasPrefix(gitUrl, "./") || strings.HasPrefix(gitUrl, "../") {
+			isValidScheme = true
+		} else if !strings.Contains(gitUrl, "::") && !strings.Contains(gitUrl, "://") {
+			// If there are no scheme markers, we can assume it might be a valid local path or simple ssh like host:path
+			isValidScheme = true
+		}
+	}
+
+	if !isValidScheme {
+		return fmt.Errorf("invalid git URL scheme")
+	}
+
 	if workMode == "persistent" {
 		gitDir := filepath.Join(destDir, ".git")
 		if info, err := os.Stat(gitDir); err == nil && info.IsDir() {
@@ -171,7 +199,7 @@ func fetchRepoAttempt(ctx context.Context, gitUrl string, destDir string, useZip
 		}
 	}
 
-	cmd := exec.CommandContext(ctx, "git", "clone", "--depth", "1", gitUrl, destDir)
+	cmd := exec.CommandContext(ctx, "git", "clone", "--depth", "1", "--", gitUrl, destDir)
 	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
