@@ -932,7 +932,8 @@ func TestParsePackageAtom(t *testing.T) {
 			dep:  ">=python-3.10",
 			want: PackageAtom{
 				Operator: ">=",
-				Name:     "python-3.10", // Fallback logic leaves version inside name
+				Name:     "python",
+				Version:  "3.10",
 			},
 		},
 		{
@@ -1041,5 +1042,88 @@ func TestGentooVersion_Roundtrip(t *testing.T) {
 		if str != v {
 			t.Errorf("Roundtrip failed for %s: got %s", v, str)
 		}
+	}
+}
+
+func TestExtractPackageNameFromDep(t *testing.T) {
+	tests := []struct {
+		name string
+		dep  string
+		want string
+	}{
+		{
+			name: "basic category and name",
+			dep:  "dev-lang/python",
+			want: "dev-lang/python",
+		},
+		{
+			name: "with version",
+			dep:  "dev-lang/python-3.10.4",
+			want: "dev-lang/python",
+		},
+		{
+			name: "with revision",
+			dep:  "dev-lang/python-3.10.4-r1",
+			want: "dev-lang/python",
+		},
+		{
+			name: "with operator >=",
+			dep:  ">=dev-lang/python-3.10.4",
+			want: "dev-lang/python",
+		},
+		{
+			name: "with operator ~",
+			dep:  "~dev-lang/python-3.10.4",
+			want: "dev-lang/python",
+		},
+		{
+			name: "with slot",
+			dep:  "dev-lang/python-3.10.4:3.10",
+			want: "dev-lang/python",
+		},
+		{
+			name: "with use flags",
+			dep:  "dev-lang/python-3.10.4[sqlite,-bluetooth]",
+			want: "dev-lang/python",
+		},
+		{
+			name: "with slot and use flags",
+			dep:  "dev-lang/python-3.10.4:3.10[sqlite]",
+			want: "dev-lang/python",
+		},
+		{
+			name: "without category",
+			dep:  "python-3.10.4",
+			want: "python",
+		},
+		{
+			name: "with wildcard",
+			dep:  "dev-lang/*",
+			want: "dev-lang/*",
+		},
+		{
+			name: "simple without version or category",
+			dep:  "python",
+			want: "python",
+		},
+		{
+			name: "with repo suffix",
+			dep:  "dev-lang/python::gentoo",
+			want: "dev-lang/python",
+		},
+		{
+			name: "malformed without category but with version and slot",
+			dep:  "python-3.10:3.10",
+			want: "python",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := ExtractPackageNameFromDep(tt.dep)
+			if got != tt.want {
+				t.Errorf("ExtractPackageNameFromDep(%q) = %q, want %q", tt.dep, got, tt.want)
+			}
+		})
 	}
 }
