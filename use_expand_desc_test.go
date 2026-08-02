@@ -170,13 +170,13 @@ func TestParseUseExpandDescFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp file: %v", err)
 	}
-	defer os.Remove(tmpFile.Name())
+	defer func() { _ = os.Remove(tmpFile.Name()) }()
 
 	content := "foo - desc foo\n"
 	if _, err := tmpFile.Write([]byte(content)); err != nil {
 		t.Fatalf("Failed to write to temp file: %v", err)
 	}
-	tmpFile.Close()
+	_ = tmpFile.Close()
 
 	ud, err := ParseUseExpandDescFile(tmpFile.Name(), "test")
 	if err != nil {
@@ -216,8 +216,8 @@ func TestWriteUseExpandDescFile(t *testing.T) {
 		t.Fatalf("Failed to create temp file: %v", err)
 	}
 	tmpFileName := tmpFile.Name()
-	tmpFile.Close()
-	defer os.Remove(tmpFileName)
+	_ = tmpFile.Close()
+	defer func() { _ = os.Remove(tmpFileName) }()
 
 	ud := &UseExpandDesc{
 		Name: "test_write",
@@ -251,7 +251,7 @@ func TestParseUseExpandDescDir(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	// Create desc files
 	err = os.WriteFile(tmpDir+"/foo.desc", []byte("foo1 - desc1\n"), 0644)
@@ -367,9 +367,9 @@ func TestParseUseExpandDescFS_Error(t *testing.T) {
 	_, err := ParseUseExpandDescFS(mockFS, ".")
 	// fstest MapFS actually doesn't enforce permissions strictly on Open, but let's test a non-existent dir
 	// for error coverage.
-	if err == nil {
-		// Just a fallback check, MapFS doesn't simulate permission errors.
-	}
+    _ = err
+
+
 }
 
 func TestParseUseExpandDescFS_NonExistentDir(t *testing.T) {
@@ -389,7 +389,7 @@ func TestParseUseExpandDescFile_ReadError(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	// Create a directory with a .desc extension
 	err = os.Mkdir(tmpDir+"/bad.desc", 0755)
@@ -488,7 +488,7 @@ func TestParseUseExpandDescFile_OpenError(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	// Create a file without read permissions
 	filePath := tmpDir + "/no_read.desc"
