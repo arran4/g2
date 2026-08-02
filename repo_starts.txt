@@ -1,5 +1,0 @@
-8:    <repo quality="experimental" status="unofficial">
-20:    <repo quality="experimental" status="unofficial">
-33:    <repo quality="experimental" status="unofficial">
-46:    <repo quality="experimental" status="unofficial">
-61:  <repo quality="experimental" status="unofficial">
