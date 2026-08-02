@@ -580,7 +580,6 @@ func ExtractURIs(content string, variables map[string]string) ([]URIEntry, error
 	return uris, nil
 }
 
-
 // GentooVersion represents a parsed Gentoo package version strictly adhering to PMS rules.
 type GentooSuffix struct {
 	Name     string
@@ -589,12 +588,12 @@ type GentooSuffix struct {
 }
 
 type GentooVersion struct {
-	Nums        []int
-	NumStrs     []string
-	Letter      string
-	Suffixes    []GentooSuffix
-	Revision    int
-	IsValid     bool
+	Nums     []int
+	NumStrs  []string
+	Letter   string
+	Suffixes []GentooSuffix
+	Revision int
+	IsValid  bool
 }
 
 // String reassembles and serializes the parsed GentooVersion back into a string.
@@ -753,10 +752,10 @@ func ParseGentooVersion(v string) GentooVersion {
 
 		if i < len(v) && v[i] == '.' {
 			// Expect another number part
-            // But if it's the last character, it's invalid
-            if i + 1 == len(v) {
-                return GentooVersion{IsValid: false}
-            }
+			// But if it's the last character, it's invalid
+			if i+1 == len(v) {
+				return GentooVersion{IsValid: false}
+			}
 			continue
 		} else {
 			break
@@ -816,12 +815,12 @@ func ParseGentooVersion(v string) GentooVersion {
 	}
 
 	return GentooVersion{
-		Nums:        nums,
-		NumStrs:     numStrs,
-		Letter:      letter,
-		Suffixes:    suffixes,
-		Revision:    revision,
-		IsValid:     true,
+		Nums:     nums,
+		NumStrs:  numStrs,
+		Letter:   letter,
+		Suffixes: suffixes,
+		Revision: revision,
+		IsValid:  true,
 	}
 }
 
@@ -1021,28 +1020,29 @@ func ParsePackageAtom(dep string) PackageAtom {
 	// 4. Extract Category, Name, and Version
 	// dep is now something like "dev-lang/python-3.10.0-r1" or "virtual/pkgconfig"
 	parts := strings.Split(dep, "/")
+	var nameAndVer string
 	if len(parts) == 2 {
 		atom.Category = parts[0]
-		nameAndVer := parts[1]
-
-		// Find where the version starts. A version usually starts after a hyphen followed by a digit.
-		verStartIdx := -1
-		for i := 0; i < len(nameAndVer)-1; i++ {
-			if nameAndVer[i] == '-' && nameAndVer[i+1] >= '0' && nameAndVer[i+1] <= '9' {
-				verStartIdx = i
-				break
-			}
-		}
-
-		if verStartIdx != -1 {
-			atom.Name = nameAndVer[:verStartIdx]
-			atom.Version = nameAndVer[verStartIdx+1:]
-		} else {
-			atom.Name = nameAndVer
-		}
+		nameAndVer = parts[1]
 	} else {
 		// Fallback for malformed strings missing category
-		atom.Name = dep
+		nameAndVer = dep
+	}
+
+	// Find where the version starts. A version usually starts after a hyphen followed by a digit.
+	verStartIdx := -1
+	for i := 0; i < len(nameAndVer)-1; i++ {
+		if nameAndVer[i] == '-' && nameAndVer[i+1] >= '0' && nameAndVer[i+1] <= '9' {
+			verStartIdx = i
+			break
+		}
+	}
+
+	if verStartIdx != -1 {
+		atom.Name = nameAndVer[:verStartIdx]
+		atom.Version = nameAndVer[verStartIdx+1:]
+	} else {
+		atom.Name = nameAndVer
 	}
 
 	return atom
