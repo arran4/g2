@@ -1,0 +1,18 @@
+test: PkgMetadata with Comments serialization
+-- input.xml --
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE pkgmetadata SYSTEM "http://www.gentoo.org/dtd/metadata.dtd">
+<pkgmetadata>
+	<!-- maintainer-needed -->
+	<maintainer type="person">
+		<email>exampledev@gentoo.org</email>
+		<description>Primary maintainer</description>
+	</maintainer>
+</pkgmetadata>
+-- expected.xml --
+<pkgmetadata>
+	<maintainer type="person">
+		<email>exampledev@gentoo.org</email>
+		<description>Primary maintainer</description>
+	</maintainer>
+</pkgmetadata>

@@ -12,6 +12,7 @@ import (
 // Source: https://github.com/gentoo-mirror/gentoo/blob/stable/metadata/dtd/metadata.dtd
 type CatMetadata struct {
 	XMLName         xml.Name          `xml:"catmetadata"`
+	Comments        MetadataComments  `xml:"comment,omitempty" json:"-"`
 	LongDescription []LongDescription `xml:"longdescription"`
 }
 
@@ -33,8 +34,27 @@ func (s *StabilizeAllArches) MarshalXML(e *xml.Encoder, start xml.StartElement) 
 	return e.EncodeElement("", start)
 }
 
+// MetadataComments represents a list of XML comments.
+type MetadataComments []string
+
+// MarshalXML implements the xml.Marshaler interface to emit XML comments.
+func (c MetadataComments) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
+	for i, comment := range c {
+		if i > 0 {
+			if err := e.EncodeToken(xml.CharData([]byte("\n\t"))); err != nil {
+				return err
+			}
+		}
+		if err := e.EncodeToken(xml.Comment([]byte(" " + comment + " "))); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 type PkgMetadata struct {
 	XMLName            xml.Name            `xml:"pkgmetadata"`
+	Comments           MetadataComments    `xml:"comment,omitempty" json:"-"`
 	Maintainers        []Maintainer        `xml:"maintainer"`
 	LongDescription    []LongDescription   `xml:"longdescription"`
 	Slots              *Slots              `xml:"slots"`
