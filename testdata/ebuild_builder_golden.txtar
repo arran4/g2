@@ -1,0 +1,30 @@
+-- expected.ebuild --
+# Copyright 1999-2023 Gentoo Authors
+# Distributed under the terms of the GNU General Public License v2
+
+EAPI="8"
+DESCRIPTION="My awesome package"
+HOMEPAGE="https://example.com"
+LICENSE="GPL-2"
+SLOT="0/1"
+KEYWORDS="~amd64 ~x86"
+IUSE="doc test"
+RESTRICT="fetch test"
+REQUIRED_USE="foo? ( || ( bar baz quux ) )"
+DEPEND="|| ( dev-libs/foo dev-libs/foo-alt )
+	doc? ( dev-util/doc-generator )"
+RDEPEND="dev-libs/bar"
+INHERIT="eutils user"
+src_prepare() {
+	default
+	ewarn "This is a warning"
+}
+pkg_setup() {
+	enewgroup mygroup
+	enewuser myuser -1 -1 -1 mygroup
+}
+SRC_URI="https://example.com/files/${P}-core.tar.bz2
+	x86?   ( https://example.com/files/${P}/${P}-sse-asm.tar.bz2 )
+	ppc?   ( https://example.com/files/${P}/${P}-vmx-asm.tar.bz2 )
+	sparc? ( https://example.com/files/${P}/${P}-vis-asm.tar.bz2 )
+	doc?   ( https://example.com/files/${P}/${P}-docs.tar.bz2 )"

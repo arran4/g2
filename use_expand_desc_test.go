@@ -367,8 +367,7 @@ func TestParseUseExpandDescFS_Error(t *testing.T) {
 	_, err := ParseUseExpandDescFS(mockFS, ".")
 	// fstest MapFS actually doesn't enforce permissions strictly on Open, but let's test a non-existent dir
 	// for error coverage.
-    _ = err
-
+	_ = err
 
 }
 
