@@ -1,6 +1,8 @@
 test: PkgMetadata serialization
 -- input.xml --
 <pkgmetadata>
+	<!-- maintainer-needed -->
+	<!-- another comment -->
 	<maintainer type="person" proxied="no" restrict="test">
 		<email>foo@gentoo.org</email>
 		<name>Foo</name>
