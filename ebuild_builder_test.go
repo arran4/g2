@@ -32,7 +32,7 @@ func TestEbuildBuilderIdiomatic(t *testing.T) {
 		EbuildIUse{"doc", "test"},
 		EbuildRestrict{"fetch", "test"},
 		EbuildRequiredUse("foo? ( || ( bar baz quux ) )"),
-		EbuildDepend("dev-libs/foo"),
+		EbuildDepend("|| ( dev-libs/foo dev-libs/foo-alt )\n\tdoc? ( dev-util/doc-generator )"),
 		EbuildRDepend("dev-libs/bar"),
 		EbuildInherit{"eutils", "user"},
 		EbuildFunc{Name: "src_prepare", Body: "{\n\tdefault\n\tewarn \"This is a warning\"\n}"},
