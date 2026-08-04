@@ -1,0 +1,51 @@
+test: basic deduplication
+Ensures that we remove duplicates
+
+-- input/app-test/dummy/dummy-1.0.ebuild --
+EAPI=8
+SLOT="0"
+# Generated via: some-tool
+DESCRIPTION="Test"
+-- input/app-test/dummy/dummy-1.1.ebuild --
+EAPI=8
+SLOT="0"
+# Generated via: some-tool
+DESCRIPTION="Test"
+-- input/app-test/dummy/dummy-1.2.ebuild --
+EAPI=8
+SLOT="0"
+# Generated via: some-tool
+DESCRIPTION="Test"
+-- input/app-test/dummy/dummy-2.0.ebuild --
+EAPI=8
+SLOT="1"
+# Generated via: some-tool
+DESCRIPTION="Test 2"
+-- input/app-test/dummy/dummy-9999.ebuild --
+EAPI=8
+SLOT="0"
+# Generated via: some-tool
+DESCRIPTION="Live"
+-- input/app-test/dummy/dummy-1.2-r1.ebuild --
+EAPI=8
+SLOT="0"
+# Generated via: some-tool
+DESCRIPTION="Test diff"
+-- input/app-test/dummy/Manifest --
+DIST dummy-1.0.tar.gz 123 BLAKE2B xyz
+-- expected/app-test/dummy/dummy-1.2-r1.ebuild --
+EAPI=8
+SLOT="0"
+# Generated via: some-tool
+DESCRIPTION="Test diff"
+-- expected/app-test/dummy/dummy-2.0.ebuild --
+EAPI=8
+SLOT="1"
+# Generated via: some-tool
+DESCRIPTION="Test 2"
+-- expected/app-test/dummy/dummy-9999.ebuild --
+EAPI=8
+SLOT="0"
+# Generated via: some-tool
+DESCRIPTION="Live"
+-- expected/app-test/dummy/Manifest --
