@@ -17,7 +17,7 @@ var ruleIUSEDocumented = lints.RuleMetadata{
 	URL:         "https://devmanual.gentoo.org/general-concepts/use-flags/",
 	Severity:    lints.SeverityWarning,
 	Source:      lints.SourceG2,
-	Tags:        []string{"metadata.xml", "ebuild", "site-quality"},
+	Tags:        []string{"metadata.xml", "ebuild", "site-quality", "PG0701"},
 }
 
 func init() {
@@ -37,6 +37,9 @@ func (r *IUSELintRule) LintWithQA(repoDir string, pkg *g2.PackageData, qa *g2.QA
 
 	if qa != nil && qa.Policies != nil {
 		if val, ok := qa.Policies["PG0701"]; ok {
+			if val == "ignore" {
+				return nil
+			}
 			if val == "notice" || val == "error" || val == "warning" {
 				switch val {
 				case "notice":

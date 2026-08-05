@@ -76,6 +76,8 @@ func (cfg *MainArgConfig) runOldLint(args []string) error {
 	severityFilter := fs.String("severity", "", "Only show warnings of this severity (error, warning, notice, info)")
 	sourceFilter := fs.String("only-source", "", "Only show warnings from this source (g2, pkgcheck)")
 	tagFilter := fs.String("only-tag", "", "Only show warnings with this tag")
+	disableRule := fs.String("disable-rule", "", "Comma-separated list of rule IDs to ignore (case-insensitive)")
+	ignoreTag := fs.String("ignore-tag", "", "Comma-separated list of tags to ignore")
 
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -167,6 +169,35 @@ func (cfg *MainArgConfig) runOldLint(args []string) error {
 						continue
 					}
 				}
+				isIgnored := false
+				if *disableRule != "" {
+					disabled := strings.Split(*disableRule, ",")
+					for _, dr := range disabled {
+						if strings.EqualFold(string(w.RuleMetadata.ID), strings.TrimSpace(dr)) {
+							isIgnored = true
+							break
+						}
+					}
+				}
+				if !isIgnored && *ignoreTag != "" {
+					ignoredTags := strings.Split(*ignoreTag, ",")
+					for _, it := range ignoredTags {
+						it = strings.TrimSpace(it)
+						for _, t := range w.RuleMetadata.Tags {
+							if strings.EqualFold(t, it) {
+								isIgnored = true
+								break
+							}
+						}
+						if isIgnored {
+							break
+						}
+					}
+				}
+				if isIgnored {
+					continue
+				}
+
 				filteredWarnings = append(filteredWarnings, w)
 			}
 
@@ -286,7 +317,7 @@ type LintQuery struct {
 	VWildcard string // e.g. "3." for "v3"
 }
 
-func (cfg *MainArgConfig) runLintCore(location string, targetMap map[string]bool, query *LintQuery, format, severityFilter, sourceFilter, tagFilter string) error {
+func (cfg *MainArgConfig) runLintCore(location string, targetMap map[string]bool, query *LintQuery, format, severityFilter, sourceFilter, tagFilter, disableRule, ignoreTag string) error {
 	siteData, err := parseRepo(os.DirFS(location), ".", "Linting", true, nil)
 	if err != nil {
 		return fmt.Errorf("parsing repo: %w", err)
@@ -391,6 +422,35 @@ func (cfg *MainArgConfig) runLintCore(location string, targetMap map[string]bool
 						continue
 					}
 				}
+				isIgnored := false
+				if disableRule != "" {
+					disabled := strings.Split(disableRule, ",")
+					for _, dr := range disabled {
+						if strings.EqualFold(string(w.RuleMetadata.ID), strings.TrimSpace(dr)) {
+							isIgnored = true
+							break
+						}
+					}
+				}
+				if !isIgnored && ignoreTag != "" {
+					ignoredTags := strings.Split(ignoreTag, ",")
+					for _, it := range ignoredTags {
+						it = strings.TrimSpace(it)
+						for _, t := range w.RuleMetadata.Tags {
+							if strings.EqualFold(t, it) {
+								isIgnored = true
+								break
+							}
+						}
+						if isIgnored {
+							break
+						}
+					}
+				}
+				if isIgnored {
+					continue
+				}
+
 				filteredWarnings = append(filteredWarnings, w)
 			}
 
@@ -452,6 +512,8 @@ func (cfg *MainArgConfig) cmdLintRepo(args []string) error {
 	severityFilter := fs.String("severity", "", "Only show warnings of this severity (error, warning, notice, info)")
 	sourceFilter := fs.String("only-source", "", "Only show warnings from this source (g2, pkgcheck)")
 	tagFilter := fs.String("only-tag", "", "Only show warnings with this tag")
+	disableRule := fs.String("disable-rule", "", "Comma-separated list of rule IDs to ignore (case-insensitive)")
+	ignoreTag := fs.String("ignore-tag", "", "Comma-separated list of tags to ignore")
 
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -462,7 +524,7 @@ func (cfg *MainArgConfig) cmdLintRepo(args []string) error {
 		location = fs.Arg(0)
 	}
 
-	return cfg.runLintCore(location, nil, nil, *format, *severityFilter, *sourceFilter, *tagFilter)
+	return cfg.runLintCore(location, nil, nil, *format, *severityFilter, *sourceFilter, *tagFilter, *disableRule, *ignoreTag)
 }
 
 func (cfg *MainArgConfig) cmdLintPackage(args []string) error {
@@ -478,6 +540,8 @@ func (cfg *MainArgConfig) cmdLintPackage(args []string) error {
 	severityFilter := fs.String("severity", "", "Only show warnings of this severity (error, warning, notice, info)")
 	sourceFilter := fs.String("only-source", "", "Only show warnings from this source (g2, pkgcheck)")
 	tagFilter := fs.String("only-tag", "", "Only show warnings with this tag")
+	disableRule := fs.String("disable-rule", "", "Comma-separated list of rule IDs to ignore (case-insensitive)")
+	ignoreTag := fs.String("ignore-tag", "", "Comma-separated list of tags to ignore")
 
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -515,7 +579,7 @@ func (cfg *MainArgConfig) cmdLintPackage(args []string) error {
 		targetMap[cleanP] = true
 	}
 
-	return cfg.runLintCore(location, targetMap, nil, *format, *severityFilter, *sourceFilter, *tagFilter)
+	return cfg.runLintCore(location, targetMap, nil, *format, *severityFilter, *sourceFilter, *tagFilter, *disableRule, *ignoreTag)
 }
 
 func parseLintQuery(queryStr string, defaultLocation string) (*LintQuery, error) {
@@ -633,6 +697,8 @@ func (cfg *MainArgConfig) cmdLintQuery(args []string) error {
 	severityFilter := fs.String("severity", "", "Only show warnings of this severity (error, warning, notice, info)")
 	sourceFilter := fs.String("only-source", "", "Only show warnings from this source (g2, pkgcheck)")
 	tagFilter := fs.String("only-tag", "", "Only show warnings with this tag")
+	disableRule := fs.String("disable-rule", "", "Comma-separated list of rule IDs to ignore (case-insensitive)")
+	ignoreTag := fs.String("ignore-tag", "", "Comma-separated list of tags to ignore")
 
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -655,5 +721,5 @@ func (cfg *MainArgConfig) cmdLintQuery(args []string) error {
 		return fmt.Errorf("parsing query: %w", err)
 	}
 
-	return cfg.runLintCore(query.RepoPath, nil, query, *format, *severityFilter, *sourceFilter, *tagFilter)
+	return cfg.runLintCore(query.RepoPath, nil, query, *format, *severityFilter, *sourceFilter, *tagFilter, *disableRule, *ignoreTag)
 }
