@@ -20,8 +20,8 @@
                 </div>
                 {{if not (.Eclass.IsDefinedLocally $.Repo.RepoName)}}
                 <div class="alert alert-info mt-3 mb-0" role="alert">
-                    <i class="fas fa-info-circle me-2"></i> This eclass is not defined in this overlay. It is inherited from other overlays.
-                    View the <a href="{{$.BaseURL}}eclasses/{{.Eclass.Name}}/" class="alert-link">global eclass page</a> to see where it is defined.
+                    <i class="fas fa-info-circle me-2"></i> This eclass is not provided by this overlay. It is inherited / used from other overlays.
+                    View the <a href="{{$.BaseURL}}eclasses/{{.Eclass.Name}}/" class="alert-link">global eclass page</a> to see where it is provided.
                 </div>
                 {{end}}
             </div>
