@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 
-	"encoding/xml"
 	"flag"
 	"fmt"
 	"html/template"
@@ -2040,8 +2039,8 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, 
 			}
 		}
 
-		var fileRepos g2.Repositories
-		if err := xml.Unmarshal(data, &fileRepos); err != nil {
+		fileRepos, err := g2.ParseRepositoriesBytes(data)
+		if err != nil {
 			return fmt.Errorf("parsing repositories.xml: %w", err)
 		}
 		repos.Repositories = append(repos.Repositories, fileRepos.Repositories...)
