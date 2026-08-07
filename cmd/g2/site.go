@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 
-	"encoding/xml"
 	"flag"
 	"fmt"
 	"html/template"
@@ -573,7 +572,13 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool, r
 		title = strings.TrimSpace(string(repoNameBytes))
 		repoName = title
 	} else {
-		repoName = filepath.Base(repoDir)
+		if repoInfo != nil && repoInfo.Name != "" {
+			repoName = repoInfo.Name
+		} else if base := filepath.Base(repoDir); base != "." && base != "" {
+			repoName = base
+		} else {
+			repoName = defaultTitle
+		}
 	}
 
 	var eapi string
@@ -2034,8 +2039,8 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, 
 			}
 		}
 
-		var fileRepos g2.Repositories
-		if err := xml.Unmarshal(data, &fileRepos); err != nil {
+		fileRepos, err := g2.ParseRepositoriesBytes(data)
+		if err != nil {
 			return fmt.Errorf("parsing repositories.xml: %w", err)
 		}
 		repos.Repositories = append(repos.Repositories, fileRepos.Repositories...)
