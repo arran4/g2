@@ -1058,7 +1058,6 @@ func getRepoEclasses(site *g2.SiteData, aggPackages map[string]*AggPackage) []*A
 									Name:  ec,
 									Repos: make(map[string]*g2.SiteData),
 								}
-								eclassMap[ec].Repos[site.RepoName] = site
 								seenPackages[ec] = make(map[string]bool)
 							}
 
