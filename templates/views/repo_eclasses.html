@@ -20,8 +20,10 @@
                     </tr>
                 </thead>
                 <tbody>
+                {{$hasDefined := false}}
                 {{range .Eclasses}}
                     {{if .IsDefinedLocally $.Repo.RepoName}}
+                    {{$hasDefined = true}}
                     <tr>
                         <td>
                             <a href="{{$.BaseURL}}repos/{{$.Repo.RepoName}}/eclasses/{{.Name}}/" class="fw-bold">{{.Name}}</a>
@@ -31,6 +33,11 @@
                         </td>
                     </tr>
                     {{end}}
+                {{end}}
+                {{if not $hasDefined}}
+                    <tr>
+                        <td colspan="2" class="text-center text-muted fst-italic">No eclasses provided by this overlay.</td>
+                    </tr>
                 {{end}}
                 </tbody>
             </table>
