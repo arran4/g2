@@ -50,7 +50,7 @@
 <h2>Recent News</h2>
 <ul>
     {{range .RecentGlobalNews}}
-    <li><a href="news/archive/{{.DirName}}/">{{.Title}}</a> - {{.Posted.Format "Jan 02, 2006"}} {{if .RepoName}}({{.RepoName}}){{end}}</li>
+    <li><a href="news/archive/{{.ArchivePath}}/">{{.Title}}</a> - {{.Posted.Format "Jan 02, 2006"}} {{if .RepoName}}({{.RepoName}}){{end}}</li>
     {{end}}
 </ul>
 <p><a href="news/archive/">More... (Archive)</a></p>
