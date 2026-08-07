@@ -573,7 +573,13 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool, r
 		title = strings.TrimSpace(string(repoNameBytes))
 		repoName = title
 	} else {
-		repoName = filepath.Base(repoDir)
+		if repoInfo != nil && repoInfo.Name != "" {
+			repoName = repoInfo.Name
+		} else if base := filepath.Base(repoDir); base != "." && base != "" {
+			repoName = base
+		} else {
+			repoName = defaultTitle
+		}
 	}
 
 	var eapi string
