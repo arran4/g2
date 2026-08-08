@@ -78,3 +78,25 @@ update-changelog = false`
 		}
 	}
 }
+
+func TestHasKey(t *testing.T) {
+	content := `masters = gentoo
+cache-formats =
+`
+	lc, err := ParseLayoutConfFromReader(strings.NewReader(content))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !lc.HasKey("masters") {
+		t.Errorf("expected true for masters")
+	}
+
+	if !lc.HasKey("cache-formats") {
+		t.Errorf("expected true for cache-formats")
+	}
+
+	if lc.HasKey("non-existent") {
+		t.Errorf("expected false for non-existent")
+	}
+}

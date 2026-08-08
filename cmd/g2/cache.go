@@ -82,8 +82,8 @@ func doCacheVerify(cfs g2.CacheFS, repoDir string) error {
 
 	cacheFormats := []string{"md5-dict"} // Default if not found
 	if lc != nil {
-		if formats := lc.GetValuesAsSlice("cache-formats"); len(formats) > 0 {
-			cacheFormats = formats
+		if lc.HasKey("cache-formats") {
+			cacheFormats = lc.GetValuesAsSlice("cache-formats")
 		}
 	}
 
@@ -218,8 +218,8 @@ func doCacheClean(cfs g2.CacheFS, repoDir string) error {
 
 	cacheFormats := []string{"md5-dict", "pms"} // check common ones during clean
 	if lc != nil {
-		if formats := lc.GetValuesAsSlice("cache-formats"); len(formats) > 0 {
-			cacheFormats = formats
+		if lc.HasKey("cache-formats") {
+			cacheFormats = lc.GetValuesAsSlice("cache-formats")
 		}
 	}
 
