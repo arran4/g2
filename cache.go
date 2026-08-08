@@ -78,8 +78,8 @@ func GenerateCacheFS(cfs CacheFS, repoDir string, targetPkgs []string, genEclass
 
 	cacheFormats := []string{"md5-dict"} // Default if not found
 	if lc != nil {
-		if formats := lc.GetValuesAsSlice("cache-formats"); len(formats) > 0 {
-			cacheFormats = formats
+		if lc.HasKey("cache-formats") {
+			cacheFormats = lc.GetValuesAsSlice("cache-formats")
 		}
 	}
 
