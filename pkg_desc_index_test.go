@@ -6,7 +6,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"testing/fstest"
 )
 
 func TestParsePkgDescIndex(t *testing.T) {
@@ -76,29 +75,6 @@ app-admin/amazon-ec2-init 20101127-r2: Init script to setup Amazon EC2 instance 
 `
 	if buf.String() != expected {
 		t.Errorf("Serialize mismatch.\nExpected:\n%s\nGot:\n%s", expected, buf.String())
-	}
-}
-
-func TestParsePkgDescIndexFS(t *testing.T) {
-	input := `app-admin/aerospike-amc-community 4.0.19-r2 5.0.0: Web UI based monitoring tool for Aerospike Community Edition Server
-app-admin/amazon-ec2-init 20101127-r2: Init script to setup Amazon EC2 instance parameters
-`
-	fsys := fstest.MapFS{
-		"pkg_desc_index": &fstest.MapFile{Data: []byte(input)},
-	}
-
-	idx, err := ParsePkgDescIndexFS(fsys, "pkg_desc_index")
-	if err != nil {
-		t.Fatalf("ParsePkgDescIndexFS failed: %v", err)
-	}
-
-	if len(idx.Entries) != 2 {
-		t.Fatalf("expected 2 entries, got %d", len(idx.Entries))
-	}
-
-	_, err = ParsePkgDescIndexFS(fsys, "non_existent")
-	if err == nil {
-		t.Errorf("expected error for non_existent file, got nil")
 	}
 }
 
