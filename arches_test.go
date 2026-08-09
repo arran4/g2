@@ -2,6 +2,8 @@ package g2
 
 import (
 	"errors"
+	"os"
+	"path/filepath"
 	"io"
 	"reflect"
 	"strings"
@@ -139,5 +141,62 @@ x86 stable
 				t.Errorf("Arches = %v, want %v", ad.Arches, tt.wantArches)
 			}
 		})
+	}
+}
+
+func TestParseArchesDescFile(t *testing.T) {
+	tempDir := t.TempDir()
+
+	// Test Case 1: File exists
+	validContent := `# Header
+amd64 stable
+x86 testing
+`
+	validFile := filepath.Join(tempDir, "arches.desc")
+	err := os.WriteFile(validFile, []byte(validContent), 0644)
+	if err != nil {
+		t.Fatalf("failed to write valid file: %v", err)
+	}
+
+	ad, err := ParseArchesDescFile(validFile)
+	if err != nil {
+		t.Fatalf("unexpected error for valid file: %v", err)
+	}
+	expectedHeaders := []string{"# Header"}
+	expectedArches := map[string]string{
+		"amd64": "stable",
+		"x86":   "testing",
+	}
+	if !reflect.DeepEqual(ad.HeaderLines, expectedHeaders) {
+		t.Errorf("expected headers %v, got %v", expectedHeaders, ad.HeaderLines)
+	}
+	if !reflect.DeepEqual(ad.Arches, expectedArches) {
+		t.Errorf("expected arches %v, got %v", expectedArches, ad.Arches)
+	}
+
+	// Test Case 2: File does not exist
+	missingFile := filepath.Join(tempDir, "missing.desc")
+	adMissing, err := ParseArchesDescFile(missingFile)
+	if err != nil {
+		t.Fatalf("unexpected error for missing file: %v", err)
+	}
+	expectedMissingHeaders := []string{
+		"# Copyright 1999-2024 Gentoo Authors",
+		"# Distributed under the terms of the GNU General Public License v2",
+	}
+	if !reflect.DeepEqual(adMissing.HeaderLines, expectedMissingHeaders) {
+		t.Errorf("expected missing headers %v, got %v", expectedMissingHeaders, adMissing.HeaderLines)
+	}
+	if len(adMissing.Arches) != 0 {
+		t.Errorf("expected empty arches, got %v", adMissing.Arches)
+	}
+
+	// Test Case 3: Error opening file (e.g., passing a directory instead of a file or unreadable file)
+	// Passing a directory to Open might succeed, but reading from it will fail or Open will fail depending on OS.
+	// Since ParseArchesDescFile calls ParseArchesDesc which reads from the file, it will eventually return an error.
+	dirAsFile := tempDir
+	_, err = ParseArchesDescFile(dirAsFile)
+	if err == nil {
+		t.Fatalf("expected error when passing directory as file")
 	}
 }
