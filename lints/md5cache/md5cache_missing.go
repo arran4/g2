@@ -21,10 +21,22 @@ var ruleMD5CacheMissing = lints.RuleMetadata{
 
 func init() {
 	lints.RegisterRuleMetadata(ruleMD5CacheMissing)
-	lints.RegisterLintRule(&MD5CacheLintRule{})
+	lints.RegisterLintRule(&MD5CacheLintRule{fs: osFileStat{}})
 }
 
-type MD5CacheLintRule struct{}
+type FileStat interface {
+	Stat(name string) (os.FileInfo, error)
+}
+
+type osFileStat struct{}
+
+func (osFileStat) Stat(name string) (os.FileInfo, error) {
+	return os.Stat(name)
+}
+
+type MD5CacheLintRule struct {
+	fs FileStat
+}
 
 func (r *MD5CacheLintRule) Lint(repoDir string, pkg *g2.PackageData) []lints.LintResult {
 	return r.LintWithQA(repoDir, pkg, nil)
@@ -55,7 +67,7 @@ func (r *MD5CacheLintRule) LintWithQA(repoDir string, pkg *g2.PackageData, qa *g
 	}
 
 	if !policySet {
-		if _, err := os.Stat(filepath.Join(repoDir, "metadata", "md5-cache")); os.IsNotExist(err) {
+		if _, err := r.fs.Stat(filepath.Join(repoDir, "metadata", "md5-cache")); os.IsNotExist(err) {
 			return nil
 		}
 	}
@@ -63,7 +75,7 @@ func (r *MD5CacheLintRule) LintWithQA(repoDir string, pkg *g2.PackageData, qa *g
 	for _, ver := range pkg.Versions {
 		if ver.Ebuild != nil {
 			cachePath := filepath.Join(repoDir, "metadata", "md5-cache", pkg.Category, pkg.Name+"-"+ver.Version)
-			if _, err := os.Stat(cachePath); os.IsNotExist(err) {
+			if _, err := r.fs.Stat(cachePath); os.IsNotExist(err) {
 				sevStr := string(severity)
 				sevTitle := strings.ToUpper(sevStr[:1]) + sevStr[1:]
 				res := lints.LintResult{
