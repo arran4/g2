@@ -2,8 +2,11 @@ package g2
 
 import (
 	"bytes"
+	"os"
+	"reflect"
 	"strings"
 	"testing"
+	"testing/fstest"
 )
 
 func TestParseInfoPkgsReader(t *testing.T) {
@@ -58,4 +61,94 @@ func TestSerializeInfoPkgs(t *testing.T) {
 	if buf.String() != expected {
 		t.Errorf("expected %q, got %q", expected, buf.String())
 	}
+}
+
+func TestParseInfoPkgsFS(t *testing.T) {
+	fsys := fstest.MapFS{
+		"info_pkgs": &fstest.MapFile{
+			Data: []byte("app-shells/bash:0\ndev-build/autoconf\n"),
+		},
+	}
+
+	tests := []struct {
+		name     string
+		path     string
+		expected []InfoPkg
+		wantErr  bool
+	}{
+		{
+			name: "existing file",
+			path: "info_pkgs",
+			expected: []InfoPkg{
+				{PackageAtom: "app-shells/bash:0"},
+				{PackageAtom: "dev-build/autoconf"},
+			},
+			wantErr: false,
+		},
+		{
+			name:     "missing file",
+			path:     "non_existent",
+			expected: nil,
+			wantErr:  false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			results, err := ParseInfoPkgsFS(fsys, tt.path)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("ParseInfoPkgsFS() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !reflect.DeepEqual(results, tt.expected) {
+				t.Errorf("ParseInfoPkgsFS() = %v, want %v", results, tt.expected)
+			}
+		})
+	}
+}
+
+func TestParseInfoPkgs(t *testing.T) {
+	t.Run("existing file", func(t *testing.T) {
+		tempDir := t.TempDir()
+		path := tempDir + "/info_pkgs"
+		err := os.WriteFile(path, []byte("app-shells/bash:0\ndev-build/autoconf\n"), 0644)
+		if err != nil {
+			t.Fatalf("failed to create temp file: %v", err)
+		}
+
+		expected := []InfoPkg{
+			{PackageAtom: "app-shells/bash:0"},
+			{PackageAtom: "dev-build/autoconf"},
+		}
+
+		results, err := ParseInfoPkgs(path)
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+		if !reflect.DeepEqual(results, expected) {
+			t.Errorf("ParseInfoPkgs() = %v, want %v", results, expected)
+		}
+	})
+
+	t.Run("missing file", func(t *testing.T) {
+		tempDir := t.TempDir()
+		path := tempDir + "/non_existent"
+
+		results, err := ParseInfoPkgs(path)
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+		if results != nil {
+			t.Errorf("ParseInfoPkgs() = %v, want nil", results)
+		}
+	})
+
+	t.Run("error reading directory as file", func(t *testing.T) {
+		tempDir := t.TempDir()
+
+		_, err := ParseInfoPkgs(tempDir)
+		if err == nil {
+			t.Errorf("expected error when attempting to read directory as file, got nil")
+		}
+	})
 }
