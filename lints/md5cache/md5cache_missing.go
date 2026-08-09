@@ -33,8 +33,11 @@ func (r *MD5CacheLintRule) Lint(repoDir string, pkg *g2.PackageData) []lints.Lin
 func (r *MD5CacheLintRule) LintWithQA(repoDir string, pkg *g2.PackageData, qa *g2.QAPolicy) []lints.LintResult {
 	var results []lints.LintResult
 	severity := lints.SeverityWarning
+
+	policySet := false
 	if qa != nil && qa.Policies != nil {
 		if val, ok := qa.Policies["PG0802"]; ok {
+			policySet = true
 			if val == "ignore" {
 				return nil
 			}
@@ -48,6 +51,12 @@ func (r *MD5CacheLintRule) LintWithQA(repoDir string, pkg *g2.PackageData, qa *g
 					severity = lints.SeverityWarning
 				}
 			}
+		}
+	}
+
+	if !policySet {
+		if _, err := os.Stat(filepath.Join(repoDir, "metadata", "md5-cache")); os.IsNotExist(err) {
+			return nil
 		}
 	}
 
