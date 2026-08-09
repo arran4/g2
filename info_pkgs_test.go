@@ -2,7 +2,6 @@ package g2
 
 import (
 	"bytes"
-	"os"
 	"reflect"
 	"strings"
 	"testing"
@@ -109,11 +108,10 @@ func TestParseInfoPkgsFS(t *testing.T) {
 
 func TestParseInfoPkgs(t *testing.T) {
 	t.Run("existing file", func(t *testing.T) {
-		tempDir := t.TempDir()
-		path := tempDir + "/info_pkgs"
-		err := os.WriteFile(path, []byte("app-shells/bash:0\ndev-build/autoconf\n"), 0644)
-		if err != nil {
-			t.Fatalf("failed to create temp file: %v", err)
+		fsys := fstest.MapFS{
+			"info_pkgs": &fstest.MapFile{
+				Data: []byte("app-shells/bash:0\ndev-build/autoconf\n"),
+			},
 		}
 
 		expected := []InfoPkg{
@@ -121,7 +119,7 @@ func TestParseInfoPkgs(t *testing.T) {
 			{PackageAtom: "dev-build/autoconf"},
 		}
 
-		results, err := ParseInfoPkgs(path)
+		results, err := ParseInfoPkgsFS(fsys, "info_pkgs")
 		if err != nil {
 			t.Errorf("unexpected error: %v", err)
 		}
@@ -131,24 +129,14 @@ func TestParseInfoPkgs(t *testing.T) {
 	})
 
 	t.Run("missing file", func(t *testing.T) {
-		tempDir := t.TempDir()
-		path := tempDir + "/non_existent"
+		fsys := fstest.MapFS{}
 
-		results, err := ParseInfoPkgs(path)
+		results, err := ParseInfoPkgsFS(fsys, "non_existent")
 		if err != nil {
 			t.Errorf("unexpected error: %v", err)
 		}
 		if results != nil {
 			t.Errorf("ParseInfoPkgs() = %v, want nil", results)
-		}
-	})
-
-	t.Run("error reading directory as file", func(t *testing.T) {
-		tempDir := t.TempDir()
-
-		_, err := ParseInfoPkgs(tempDir)
-		if err == nil {
-			t.Errorf("expected error when attempting to read directory as file, got nil")
 		}
 	})
 }
