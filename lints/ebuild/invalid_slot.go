@@ -43,7 +43,6 @@ func (r *InvalidSlotLintRule) LintWithQA(repoDir string, pkg *g2.PackageData, qa
 		if ver.Ebuild != nil && ver.Ebuild.Vars != nil {
 			slot, ok := ver.Ebuild.Vars["SLOT"]
 			if !ok {
-				// if SLOT isn't defined, parser puts empty string, or we skip
 				continue
 			}
 
