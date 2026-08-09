@@ -2,8 +2,10 @@ package g2
 
 import (
 	"encoding/xml"
+	"errors"
 	"os"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -114,5 +116,69 @@ func TestCircularity(t *testing.T) {
 	// reflect.DeepEqual might fail if field ordering or unexported fields differ (none here).
 	if !reflect.DeepEqual(got, got2) {
 		t.Errorf("Structs changed after round trip.\nGot: %+v\nWant: %+v", got2, got)
+	}
+}
+
+func TestParseMetadataFromReader(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		wantType interface{}
+		wantErr  bool
+	}{
+		{
+			name:     "PkgMetadata",
+			input:    `<pkgmetadata></pkgmetadata>`,
+			wantType: &PkgMetadata{},
+		},
+		{
+			name:     "CatMetadata",
+			input:    `<catmetadata></catmetadata>`,
+			wantType: &CatMetadata{},
+		},
+		{
+			name:    "Invalid XML",
+			input:   `<pkgmetadata><invalid></pkgmetadata>`,
+			wantErr: true,
+		},
+		{
+			name:    "Unknown Metadata",
+			input:   `<unknownmetadata></unknownmetadata>`,
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := ParseMetadataFromReader(strings.NewReader(tt.input))
+
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("ParseMetadataFromReader() error = nil, wantErr %v", tt.wantErr)
+				}
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("ParseMetadataFromReader() error = %v, wantErr %v", err, tt.wantErr)
+			}
+
+			if reflect.TypeOf(got) != reflect.TypeOf(tt.wantType) {
+				t.Errorf("ParseMetadataFromReader() type = %T, want %T", got, tt.wantType)
+			}
+		})
+	}
+}
+
+type mdErrorReader struct{}
+
+func (e *mdErrorReader) Read(p []byte) (n int, err error) {
+	return 0, errors.New("read error")
+}
+
+func TestParseMetadataFromReader_ReadError(t *testing.T) {
+	_, err := ParseMetadataFromReader(&mdErrorReader{})
+	if err == nil || err.Error() != "read error" {
+		t.Errorf("Expected 'read error', got %v", err)
 	}
 }

@@ -4,7 +4,52 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"testing/fstest"
 )
+
+
+func TestParseUpdatesDirFS(t *testing.T) {
+	mockFS := fstest.MapFS{
+		"updates/1Q-2021": &fstest.MapFile{
+			Data: []byte("move dev-python/PyICU dev-python/pyicu\nmove dev-python/python-fastimport dev-python/fastimport\nslotmove dev-build/autoconf-dickey 2.52_p20210509 2.52\n"),
+		},
+		"updates/.hidden": &fstest.MapFile{
+			Data: []byte("move hidden/pkg hidden/newpkg\n"),
+		},
+		"updates/subdir": &fstest.MapFile{
+			Mode: os.ModeDir,
+		},
+	}
+
+	update, err := ParseUpdatesDirFS(mockFS, "updates")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(update.Moves) != 2 {
+		t.Fatalf("expected 2 moves, got %d", len(update.Moves))
+	}
+	if update.Moves[0].Old != "dev-python/PyICU" || update.Moves[0].New != "dev-python/pyicu" {
+		t.Fatalf("unexpected move 0: %+v", update.Moves[0])
+	}
+	if update.Moves[1].Old != "dev-python/python-fastimport" || update.Moves[1].New != "dev-python/fastimport" {
+		t.Fatalf("unexpected move 1: %+v", update.Moves[1])
+	}
+	if len(update.SlotMoves) != 1 {
+		t.Fatalf("expected 1 slotmove, got %d", len(update.SlotMoves))
+	}
+	if update.SlotMoves[0].Package != "dev-build/autoconf-dickey" || update.SlotMoves[0].Old != "2.52_p20210509" || update.SlotMoves[0].New != "2.52" {
+		t.Fatalf("unexpected slotmove 0: %+v", update.SlotMoves[0])
+	}
+
+	emptyUpdate, err := ParseUpdatesDirFS(mockFS, "nonexistent")
+	if err != nil {
+		t.Fatalf("expected no error for non-existent dir, got: %v", err)
+	}
+	if len(emptyUpdate.Moves) != 0 || len(emptyUpdate.SlotMoves) != 0 {
+		t.Fatalf("expected empty update for non-existent dir")
+	}
+}
 
 func TestParseUpdatesDir(t *testing.T) {
 	tmpDir := t.TempDir()

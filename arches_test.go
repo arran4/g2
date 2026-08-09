@@ -7,6 +7,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"testing/fstest"
+	"io/fs"
 )
 
 func TestParseArchList(t *testing.T) {
@@ -158,5 +160,62 @@ func TestParseArchListFile(t *testing.T) {
 	_, err = ParseArchListFile("nonexistent.list")
 	if err == nil {
 		t.Error("expected error for non-existent file, got nil")
+  }
+}
+
+type errorFS struct{}
+
+func (e errorFS) Open(name string) (fs.File, error) {
+	return nil, errors.New("mock read error")
+}
+
+func TestParseArchesDescFile(t *testing.T) {
+	// Test Case 1: File exists
+	validContent := `# Header
+amd64 stable
+x86 testing
+`
+	fsys := fstest.MapFS{
+		"arches.desc": &fstest.MapFile{
+			Data: []byte(validContent),
+		},
+	}
+
+	ad, err := ParseArchesDescFS(fsys, "arches.desc")
+	if err != nil {
+		t.Fatalf("unexpected error for valid file: %v", err)
+	}
+	expectedHeaders := []string{"# Header"}
+	expectedArches := map[string]string{
+		"amd64": "stable",
+		"x86":   "testing",
+	}
+	if !reflect.DeepEqual(ad.HeaderLines, expectedHeaders) {
+		t.Errorf("expected headers %v, got %v", expectedHeaders, ad.HeaderLines)
+	}
+	if !reflect.DeepEqual(ad.Arches, expectedArches) {
+		t.Errorf("expected arches %v, got %v", expectedArches, ad.Arches)
+	}
+
+	// Test Case 2: File does not exist
+	adMissing, err := ParseArchesDescFS(fsys, "missing.desc")
+	if err != nil {
+		t.Fatalf("unexpected error for missing file: %v", err)
+	}
+	expectedMissingHeaders := []string{
+		"# Copyright 1999-2024 Gentoo Authors",
+		"# Distributed under the terms of the GNU General Public License v2",
+	}
+	if !reflect.DeepEqual(adMissing.HeaderLines, expectedMissingHeaders) {
+		t.Errorf("expected missing headers %v, got %v", expectedMissingHeaders, adMissing.HeaderLines)
+	}
+	if len(adMissing.Arches) != 0 {
+		t.Errorf("expected empty arches, got %v", adMissing.Arches)
+	}
+
+	// Test Case 3: Error case
+	_, err = ParseArchesDescFS(errorFS{}, "error.desc")
+	if err == nil {
+		t.Fatalf("expected error when passing invalid file path")
 	}
 }

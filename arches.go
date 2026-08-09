@@ -2,8 +2,10 @@ package g2
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"sort"
 	"strings"
@@ -94,10 +96,10 @@ func ParseArchesDesc(r io.Reader) (*ArchesDesc, error) {
 	return ad, nil
 }
 
-func ParseArchesDescFile(filename string) (*ArchesDesc, error) {
-	file, err := os.Open(filename)
+func ParseArchesDescFS(fsys fs.FS, filename string) (*ArchesDesc, error) {
+	file, err := fsys.Open(filename)
 	if err != nil {
-		if os.IsNotExist(err) {
+		if errors.Is(err, fs.ErrNotExist) || os.IsNotExist(err) {
 			return &ArchesDesc{
 				Arches: make(map[string]string),
 				HeaderLines: []string{
@@ -111,6 +113,10 @@ func ParseArchesDescFile(filename string) (*ArchesDesc, error) {
 	defer func() { _ = file.Close() }()
 
 	return ParseArchesDesc(file)
+}
+
+func ParseArchesDescFile(filename string) (*ArchesDesc, error) {
+	return ParseArchesDescFS(os.DirFS("/"), strings.TrimPrefix(filename, "/"))
 }
 
 func (ad *ArchesDesc) Write(w io.Writer) error {
