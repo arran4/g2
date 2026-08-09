@@ -65,17 +65,37 @@ func padVersionTokensBuilder(v string) string {
 }
 
 func BenchmarkPadVersionTokensRegex(b *testing.B) {
-	for i := 0; i < b.N; i++ {
-		padVersionTokensRegex("1.2.3-r4")
-		padVersionTokensRegex("2.0_alpha1")
-		padVersionTokensRegex("3.0_beta2-r10")
+	benchmarks := []struct {
+		name string
+		v    string
+	}{
+		{"WithRevision", "1.2.3-r4"},
+		{"WithAlpha", "2.0_alpha1"},
+		{"Complex", "3.0_beta2-r10"},
+	}
+	for _, bm := range benchmarks {
+		b.Run(bm.name, func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				padVersionTokensRegex(bm.v)
+			}
+		})
 	}
 }
 
 func BenchmarkPadVersionTokensBuilder(b *testing.B) {
-	for i := 0; i < b.N; i++ {
-		padVersionTokensBuilder("1.2.3-r4")
-		padVersionTokensBuilder("2.0_alpha1")
-		padVersionTokensBuilder("3.0_beta2-r10")
+	benchmarks := []struct {
+		name string
+		v    string
+	}{
+		{"WithRevision", "1.2.3-r4"},
+		{"WithAlpha", "2.0_alpha1"},
+		{"Complex", "3.0_beta2-r10"},
+	}
+	for _, bm := range benchmarks {
+		b.Run(bm.name, func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				padVersionTokensBuilder(bm.v)
+			}
+		})
 	}
 }
