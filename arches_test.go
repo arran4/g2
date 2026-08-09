@@ -3,6 +3,8 @@ package g2
 import (
 	"errors"
 	"io"
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -139,5 +141,31 @@ x86 stable
 				t.Errorf("Arches = %v, want %v", ad.Arches, tt.wantArches)
 			}
 		})
+	}
+}
+
+func TestParseArchListFile(t *testing.T) {
+	tempDir := t.TempDir()
+	filePath := filepath.Join(tempDir, "arch.list")
+
+	content := "amd64\n# a comment\n\n  x86  \narm64"
+	if err := os.WriteFile(filePath, []byte(content), 0644); err != nil {
+		t.Fatalf("failed to write test file: %v", err)
+	}
+
+	al, err := ParseArchListFile(filePath)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	expected := []string{"amd64", "x86", "arm64"}
+	if !reflect.DeepEqual(al.Arches, expected) {
+		t.Errorf("expected %v, got %v", expected, al.Arches)
+	}
+
+	// Test non-existent file
+	_, err = ParseArchListFile(filepath.Join(tempDir, "nonexistent.list"))
+	if err == nil {
+		t.Error("expected error for non-existent file, got nil")
 	}
 }
