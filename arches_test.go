@@ -2,12 +2,12 @@ package g2
 
 import (
 	"errors"
-	"os"
-	"path/filepath"
 	"io"
 	"reflect"
 	"strings"
 	"testing"
+	"testing/fstest"
+	"io/fs"
 )
 
 func TestParseArchList(t *testing.T) {
@@ -144,21 +144,25 @@ x86 stable
 	}
 }
 
-func TestParseArchesDescFile(t *testing.T) {
-	tempDir := t.TempDir()
+type errorFS struct{}
 
+func (e errorFS) Open(name string) (fs.File, error) {
+	return nil, errors.New("mock read error")
+}
+
+func TestParseArchesDescFile(t *testing.T) {
 	// Test Case 1: File exists
 	validContent := `# Header
 amd64 stable
 x86 testing
 `
-	validFile := filepath.Join(tempDir, "arches.desc")
-	err := os.WriteFile(validFile, []byte(validContent), 0644)
-	if err != nil {
-		t.Fatalf("failed to write valid file: %v", err)
+	fsys := fstest.MapFS{
+		"arches.desc": &fstest.MapFile{
+			Data: []byte(validContent),
+		},
 	}
 
-	ad, err := ParseArchesDescFile(validFile)
+	ad, err := ParseArchesDescFS(fsys, "arches.desc")
 	if err != nil {
 		t.Fatalf("unexpected error for valid file: %v", err)
 	}
@@ -175,8 +179,7 @@ x86 testing
 	}
 
 	// Test Case 2: File does not exist
-	missingFile := filepath.Join(tempDir, "missing.desc")
-	adMissing, err := ParseArchesDescFile(missingFile)
+	adMissing, err := ParseArchesDescFS(fsys, "missing.desc")
 	if err != nil {
 		t.Fatalf("unexpected error for missing file: %v", err)
 	}
@@ -191,12 +194,9 @@ x86 testing
 		t.Errorf("expected empty arches, got %v", adMissing.Arches)
 	}
 
-	// Test Case 3: Error opening file (e.g., passing a directory instead of a file or unreadable file)
-	// Passing a directory to Open might succeed, but reading from it will fail or Open will fail depending on OS.
-	// Since ParseArchesDescFile calls ParseArchesDesc which reads from the file, it will eventually return an error.
-	dirAsFile := tempDir
-	_, err = ParseArchesDescFile(dirAsFile)
+	// Test Case 3: Error case
+	_, err = ParseArchesDescFS(errorFS{}, "error.desc")
 	if err == nil {
-		t.Fatalf("expected error when passing directory as file")
+		t.Fatalf("expected error when passing invalid file path")
 	}
 }
