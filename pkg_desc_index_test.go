@@ -2,6 +2,8 @@ package g2
 
 import (
 	"bytes"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -73,5 +75,46 @@ app-admin/amazon-ec2-init 20101127-r2: Init script to setup Amazon EC2 instance 
 `
 	if buf.String() != expected {
 		t.Errorf("Serialize mismatch.\nExpected:\n%s\nGot:\n%s", expected, buf.String())
+	}
+}
+
+func TestParsePkgDescIndexFile(t *testing.T) {
+	// Test with a valid file
+	tempDir := t.TempDir()
+	filePath := filepath.Join(tempDir, "pkg_desc_index")
+
+	input := `app-admin/aerospike-amc-community 4.0.19-r2 5.0.0: Web UI based monitoring tool for Aerospike Community Edition Server
+app-admin/amazon-ec2-init 20101127-r2: Init script to setup Amazon EC2 instance parameters
+`
+	err := os.WriteFile(filePath, []byte(input), 0644)
+	if err != nil {
+		t.Fatalf("Failed to write temporary file: %v", err)
+	}
+
+	idx, err := ParsePkgDescIndexFile(filePath)
+	if err != nil {
+		t.Fatalf("ParsePkgDescIndexFile failed: %v", err)
+	}
+
+	if len(idx.Entries) != 2 {
+		t.Fatalf("expected 2 entries, got %d", len(idx.Entries))
+	}
+
+	e1 := idx.Entries[0]
+	if e1.Category != "app-admin" || e1.Package != "aerospike-amc-community" {
+		t.Errorf("entry 1 path wrong: %s/%s", e1.Category, e1.Package)
+	}
+	if len(e1.Versions) != 2 || e1.Versions[0] != "4.0.19-r2" || e1.Versions[1] != "5.0.0" {
+		t.Errorf("entry 1 versions wrong: %v", e1.Versions)
+	}
+	if e1.Description != "Web UI based monitoring tool for Aerospike Community Edition Server" {
+		t.Errorf("entry 1 description wrong: %s", e1.Description)
+	}
+
+	// Test with non-existent file
+	invalidFilePath := filepath.Join(tempDir, "non_existent_file")
+	_, err = ParsePkgDescIndexFile(invalidFilePath)
+	if err == nil {
+		t.Errorf("ParsePkgDescIndexFile should fail for non-existent file")
 	}
 }
