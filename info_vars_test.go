@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"reflect"
 	"testing"
+	"testing/fstest"
 )
 
 func TestParseInfoVarsReader(t *testing.T) {
@@ -59,4 +60,36 @@ func TestSerializeInfoVars(t *testing.T) {
 	if buf.String() != expected {
 		t.Errorf("expected %q, got %q", expected, buf.String())
 	}
+}
+
+func TestParseInfoVarsFS(t *testing.T) {
+	input := `# Comment
+VAR1
+VAR2
+`
+	sysFS := fstest.MapFS{
+		"profiles/info_vars": &fstest.MapFile{Data: []byte(input)},
+	}
+
+	expected := []string{"VAR1", "VAR2"}
+
+	t.Run("existing file", func(t *testing.T) {
+		parsed, err := ParseInfoVarsFS(sysFS, "profiles/info_vars")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !reflect.DeepEqual(parsed, expected) {
+			t.Errorf("expected %v, got %v", expected, parsed)
+		}
+	})
+
+	t.Run("non-existent file", func(t *testing.T) {
+		parsed, err := ParseInfoVarsFS(sysFS, "profiles/does_not_exist")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if parsed != nil {
+			t.Errorf("expected nil, got %v", parsed)
+		}
+	})
 }
