@@ -118,7 +118,7 @@ func (cfg *MainArgConfig) cmdPkgDescIndexVerify(args []string) error {
 	if err != nil {
 		return fmt.Errorf("pkg_desc_index not found at %s. run generate first", indexPath)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	index, err := g2.ParsePkgDescIndex(file)
 	if err != nil {
