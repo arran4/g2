@@ -1,0 +1,5 @@
+🧪 Add tests for ParseInfoVarsFS
+
+🎯 **What:** The testing gap addressed: Added tests for the previously untested `ParseInfoVarsFS` public function in `info_vars.go`. Also added tests for `ParseInfoVars` and `WriteInfoVarsFile`.
+📊 **Coverage:** What scenarios are now tested: Successfully parsing an existing info_vars file, and the specific `os.IsNotExist` error handling for non-existent files.
+✨ **Result:** The improvement in test coverage: The `info_vars.go` file functions are now completely covered, using `testing/fstest` to mock filesystem behavior and `t.TempDir()` for secure real file testing.
