@@ -191,7 +191,6 @@ func resolveBash(ctx context.Context, text string, variables map[string]string, 
 		if err == nil {
 			err = runner.Run(ctx, file)
 			if err == nil {
-				// if there was output, return the output instead of text
 				out := buf.String()
 				if len(out) > 0 {
 					return strings.TrimSuffix(out, "\n")
