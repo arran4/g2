@@ -2,8 +2,6 @@ package g2
 
 import (
 	"bytes"
-	"os"
-	"path/filepath"
 	"reflect"
 	"testing"
 	"testing/fstest"
@@ -94,62 +92,4 @@ VAR2
 			t.Errorf("expected nil, got %v", parsed)
 		}
 	})
-}
-
-func TestParseInfoVars(t *testing.T) {
-	tempDir := t.TempDir()
-	path := filepath.Join(tempDir, "info_vars")
-
-	input := `# Comment
-VAR1
-VAR2
-`
-	err := os.WriteFile(path, []byte(input), 0644)
-	if err != nil {
-		t.Fatalf("failed to write test file: %v", err)
-	}
-
-	expected := []string{"VAR1", "VAR2"}
-
-	t.Run("existing file", func(t *testing.T) {
-		parsed, err := ParseInfoVars(path)
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if !reflect.DeepEqual(parsed, expected) {
-			t.Errorf("expected %v, got %v", expected, parsed)
-		}
-	})
-
-	t.Run("non-existent file", func(t *testing.T) {
-		parsed, err := ParseInfoVars(filepath.Join(tempDir, "does_not_exist"))
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if parsed != nil {
-			t.Errorf("expected nil, got %v", parsed)
-		}
-	})
-}
-
-func TestWriteInfoVarsFile(t *testing.T) {
-	tempDir := t.TempDir()
-	path := filepath.Join(tempDir, "info_vars")
-
-	vars := []string{"VAR1", "VAR2"}
-	expected := "VAR1\nVAR2\n"
-
-	err := WriteInfoVarsFile(path, vars)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	content, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("failed to read test file: %v", err)
-	}
-
-	if string(content) != expected {
-		t.Errorf("expected %q, got %q", expected, string(content))
-	}
 }
