@@ -3,6 +3,7 @@ package g2
 import (
 	"errors"
 	"io"
+	"os"
 	"reflect"
 	"strings"
 	"testing"
@@ -142,6 +143,24 @@ x86 stable
 			}
 		})
 	}
+}
+
+func TestParseArchListFile(t *testing.T) {
+	// Test success using os.DevNull to avoid disk changes
+	al, err := ParseArchListFile(os.DevNull)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(al.Arches) != 0 {
+		t.Errorf("expected 0 arches, got %d", len(al.Arches))
+	}
+
+	// Test non-existent file
+	_, err = ParseArchListFile("nonexistent.list")
+	if err == nil {
+		t.Error("expected error for non-existent file, got nil")
+  }
 }
 
 type errorFS struct{}
