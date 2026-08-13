@@ -60,8 +60,6 @@ func (cfg *MainArgConfig) cmdEclass(args []string) error {
 		fs.Usage()
 		return fmt.Errorf("unknown command %s", cmd)
 	}
-
-	return nil
 }
 
 func (cfg *CmdEclassArgConfig) cmdEclassList(args []string) error {

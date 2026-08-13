@@ -48,7 +48,6 @@ func (cfg *CmdPackageArgConfig) cmdMasked(args []string) error {
 		fs.Usage()
 		return fmt.Errorf("unknown command %s", cmd)
 	}
-	return nil
 }
 
 func (cfg *CmdPackageArgConfig) cmdMaskedList(args []string) error {

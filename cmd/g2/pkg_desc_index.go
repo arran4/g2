@@ -44,7 +44,6 @@ func (cfg *MainArgConfig) cmdPkgDescIndex(args []string) error {
 		fs.Usage()
 		return fmt.Errorf("unknown command %s", cmd)
 	}
-	return nil
 }
 
 func (cfg *MainArgConfig) cmdPkgDescIndexGenerate(args []string) error {
