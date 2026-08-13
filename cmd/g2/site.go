@@ -48,6 +48,9 @@ func (cfg *MainArgConfig) cmdOverlay(args []string) error {
 		return fmt.Errorf("missing subcommand for overlay (e.g., site)")
 	}
 	subcmd := args[0]
+	if subcmd == "init" {
+		return cfg.cmdOverlayInit(args[1:])
+	}
 	if subcmd == "ebuild" {
 		return cfg.cmdOverlayEbuild(args[1:])
 	}
