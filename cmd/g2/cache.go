@@ -49,12 +49,11 @@ func (cfg *MainArgConfig) cmdCache(args []string) error {
 		return cfg.cmdCacheClean(fs.Args()[1:])
 	case "help", "-help", "--help":
 		fs.Usage()
-		os.Exit(0)
+		return &ExitError{Code: 0}
 	default:
 		fs.Usage()
 		return fmt.Errorf("unknown command %s", cmd)
 	}
-	return nil
 }
 
 func (cfg *MainArgConfig) cmdCacheVerify(args []string) error {

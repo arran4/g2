@@ -43,12 +43,11 @@ func (cfg *CmdPackageArgConfig) cmdDeprecated(args []string) error {
 		return cfg.cmdDeprecatedRemove(fs.Args()[1:])
 	case "help", "-help", "--help":
 		fs.Usage()
-		os.Exit(-1)
+		return &ExitError{Code: 255}
 	default:
 		fs.Usage()
 		return fmt.Errorf("unknown command %s", cmd)
 	}
-	return nil
 }
 
 func (cfg *CmdPackageArgConfig) cmdDeprecatedList(args []string) error {
