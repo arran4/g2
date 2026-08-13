@@ -43,7 +43,7 @@ func (cfg *CmdPackageArgConfig) cmdMasked(args []string) error {
 		return cfg.cmdMaskedRemove(fs.Args()[1:])
 	case "help", "-help", "--help":
 		fs.Usage()
-		os.Exit(-1)
+		return nil
 	default:
 		fs.Usage()
 		return fmt.Errorf("unknown command %s", cmd)

@@ -259,7 +259,7 @@ func compareVersions(args []string) error {
 
 	fmt.Println(isTrue)
 	if !isTrue {
-		os.Exit(1)
+		return &ExitError{Code: 1}
 	}
 	return nil
 }

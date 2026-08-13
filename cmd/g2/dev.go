@@ -11,36 +11,31 @@ import (
 	"golang.org/x/tools/txtar"
 )
 
-func cmdDev() {
+func cmdDev() error {
 	if len(os.Args) < 3 {
-		fmt.Println("Usage: g2 dev <subcommand>")
-		fmt.Println("Subcommands: update-txtar-tests")
-		os.Exit(1)
+		return fmt.Errorf("usage: g2 dev <subcommand>\nSubcommands: update-txtar-tests")
 	}
 
 	subcommand := os.Args[2]
 	switch subcommand {
 	case "update-txtar-tests":
-		cmdDevUpdateTxtarTests()
+		return cmdDevUpdateTxtarTests()
 	default:
-		fmt.Printf("Unknown subcommand: %s\n", subcommand)
-		os.Exit(1)
+		return fmt.Errorf("unknown subcommand: %s", subcommand)
 	}
 }
 
-func cmdDevUpdateTxtarTests() {
+func cmdDevUpdateTxtarTests() error {
 	fs := flag.NewFlagSet("update-txtar-tests", flag.ExitOnError)
 	if err := fs.Parse(os.Args[3:]); err != nil {
-		fmt.Println(err)
-		os.Exit(1)
+		return fmt.Errorf("parsing flags: %w", err)
 	}
 
 	targetFile := "testdata/ebuilds.txtar"
 
 	archiveData, err := os.ReadFile(targetFile)
 	if err != nil {
-		fmt.Printf("failed to read txtar archive: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("failed to read txtar archive: %w", err)
 	}
 
 	archive := txtar.Parse(archiveData)
@@ -97,9 +92,9 @@ func cmdDevUpdateTxtarTests() {
 
 	updatedData := txtar.Format(archive)
 	if err := os.WriteFile(targetFile, updatedData, 0644); err != nil {
-		fmt.Printf("failed to write txtar archive: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("failed to write txtar archive: %w", err)
 	}
 
 	fmt.Println("Successfully updated txtar test data.")
+	return nil
 }
