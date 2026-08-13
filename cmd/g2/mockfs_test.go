@@ -91,7 +91,9 @@ func (m *MockFS) WriteFile(name string, data []byte, perm os.FileMode) error {
 	// Ensure parent dir exists conceptually
 	dir := filepath.Dir(name)
 	if dir != "." {
-		m.MkdirAll(dir, 0755)
+		if err := m.MkdirAll(dir, 0755); err != nil {
+			return err
+		}
 	}
 
 	m.MapFS[name] = &fstest.MapFile{

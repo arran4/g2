@@ -15,7 +15,9 @@ CATEGORY="app-test"
 DESCRIPTION="Test"
 `)
 	// Setup repo dir
-	mockFS.MkdirAll("repo", 0755)
+	if err := mockFS.MkdirAll("repo", 0755); err != nil {
+		t.Fatalf("MkdirAll failed: %v", err)
+	}
 
 	cfg := &CmdEbuildArgConfig{
 		MainArgConfig: &MainArgConfig{},

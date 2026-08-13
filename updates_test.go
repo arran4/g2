@@ -7,7 +7,6 @@ import (
 	"testing/fstest"
 )
 
-
 func TestParseUpdatesDirFS(t *testing.T) {
 	mockFS := fstest.MapFS{
 		"updates/1Q-2021": &fstest.MapFile{

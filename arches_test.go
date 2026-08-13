@@ -3,12 +3,12 @@ package g2
 import (
 	"errors"
 	"io"
+	"io/fs"
 	"os"
 	"reflect"
 	"strings"
 	"testing"
 	"testing/fstest"
-	"io/fs"
 )
 
 func TestParseArchList(t *testing.T) {
@@ -160,7 +160,7 @@ func TestParseArchListFile(t *testing.T) {
 	_, err = ParseArchListFile("nonexistent.list")
 	if err == nil {
 		t.Error("expected error for non-existent file, got nil")
-  }
+	}
 }
 
 type errorFS struct{}
