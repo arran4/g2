@@ -84,7 +84,7 @@ func (cfg *MainArgConfig) cmdPackage(args []string) error {
 		}
 	case "help", "-help", "--help":
 		fs.Usage()
-		os.Exit(-1)
+		return nil
 	default:
 		fs.Usage()
 		return fmt.Errorf("unknown command %s", cmd)

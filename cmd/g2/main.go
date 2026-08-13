@@ -19,13 +19,21 @@ type MainArgConfig struct {
 	Args []string
 }
 
-// ExitError is a custom error that can be returned by commands to exit with a specific code silently.
+// ExitError is a custom error that can be returned by commands to exit with a specific code silently or with an error.
 type ExitError struct {
 	Code int
+	Err  error
 }
 
 func (e *ExitError) Error() string {
+	if e.Err != nil {
+		return e.Err.Error()
+	}
 	return fmt.Sprintf("exit status %d", e.Code)
+}
+
+func (e *ExitError) Unwrap() error {
+	return e.Err
 }
 
 func main() {
@@ -74,153 +82,75 @@ func main() {
 
 	cmd := fs.Arg(1)
 	cfg.Args = append(cfg.Args, cmd)
+	var err error
+	logPrefix := cmd
 	switch cmd {
 	case "skill":
-		if err := cfg.cmdSkill(fs.Args()[2:]); err != nil {
-			log.Printf("skill error: %s", err)
-			os.Exit(1)
-			return
-		}
+		err = cfg.cmdSkill(fs.Args()[2:])
 	case "masks":
-		if err := cfg.cmdMasks(fs.Args()[2:]); err != nil {
-			log.Printf("masks error: %s", err)
-			os.Exit(1)
-			return
-		}
+		err = cfg.cmdMasks(fs.Args()[2:])
 	case "conf":
-		if err := cfg.cmdConf(fs.Args()[2:]); err != nil {
-			log.Printf("conf error: %s", err)
-			os.Exit(1)
-			return
-		}
+		err = cfg.cmdConf(fs.Args()[2:])
 	case "arch":
-		if err := cfg.cmdArch(fs.Args()[2:]); err != nil {
-			log.Printf("arch error: %s", err)
-			os.Exit(1)
-			return
-		}
+		err = cfg.cmdArch(fs.Args()[2:])
 	case "profile":
-		if err := ProfileCommand(fs.Args()[2:]); err != nil {
-			log.Printf("profile error: %s", err)
-			os.Exit(1)
-			return
-		}
+		err = ProfileCommand(fs.Args()[2:])
 	case "repos-conf":
-		if err := cfg.cmdReposConf(fs.Args()[2:]); err != nil {
-			log.Printf("repos-conf error: %s", err)
-			os.Exit(1)
-			return
-		}
+		err = cfg.cmdReposConf(fs.Args()[2:])
 	case "make-conf":
-		if err := cfg.cmdMakeConf(fs.Args()[2:]); err != nil {
-			log.Printf("make-conf error: %s", err)
-			os.Exit(1)
-			return
-		}
+		err = cfg.cmdMakeConf(fs.Args()[2:])
 	case "world":
-		if err := cfg.cmdWorld(fs.Args()[2:]); err != nil {
-			log.Printf("world error: %s", err)
-			os.Exit(1)
-			return
-		}
+		err = cfg.cmdWorld(fs.Args()[2:])
 	case "manifest":
-		if err := cfg.cmdManifest(fs.Args()[2:]); err != nil {
-			log.Printf("generate error: %s", err)
-			os.Exit(1)
-			return
-		}
+		logPrefix = "generate"
+		err = cfg.cmdManifest(fs.Args()[2:])
 	case "layout-conf":
-		if err := cfg.cmdLayoutConf(fs.Args()[2:]); err != nil {
-			log.Printf("layout-conf error: %s", err)
-			os.Exit(1)
-			return
-		}
+		err = cfg.cmdLayoutConf(fs.Args()[2:])
 	case "versions":
-		if err := cfg.CmdVersions(fs.Args()[2:]); err != nil {
-			log.Printf("versions error: %s", err)
-			os.Exit(1)
-			return
-		}
+		err = cfg.CmdVersions(fs.Args()[2:])
 	case "metadata":
-		if err := cfg.cmdMetadata(fs.Args()[2:]); err != nil {
-			log.Printf("metadata error: %s", err)
-			os.Exit(1)
-			return
-		}
+		err = cfg.cmdMetadata(fs.Args()[2:])
 	case "ebuild":
-		if err := cfg.cmdEbuild(fs.Args()[2:]); err != nil {
-			var exitErr *ExitError
-			if errors.As(err, &exitErr) {
-				os.Exit(exitErr.Code)
-			}
-			log.Printf("ebuild error: %s", err)
-			os.Exit(1)
-			return
-		}
+		err = cfg.cmdEbuild(fs.Args()[2:])
 	case "overlay":
-		if err := cfg.cmdOverlay(fs.Args()[2:]); err != nil {
-			log.Printf("overlay error: %s", err)
-			os.Exit(1)
-			return
-		}
+		err = cfg.cmdOverlay(fs.Args()[2:])
 	case "overlays":
-		if err := cfg.cmdOverlays(fs.Args()[2:]); err != nil {
-			log.Printf("overlays error: %s", err)
-			os.Exit(1)
-			return
-		}
+		err = cfg.cmdOverlays(fs.Args()[2:])
 	case "lint":
-		if err := cfg.cmdLint(fs.Args()[2:]); err != nil {
-			log.Printf("lint error: %s", err)
-			os.Exit(1)
-			return
-		}
+		err = cfg.cmdLint(fs.Args()[2:])
 	case "use":
-		if err := cfg.cmdUse(fs.Args()[2:]); err != nil {
-			log.Printf("use error: %s", err)
-			os.Exit(1)
-			return
-		}
+		err = cfg.cmdUse(fs.Args()[2:])
 	case "site":
-		if err := cfg.cmdSite(fs.Args()[2:]); err != nil {
-			log.Printf("site error: %s", err)
-			os.Exit(1)
-			return
-		}
+		err = cfg.cmdSite(fs.Args()[2:])
 	case "cache":
-		if err := cfg.cmdCache(fs.Args()[2:]); err != nil {
-			log.Printf("cache error: %s", err)
-			os.Exit(1)
-			return
-		}
+		err = cfg.cmdCache(fs.Args()[2:])
 	case "pkg-desc-index":
-		if err := cfg.cmdPkgDescIndex(fs.Args()[2:]); err != nil {
-			log.Printf("pkg-desc-index error: %s", err)
-			os.Exit(1)
-			return
-		}
+		err = cfg.cmdPkgDescIndex(fs.Args()[2:])
 	case "package":
-		if err := cfg.cmdPackage(fs.Args()[2:]); err != nil {
-			log.Printf("package error: %s", err)
-			os.Exit(1)
-			return
-		}
+		err = cfg.cmdPackage(fs.Args()[2:])
 	case "eclass":
-		if err := cfg.cmdEclass(fs.Args()[2:]); err != nil {
-			log.Printf("eclass error: %s", err)
-			os.Exit(1)
-			return
-		}
+		err = cfg.cmdEclass(fs.Args()[2:])
 	case "dev":
-		cmdDev()
-		return
+		err = cmdDev()
 	case "help", "-help", "--help":
 		fs.Usage()
-		os.Exit(1)
+		return
 	default:
-		fmt.Printf("Unknown command %s", cmd)
+		fmt.Printf("Unknown command %s\n", cmd)
 		fs.Usage()
 		return
+	}
+
+	if err != nil {
+		var exitErr *ExitError
+		if errors.As(err, &exitErr) {
+			if exitErr.Err != nil {
+				log.Printf("%s error: %s", logPrefix, exitErr.Err)
+			}
+			os.Exit(exitErr.Code)
+		}
+		log.Printf("%s error: %s", logPrefix, err)
+		os.Exit(1)
 	}
 }
 
@@ -316,7 +246,11 @@ func (cfg *MainArgConfig) cmdManifest(args []string) error {
 			}
 		}
 		if err := config.cmdUpsertFromUrl(urlArgs, hashes); err != nil {
-			return fmt.Errorf("upsert file from url %s: %w", urlArgs[0], err)
+			urlStr := ""
+			if len(urlArgs) > 0 {
+				urlStr = " " + urlArgs[0]
+			}
+			return &ExitError{Code: 1, Err: fmt.Errorf("upsert file from url%s: %w", urlStr, err)}
 		}
 	case "verify":
 		verifyArgs := fs.Args()[1:]
@@ -367,7 +301,7 @@ func (cfg *MainArgConfig) cmdManifest(args []string) error {
 		}
 	case "help", "-help", "--help":
 		fs.Usage()
-		os.Exit(1)
+		return nil
 	default:
 		fs.Usage()
 		return fmt.Errorf("unknown command %s", cmd)
