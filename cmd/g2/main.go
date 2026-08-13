@@ -63,12 +63,12 @@ func main() {
 	}
 	if err := fs.Parse(os.Args); err != nil {
 		log.Printf("Flag parse error: %s", err)
-		os.Exit(-1)
+		os.Exit(1)
 		return
 	}
 	if fs.NArg() <= 1 {
 		log.Printf("Please specify an argument, try -help for help")
-		os.Exit(-1)
+		os.Exit(1)
 		return
 	}
 
@@ -78,73 +78,73 @@ func main() {
 	case "skill":
 		if err := cfg.cmdSkill(fs.Args()[2:]); err != nil {
 			log.Printf("skill error: %s", err)
-			os.Exit(-1)
+			os.Exit(1)
 			return
 		}
 	case "masks":
 		if err := cfg.cmdMasks(fs.Args()[2:]); err != nil {
 			log.Printf("masks error: %s", err)
-			os.Exit(-1)
+			os.Exit(1)
 			return
 		}
 	case "conf":
 		if err := cfg.cmdConf(fs.Args()[2:]); err != nil {
 			log.Printf("conf error: %s", err)
-			os.Exit(-1)
+			os.Exit(1)
 			return
 		}
 	case "arch":
 		if err := cfg.cmdArch(fs.Args()[2:]); err != nil {
 			log.Printf("arch error: %s", err)
-			os.Exit(-1)
+			os.Exit(1)
 			return
 		}
 	case "profile":
 		if err := ProfileCommand(fs.Args()[2:]); err != nil {
 			log.Printf("profile error: %s", err)
-			os.Exit(-1)
+			os.Exit(1)
 			return
 		}
 	case "repos-conf":
 		if err := cfg.cmdReposConf(fs.Args()[2:]); err != nil {
 			log.Printf("repos-conf error: %s", err)
-			os.Exit(-1)
+			os.Exit(1)
 			return
 		}
 	case "make-conf":
 		if err := cfg.cmdMakeConf(fs.Args()[2:]); err != nil {
 			log.Printf("make-conf error: %s", err)
-			os.Exit(-1)
+			os.Exit(1)
 			return
 		}
 	case "world":
 		if err := cfg.cmdWorld(fs.Args()[2:]); err != nil {
 			log.Printf("world error: %s", err)
-			os.Exit(-1)
+			os.Exit(1)
 			return
 		}
 	case "manifest":
 		if err := cfg.cmdManifest(fs.Args()[2:]); err != nil {
 			log.Printf("generate error: %s", err)
-			os.Exit(-1)
+			os.Exit(1)
 			return
 		}
 	case "layout-conf":
 		if err := cfg.cmdLayoutConf(fs.Args()[2:]); err != nil {
 			log.Printf("layout-conf error: %s", err)
-			os.Exit(-1)
+			os.Exit(1)
 			return
 		}
 	case "versions":
 		if err := cfg.CmdVersions(fs.Args()[2:]); err != nil {
 			log.Printf("versions error: %s", err)
-			os.Exit(-1)
+			os.Exit(1)
 			return
 		}
 	case "metadata":
 		if err := cfg.cmdMetadata(fs.Args()[2:]); err != nil {
 			log.Printf("metadata error: %s", err)
-			os.Exit(-1)
+			os.Exit(1)
 			return
 		}
 	case "ebuild":
@@ -154,61 +154,61 @@ func main() {
 				os.Exit(exitErr.Code)
 			}
 			log.Printf("ebuild error: %s", err)
-			os.Exit(-1)
+			os.Exit(1)
 			return
 		}
 	case "overlay":
 		if err := cfg.cmdOverlay(fs.Args()[2:]); err != nil {
 			log.Printf("overlay error: %s", err)
-			os.Exit(-1)
+			os.Exit(1)
 			return
 		}
 	case "overlays":
 		if err := cfg.cmdOverlays(fs.Args()[2:]); err != nil {
 			log.Printf("overlays error: %s", err)
-			os.Exit(-1)
+			os.Exit(1)
 			return
 		}
 	case "lint":
 		if err := cfg.cmdLint(fs.Args()[2:]); err != nil {
 			log.Printf("lint error: %s", err)
-			os.Exit(-1)
+			os.Exit(1)
 			return
 		}
 	case "use":
 		if err := cfg.cmdUse(fs.Args()[2:]); err != nil {
 			log.Printf("use error: %s", err)
-			os.Exit(-1)
+			os.Exit(1)
 			return
 		}
 	case "site":
 		if err := cfg.cmdSite(fs.Args()[2:]); err != nil {
 			log.Printf("site error: %s", err)
-			os.Exit(-1)
+			os.Exit(1)
 			return
 		}
 	case "cache":
 		if err := cfg.cmdCache(fs.Args()[2:]); err != nil {
 			log.Printf("cache error: %s", err)
-			os.Exit(-1)
+			os.Exit(1)
 			return
 		}
 	case "pkg-desc-index":
 		if err := cfg.cmdPkgDescIndex(fs.Args()[2:]); err != nil {
 			log.Printf("pkg-desc-index error: %s", err)
-			os.Exit(-1)
+			os.Exit(1)
 			return
 		}
 	case "package":
 		if err := cfg.cmdPackage(fs.Args()[2:]); err != nil {
 			log.Printf("package error: %s", err)
-			os.Exit(-1)
+			os.Exit(1)
 			return
 		}
 	case "eclass":
 		if err := cfg.cmdEclass(fs.Args()[2:]); err != nil {
 			log.Printf("eclass error: %s", err)
-			os.Exit(-1)
+			os.Exit(1)
 			return
 		}
 	case "dev":
@@ -216,7 +216,7 @@ func main() {
 		return
 	case "help", "-help", "--help":
 		fs.Usage()
-		os.Exit(-1)
+		os.Exit(1)
 	default:
 		fmt.Printf("Unknown command %s", cmd)
 		fs.Usage()
@@ -367,7 +367,7 @@ func (cfg *MainArgConfig) cmdManifest(args []string) error {
 		}
 	case "help", "-help", "--help":
 		fs.Usage()
-		os.Exit(-1)
+		os.Exit(1)
 	default:
 		fs.Usage()
 		return fmt.Errorf("unknown command %s", cmd)
