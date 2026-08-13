@@ -316,7 +316,7 @@ func (cfg *MainArgConfig) cmdManifest(args []string) error {
 			}
 		}
 		if err := config.cmdUpsertFromUrl(urlArgs, hashes); err != nil {
-			return fmt.Errorf("upsert file from url: %w", err)
+			return fmt.Errorf("upsert file from url %s: %w", urlArgs[0], err)
 		}
 	case "verify":
 		verifyArgs := fs.Args()[1:]
@@ -389,7 +389,7 @@ func (cfg *CmdManifestArgConfig) cmdUpsertFromUrl(args []string, hashes []string
 
 	checksums, err := g2.DownloadAndChecksum(url, hashes)
 	if err != nil {
-		return fmt.Errorf("downloading and calculating checksums: %w", err)
+		return fmt.Errorf("downloading and calculating checksums for %s: %w", url, err)
 	}
 
 	var sb strings.Builder
@@ -601,7 +601,7 @@ func (cfg *CmdManifestArgConfig) cmdClean(args []string) error {
 func (cfg *CmdManifestArgConfig) upsertFromUrlLogic(url, filename, manifestPath string, hashes []string) error {
 	checksums, err := g2.DownloadAndChecksum(url, hashes)
 	if err != nil {
-		return fmt.Errorf("downloading and calculating checksums: %w", err)
+		return fmt.Errorf("downloading and calculating checksums for %s: %w", url, err)
 	}
 
 	entry := g2.NewManifestEntry("DIST", filename, checksums.Size)
