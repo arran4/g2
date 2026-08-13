@@ -4,39 +4,15 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"io/fs"
 	"net/http"
 	"os"
-	"path/filepath"
 )
 
 type OverlayInitArgs struct {
 	Name          string
 	EapiVersion   string
 	LayoutConfUrl string
-}
-
-// SimpleFS provides a minimal interface for file system operations needed by overlay init.
-type SimpleFS interface {
-	MkdirAll(path string, perm os.FileMode) error
-	Stat(name string) (os.FileInfo, error)
-	WriteFile(name string, data []byte, perm os.FileMode) error
-}
-
-// osSimpleFS implements SimpleFS using the os package.
-type osSimpleFS struct {
-	baseDir string
-}
-
-func (fs *osSimpleFS) MkdirAll(path string, perm os.FileMode) error {
-	return os.MkdirAll(filepath.Join(fs.baseDir, path), perm)
-}
-
-func (fs *osSimpleFS) Stat(name string) (os.FileInfo, error) {
-	return os.Stat(filepath.Join(fs.baseDir, name))
-}
-
-func (fs *osSimpleFS) WriteFile(name string, data []byte, perm os.FileMode) error {
-	return os.WriteFile(filepath.Join(fs.baseDir, name), data, perm)
 }
 
 func (cfg *MainArgConfig) cmdOverlayInit(args []string) error {
@@ -71,20 +47,20 @@ func (cfg *MainArgConfig) cmdOverlayInit(args []string) error {
 		return fmt.Errorf("failed to get current working directory: %w", err)
 	}
 
-	targetFs := &osSimpleFS{baseDir: cwd}
+	targetFs := NewOSFS(cwd)
 
 	return InitOverlay(targetFs, initArgs)
 }
 
-func InitOverlay(fs SimpleFS, args OverlayInitArgs) error {
+func InitOverlay(targetFs WritableFS, args OverlayInitArgs) error {
 	// Create profiles directory
-	if err := fs.MkdirAll("profiles", 0755); err != nil {
+	if err := targetFs.MkdirAll("profiles", 0755); err != nil {
 		return fmt.Errorf("failed to create profiles directory: %w", err)
 	}
 
 	// Create profiles/repo_name
-	if _, err := fs.Stat("profiles/repo_name"); os.IsNotExist(err) {
-		if err := fs.WriteFile("profiles/repo_name", []byte(args.Name+"\n"), 0644); err != nil {
+	if _, err := fs.Stat(targetFs, "profiles/repo_name"); os.IsNotExist(err) {
+		if err := targetFs.WriteFile("profiles/repo_name", []byte(args.Name+"\n"), 0644); err != nil {
 			return fmt.Errorf("failed to write profiles/repo_name: %w", err)
 		}
 		fmt.Printf("Created profiles/repo_name with '%s'\n", args.Name)
@@ -93,8 +69,8 @@ func InitOverlay(fs SimpleFS, args OverlayInitArgs) error {
 	}
 
 	// Create profiles/eapi
-	if _, err := fs.Stat("profiles/eapi"); os.IsNotExist(err) {
-		if err := fs.WriteFile("profiles/eapi", []byte(args.EapiVersion+"\n"), 0644); err != nil {
+	if _, err := fs.Stat(targetFs, "profiles/eapi"); os.IsNotExist(err) {
+		if err := targetFs.WriteFile("profiles/eapi", []byte(args.EapiVersion+"\n"), 0644); err != nil {
 			return fmt.Errorf("failed to write profiles/eapi: %w", err)
 		}
 		fmt.Printf("Created profiles/eapi with '%s'\n", args.EapiVersion)
@@ -103,12 +79,12 @@ func InitOverlay(fs SimpleFS, args OverlayInitArgs) error {
 	}
 
 	// Create metadata directory
-	if err := fs.MkdirAll("metadata", 0755); err != nil {
+	if err := targetFs.MkdirAll("metadata", 0755); err != nil {
 		return fmt.Errorf("failed to create metadata directory: %w", err)
 	}
 
 	// Create metadata/layout.conf
-	if _, err := fs.Stat("metadata/layout.conf"); os.IsNotExist(err) {
+	if _, err := fs.Stat(targetFs, "metadata/layout.conf"); os.IsNotExist(err) {
 		var content []byte
 		if args.LayoutConfUrl != "" {
 			fmt.Printf("Downloading layout.conf from %s...\n", args.LayoutConfUrl)
@@ -126,7 +102,7 @@ func InitOverlay(fs SimpleFS, args OverlayInitArgs) error {
 			}
 		}
 		if len(content) > 0 {
-			if err := fs.WriteFile("metadata/layout.conf", content, 0644); err != nil {
+			if err := targetFs.WriteFile("metadata/layout.conf", content, 0644); err != nil {
 				return fmt.Errorf("failed to write metadata/layout.conf: %w", err)
 			}
 			fmt.Printf("Created metadata/layout.conf\n")
