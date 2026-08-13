@@ -208,15 +208,15 @@ func (cfg *CmdEbuildArgConfig) cmdEbuildDelete(args []string) error {
 		}
 	}
 
-	if err := cfg.MainArgConfig.cmdUseDiscover([]string{repoPath}); err != nil {
+	if err := cfg.cmdUseDiscover([]string{repoPath}); err != nil {
 		log.Printf("Warning: updating use.desc/use.local.desc: %v", err)
 	}
 
-	if err := cfg.MainArgConfig.cmdPkgDescIndexGenerate([]string{repoPath}); err != nil {
+	if err := cfg.cmdPkgDescIndexGenerate([]string{repoPath}); err != nil {
 		log.Printf("Warning: generating pkg_desc_index: %v", err)
 	}
 
-	if err := cfg.MainArgConfig.cmdCacheGenerate([]string{repoPath}); err != nil {
+	if err := cfg.cmdCacheGenerate([]string{repoPath}); err != nil {
 		log.Printf("Warning: generating md5-cache: %v", err)
 	}
 

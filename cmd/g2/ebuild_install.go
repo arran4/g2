@@ -76,14 +76,13 @@ func (cfg *MainArgConfig) cmdEbuildInstall(args []string) error {
 
 	// ebuild is missing EAPI / doesn't get fully parsed by ParseEbuildVariablesFromReader, so we can try to parse it via parser to get CATEGORY if it's there
 	var ebuildParsed *g2.Ebuild
-	var err error
+
 	if ebuildPath != "-" {
-		ebuildParsed, err = g2.ParseEbuild(os.DirFS(filepath.Dir(ebuildPath)), filepath.Base(ebuildPath), g2.ParseVariables)
+		ebuildParsed, _ = g2.ParseEbuild(os.DirFS(filepath.Dir(ebuildPath)), filepath.Base(ebuildPath), g2.ParseVariables)
 	}
-	err = nil
 
 	category := *categoryFlag
-	if category == "" && err == nil && ebuildParsed != nil {
+	if category == "" && ebuildParsed != nil {
 		if c, ok := ebuildParsed.Vars["CATEGORY"]; ok && c != "" {
 			category = c
 		}
@@ -135,12 +134,12 @@ func (cfg *MainArgConfig) cmdEbuildInstall(args []string) error {
 				if err != nil {
 					return err
 				}
-				defer source.Close()
+				defer func() { _ = source.Close() }()
 				destination, err := os.Create(dest)
 				if err != nil {
 					return err
 				}
-				defer destination.Close()
+				defer func() { _ = destination.Close() }()
 				_, err = io.Copy(destination, source)
 				return err
 			}(); err != nil {
