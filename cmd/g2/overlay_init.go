@@ -3,9 +3,9 @@ package main
 import (
 	"flag"
 	"fmt"
-	"os"
 	"io"
 	"net/http"
+	"os"
 	"path/filepath"
 )
 
@@ -84,7 +84,7 @@ func InitOverlay(fs SimpleFS, args OverlayInitArgs) error {
 
 	// Create profiles/repo_name
 	if _, err := fs.Stat("profiles/repo_name"); os.IsNotExist(err) {
-		if err := fs.WriteFile("profiles/repo_name", []byte(args.Name + "\n"), 0644); err != nil {
+		if err := fs.WriteFile("profiles/repo_name", []byte(args.Name+"\n"), 0644); err != nil {
 			return fmt.Errorf("failed to write profiles/repo_name: %w", err)
 		}
 		fmt.Printf("Created profiles/repo_name with '%s'\n", args.Name)
@@ -94,7 +94,7 @@ func InitOverlay(fs SimpleFS, args OverlayInitArgs) error {
 
 	// Create profiles/eapi
 	if _, err := fs.Stat("profiles/eapi"); os.IsNotExist(err) {
-		if err := fs.WriteFile("profiles/eapi", []byte(args.EapiVersion + "\n"), 0644); err != nil {
+		if err := fs.WriteFile("profiles/eapi", []byte(args.EapiVersion+"\n"), 0644); err != nil {
 			return fmt.Errorf("failed to write profiles/eapi: %w", err)
 		}
 		fmt.Printf("Created profiles/eapi with '%s'\n", args.EapiVersion)

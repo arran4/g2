@@ -3,9 +3,9 @@ package main
 import (
 	"bytes"
 	"io"
-	"os"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 	"time"
 )
@@ -44,7 +44,6 @@ func (m mockFileInfo) Mode() os.FileMode  { return 0 }
 func (m mockFileInfo) ModTime() time.Time { return time.Time{} }
 func (m mockFileInfo) IsDir() bool        { return false }
 func (m mockFileInfo) Sys() interface{}   { return nil }
-
 
 func TestInitOverlay(t *testing.T) {
 	fs := newMockFS()
