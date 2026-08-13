@@ -21,10 +21,14 @@ type MainArgConfig struct {
 
 // ExitError is a custom error that can be returned by commands to exit with a specific code silently.
 type ExitError struct {
-	Code int
+	Code    int
+	Message string
 }
 
 func (e *ExitError) Error() string {
+	if e.Message != "" {
+		return e.Message
+	}
 	return fmt.Sprintf("exit status %d", e.Code)
 }
 
@@ -125,6 +129,11 @@ func main() {
 		}
 	case "manifest":
 		if err := cfg.cmdManifest(fs.Args()[2:]); err != nil {
+			var exitErr *ExitError
+			if errors.As(err, &exitErr) {
+				log.Printf("generate error: %s", err)
+				os.Exit(exitErr.Code)
+			}
 			log.Printf("generate error: %s", err)
 			os.Exit(-1)
 			return
@@ -316,7 +325,7 @@ func (cfg *MainArgConfig) cmdManifest(args []string) error {
 			}
 		}
 		if err := config.cmdUpsertFromUrl(urlArgs, hashes); err != nil {
-			return fmt.Errorf("upsert file from url: %w", err)
+			return &ExitError{Code: 1, Message: fmt.Sprintf("upsert file from url: %v", err)}
 		}
 	case "verify":
 		verifyArgs := fs.Args()[1:]
