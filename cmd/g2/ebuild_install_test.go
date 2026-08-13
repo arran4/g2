@@ -1,39 +1,35 @@
 package main
 
 import (
+	"bytes"
+	"io/fs"
 	"os"
-	"path/filepath"
 	"testing"
 )
 
 func TestCmdEbuildInstall(t *testing.T) {
-	tmpDir := t.TempDir()
+	mockFS := NewMockFS()
 
 	ebuildContent := []byte(`EAPI=8
 CATEGORY="app-test"
 DESCRIPTION="Test"
 `)
-	ebuildFile := filepath.Join(tmpDir, "test-pkg-1.0.ebuild")
-	if err := os.WriteFile(ebuildFile, ebuildContent, 0644); err != nil {
-		t.Fatalf("Failed to write ebuild: %v", err)
-	}
-
-	repoDir := filepath.Join(tmpDir, "repo")
-	if err := os.MkdirAll(repoDir, 0755); err != nil {
-		t.Fatalf("Failed to create repo dir: %v", err)
-	}
+	// Setup repo dir
+	mockFS.MkdirAll("repo", 0755)
 
 	cfg := &CmdEbuildArgConfig{
 		MainArgConfig: &MainArgConfig{},
 	}
 
-	// Install file
-	if err := cfg.cmdEbuildInstall([]string{"--repo", repoDir, ebuildFile}); err != nil {
-		t.Fatalf("cmdEbuildInstall failed: %v", err)
+	// Install from stdin
+	stdin := bytes.NewReader(ebuildContent)
+
+	if err := cfg.InstallEbuild(mockFS, []string{"-", "test-pkg-1.0.ebuild"}, "repo", stdin); err != nil {
+		t.Fatalf("InstallEbuild failed: %v", err)
 	}
 
-	targetFile := filepath.Join(repoDir, "app-test", "test-pkg", "test-pkg-1.0.ebuild")
-	if _, err := os.Stat(targetFile); os.IsNotExist(err) {
+	targetFile := "repo/app-test/test-pkg/test-pkg-1.0.ebuild"
+	if _, err := fs.Stat(mockFS, targetFile); os.IsNotExist(err) {
 		t.Errorf("Ebuild was not installed to expected path: %s", targetFile)
 	}
 }

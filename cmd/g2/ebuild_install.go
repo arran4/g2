@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"io/fs"
 	"log"
 	"os"
 	"path/filepath"
@@ -24,27 +25,25 @@ func (cfg *CmdEbuildArgConfig) cmdEbuildInstall(args []string) error {
 		return fmt.Errorf("usage: g2 ebuild install --repo <repo name / dir> <ebuild fn | - for stdin>")
 	}
 
-	target := targets[0]
 	repoDir := *repoFlag
+	wfs := NewOSFS("")
+
+	return cfg.InstallEbuild(wfs, targets, repoDir, os.Stdin)
+}
+
+func (cfg *CmdEbuildArgConfig) InstallEbuild(wfs WritableFS, targets []string, repoDir string, stdin io.Reader) error {
+	target := targets[0]
 
 	var content []byte
 	var ebuildName string
 
 	if target == "-" {
 		var err error
-		content, err = io.ReadAll(os.Stdin)
+		content, err = io.ReadAll(stdin)
 		if err != nil {
 			return fmt.Errorf("reading stdin: %w", err)
 		}
-		// If read from stdin, we need some way to know the filename.
-		// Usually install ebuild has to know the name, we could try to parse it from the content but ebuilds don't contain their own name usually.
-		// If the user uses `-`, they would need to provide an explicit filename, or we parse from stdin content somehow...
-		// However, standard portage doesn't have an exact `ebuild install -` but we can write it to a temp file and parse,
-		// but we still wouldn't know the package name.
-		// Wait, if it's `-`, we can't easily guess. The prompt just says `<ebuild fn | - for stdin>`.
-		// Let's assume there is a second argument for filename if stdin, or we could parse variables like `PN` and `PV`? But those are often not in the file, but implied from the filename.
 
-		// If they don't provide a name, it's an error.
 		if len(targets) < 2 {
 			return fmt.Errorf("when using stdin, provide the ebuild filename as the second argument")
 		}
@@ -52,7 +51,10 @@ func (cfg *CmdEbuildArgConfig) cmdEbuildInstall(args []string) error {
 	} else {
 		ebuildName = filepath.Base(target)
 		var err error
-		content, err = os.ReadFile(target)
+		// Use os.ReadFile for standard file if it's absolute, otherwise join. But actually wfs handles it.
+		// Wait, WritableFS might not have ReadFile, we only put WriteFile.
+		// Actually fs.ReadFile(wfs, target) works.
+		content, err = fs.ReadFile(wfs, filepath.ToSlash(target))
 		if err != nil {
 			return fmt.Errorf("reading file %s: %w", target, err)
 		}
@@ -70,18 +72,32 @@ func (cfg *CmdEbuildArgConfig) cmdEbuildInstall(args []string) error {
 	pn := vars["PN"]
 
 	// Now we need CATEGORY. We can parse the ebuild to see if it sets CATEGORY.
-	tmpDir, err := os.MkdirTemp("", "g2-install-*")
-	if err != nil {
+	// Since wfs is the filesystem, we can just write it to a temp dir and parse.
+	// Since wfs doesn't have MkdirTemp, we'll just write it directly to the target dir,
+	// but we don't know the category yet.
+	// We'll write it to repoDir/tmp-install-xyz.
+	tmpDir := filepath.Join(repoDir, "tmp-install")
+	if err := wfs.MkdirAll(tmpDir, 0755); err != nil {
 		return fmt.Errorf("creating temp dir: %w", err)
 	}
-	defer func() { _ = os.RemoveAll(tmpDir) }()
+	defer func() { _ = wfs.RemoveAll(tmpDir) }()
 
 	tmpFile := filepath.Join(tmpDir, ebuildName)
-	if err := os.WriteFile(tmpFile, content, 0644); err != nil {
+	if err := wfs.WriteFile(tmpFile, content, 0644); err != nil {
 		return fmt.Errorf("writing temp file: %w", err)
 	}
 
-	ebuild, err := g2.ParseEbuild(os.DirFS(tmpDir), ebuildName, g2.ParseVariables)
+	// We can use os.DirFS if we are using OSFS, or use wfs directly for g2.ParseEbuild if we wrap it.
+	// Wait, g2.ParseEbuild takes an fs.FS and a string. `wfs` is an `fs.FS`! We can just pass `wfs` and the relative path, but ParseEbuild looks in the root of the fs.
+	// But it actually calls `fs.Open(filepath.Join(".", filename))` internally or similar.
+	// Let's use `fs.Sub` to get the dir.
+	subFs, err := fs.Sub(wfs, filepath.ToSlash(tmpDir))
+	if err != nil {
+		// fallback to os.DirFS
+		subFs = os.DirFS(tmpDir)
+	}
+
+	ebuild, err := g2.ParseEbuild(subFs, ebuildName, g2.ParseVariables)
 	if err != nil {
 		return fmt.Errorf("parsing ebuild: %w", err)
 	}
@@ -106,12 +122,12 @@ func (cfg *CmdEbuildArgConfig) cmdEbuildInstall(args []string) error {
 	}
 
 	targetPkgDir := filepath.Join(repoDir, category, pn)
-	if err := os.MkdirAll(targetPkgDir, 0755); err != nil {
+	if err := wfs.MkdirAll(targetPkgDir, 0755); err != nil {
 		return fmt.Errorf("creating target package directory: %w", err)
 	}
 
 	targetEbuildPath := filepath.Join(targetPkgDir, ebuildName)
-	if err := os.WriteFile(targetEbuildPath, content, 0644); err != nil {
+	if err := wfs.WriteFile(targetEbuildPath, content, 0644); err != nil {
 		return fmt.Errorf("writing ebuild: %w", err)
 	}
 

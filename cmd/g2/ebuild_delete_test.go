@@ -1,67 +1,63 @@
 package main
 
 import (
+	"io/fs"
 	"os"
 	"path/filepath"
 	"testing"
 )
 
 func TestCmdEbuildDelete(t *testing.T) {
-	tmpDir := t.TempDir()
+	mockFS := NewMockFS()
 
 	// Setup a fake repo
-	pkgDir := filepath.Join(tmpDir, "app-test", "test-pkg")
-	if err := os.MkdirAll(pkgDir, 0755); err != nil {
-		t.Fatalf("Failed to create pkg dir: %v", err)
-	}
+	pkgDir := "app-test/test-pkg"
+	mockFS.MkdirAll(pkgDir, 0755)
 
-	ebuildPath := filepath.Join(pkgDir, "test-pkg-1.0.ebuild")
-	if err := os.WriteFile(ebuildPath, []byte("EAPI=8\n"), 0644); err != nil {
-		t.Fatalf("Failed to write ebuild: %v", err)
-	}
+	ebuildPath := "app-test/test-pkg/test-pkg-1.0.ebuild"
+	mockFS.WriteFile(ebuildPath, []byte("EAPI=8\n"), 0644)
 
-	manifestPath := filepath.Join(pkgDir, "Manifest")
-	if err := os.WriteFile(manifestPath, []byte(""), 0644); err != nil {
-		t.Fatalf("Failed to write manifest: %v", err)
-	}
+	manifestPath := "app-test/test-pkg/Manifest"
+	mockFS.WriteFile(manifestPath, []byte(""), 0644)
 
-	metadataPath := filepath.Join(pkgDir, "metadata.xml")
-	if err := os.WriteFile(metadataPath, []byte(""), 0644); err != nil {
-		t.Fatalf("Failed to write metadata: %v", err)
-	}
+	metadataPath := "app-test/test-pkg/metadata.xml"
+	mockFS.WriteFile(metadataPath, []byte(""), 0644)
+
+	// Create absolute path versions for MockFS because DeleteEbuilds converts to absolute
+	absEbuildPath, _ := filepath.Abs(ebuildPath)
+	mockFS.WriteFile(absEbuildPath, []byte("EAPI=8\n"), 0644)
+	absPkgDir := filepath.Dir(absEbuildPath)
+	mockFS.WriteFile(filepath.Join(absPkgDir, "Manifest"), []byte(""), 0644)
+	mockFS.WriteFile(filepath.Join(absPkgDir, "metadata.xml"), []byte(""), 0644)
 
 	cfg := &CmdEbuildArgConfig{
 		MainArgConfig: &MainArgConfig{},
 	}
 
 	// Delete by path
-	if err := cfg.cmdEbuildDelete([]string{"--repo", tmpDir, ebuildPath}); err != nil {
-		t.Fatalf("cmdEbuildDelete failed: %v", err)
+	if err := cfg.DeleteEbuilds(mockFS, []string{ebuildPath}, "."); err != nil {
+		t.Fatalf("DeleteEbuilds failed: %v", err)
 	}
 
-	if _, err := os.Stat(ebuildPath); !os.IsNotExist(err) {
+	if _, err := fs.Stat(mockFS, absEbuildPath); !os.IsNotExist(err) {
 		t.Errorf("Ebuild was not deleted")
 	}
-	if _, err := os.Stat(pkgDir); !os.IsNotExist(err) {
+	if _, err := fs.Stat(mockFS, absPkgDir); !os.IsNotExist(err) {
 		t.Errorf("Package directory was not completely deleted")
 	}
 
 	// Test by atom
-	pkgDir = filepath.Join(tmpDir, "app-test", "test-pkg2")
-	if err := os.MkdirAll(pkgDir, 0755); err != nil {
-		t.Fatalf("Failed to create pkg dir: %v", err)
+	pkgDir2 := "app-test/test-pkg2"
+	mockFS.MkdirAll(pkgDir2, 0755)
+
+	ebuildPath2 := "app-test/test-pkg2/test-pkg2-1.0.ebuild"
+	mockFS.WriteFile(ebuildPath2, []byte("EAPI=8\n"), 0644)
+
+	if err := cfg.DeleteEbuilds(mockFS, []string{"app-test/test-pkg2-1.0"}, "."); err != nil {
+		t.Fatalf("DeleteEbuilds failed: %v", err)
 	}
 
-	ebuildPath = filepath.Join(pkgDir, "test-pkg2-1.0.ebuild")
-	if err := os.WriteFile(ebuildPath, []byte("EAPI=8\n"), 0644); err != nil {
-		t.Fatalf("Failed to write ebuild: %v", err)
-	}
-
-	if err := cfg.cmdEbuildDelete([]string{"--repo", tmpDir, "app-test/test-pkg2-1.0"}); err != nil {
-		t.Fatalf("cmdEbuildDelete failed: %v", err)
-	}
-
-	if _, err := os.Stat(ebuildPath); !os.IsNotExist(err) {
+	if _, err := fs.Stat(mockFS, ebuildPath2); !os.IsNotExist(err) {
 		t.Errorf("Ebuild was not deleted by atom")
 	}
 }

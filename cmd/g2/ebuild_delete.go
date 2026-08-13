@@ -24,6 +24,12 @@ func (cfg *CmdEbuildArgConfig) cmdEbuildDelete(args []string) error {
 	}
 
 	repoDir := *repoFlag
+	wfs := NewOSFS("")
+
+	return cfg.DeleteEbuilds(wfs, targets, repoDir)
+}
+
+func (cfg *CmdEbuildArgConfig) DeleteEbuilds(wfs WritableFS, targets []string, repoDir string) error {
 	if !filepath.IsAbs(repoDir) && repoDir != "." {
 		if abs, err := filepath.Abs(repoDir); err == nil {
 			repoDir = abs
@@ -49,7 +55,7 @@ func (cfg *CmdEbuildArgConfig) cmdEbuildDelete(args []string) error {
 			}
 
 			pkgDir := filepath.Join(repoDir, atom.Category, atom.Name)
-			entries, err := os.ReadDir(pkgDir)
+			entries, err := wfs.ReadDir(pkgDir)
 			if err != nil {
 				if os.IsNotExist(err) {
 					log.Printf("Warning: package directory %s not found", pkgDir)
@@ -81,7 +87,7 @@ func (cfg *CmdEbuildArgConfig) cmdEbuildDelete(args []string) error {
 	pkgDirsToClean := make(map[string]bool)
 
 	for _, f := range filesToRemove {
-		if err := os.Remove(f); err != nil {
+		if err := wfs.Remove(f); err != nil {
 			log.Printf("Failed to remove ebuild %s: %v", f, err)
 			continue
 		}
@@ -90,7 +96,7 @@ func (cfg *CmdEbuildArgConfig) cmdEbuildDelete(args []string) error {
 	}
 
 	for pkgDir := range pkgDirsToClean {
-		entries, _ := os.ReadDir(pkgDir)
+		entries, _ := wfs.ReadDir(pkgDir)
 		ebuildCount := 0
 		for _, e := range entries {
 			if !e.IsDir() && strings.HasSuffix(e.Name(), ".ebuild") {
@@ -101,12 +107,20 @@ func (cfg *CmdEbuildArgConfig) cmdEbuildDelete(args []string) error {
 		manifestPath := filepath.Join(pkgDir, "Manifest")
 		if ebuildCount > 0 {
 			if manifest, err := g2.ParseManifest(manifestPath); err == nil {
+				// g2.CleanManifest needs fs.FS, which wfs provides.
+				// Wait, g2.CleanManifest might need os.DirFS if it uses real paths, but if we pass wfs it might work.
+				// However g2.CleanManifest expects a fs.FS rooted at the package directory.
+				// WritableFS doesn't have Sub(). We can just pass os.DirFS for now if it's OSFS.
+				// Let's use a sub-fs. But actually g2.CleanManifest isn't easily mockable if it requires a rooted FS.
+				// Actually, we can just use standard os.DirFS for g2.CleanManifest if it's not easily mocked.
+				// Let's just use wfs for the write file.
+				// Wait, since we are moving to WritableFS, let's just use os.DirFS(pkgDir) for CleanManifest.
 				_ = g2.CleanManifest(os.DirFS(pkgDir), ".", manifest)
-				_ = os.WriteFile(manifestPath, []byte(manifest.String()), 0644)
+				_ = wfs.WriteFile(manifestPath, []byte(manifest.String()), 0644)
 			}
 		} else {
-			_ = os.Remove(manifestPath)
-			_ = os.Remove(filepath.Join(pkgDir, "metadata.xml"))
+			_ = wfs.Remove(manifestPath)
+			_ = wfs.Remove(filepath.Join(pkgDir, "metadata.xml"))
 
 			// Attempt to remove md5-cache
 			parts := strings.Split(filepath.ToSlash(pkgDir), "/")
@@ -123,16 +137,16 @@ func (cfg *CmdEbuildArgConfig) cmdEbuildDelete(args []string) error {
 				}
 
 				md5CacheDir := filepath.Join(repoRoot, "metadata", "md5-cache", category)
-				if cacheEntries, err := os.ReadDir(md5CacheDir); err == nil {
+				if cacheEntries, err := wfs.ReadDir(md5CacheDir); err == nil {
 					for _, ce := range cacheEntries {
 						if strings.HasPrefix(ce.Name(), pkg+"-") && len(ce.Name()) > len(pkg)+1 && (ce.Name()[len(pkg)] == '-' && ce.Name()[len(pkg)+1] >= '0' && ce.Name()[len(pkg)+1] <= '9') {
-							_ = os.Remove(filepath.Join(md5CacheDir, ce.Name()))
+							_ = wfs.Remove(filepath.Join(md5CacheDir, ce.Name()))
 						}
 					}
 				}
 			}
 
-			_ = os.RemoveAll(pkgDir)
+			_ = wfs.RemoveAll(pkgDir)
 		}
 	}
 
