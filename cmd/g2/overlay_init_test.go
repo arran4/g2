@@ -3,14 +3,51 @@ package main
 import (
 	"bytes"
 	"io"
+	"os"
 	"net/http"
 	"net/http/httptest"
 	"testing"
-	"github.com/go-git/go-billy/v5/memfs"
+	"time"
 )
 
+type mockFS struct {
+	files map[string][]byte
+}
+
+func newMockFS() *mockFS {
+	return &mockFS{files: make(map[string][]byte)}
+}
+
+func (m *mockFS) MkdirAll(path string, perm os.FileMode) error {
+	return nil
+}
+
+func (m *mockFS) Stat(name string) (os.FileInfo, error) {
+	if _, ok := m.files[name]; ok {
+		return mockFileInfo{name: name}, nil
+	}
+	return nil, os.ErrNotExist
+}
+
+func (m *mockFS) WriteFile(name string, data []byte, perm os.FileMode) error {
+	m.files[name] = data
+	return nil
+}
+
+type mockFileInfo struct {
+	name string
+}
+
+func (m mockFileInfo) Name() string       { return m.name }
+func (m mockFileInfo) Size() int64        { return 0 }
+func (m mockFileInfo) Mode() os.FileMode  { return 0 }
+func (m mockFileInfo) ModTime() time.Time { return time.Time{} }
+func (m mockFileInfo) IsDir() bool        { return false }
+func (m mockFileInfo) Sys() interface{}   { return nil }
+
+
 func TestInitOverlay(t *testing.T) {
-	fs := memfs.New()
+	fs := newMockFS()
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		io.WriteString(w, "masters = gentoo\n")
@@ -29,35 +66,29 @@ func TestInitOverlay(t *testing.T) {
 	}
 
 	// check profiles/repo_name
-	f, err := fs.Open("profiles/repo_name")
-	if err != nil {
-		t.Fatalf("Failed to open profiles/repo_name: %v", err)
+	content, ok := fs.files["profiles/repo_name"]
+	if !ok {
+		t.Fatalf("Failed to find profiles/repo_name")
 	}
-	content, _ := io.ReadAll(f)
 	if string(content) != "test-overlay\n" {
 		t.Errorf("Unexpected content in profiles/repo_name: %s", content)
 	}
-	f.Close()
 
 	// check profiles/eapi
-	f, err = fs.Open("profiles/eapi")
-	if err != nil {
-		t.Fatalf("Failed to open profiles/eapi: %v", err)
+	content, ok = fs.files["profiles/eapi"]
+	if !ok {
+		t.Fatalf("Failed to find profiles/eapi")
 	}
-	content, _ = io.ReadAll(f)
 	if string(content) != "8\n" {
 		t.Errorf("Unexpected content in profiles/eapi: %s", content)
 	}
-	f.Close()
 
 	// check metadata/layout.conf
-	f, err = fs.Open("metadata/layout.conf")
-	if err != nil {
-		t.Fatalf("Failed to open metadata/layout.conf: %v", err)
+	content, ok = fs.files["metadata/layout.conf"]
+	if !ok {
+		t.Fatalf("Failed to find metadata/layout.conf")
 	}
-	content, _ = io.ReadAll(f)
 	if !bytes.Contains(content, []byte("masters = gentoo\n")) {
 		t.Errorf("Unexpected content in metadata/layout.conf: %s", content)
 	}
-	f.Close()
 }

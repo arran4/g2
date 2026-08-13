@@ -6,9 +6,7 @@ import (
 	"os"
 	"io"
 	"net/http"
-
-	"github.com/go-git/go-billy/v5"
-	"github.com/go-git/go-billy/v5/osfs"
+	"path/filepath"
 )
 
 type OverlayInitArgs struct {
@@ -17,19 +15,43 @@ type OverlayInitArgs struct {
 	LayoutConfUrl string
 }
 
-func (cfg *MainArgConfig) cmdOverlayInit(args []string) error {
-	fs := flag.NewFlagSet("overlay init", flag.ExitOnError)
-	overlayName := fs.String("overlay-name", "my-overlay", "Name of the overlay")
-	repoName := fs.String("repo-name", "", "Name of the repository (alias for overlay-name)")
-	eapiVersion := fs.String("eapi-version", "8", "EAPI version")
-	layoutConfUrl := fs.String("layout-conf-url", "https://raw.githubusercontent.com/gentoo/gentoo/master/metadata/layout.conf", "URL to fetch layout.conf from (if empty, a minimal one is created)")
+// SimpleFS provides a minimal interface for file system operations needed by overlay init.
+type SimpleFS interface {
+	MkdirAll(path string, perm os.FileMode) error
+	Stat(name string) (os.FileInfo, error)
+	WriteFile(name string, data []byte, perm os.FileMode) error
+}
 
-	fs.Usage = func() {
+// osSimpleFS implements SimpleFS using the os package.
+type osSimpleFS struct {
+	baseDir string
+}
+
+func (fs *osSimpleFS) MkdirAll(path string, perm os.FileMode) error {
+	return os.MkdirAll(filepath.Join(fs.baseDir, path), perm)
+}
+
+func (fs *osSimpleFS) Stat(name string) (os.FileInfo, error) {
+	return os.Stat(filepath.Join(fs.baseDir, name))
+}
+
+func (fs *osSimpleFS) WriteFile(name string, data []byte, perm os.FileMode) error {
+	return os.WriteFile(filepath.Join(fs.baseDir, name), data, perm)
+}
+
+func (cfg *MainArgConfig) cmdOverlayInit(args []string) error {
+	fsFlags := flag.NewFlagSet("overlay init", flag.ExitOnError)
+	overlayName := fsFlags.String("overlay-name", "my-overlay", "Name of the overlay")
+	repoName := fsFlags.String("repo-name", "", "Name of the repository (alias for overlay-name)")
+	eapiVersion := fsFlags.String("eapi-version", "8", "EAPI version")
+	layoutConfUrl := fsFlags.String("layout-conf-url", "https://raw.githubusercontent.com/gentoo/gentoo/master/metadata/layout.conf", "URL to fetch layout.conf from (if empty, a minimal one is created)")
+
+	fsFlags.Usage = func() {
 		fmt.Printf("Usage: g2 overlay init [flags]\n")
-		fs.PrintDefaults()
+		fsFlags.PrintDefaults()
 	}
 
-	if err := fs.Parse(args); err != nil {
+	if err := fsFlags.Parse(args); err != nil {
 		return err
 	}
 
@@ -49,12 +71,12 @@ func (cfg *MainArgConfig) cmdOverlayInit(args []string) error {
 		return fmt.Errorf("failed to get current working directory: %w", err)
 	}
 
-	targetFs := osfs.New(cwd)
+	targetFs := &osSimpleFS{baseDir: cwd}
 
 	return InitOverlay(targetFs, initArgs)
 }
 
-func InitOverlay(fs billy.Filesystem, args OverlayInitArgs) error {
+func InitOverlay(fs SimpleFS, args OverlayInitArgs) error {
 	// Create profiles directory
 	if err := fs.MkdirAll("profiles", 0755); err != nil {
 		return fmt.Errorf("failed to create profiles directory: %w", err)
@@ -62,13 +84,7 @@ func InitOverlay(fs billy.Filesystem, args OverlayInitArgs) error {
 
 	// Create profiles/repo_name
 	if _, err := fs.Stat("profiles/repo_name"); os.IsNotExist(err) {
-		f, err := fs.Create("profiles/repo_name")
-		if err != nil {
-			return fmt.Errorf("failed to write profiles/repo_name: %w", err)
-		}
-		_, err = f.Write([]byte(args.Name + "\n"))
-		f.Close()
-		if err != nil {
+		if err := fs.WriteFile("profiles/repo_name", []byte(args.Name + "\n"), 0644); err != nil {
 			return fmt.Errorf("failed to write profiles/repo_name: %w", err)
 		}
 		fmt.Printf("Created profiles/repo_name with '%s'\n", args.Name)
@@ -78,13 +94,7 @@ func InitOverlay(fs billy.Filesystem, args OverlayInitArgs) error {
 
 	// Create profiles/eapi
 	if _, err := fs.Stat("profiles/eapi"); os.IsNotExist(err) {
-		f, err := fs.Create("profiles/eapi")
-		if err != nil {
-			return fmt.Errorf("failed to write profiles/eapi: %w", err)
-		}
-		_, err = f.Write([]byte(args.EapiVersion + "\n"))
-		f.Close()
-		if err != nil {
+		if err := fs.WriteFile("profiles/eapi", []byte(args.EapiVersion + "\n"), 0644); err != nil {
 			return fmt.Errorf("failed to write profiles/eapi: %w", err)
 		}
 		fmt.Printf("Created profiles/eapi with '%s'\n", args.EapiVersion)
@@ -116,13 +126,7 @@ func InitOverlay(fs billy.Filesystem, args OverlayInitArgs) error {
 			}
 		}
 		if len(content) > 0 {
-			f, err := fs.Create("metadata/layout.conf")
-			if err != nil {
-				return fmt.Errorf("failed to write metadata/layout.conf: %w", err)
-			}
-			_, err = f.Write(content)
-			f.Close()
-			if err != nil {
+			if err := fs.WriteFile("metadata/layout.conf", content, 0644); err != nil {
 				return fmt.Errorf("failed to write metadata/layout.conf: %w", err)
 			}
 			fmt.Printf("Created metadata/layout.conf\n")
