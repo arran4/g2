@@ -74,7 +74,7 @@ func (cfg *CmdEbuildArgConfig) cmdEbuildInstall(args []string) error {
 	if err != nil {
 		return fmt.Errorf("creating temp dir: %w", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	tmpFile := filepath.Join(tmpDir, ebuildName)
 	if err := os.WriteFile(tmpFile, content, 0644); err != nil {
@@ -122,15 +122,15 @@ func (cfg *CmdEbuildArgConfig) cmdEbuildInstall(args []string) error {
 		log.Printf("Warning: updating manifest: %v", err)
 	}
 
-	if err := cfg.MainArgConfig.cmdUseDiscover([]string{repoDir}); err != nil {
+	if err := cfg.cmdUseDiscover([]string{repoDir}); err != nil {
 		log.Printf("Warning: updating use.desc/use.local.desc: %v", err)
 	}
 
-	if err := cfg.MainArgConfig.cmdPkgDescIndexGenerate([]string{repoDir}); err != nil {
+	if err := cfg.cmdPkgDescIndexGenerate([]string{repoDir}); err != nil {
 		log.Printf("Warning: generating pkg_desc_index: %v", err)
 	}
 
-	if err := cfg.MainArgConfig.cmdCacheGenerate([]string{repoDir}); err != nil {
+	if err := cfg.cmdCacheGenerate([]string{repoDir}); err != nil {
 		log.Printf("Warning: generating md5-cache: %v", err)
 	}
 
