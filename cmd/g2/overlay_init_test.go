@@ -49,7 +49,7 @@ func TestInitOverlay(t *testing.T) {
 	fs := newMockFS()
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		io.WriteString(w, "masters = gentoo\n")
+		_, _ = io.WriteString(w, "masters = gentoo\n")
 	}))
 	defer ts.Close()
 

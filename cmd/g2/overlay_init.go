@@ -116,7 +116,7 @@ func InitOverlay(fs SimpleFS, args OverlayInitArgs) error {
 			if err != nil {
 				fmt.Printf("Warning: failed to download layout.conf: %v\n", err)
 			} else {
-				defer resp.Body.Close()
+				defer func() { _ = resp.Body.Close() }()
 				if resp.StatusCode == http.StatusOK {
 					content, _ = io.ReadAll(resp.Body)
 				} else {
