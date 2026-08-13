@@ -41,6 +41,8 @@ func (cfg *MainArgConfig) cmdEbuild(args []string) error {
 		fmt.Printf("\t\t %s \t\t %s\n", "next-revision", "Generate the next revision name and optionally inspect contents")
 		fmt.Printf("\t\t %s \t\t %s\n", "upsert", "Upsert an ebuild revision from stdin or file")
 		fmt.Printf("\t\t %s \t\t %s\n", "deduplicate", "Deduplicate and clean up old or redundant ebuilds")
+		fmt.Printf("\t\t %s \t\t %s\n", "delete", "Delete ebuilds and clean up their repo entries")
+		fmt.Printf("\t\t %s \t\t %s\n", "install", "Install ebuild into repository")
 	}
 
 	config := &CmdEbuildArgConfig{
@@ -115,6 +117,14 @@ func (cfg *MainArgConfig) cmdEbuild(args []string) error {
 	case "deduplicate":
 		if err := config.cmdEbuildDeduplicate(fs.Args()[1:]); err != nil {
 			return fmt.Errorf("ebuild deduplicate: %w", err)
+		}
+	case "delete":
+		if err := config.cmdEbuildDelete(fs.Args()[1:]); err != nil {
+			return fmt.Errorf("ebuild delete: %w", err)
+		}
+	case "install":
+		if err := config.cmdEbuildInstall(fs.Args()[1:]); err != nil {
+			return fmt.Errorf("ebuild install: %w", err)
 		}
 	case "help", "-help", "--help":
 		fs.Usage()
