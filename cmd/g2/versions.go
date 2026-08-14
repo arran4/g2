@@ -31,7 +31,7 @@ func (cfg *MainArgConfig) CmdVersions(args []string) error {
 		return compareVersions(args[1:])
 	case "convert":
 		if len(args) < 3 {
-			return fmt.Errorf("usage: versions convert <semantic-to-gentoo|gentoo-to-semantic> <version string | ->")
+			return fmt.Errorf("usage: versions convert <semantic-to-gentoo|gentoo-to-semantic|flutter-to-gentoo|gentoo-to-flutter> <version string | ->")
 		}
 		mode := args[1]
 		input := args[2]
@@ -42,8 +42,12 @@ func (cfg *MainArgConfig) CmdVersions(args []string) error {
 			processFunc = SemanticToGentoo
 		case "gentoo-to-semantic":
 			processFunc = GentooToSemantic
+		case "flutter-to-gentoo":
+			processFunc = FlutterToGentoo
+		case "gentoo-to-flutter":
+			processFunc = GentooToFlutter
 		default:
-			return fmt.Errorf("unknown convert mode: %s, must be semantic-to-gentoo or gentoo-to-semantic", mode)
+			return fmt.Errorf("unknown convert mode: %s, must be semantic-to-gentoo, gentoo-to-semantic, flutter-to-gentoo, or gentoo-to-flutter", mode)
 		}
 
 		if input == "-" {
@@ -186,6 +190,50 @@ func SemanticToGentoo(v string) string {
 	}
 
 	return res
+}
+
+// FlutterToGentoo converts a Flutter version string to a Gentoo version string.
+func FlutterToGentoo(v string) string {
+	if !strings.HasSuffix(v, ".pre") {
+		return v
+	}
+
+	// strip .pre
+	v = strings.TrimSuffix(v, ".pre")
+
+	// split by -
+	parts := strings.Split(v, "-")
+	if len(parts) != 2 {
+		return v // fallback
+	}
+
+	base := parts[0]
+	preParts := strings.Split(parts[1], ".")
+	if len(preParts) == 2 {
+		return fmt.Sprintf("%s_pre%s_p%s", base, preParts[0], preParts[1])
+	} else if len(preParts) == 1 {
+		return fmt.Sprintf("%s_pre%s", base, preParts[0])
+	}
+
+	return v
+}
+
+// GentooToFlutter converts a Gentoo version string to a Flutter version string.
+func GentooToFlutter(v string) string {
+	// looking for _preX_pY or _preX
+	if !strings.Contains(v, "_pre") {
+		return v
+	}
+
+	parts := strings.SplitN(v, "_pre", 2)
+	base := parts[0]
+
+	if strings.Contains(parts[1], "_p") {
+		subParts := strings.SplitN(parts[1], "_p", 2)
+		return fmt.Sprintf("%s-%s.%s.pre", base, subParts[0], subParts[1])
+	}
+
+	return fmt.Sprintf("%s-%s.0.pre", base, parts[1])
 }
 
 // GentooToSemantic converts a Gentoo version string to a semantic version string.
