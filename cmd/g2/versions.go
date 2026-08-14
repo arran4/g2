@@ -192,59 +192,100 @@ func SemanticToGentoo(v string) string {
 	return res
 }
 
-// FlutterToGentoo converts a Flutter version string to a Gentoo version string.
-func FlutterToGentoo(v string) string {
+// ParseFlutterVersion parses a flutter version string into its components.
+func ParseFlutterVersion(v string) (base string, pre string, build string) {
 	v = strings.TrimPrefix(v, "v")
 
-	if strings.Contains(v, "+hotfix.") {
-		v = strings.ReplaceAll(v, "+hotfix.", "_p")
-	} else if strings.Contains(v, "+") {
-		v = strings.ReplaceAll(v, "+", "_p")
+	if idx := strings.Index(v, "+"); idx != -1 {
+		build = v[idx+1:]
+		v = v[:idx]
 	}
 
-	if !strings.HasSuffix(v, ".pre") {
-		return v
+	if idx := strings.Index(v, "-"); idx != -1 {
+		pre = v[idx+1:]
+		v = v[:idx]
 	}
 
-	// strip .pre
-	v = strings.TrimSuffix(v, ".pre")
+	base = v
+	return
+}
 
-	// split by -
-	parts := strings.Split(v, "-")
-	if len(parts) != 2 {
-		return v // fallback
+// FlutterToGentoo converts a Flutter version string to a Gentoo version string.
+func FlutterToGentoo(v string) string {
+	base, pre, build := ParseFlutterVersion(v)
+	res := base
+
+	if pre != "" {
+		pre = strings.TrimSuffix(pre, ".pre")
+		parts := strings.Split(pre, ".")
+		if len(parts) >= 2 {
+			res += fmt.Sprintf("_pre%s_p%s", parts[0], parts[1])
+		} else if len(parts) == 1 {
+			res += fmt.Sprintf("_pre%s", parts[0])
+		} else {
+			res += "_pre" + pre
+		}
 	}
 
-	base := parts[0]
-	preParts := strings.Split(parts[1], ".")
-	if len(preParts) == 2 {
-		return fmt.Sprintf("%s_pre%s_p%s", base, preParts[0], preParts[1])
-	} else if len(preParts) == 1 {
-		return fmt.Sprintf("%s_pre%s", base, preParts[0])
+	if build != "" {
+		build = strings.TrimPrefix(build, "hotfix.")
+		res += fmt.Sprintf("_p%s", build)
 	}
 
-	return v
+	return res
 }
 
 // GentooToFlutter converts a Gentoo version string to a Flutter version string.
 func GentooToFlutter(v string) string {
-	// looking for _preX_pY or _preX
-	if !strings.Contains(v, "_pre") {
-		if strings.Contains(v, "_p") {
-			return strings.ReplaceAll(v, "_p", "+")
-		}
+	gv := g2.ParseGentooVersion(v)
+	if !gv.IsValid {
 		return v
 	}
 
-	parts := strings.SplitN(v, "_pre", 2)
-	base := parts[0]
-
-	if strings.Contains(parts[1], "_p") {
-		subParts := strings.SplitN(parts[1], "_p", 2)
-		return fmt.Sprintf("%s-%s.%s.pre", base, subParts[0], subParts[1])
+	res := strings.Join(gv.NumStrs, ".")
+	if gv.Letter != "" {
+		res += gv.Letter
 	}
 
-	return fmt.Sprintf("%s-%s.0.pre", base, parts[1])
+	var preParts []string
+	var buildParts []string
+
+	for _, suf := range gv.Suffixes {
+		if suf.Name == "pre" {
+			preParts = append(preParts, suf.ValueStr)
+		} else if suf.Name == "p" {
+			// If we already have a 'pre' but no patch for it, this '_p' acts as the pre-release's minor patch
+			if len(preParts) > 0 && len(preParts) < 2 {
+				preParts = append(preParts, suf.ValueStr)
+			} else {
+				buildParts = append(buildParts, suf.ValueStr)
+			}
+		} else {
+			preParts = append(preParts, suf.Name+suf.ValueStr)
+		}
+	}
+
+	if len(preParts) > 0 {
+		if len(preParts) == 1 {
+			res += fmt.Sprintf("-%s.0.pre", preParts[0])
+		} else {
+			res += fmt.Sprintf("-%s.%s.pre", preParts[0], preParts[1])
+		}
+	}
+
+	if len(buildParts) > 0 {
+		res += "+" + buildParts[0]
+	}
+
+	if gv.Revision > 0 {
+		if len(buildParts) == 0 {
+			res += fmt.Sprintf("+%d", gv.Revision)
+		} else {
+			res += fmt.Sprintf(".%d", gv.Revision)
+		}
+	}
+
+	return res
 }
 
 // GentooToSemantic converts a Gentoo version string to a semantic version string.
