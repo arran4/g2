@@ -31,7 +31,7 @@ func (cfg *MainArgConfig) CmdVersions(args []string) error {
 		return compareVersions(args[1:])
 	case "convert":
 		if len(args) < 3 {
-			return fmt.Errorf("usage: versions convert <semantic-to-gentoo|gentoo-to-semantic> <version string | ->")
+			return fmt.Errorf("usage: versions convert <semantic-to-gentoo|gentoo-to-semantic|flutter-to-gentoo|gentoo-to-flutter> <version string | ->")
 		}
 		mode := args[1]
 		input := args[2]
@@ -42,8 +42,12 @@ func (cfg *MainArgConfig) CmdVersions(args []string) error {
 			processFunc = SemanticToGentoo
 		case "gentoo-to-semantic":
 			processFunc = GentooToSemantic
+		case "flutter-to-gentoo":
+			processFunc = FlutterToGentoo
+		case "gentoo-to-flutter":
+			processFunc = GentooToFlutter
 		default:
-			return fmt.Errorf("unknown convert mode: %s, must be semantic-to-gentoo or gentoo-to-semantic", mode)
+			return fmt.Errorf("unknown convert mode: %s, must be semantic-to-gentoo, gentoo-to-semantic, flutter-to-gentoo, or gentoo-to-flutter", mode)
 		}
 
 		if input == "-" {
@@ -183,6 +187,103 @@ func SemanticToGentoo(v string) string {
 	}
 	if sv.Revision > 0 {
 		res += fmt.Sprintf("-r%d", sv.Revision)
+	}
+
+	return res
+}
+
+// ParseFlutterVersion parses a flutter version string into its components.
+func ParseFlutterVersion(v string) (base string, pre string, build string) {
+	v = strings.TrimPrefix(v, "v")
+
+	if idx := strings.Index(v, "+"); idx != -1 {
+		build = v[idx+1:]
+		v = v[:idx]
+	}
+
+	if idx := strings.Index(v, "-"); idx != -1 {
+		pre = v[idx+1:]
+		v = v[:idx]
+	}
+
+	base = v
+	return
+}
+
+// FlutterToGentoo converts a Flutter version string to a Gentoo version string.
+func FlutterToGentoo(v string) string {
+	base, pre, build := ParseFlutterVersion(v)
+	res := base
+
+	if pre != "" {
+		pre = strings.TrimSuffix(pre, ".pre")
+		parts := strings.Split(pre, ".")
+		if len(parts) >= 2 {
+			res += fmt.Sprintf("_pre%s_p%s", parts[0], parts[1])
+		} else if len(parts) == 1 {
+			res += fmt.Sprintf("_pre%s", parts[0])
+		} else {
+			res += "_pre" + pre
+		}
+	}
+
+	if build != "" {
+		build = strings.TrimPrefix(build, "hotfix.")
+		res += fmt.Sprintf("_p%s", build)
+	}
+
+	return res
+}
+
+// GentooToFlutter converts a Gentoo version string to a Flutter version string.
+func GentooToFlutter(v string) string {
+	gv := g2.ParseGentooVersion(v)
+	if !gv.IsValid {
+		return v
+	}
+
+	res := strings.Join(gv.NumStrs, ".")
+	if gv.Letter != "" {
+		res += gv.Letter
+	}
+
+	var preParts []string
+	var buildParts []string
+
+	for _, suf := range gv.Suffixes {
+		switch suf.Name {
+		case "pre":
+			preParts = append(preParts, suf.ValueStr)
+		case "p":
+			// If we already have a 'pre' but no patch for it, this '_p' acts as the pre-release's minor patch
+			if len(preParts) > 0 && len(preParts) < 2 {
+				preParts = append(preParts, suf.ValueStr)
+			} else {
+				buildParts = append(buildParts, suf.ValueStr)
+			}
+		default:
+			preParts = append(preParts, suf.Name+suf.ValueStr)
+		}
+	}
+
+	if len(preParts) > 0 {
+		if len(preParts) == 1 {
+			res += fmt.Sprintf("-%s.0.pre", preParts[0])
+		} else {
+			res += fmt.Sprintf("-%s.%s.pre", preParts[0], preParts[1])
+		}
+	}
+
+	if len(buildParts) > 0 {
+		res += "+" + buildParts[0]
+	}
+
+	if gv.Revision > 0 {
+		if len(buildParts) == 0 {
+			res += fmt.Sprintf("+%d", gv.Revision)
+		} else {
+			res += fmt.Sprintf(".%d", gv.Revision)
+		}
 	}
 
 	return res

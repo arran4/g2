@@ -32,6 +32,57 @@ func TestSemanticToGentoo(t *testing.T) {
 	}
 }
 
+func TestFlutterToGentoo(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"3.48.0", "3.48.0"},
+		{"3.48.0-0.1.pre", "3.48.0_pre0_p1"},
+		{"3.48.0-1.0.pre", "3.48.0_pre1_p0"},
+		{"3.48.0-2.pre", "3.48.0_pre2"},
+		{"3.47.0-0.4.pre", "3.47.0_pre0_p4"},
+		{"3.19.0+1", "3.19.0_p1"},
+		{"1.12.13+hotfix.9", "1.12.13_p9"},
+		{"3.48.0-0.1.pre+1", "3.48.0_pre0_p1_p1"},
+		{"invalid", "invalid"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			actual := FlutterToGentoo(tt.input)
+			if actual != tt.expected {
+				t.Errorf("FlutterToGentoo(%q) = %q, expected %q", tt.input, actual, tt.expected)
+			}
+		})
+	}
+}
+
+func TestGentooToFlutter(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"3.48.0", "3.48.0"},
+		{"3.48.0_pre0_p1", "3.48.0-0.1.pre"},
+		{"3.48.0_pre1_p0", "3.48.0-1.0.pre"},
+		{"3.48.0_pre2", "3.48.0-2.0.pre"},
+		{"3.47.0_pre0_p4", "3.47.0-0.4.pre"},
+		{"3.19.0_p1", "3.19.0+1"},
+		{"3.48.0_pre0_p1_p1", "3.48.0-0.1.pre+1"},
+		{"invalid", "invalid"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			actual := GentooToFlutter(tt.input)
+			if actual != tt.expected {
+				t.Errorf("GentooToFlutter(%q) = %q, expected %q", tt.input, actual, tt.expected)
+			}
+		})
+	}
+}
+
 func TestGentooToSemantic(t *testing.T) {
 	tests := []struct {
 		input    string
