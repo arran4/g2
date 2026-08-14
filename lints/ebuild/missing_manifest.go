@@ -2,6 +2,7 @@ package ebuild
 
 import (
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -31,6 +32,10 @@ func (r *MissingManifestLintRule) Lint(repoDir string, pkg *g2.PackageData) []li
 }
 
 func (r *MissingManifestLintRule) LintWithQA(repoDir string, pkg *g2.PackageData, qa *g2.QAPolicy) []lints.LintResult {
+	return r.lintWithFS(os.DirFS(repoDir), filepath.Join(pkg.Category, pkg.Name), pkg, qa)
+}
+
+func (r *MissingManifestLintRule) lintWithFS(repoFS fs.FS, pkgDir string, pkg *g2.PackageData, qa *g2.QAPolicy) []lints.LintResult {
 	var results []lints.LintResult
 
 	manifestFiles := make(map[string]bool)
@@ -42,8 +47,12 @@ func (r *MissingManifestLintRule) LintWithQA(repoDir string, pkg *g2.PackageData
 		}
 	}
 
-	pkgDir := filepath.Join(repoDir, pkg.Category, pkg.Name)
-	entries, err := os.ReadDir(pkgDir)
+	entries, err := fs.ReadDir(repoFS, pkgDir)
+	if err != nil {
+		return results
+	}
+
+	pkgFS, err := fs.Sub(repoFS, pkgDir)
 	if err != nil {
 		return results
 	}
@@ -56,7 +65,7 @@ func (r *MissingManifestLintRule) LintWithQA(repoDir string, pkg *g2.PackageData
 				version = strings.TrimPrefix(version, pkg.Name+"-")
 			}
 
-			parsedEbuild, err := g2.ParseEbuild(os.DirFS(pkgDir), ebuildName, g2.ParseFull)
+			parsedEbuild, err := g2.ParseEbuild(pkgFS, ebuildName, g2.ParseFull)
 			if err != nil {
 				continue
 			}
