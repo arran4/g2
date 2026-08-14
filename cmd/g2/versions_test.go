@@ -42,6 +42,8 @@ func TestFlutterToGentoo(t *testing.T) {
 		{"3.48.0-1.0.pre", "3.48.0_pre1_p0"},
 		{"3.48.0-2.pre", "3.48.0_pre2"},
 		{"3.47.0-0.4.pre", "3.47.0_pre0_p4"},
+		{"3.19.0+1", "3.19.0_p1"},
+		{"1.12.13+hotfix.9", "1.12.13_p9"},
 		{"invalid", "invalid"},
 	}
 
@@ -65,6 +67,7 @@ func TestGentooToFlutter(t *testing.T) {
 		{"3.48.0_pre1_p0", "3.48.0-1.0.pre"},
 		{"3.48.0_pre2", "3.48.0-2.0.pre"},
 		{"3.47.0_pre0_p4", "3.47.0-0.4.pre"},
+		{"3.19.0_p1", "3.19.0+1"},
 		{"invalid", "invalid"},
 	}
 

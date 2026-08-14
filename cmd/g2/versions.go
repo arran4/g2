@@ -194,6 +194,14 @@ func SemanticToGentoo(v string) string {
 
 // FlutterToGentoo converts a Flutter version string to a Gentoo version string.
 func FlutterToGentoo(v string) string {
+	v = strings.TrimPrefix(v, "v")
+
+	if strings.Contains(v, "+hotfix.") {
+		v = strings.ReplaceAll(v, "+hotfix.", "_p")
+	} else if strings.Contains(v, "+") {
+		v = strings.ReplaceAll(v, "+", "_p")
+	}
+
 	if !strings.HasSuffix(v, ".pre") {
 		return v
 	}
@@ -222,6 +230,9 @@ func FlutterToGentoo(v string) string {
 func GentooToFlutter(v string) string {
 	// looking for _preX_pY or _preX
 	if !strings.Contains(v, "_pre") {
+		if strings.Contains(v, "_p") {
+			return strings.ReplaceAll(v, "_p", "+")
+		}
 		return v
 	}
 
