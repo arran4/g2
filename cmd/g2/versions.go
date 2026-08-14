@@ -251,16 +251,17 @@ func GentooToFlutter(v string) string {
 	var buildParts []string
 
 	for _, suf := range gv.Suffixes {
-		if suf.Name == "pre" {
+		switch suf.Name {
+		case "pre":
 			preParts = append(preParts, suf.ValueStr)
-		} else if suf.Name == "p" {
+		case "p":
 			// If we already have a 'pre' but no patch for it, this '_p' acts as the pre-release's minor patch
 			if len(preParts) > 0 && len(preParts) < 2 {
 				preParts = append(preParts, suf.ValueStr)
 			} else {
 				buildParts = append(buildParts, suf.ValueStr)
 			}
-		} else {
+		default:
 			preParts = append(preParts, suf.Name+suf.ValueStr)
 		}
 	}
