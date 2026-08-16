@@ -133,7 +133,7 @@ func (lc *LayoutConf) SetValue(key, value string) {
 
 // UnsetValue removes a specific key
 func (lc *LayoutConf) UnsetValue(key string) {
-	var newEntries []LayoutConfEntry
+	newEntries := make([]LayoutConfEntry, 0, len(lc.Entries))
 	for _, entry := range lc.Entries {
 		if entry.Key != key {
 			newEntries = append(newEntries, entry)
