@@ -208,7 +208,7 @@ func (n NewsItem) ToHTMLTemplate() template.HTML {
 				}
 				out = append(out, "</ul>")
 			case NewsNodeCode:
-				var codeLines []string
+				codeLines := make([]string, 0, len(node.Lines))
 				for _, codeLine := range node.Lines {
 					codeLines = append(codeLines, template.HTMLEscapeString(codeLine))
 				}
