@@ -381,6 +381,7 @@ func parseBumpTarget(target string) string {
 			entries, err := os.ReadDir(target)
 			if err == nil {
 				var highestVersion string
+				var builder strings.Builder
 				for _, entry := range entries {
 					if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".ebuild") {
 						continue
@@ -388,10 +389,13 @@ func parseBumpTarget(target string) string {
 					vars := g2.ParseEbuildVariables(entry.Name())
 					if vars != nil {
 						if pv, ok := vars["PV"]; ok {
-							vStr := pv
+							builder.Reset()
+							builder.WriteString(pv)
 							if pr, ok := vars["PR"]; ok && pr != "r0" {
-								vStr += "-" + pr
+								builder.WriteString("-")
+								builder.WriteString(pr)
 							}
+							vStr := builder.String()
 							if highestVersion == "" || g2.CompareVersions(vStr, highestVersion) > 0 {
 								highestVersion = vStr
 							}
