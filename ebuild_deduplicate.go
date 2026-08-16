@@ -86,9 +86,9 @@ func DeduplicateEbuilds(targets []string) ([]string, error) {
 				continue
 			}
 			if !firstLine {
-				io.WriteString(hasher, "\n")
+				_, _ = io.WriteString(hasher, "\n")
 			}
-			io.WriteString(hasher, line)
+			_, _ = io.WriteString(hasher, line)
 			firstLine = false
 
 			if strings.HasPrefix(trimmed, "SLOT=") {

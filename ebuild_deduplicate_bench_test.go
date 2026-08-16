@@ -3,8 +3,8 @@ package g2
 import (
 	"crypto/md5"
 	"encoding/hex"
-	"strings"
 	"io"
+	"strings"
 	"testing"
 )
 
@@ -63,9 +63,9 @@ func BenchmarkHashNew(b *testing.B) {
 				continue
 			}
 			if !firstLine {
-				io.WriteString(hasher, "\n")
+				_, _ = io.WriteString(hasher, "\n")
 			}
-			io.WriteString(hasher, line)
+			_, _ = io.WriteString(hasher, line)
 			firstLine = false
 
 			if strings.HasPrefix(trimmed, "SLOT=") {
