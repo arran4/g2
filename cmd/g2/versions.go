@@ -296,19 +296,21 @@ func GentooToSemantic(v string) string {
 		return strings.ReplaceAll(v, "_", "-")
 	}
 
-	res := strings.Join(gv.NumStrs, ".")
+	var sb strings.Builder
+	sb.WriteString(strings.Join(gv.NumStrs, "."))
 	if gv.Letter != "" {
-		res += gv.Letter
+		sb.WriteString(gv.Letter)
 	}
 	for _, s := range gv.Suffixes {
-		res += "-" + s.Name
-		res += s.ValueStr
+		sb.WriteString("-")
+		sb.WriteString(s.Name)
+		sb.WriteString(s.ValueStr)
 	}
 	if gv.Revision > 0 {
-		res += fmt.Sprintf("-r%d", gv.Revision)
+		sb.WriteString(fmt.Sprintf("-r%d", gv.Revision))
 	}
 
-	return res
+	return sb.String()
 }
 
 func compareVersions(args []string) error {
