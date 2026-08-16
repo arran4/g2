@@ -4,6 +4,7 @@ import (
 	"crypto/md5"
 	"encoding/hex"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"path/filepath"
@@ -76,14 +77,19 @@ func DeduplicateEbuilds(targets []string) ([]string, error) {
 		}
 
 		lines := strings.Split(string(contentBytes), "\n")
-		var hashContent []string
+		hasher := md5.New()
 		slot := "0"
+		firstLine := true
 		for _, line := range lines {
 			trimmed := strings.TrimSpace(line)
 			if strings.HasPrefix(trimmed, "# Generated via:") {
 				continue
 			}
-			hashContent = append(hashContent, line)
+			if !firstLine {
+				io.WriteString(hasher, "\n")
+			}
+			io.WriteString(hasher, line)
+			firstLine = false
 
 			if strings.HasPrefix(trimmed, "SLOT=") {
 				parts := strings.SplitN(trimmed, "=", 2)
@@ -92,9 +98,6 @@ func DeduplicateEbuilds(targets []string) ([]string, error) {
 				}
 			}
 		}
-
-		hasher := md5.New()
-		hasher.Write([]byte(strings.Join(hashContent, "\n")))
 		digest := hex.EncodeToString(hasher.Sum(nil))
 
 		grade := "release"
