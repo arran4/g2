@@ -213,26 +213,34 @@ func ParseFlutterVersion(v string) (base string, pre string, build string) {
 // FlutterToGentoo converts a Flutter version string to a Gentoo version string.
 func FlutterToGentoo(v string) string {
 	base, pre, build := ParseFlutterVersion(v)
-	res := base
+	var sb strings.Builder
+	sb.Grow(len(base) + len(pre) + len(build) + 16)
+	sb.WriteString(base)
 
 	if pre != "" {
 		pre = strings.TrimSuffix(pre, ".pre")
 		parts := strings.Split(pre, ".")
 		if len(parts) >= 2 {
-			res += fmt.Sprintf("_pre%s_p%s", parts[0], parts[1])
+			sb.WriteString("_pre")
+			sb.WriteString(parts[0])
+			sb.WriteString("_p")
+			sb.WriteString(parts[1])
 		} else if len(parts) == 1 {
-			res += fmt.Sprintf("_pre%s", parts[0])
+			sb.WriteString("_pre")
+			sb.WriteString(parts[0])
 		} else {
-			res += "_pre" + pre
+			sb.WriteString("_pre")
+			sb.WriteString(pre)
 		}
 	}
 
 	if build != "" {
 		build = strings.TrimPrefix(build, "hotfix.")
-		res += fmt.Sprintf("_p%s", build)
+		sb.WriteString("_p")
+		sb.WriteString(build)
 	}
 
-	return res
+	return sb.String()
 }
 
 // GentooToFlutter converts a Gentoo version string to a Flutter version string.
