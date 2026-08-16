@@ -307,7 +307,7 @@ func GentooToSemantic(v string) string {
 		sb.WriteString(s.ValueStr)
 	}
 	if gv.Revision > 0 {
-		sb.WriteString(fmt.Sprintf("-r%d", gv.Revision))
+		fmt.Fprintf(&sb, "-r%d", gv.Revision)
 	}
 
 	return sb.String()
