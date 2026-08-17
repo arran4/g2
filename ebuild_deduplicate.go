@@ -86,9 +86,13 @@ func DeduplicateEbuilds(targets []string) ([]string, error) {
 				continue
 			}
 			if !firstLine {
-				_, _ = io.WriteString(hasher, "\n")
+				if _, err := io.WriteString(hasher, "\n"); err != nil {
+					log.Printf("Warning: failed to write to hasher: %v", err)
+				}
 			}
-			_, _ = io.WriteString(hasher, line)
+			if _, err := io.WriteString(hasher, line); err != nil {
+				log.Printf("Warning: failed to write to hasher: %v", err)
+			}
 			firstLine = false
 
 			if strings.HasPrefix(trimmed, "SLOT=") {

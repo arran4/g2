@@ -63,9 +63,13 @@ func BenchmarkHashNew(b *testing.B) {
 				continue
 			}
 			if !firstLine {
-				_, _ = io.WriteString(hasher, "\n")
+				if _, err := io.WriteString(hasher, "\n"); err != nil {
+					// Handle error
+				}
 			}
-			_, _ = io.WriteString(hasher, line)
+			if _, err := io.WriteString(hasher, line); err != nil {
+				// Handle error
+			}
 			firstLine = false
 
 			if strings.HasPrefix(trimmed, "SLOT=") {
