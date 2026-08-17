@@ -56,13 +56,12 @@ func BenchmarkHashNew(b *testing.B) {
 		lines := strings.Split(string(contentBytes), "\n")
 		hasher := md5.New()
 		slot := "0"
-		firstLine := true
-		for _, line := range lines {
+		for j, line := range lines {
 			trimmed := strings.TrimSpace(line)
 			if strings.HasPrefix(trimmed, "# Generated via:") {
 				continue
 			}
-			if !firstLine {
+			if j > 0 {
 				if _, err := io.WriteString(hasher, "\n"); err != nil {
 					b.Fatalf("failed to write newline to hasher: %v", err)
 				}
@@ -70,7 +69,6 @@ func BenchmarkHashNew(b *testing.B) {
 			if _, err := io.WriteString(hasher, line); err != nil {
 				b.Fatalf("failed to write line to hasher: %v", err)
 			}
-			firstLine = false
 
 			if strings.HasPrefix(trimmed, "SLOT=") {
 				parts := strings.SplitN(trimmed, "=", 2)

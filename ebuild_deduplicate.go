@@ -79,13 +79,12 @@ func DeduplicateEbuilds(targets []string) ([]string, error) {
 		lines := strings.Split(string(contentBytes), "\n")
 		hasher := md5.New()
 		slot := "0"
-		firstLine := true
-		for _, line := range lines {
+		for i, line := range lines {
 			trimmed := strings.TrimSpace(line)
 			if strings.HasPrefix(trimmed, "# Generated via:") {
 				continue
 			}
-			if !firstLine {
+			if i > 0 {
 				if _, err := io.WriteString(hasher, "\n"); err != nil {
 					log.Printf("Warning: failed to write to hasher: %v", err)
 				}
@@ -93,7 +92,6 @@ func DeduplicateEbuilds(targets []string) ([]string, error) {
 			if _, err := io.WriteString(hasher, line); err != nil {
 				log.Printf("Warning: failed to write to hasher: %v", err)
 			}
-			firstLine = false
 
 			if strings.HasPrefix(trimmed, "SLOT=") {
 				parts := strings.SplitN(trimmed, "=", 2)
