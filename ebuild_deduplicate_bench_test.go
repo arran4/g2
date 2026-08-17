@@ -64,11 +64,11 @@ func BenchmarkHashNew(b *testing.B) {
 			}
 			if !firstLine {
 				if _, err := io.WriteString(hasher, "\n"); err != nil {
-					// Handle error
+					b.Fatalf("failed to write newline to hasher: %v", err)
 				}
 			}
 			if _, err := io.WriteString(hasher, line); err != nil {
-				// Handle error
+				b.Fatalf("failed to write line to hasher: %v", err)
 			}
 			firstLine = false
 
