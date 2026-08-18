@@ -72,11 +72,11 @@ func getGitModifiedPackages(repoDir string) ([]string, error) {
 	}
 
 	// Uncommitted changes
-	runCmd("git", "diff", "--name-only", "HEAD")
+	_ = runCmd("git", "diff", "--name-only", "HEAD")
 	// Staged changes
-	runCmd("git", "diff", "--cached", "--name-only")
+	_ = runCmd("git", "diff", "--cached", "--name-only")
 	// Untracked files
-	runCmd("git", "ls-files", "--others", "--exclude-standard")
+	_ = runCmd("git", "ls-files", "--others", "--exclude-standard")
 
 	// Changes from commits
 	cmd := exec.Command("git", "rev-parse", "--abbrev-ref", "@{u}")
@@ -95,10 +95,10 @@ func getGitModifiedPackages(repoDir string) ([]string, error) {
 	}
 
 	if upstream != "" {
-		runCmd("git", "diff", "--name-only", upstream+"...HEAD")
+		_ = runCmd("git", "diff", "--name-only", upstream+"...HEAD")
 	} else {
         // If no upstream, get changes from the latest commit as fallback
-        runCmd("git", "diff", "--name-only", "HEAD~1...HEAD")
+        _ = runCmd("git", "diff", "--name-only", "HEAD~1...HEAD")
     }
 
 	for _, f := range files {
