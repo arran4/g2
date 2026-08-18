@@ -724,7 +724,7 @@ func (cfg *CmdEbuildArgConfig) cmdEbuildCheck(args []string) error {
 
 		pkgData.Versions = append(pkgData.Versions, vData)
 
-		lintWarnings := lints.PerformLintingResults(dir, &pkgData)
+		lintWarnings := lints.PerformLintingResults(dir, &pkgData, nil)
 
 		for _, w := range lintWarnings {
 			w.File = filename

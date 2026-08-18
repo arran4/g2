@@ -39,6 +39,35 @@ func (cfg *MainArgConfig) cmdLint(args []string) error {
 	return cfg.runOldLint(args)
 }
 
+
+func buildLintContext(reposXML, reposDir string) *lints.LintContext {
+	lintCtx := &lints.LintContext{}
+	if reposXML != "" {
+		fileRepos, err := g2.ParseRepositories(reposXML)
+		if err == nil {
+			for _, r := range fileRepos.Repositories {
+				repoPath := filepath.Join(reposDir, r.Name)
+				if stat, err := os.Stat(repoPath); err == nil && stat.IsDir() {
+					lintCtx.OtherRepos = append(lintCtx.OtherRepos, repoPath)
+				}
+			}
+		}
+	} else {
+		if entries, err := os.ReadDir(reposDir); err == nil {
+			for _, entry := range entries {
+				if !entry.IsDir() {
+					continue
+				}
+				repoPath := filepath.Join(reposDir, entry.Name())
+				if _, err := os.Stat(filepath.Join(repoPath, "profiles", "repo_name")); err == nil {
+					lintCtx.OtherRepos = append(lintCtx.OtherRepos, repoPath)
+				}
+			}
+		}
+	}
+	return lintCtx
+}
+
 func (cfg *MainArgConfig) cmdLintList(args []string) error {
 	fs := flag.NewFlagSet("list", flag.ExitOnError)
 	format := fs.String("format", "text", "Output format: text, json")
@@ -146,7 +175,7 @@ func (cfg *MainArgConfig) runOldLint(args []string) error {
 				})
 			}
 
-			lintWarnings := lints.PerformLintingResults(location, &pkgCopy)
+			lintWarnings := lints.PerformLintingResults(location, &pkgCopy, nil)
 
 			// Filter warnings
 			var filteredWarnings []lints.LintResult
@@ -317,7 +346,7 @@ type LintQuery struct {
 	VWildcard string // e.g. "3." for "v3"
 }
 
-func (cfg *MainArgConfig) runLintCore(location string, targetMap map[string]bool, query *LintQuery, format, severityFilter, sourceFilter, tagFilter, disableRule, ignoreTag string) error {
+func (cfg *MainArgConfig) runLintCore(location string, targetMap map[string]bool, query *LintQuery, format, severityFilter, sourceFilter, tagFilter, disableRule, ignoreTag string, lintCtx *lints.LintContext) error {
 	siteData, err := parseRepo(os.DirFS(location), ".", "Linting", true, nil)
 	if err != nil {
 		return fmt.Errorf("parsing repo: %w", err)
@@ -400,7 +429,7 @@ func (cfg *MainArgConfig) runLintCore(location string, targetMap map[string]bool
 				continue
 			}
 
-			lintWarnings := lints.PerformLintingResults(location, &pkgCopy)
+			lintWarnings := lints.PerformLintingResults(location, &pkgCopy, lintCtx)
 
 			var filteredWarnings []lints.LintResult
 			for _, w := range lintWarnings {
@@ -515,6 +544,9 @@ func (cfg *MainArgConfig) cmdLintRepo(args []string) error {
 	disableRule := fs.String("disable-rule", "", "Comma-separated list of rule IDs to ignore (case-insensitive)")
 	ignoreTag := fs.String("ignore-tag", "", "Comma-separated list of tags to ignore")
 
+	reposXML := fs.String("repos-xml", "", "Path to repositories.xml to load other repositories for cross-repo lint checks")
+	reposDir := fs.String("repos-dir", "/var/db/repos", "Default directory to look for repositories if repos-xml is not provided")
+
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -524,7 +556,10 @@ func (cfg *MainArgConfig) cmdLintRepo(args []string) error {
 		location = fs.Arg(0)
 	}
 
-	return cfg.runLintCore(location, nil, nil, *format, *severityFilter, *sourceFilter, *tagFilter, *disableRule, *ignoreTag)
+
+lintCtx := buildLintContext(*reposXML, *reposDir)
+
+	return cfg.runLintCore(location, nil, nil, *format, *severityFilter, *sourceFilter, *tagFilter, *disableRule, *ignoreTag, lintCtx)
 }
 
 func (cfg *MainArgConfig) cmdLintPackage(args []string) error {
@@ -542,6 +577,9 @@ func (cfg *MainArgConfig) cmdLintPackage(args []string) error {
 	tagFilter := fs.String("only-tag", "", "Only show warnings with this tag")
 	disableRule := fs.String("disable-rule", "", "Comma-separated list of rule IDs to ignore (case-insensitive)")
 	ignoreTag := fs.String("ignore-tag", "", "Comma-separated list of tags to ignore")
+
+	reposXML := fs.String("repos-xml", "", "Path to repositories.xml to load other repositories for cross-repo lint checks")
+	reposDir := fs.String("repos-dir", "/var/db/repos", "Default directory to look for repositories if repos-xml is not provided")
 
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -579,7 +617,10 @@ func (cfg *MainArgConfig) cmdLintPackage(args []string) error {
 		targetMap[cleanP] = true
 	}
 
-	return cfg.runLintCore(location, targetMap, nil, *format, *severityFilter, *sourceFilter, *tagFilter, *disableRule, *ignoreTag)
+
+lintCtx := buildLintContext(*reposXML, *reposDir)
+
+	return cfg.runLintCore(location, targetMap, nil, *format, *severityFilter, *sourceFilter, *tagFilter, *disableRule, *ignoreTag, lintCtx)
 }
 
 func parseLintQuery(queryStr string, defaultLocation string) (*LintQuery, error) {
@@ -700,6 +741,9 @@ func (cfg *MainArgConfig) cmdLintQuery(args []string) error {
 	disableRule := fs.String("disable-rule", "", "Comma-separated list of rule IDs to ignore (case-insensitive)")
 	ignoreTag := fs.String("ignore-tag", "", "Comma-separated list of tags to ignore")
 
+	reposXML := fs.String("repos-xml", "", "Path to repositories.xml to load other repositories for cross-repo lint checks")
+	reposDir := fs.String("repos-dir", "/var/db/repos", "Default directory to look for repositories if repos-xml is not provided")
+
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -721,5 +765,8 @@ func (cfg *MainArgConfig) cmdLintQuery(args []string) error {
 		return fmt.Errorf("parsing query: %w", err)
 	}
 
-	return cfg.runLintCore(query.RepoPath, nil, query, *format, *severityFilter, *sourceFilter, *tagFilter, *disableRule, *ignoreTag)
+
+lintCtx := buildLintContext(*reposXML, *reposDir)
+
+	return cfg.runLintCore(query.RepoPath, nil, query, *format, *severityFilter, *sourceFilter, *tagFilter, *disableRule, *ignoreTag, lintCtx)
 }

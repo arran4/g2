@@ -36,7 +36,7 @@ func TestMD5CacheMissing(t *testing.T) {
 
 	// Test case 1: md5-cache directory does not exist, default QA policy
 	rule := &MD5CacheLintRule{fs: mockFileStat{paths: map[string]bool{}}}
-	results := rule.LintWithQA(repoDir, pkg, nil)
+	results := rule.LintWithQA(repoDir, pkg, nil, nil)
 	if len(results) != 0 {
 		t.Errorf("Expected 0 results when md5-cache dir is missing, got %d", len(results))
 	}
@@ -47,7 +47,7 @@ func TestMD5CacheMissing(t *testing.T) {
 			"PG0802": "error",
 		},
 	}
-	results = rule.LintWithQA(repoDir, pkg, qaPolicy)
+	results = rule.LintWithQA(repoDir, pkg, qaPolicy, nil)
 	if len(results) != 1 {
 		t.Errorf("Expected 1 result when explicitly enforced, got %d", len(results))
 	} else if results[0].RuleMetadata.Severity != lints.SeverityError {
@@ -58,7 +58,7 @@ func TestMD5CacheMissing(t *testing.T) {
 	rule = &MD5CacheLintRule{fs: mockFileStat{paths: map[string]bool{
 		filepath.Join(repoDir, "metadata", "md5-cache"): true,
 	}}}
-	results = rule.LintWithQA(repoDir, pkg, nil)
+	results = rule.LintWithQA(repoDir, pkg, nil, nil)
 	if len(results) != 1 {
 		t.Errorf("Expected 1 result when md5-cache dir exists but file is missing, got %d", len(results))
 	} else if results[0].RuleMetadata.Severity != lints.SeverityWarning {
@@ -70,7 +70,7 @@ func TestMD5CacheMissing(t *testing.T) {
 		filepath.Join(repoDir, "metadata", "md5-cache"):                        true,
 		filepath.Join(repoDir, "metadata", "md5-cache", "app-misc", "foo-1.0"): true,
 	}}}
-	results = rule.LintWithQA(repoDir, pkg, nil)
+	results = rule.LintWithQA(repoDir, pkg, nil, nil)
 	if len(results) != 0 {
 		t.Errorf("Expected 0 results when cache file exists, got %d", len(results))
 	}

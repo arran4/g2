@@ -59,7 +59,7 @@ func TestOrphanedManifestLintRule(t *testing.T) {
 		},
 	}
 
-	warnings := rule.Lint(repoDir, pkg)
+	warnings := rule.Lint(repoDir, pkg, nil)
 
 	expectedWarnings := []string{
 		"Manifest entry for unused DIST file 'file2.tar.gz'",

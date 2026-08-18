@@ -535,7 +535,7 @@ func parseRepoCategoriesAndPackages(sysFS fs.FS, repoDir string, repoName string
 				pkgData.IsInfoPkg = true
 			}
 
-			pkgData.LintWarnings = lints.PerformLinting(repoDir, &g2PkgData)
+			pkgData.LintWarnings = lints.PerformLinting(repoDir, &g2PkgData, nil)
 
 			if len(supportedCategories) > 0 && !inRepo {
 				if inMain {

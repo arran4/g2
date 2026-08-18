@@ -44,12 +44,16 @@ func (lr LintResult) String() string {
 	return lr.Message
 }
 
+type LintContext struct {
+	OtherRepos []string
+}
+
 type LintRule interface {
-	Lint(repoDir string, pkg *g2.PackageData) []LintResult
+	Lint(repoDir string, pkg *g2.PackageData, ctx *LintContext) []LintResult
 }
 
 type QAAwareLintRule interface {
-	LintWithQA(repoDir string, pkg *g2.PackageData, qa *g2.QAPolicy) []LintResult
+	LintWithQA(repoDir string, pkg *g2.PackageData, qa *g2.QAPolicy, ctx *LintContext) []LintResult
 }
 
 var lintRules []LintRule
@@ -58,7 +62,7 @@ func RegisterLintRule(rule LintRule) {
 	lintRules = append(lintRules, rule)
 }
 
-func PerformLintingResults(repoDir string, pkg *g2.PackageData) []LintResult {
+func PerformLintingResults(repoDir string, pkg *g2.PackageData, ctx *LintContext) []LintResult {
 	var results []LintResult
 
 	// Try to load QA Policy
@@ -67,17 +71,17 @@ func PerformLintingResults(repoDir string, pkg *g2.PackageData) []LintResult {
 
 	for _, rule := range lintRules {
 		if qaRule, ok := rule.(QAAwareLintRule); ok {
-			results = append(results, qaRule.LintWithQA(repoDir, pkg, qa)...)
+			results = append(results, qaRule.LintWithQA(repoDir, pkg, qa, ctx)...)
 		} else {
-			results = append(results, rule.Lint(repoDir, pkg)...)
+			results = append(results, rule.Lint(repoDir, pkg, ctx)...)
 		}
 	}
 	return results
 }
 
-func PerformLinting(repoDir string, pkg *g2.PackageData) []string {
+func PerformLinting(repoDir string, pkg *g2.PackageData, ctx *LintContext) []string {
 	var warnings []string
-	for _, res := range PerformLintingResults(repoDir, pkg) {
+	for _, res := range PerformLintingResults(repoDir, pkg, ctx) {
 		warnings = append(warnings, res.Message)
 	}
 	return warnings

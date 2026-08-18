@@ -38,7 +38,7 @@ func TestEAPIDeprecatedLintRule(t *testing.T) {
 					},
 				},
 			}
-			warnings := rule.Lint(".", pkg)
+			warnings := rule.Lint(".", pkg, nil)
 			if tt.hasWarn && len(warnings) == 0 {
 				t.Errorf("expected warning for EAPI %s, got none", tt.eapi)
 			}

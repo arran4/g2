@@ -54,7 +54,7 @@ func isUsrLocalPath(word *syntax.Word) (bool, string) {
 	return false, ""
 }
 
-func (l *UsrLocalLintRule) Lint(repoDir string, pkgData *g2.PackageData) []lints.LintResult {
+func (l *UsrLocalLintRule) Lint(repoDir string, pkgData *g2.PackageData, ctx *lints.LintContext) []lints.LintResult {
 	var results []lints.LintResult
 
 	for _, version := range pkgData.Versions {

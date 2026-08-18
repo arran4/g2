@@ -26,11 +26,11 @@ func init() {
 
 type OrphanedManifestLintRule struct{}
 
-func (r *OrphanedManifestLintRule) Lint(repoDir string, pkg *g2.PackageData) []lints.LintResult {
-	return r.LintWithQA(repoDir, pkg, nil)
+func (r *OrphanedManifestLintRule) Lint(repoDir string, pkg *g2.PackageData, ctx *lints.LintContext) []lints.LintResult {
+	return r.LintWithQA(repoDir, pkg, nil, ctx)
 }
 
-func (r *OrphanedManifestLintRule) LintWithQA(repoDir string, pkg *g2.PackageData, qa *g2.QAPolicy) []lints.LintResult {
+func (r *OrphanedManifestLintRule) LintWithQA(repoDir string, pkg *g2.PackageData, qa *g2.QAPolicy, ctx *lints.LintContext) []lints.LintResult {
 	var results []lints.LintResult
 
 	if pkg.Manifest == nil || len(pkg.Manifest.Entries) == 0 {

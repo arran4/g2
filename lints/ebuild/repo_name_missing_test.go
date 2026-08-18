@@ -75,7 +75,7 @@ func TestRepoNameMissingLintRule(t *testing.T) {
 			tt.setupRepo(tempDir)
 
 			rule := &RepoNameMissingLintRule{}
-			results := rule.Lint(tempDir, pkgData)
+			results := rule.Lint(tempDir, pkgData, nil)
 
 			if len(results) != tt.expectErrors {
 				t.Errorf("expected %d errors, got %d", tt.expectErrors, len(results))

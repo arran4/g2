@@ -27,11 +27,11 @@ func init() {
 
 type MissingSlotLintRule struct{}
 
-func (r *MissingSlotLintRule) Lint(repoDir string, pkg *g2.PackageData) []lints.LintResult {
-	return r.LintWithQA(repoDir, pkg, nil)
+func (r *MissingSlotLintRule) Lint(repoDir string, pkg *g2.PackageData, ctx *lints.LintContext) []lints.LintResult {
+	return r.LintWithQA(repoDir, pkg, nil, ctx)
 }
 
-func (r *MissingSlotLintRule) LintWithQA(repoDir string, pkg *g2.PackageData, qa *g2.QAPolicy) []lints.LintResult {
+func (r *MissingSlotLintRule) LintWithQA(repoDir string, pkg *g2.PackageData, qa *g2.QAPolicy, ctx *lints.LintContext) []lints.LintResult {
 	var results []lints.LintResult
 	severity := ruleMissingSlot.Severity
 	if qa != nil && qa.Policies != nil {

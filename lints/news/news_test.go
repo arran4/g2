@@ -35,7 +35,7 @@ Body
 
 	pkg := &g2.PackageData{Category: "app-misc", Name: "foo"}
 
-	results := rule.Lint(".", pkg)
+	results := rule.Lint(".", pkg, nil)
 
 	if len(results) == 0 {
 		t.Fatalf("expected lint results, got none")

@@ -26,7 +26,7 @@ func init() {
 
 type GlobalScopeLintRule struct{}
 
-func (l *GlobalScopeLintRule) Lint(repoDir string, pkgData *g2.PackageData) []lints.LintResult {
+func (l *GlobalScopeLintRule) Lint(repoDir string, pkgData *g2.PackageData, ctx *lints.LintContext) []lints.LintResult {
 	var results []lints.LintResult
 
 	disallowedCommands := map[string]bool{

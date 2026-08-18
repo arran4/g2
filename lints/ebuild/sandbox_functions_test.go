@@ -84,7 +84,7 @@ src_compile() {
 				},
 			}
 
-			results := rule.Lint("", pkgData)
+			results := rule.Lint("", pkgData, nil)
 
 			if len(results) != len(tt.expected) {
 				t.Fatalf("expected %d results, got %d", len(tt.expected), len(results))

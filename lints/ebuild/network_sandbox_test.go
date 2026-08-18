@@ -51,7 +51,7 @@ func TestNetworkSandboxLintRule(t *testing.T) {
 					},
 				},
 			}
-			warnings := rule.Lint(".", pkg)
+			warnings := rule.Lint(".", pkg, nil)
 			if len(warnings) != tt.want {
 				t.Errorf("got %d warnings, want %d", len(warnings), tt.want)
 			}

@@ -99,7 +99,7 @@ esac
 				},
 			}
 
-			results := rule.Lint("", pkgData)
+			results := rule.Lint("", pkgData, nil)
 			assert.Len(t, results, tt.expected)
 		})
 	}

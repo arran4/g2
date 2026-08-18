@@ -26,7 +26,7 @@ func init() {
 
 type SandboxFunctionsLintRule struct{}
 
-func (l *SandboxFunctionsLintRule) Lint(repoDir string, pkgData *g2.PackageData) []lints.LintResult {
+func (l *SandboxFunctionsLintRule) Lint(repoDir string, pkgData *g2.PackageData, ctx *lints.LintContext) []lints.LintResult {
 	var results []lints.LintResult
 
 	for _, version := range pkgData.Versions {

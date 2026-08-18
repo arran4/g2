@@ -38,11 +38,11 @@ type MD5CacheLintRule struct {
 	fs FileStat
 }
 
-func (r *MD5CacheLintRule) Lint(repoDir string, pkg *g2.PackageData) []lints.LintResult {
-	return r.LintWithQA(repoDir, pkg, nil)
+func (r *MD5CacheLintRule) Lint(repoDir string, pkg *g2.PackageData, ctx *lints.LintContext) []lints.LintResult {
+	return r.LintWithQA(repoDir, pkg, nil, ctx)
 }
 
-func (r *MD5CacheLintRule) LintWithQA(repoDir string, pkg *g2.PackageData, qa *g2.QAPolicy) []lints.LintResult {
+func (r *MD5CacheLintRule) LintWithQA(repoDir string, pkg *g2.PackageData, qa *g2.QAPolicy, ctx *lints.LintContext) []lints.LintResult {
 	var results []lints.LintResult
 	severity := lints.SeverityWarning
 

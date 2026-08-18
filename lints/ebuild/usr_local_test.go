@@ -78,7 +78,7 @@ src_install() {
 				},
 			}
 
-			results := rule.Lint(".", pkg)
+			results := rule.Lint(".", pkg, nil)
 
 			if len(results) != tc.expected {
 				t.Fatalf("expected %d issues, got %d. Results: %v", tc.expected, len(results), results)
