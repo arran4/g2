@@ -159,6 +159,6 @@ func (l *ConditionalInheritLintRule) Lint(repoDir string, pkgData *g2.PackageDat
 func formatNode(node syntax.Node) string {
 	printer := syntax.NewPrinter()
 	var buf strings.Builder
-	printer.Print(&buf, node)
+	_ = printer.Print(&buf, node)
 	return buf.String()
 }
