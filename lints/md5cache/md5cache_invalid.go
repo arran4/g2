@@ -117,14 +117,15 @@ func (r *MD5CacheInvalidLintRule) LintWithQA(repoDir string, pkg *g2.PackageData
 					continue
 				}
 
-				if parts[0] == "_md5_" {
+				switch parts[0] {
+				case "_md5_":
 					hasEbuildMd5 = true
 					ebuildMd5 = parts[1]
-				} else if parts[0] == "_eclasses_" {
+				case "_eclasses_":
 					eclassesLine = parts[1]
 				}
 			}
-			f.Close()
+			_ = f.Close()
 
 			sevStr := string(severity)
 			sevTitle := strings.ToUpper(sevStr[:1]) + sevStr[1:]
