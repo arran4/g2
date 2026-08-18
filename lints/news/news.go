@@ -5,12 +5,18 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/arran4/g2"
 	"github.com/arran4/g2/lints"
+)
+
+var (
+	newsDirNameRegex  = regexp.MustCompile(`^(\d{4}-\d{2}-\d{2})-([a-z0-9+_-]{1,20})$`)
+	newsFileNameRegex = regexp.MustCompile(`^(\d{4}-\d{2}-\d{2})-([a-z0-9+_-]{1,20})\.([a-zA-Z0-9-]+)\.txt$`)
 )
 
 var ruleNewsValidity = lints.RuleMetadata{
@@ -106,6 +112,18 @@ func (r *NewsValidityLintRule) LintWithQA(repoDir string, pkg *g2.PackageData, q
 		}
 		dirName := entry.Name()
 
+		dirMatch := newsDirNameRegex.FindStringSubmatch(dirName)
+		if dirMatch == nil {
+			res := lints.LintResult{
+				RuleMetadata: ruleNewsValidity,
+				Message:      fmt.Sprintf("[%s] Invalid news directory name format: '%s'", lints.SeverityError, dirName),
+				File:         filepath.Join("metadata", "news", dirName),
+				Package:      "metadata/news/" + dirName,
+			}
+			res.RuleMetadata.Severity = lints.SeverityError
+			results = append(results, res)
+		}
+
 		var txtFiles []string
 
 		if r.fs != nil {
@@ -147,6 +165,28 @@ func (r *NewsValidityLintRule) LintWithQA(repoDir string, pkg *g2.PackageData, q
 			if r.fs != nil {
 				// in test mode relPath is exactly the matched file path because repoDir is essentially root
 				relPath = txtFile
+			}
+
+			fileName := filepath.Base(txtFile)
+			fileMatch := newsFileNameRegex.FindStringSubmatch(fileName)
+			if fileMatch == nil {
+				res := lints.LintResult{
+					RuleMetadata: ruleNewsValidity,
+					Message:      fmt.Sprintf("[%s] Invalid news file name format: '%s'", lints.SeverityError, fileName),
+					File:         relPath,
+					Package:      "metadata/news/" + dirName,
+				}
+				res.RuleMetadata.Severity = lints.SeverityError
+				results = append(results, res)
+			} else if dirMatch != nil && (fileMatch[1] != dirMatch[1] || fileMatch[2] != dirMatch[2]) {
+				res := lints.LintResult{
+					RuleMetadata: ruleNewsValidity,
+					Message:      fmt.Sprintf("[%s] News file prefix '%s-%s' does not match directory name '%s'", lints.SeverityError, fileMatch[1], fileMatch[2], dirName),
+					File:         relPath,
+					Package:      "metadata/news/" + dirName,
+				}
+				res.RuleMetadata.Severity = lints.SeverityError
+				results = append(results, res)
 			}
 
 			res := r.lintNewsItem(string(content), relPath)
