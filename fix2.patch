@@ -1,0 +1,11 @@
+--- lints/ebuild/network_sandbox_test.go
++++ lints/ebuild/network_sandbox_test.go
+@@ -34,7 +34,7 @@
+			}
+
+			memFS := fstest.MapFS{
+-				tt.filename: {Data: content},
++				tt.filename: &fstest.MapFile{Data: content},
+			}
+
+			ebuildData, err := g2.ParseEbuild(memFS, tt.filename, g2.ParseVariables)

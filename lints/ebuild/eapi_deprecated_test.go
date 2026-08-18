@@ -46,9 +46,10 @@ func TestEAPIDeprecatedLintRule(t *testing.T) {
 			errs := 0
 			warns := 0
 			for _, res := range warnings {
-				if res.RuleMetadata.Severity == lints.SeverityError {
+				switch res.RuleMetadata.Severity {
+				case lints.SeverityError:
 					errs++
-				} else if res.RuleMetadata.Severity == lints.SeverityWarning {
+				case lints.SeverityWarning:
 					warns++
 				}
 			}
