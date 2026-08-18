@@ -328,6 +328,9 @@ func (cfg *MainArgConfig) runLintCore(location string, targetMap map[string]bool
 	var allResults []lints.LintResult
 
 	for _, eclass := range siteData.Eclasses {
+		if query != nil {
+			continue // Skip eclasses for package query
+		}
 		if len(targetMap) > 0 {
 			eclassName := filepath.Base(eclass.Path)
 			if !targetMap[eclassName] && !targetMap[eclass.Path] && !targetMap["eclass"] {
