@@ -50,6 +50,14 @@ func TestParseLintQuery(t *testing.T) {
 				Package:  "foo",
 			},
 		},
+		{
+			name:  "eclass query fallback",
+			query: "foo.eclass",
+			expectedQuery: LintQuery{
+				RepoPath: ".",
+				Package:  "foo.eclass",
+			},
+		},
 	}
 
 	for _, tt := range tests {

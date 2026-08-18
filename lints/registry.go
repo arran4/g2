@@ -52,10 +52,23 @@ type QAAwareLintRule interface {
 	LintWithQA(repoDir string, pkg *g2.PackageData, qa *g2.QAPolicy) []LintResult
 }
 
+type EclassLintRule interface {
+	Lint(repoDir string, eclass *g2.Ebuild) []LintResult
+}
+
+type QAAwareEclassLintRule interface {
+	LintWithQA(repoDir string, eclass *g2.Ebuild, qa *g2.QAPolicy) []LintResult
+}
+
 var lintRules []LintRule
+var eclassLintRules []EclassLintRule
 
 func RegisterLintRule(rule LintRule) {
 	lintRules = append(lintRules, rule)
+}
+
+func RegisterEclassLintRule(rule EclassLintRule) {
+	eclassLintRules = append(eclassLintRules, rule)
 }
 
 func PerformLintingResults(repoDir string, pkg *g2.PackageData) []LintResult {
@@ -81,6 +94,23 @@ func PerformLinting(repoDir string, pkg *g2.PackageData) []string {
 		warnings = append(warnings, res.Message)
 	}
 	return warnings
+}
+
+func PerformEclassLintingResults(repoDir string, eclass *g2.Ebuild) []LintResult {
+	var results []LintResult
+
+	// Try to load QA Policy
+	qaPolicyPath := filepath.Join(repoDir, "metadata", "qa-policy.conf")
+	qa, _ := g2.ParseQAPolicy(qaPolicyPath)
+
+	for _, rule := range eclassLintRules {
+		if qaRule, ok := rule.(QAAwareEclassLintRule); ok {
+			results = append(results, qaRule.LintWithQA(repoDir, eclass, qa)...)
+		} else {
+			results = append(results, rule.Lint(repoDir, eclass)...)
+		}
+	}
+	return results
 }
 
 type MetadataAwareLintRule interface {
