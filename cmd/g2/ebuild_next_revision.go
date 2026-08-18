@@ -88,9 +88,7 @@ func sanitizeVersion(v string) string {
 	if atom.Version != "" {
 		v = atom.Version
 	}
-	if strings.HasPrefix(v, "v") {
-		v = strings.TrimPrefix(v, "v")
-	}
+	v = strings.TrimPrefix(v, "v")
 	return v
 }
 
