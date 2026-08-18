@@ -15,7 +15,7 @@ var ruleEbuildHeader = lints.RuleMetadata{
 	Title:       "Invalid Ebuild Header",
 	Description: "Validates that the ebuild header matches the expected Gentoo copyright header.",
 	URL:         "https://devmanual.gentoo.org/ebuild-writing/file-format/index.html",
-	Severity:    lints.SeverityError,
+	Severity:    lints.SeverityNotice,
 	Source:      lints.SourceG2,
 	Tags:        []string{"ebuild", "gentoo-policy"},
 }
@@ -35,7 +35,23 @@ func (r *EbuildHeaderLintRule) Lint(repoDir string, pkg *g2.PackageData) []lints
 
 func (r *EbuildHeaderLintRule) LintWithQA(repoDir string, pkg *g2.PackageData, qa *g2.QAPolicy) []lints.LintResult {
 	var results []lints.LintResult
-	severity := lints.SeverityError
+	severity := lints.SeverityNotice
+
+	if qa != nil {
+		if val, ok := qa.Policies[ruleEbuildHeader.ID]; ok {
+			if val == "ignore" {
+				return nil
+			}
+			switch val {
+			case "error":
+				severity = lints.SeverityError
+			case "warning":
+				severity = lints.SeverityWarning
+			case "notice":
+				severity = lints.SeverityNotice
+			}
+		}
+	}
 
 	for _, ver := range pkg.Versions {
 		if ver.Ebuild != nil && ver.Ebuild.RawText != "" {
@@ -45,6 +61,7 @@ func (r *EbuildHeaderLintRule) LintWithQA(repoDir string, pkg *g2.PackageData, q
 					Message:      fmt.Sprintf("[%s] Ebuild %s has an invalid header. It should exactly match the first two lines of header.txt followed by an empty line.", cases.Title(language.Und, cases.NoLower).String(string(severity)), ver.Version),
 					Package:      pkg.Category + "/" + pkg.Name,
 				}
+				res.RuleMetadata.Severity = severity
 				results = append(results, res)
 			}
 		}

@@ -87,7 +87,7 @@ func TestEbuildHeaderLintRule(t *testing.T) {
 			results := rule.Lint("", tt.pkg)
 			assert.Len(t, results, tt.expected)
 			if tt.expected > 0 {
-				assert.Equal(t, lints.SeverityError, results[0].RuleMetadata.Severity)
+				assert.Equal(t, lints.SeverityNotice, results[0].RuleMetadata.Severity)
 			}
 		})
 	}
