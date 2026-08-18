@@ -86,8 +86,8 @@ func (l *RepoLayoutLintRule) LintRepo(repoDir string, site *g2.SiteData) []lints
 		"profiles": true,
 		"scripts":  true,
 		// standard git files
-		".git":     true,
-		".github":  true,
+		".git":    true,
+		".github": true,
 	}
 
 	entries, err := os.ReadDir(repoDir)

@@ -75,7 +75,7 @@ func (r *ProxiedMaintainerLintRule) LintWithQA(repoDir string, pkg *g2.PackageDa
 		}
 
 		if hasProxy && !hasProxied {
-		    res := lints.LintResult{
+			res := lints.LintResult{
 				RuleMetadata: ruleProxiedMaintainer,
 				Message:      fmt.Sprintf("[%s] Package has a proxy developer/project but no proxied maintainer is listed", cases.Title(language.Und, cases.NoLower).String(string(severity))),
 				Package:      pkg.Category + "/" + pkg.Name,
