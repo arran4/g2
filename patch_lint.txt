@@ -1,0 +1,26 @@
+<<<<<<< SEARCH
+	importLayout := func() {
+		// Set global vars in layout package
+		layout.LayoutLintEnabled = *enableLayoutLint
+		layout.AllowGithubAPI = *allowGithubAPI
+		layout.UpstreamRepoPath = *upstreamRepoPath
+	}
+	importLayout()
+=======
+	layout.LayoutLintEnabled = *enableLayoutLint
+	layout.AllowGithubAPI = *allowGithubAPI
+	layout.UpstreamRepoPath = *upstreamRepoPath
+>>>>>>> REPLACE
+<<<<<<< SEARCH
+	importLayout := func() {
+		// Set global vars in layout package
+		layout.LayoutLintEnabled = *enableLayoutLint
+		layout.AllowGithubAPI = *allowGithubAPI
+		layout.UpstreamRepoPath = *upstreamRepoPath
+	}
+	importLayout()
+=======
+	layout.LayoutLintEnabled = *enableLayoutLint
+	layout.AllowGithubAPI = *allowGithubAPI
+	layout.UpstreamRepoPath = *upstreamRepoPath
+>>>>>>> REPLACE
