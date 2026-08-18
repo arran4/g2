@@ -259,28 +259,41 @@ g2 site serve -port 8080 .
 
 ### `lint`
 
-Checks the repository for errors such as ebuild `IUSE` variables missing in `metadata.xml`, missing `md5-cache` files, and orphaned `Manifest` entries.
+Checks the repository for errors such as ebuild `IUSE` variables missing in `metadata.xml`, missing `md5-cache` files, orphaned `Manifest` entries, and invalid repository layout.
 
 **Usage:**
 
 ```bash
-g2 lint [<location>] [<target_package>...]
+g2 lint [flags] [<location>] [<target_package>...]
 ```
 
-**Arguments:**
+**Subcommands:**
 
-* `<location>`: Path to the overlay directory (defaults to `.`). Detected automatically if it's a valid repo.
-* `<target_package>`: Optional specific packages or categories to lint instead of the entire repository (e.g. `app-misc/foo` or just `foo`).
+* `g2 lint list`: Lists all available lint rules.
+* `g2 lint repo [flags] [<location>]`: Lints an entire repository.
+* `g2 lint package [flags] [<location>] <target_package>...`: Lints specific packages or categories.
+* `g2 lint query [flags] [<location>] <query>`: Lints packages matching a query (e.g. `'>=app-misc/foo-v3::guru'`).
+
+**Flags:**
+
+* `-enable-layout-lint`: Enable repository layout linting (checks for stray files, unlisted categories, honoring `.g2ignore`).
+* `-allow-github-api`: Allow fetching upstream Gentoo categories via GitHub API for layout linting.
+* `-upstream-repo-path <path>`: Path to upstream repository on disk for layout linting (overrides GitHub API).
+* `-format <string>`: Output format: `text`, `json`, or `github-actions` (default `text`).
+* `-severity <string>`: Only show warnings of this severity (`error`, `warning`, `notice`, `info`).
+* `-only-source <string>`: Only show warnings from this source (`g2`, `pkgcheck`).
+* `-only-tag <string>`: Only show warnings with this tag.
+* `-disable-rule <string>`: Comma-separated list of rule IDs to ignore (case-insensitive).
+* `-ignore-tag <string>`: Comma-separated list of tags to ignore.
 
 **Example:**
 
 ```bash
 g2 lint /var/db/repos/my-overlay
-g2 lint . app-misc/foo
-g2 lint /var/db/repos/my-overlay app-misc/foo dev-util/bar
+g2 lint --enable-layout-lint .
+g2 lint package . app-misc/foo
+g2 lint query '>=app-misc/foo-1.0'
 ```
-
-*(Note: In the future, this command may be split into separate subcommands like `g2 lint repo`, `g2 lint package`, and `g2 lint query` for clarity. It does not currently support full package queries like `<pn>::guru`, `app-misc/foo-v3`, or `>=`)*
 
 ### `use`
 

@@ -78,8 +78,8 @@ func TestEclassHeaderLintRule(t *testing.T) {
 			},
 		},
 		{
-			name:   "Nil eclass",
-			eclass: nil,
+			name:      "Nil eclass",
+			eclass:    nil,
 			wantCount: 0,
 		},
 		{

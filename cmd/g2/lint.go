@@ -11,6 +11,7 @@ import (
 
 	"github.com/arran4/g2"
 	"github.com/arran4/g2/lints"
+	"github.com/arran4/g2/lints/layout"
 
 	_ "github.com/arran4/g2/lints/ebuild"
 	_ "github.com/arran4/g2/lints/eclass"
@@ -80,9 +81,17 @@ func (cfg *MainArgConfig) runOldLint(args []string) error {
 	disableRule := fs.String("disable-rule", "", "Comma-separated list of rule IDs to ignore (case-insensitive)")
 	ignoreTag := fs.String("ignore-tag", "", "Comma-separated list of tags to ignore")
 
+	enableLayoutLint := fs.Bool("enable-layout-lint", false, "Enable repository layout linting")
+	allowGithubAPI := fs.Bool("allow-github-api", false, "Allow fetching upstream categories via Github API for layout lint")
+	upstreamRepoPath := fs.String("upstream-repo-path", "", "Path to upstream repository on disk for layout lint (overrides github API)")
+
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
+
+	layout.LayoutLintEnabled = *enableLayoutLint
+	layout.AllowGithubAPI = *allowGithubAPI
+	layout.UpstreamRepoPath = *upstreamRepoPath
 
 	location := "."
 	var targetPkgs []string
@@ -326,6 +335,74 @@ func (cfg *MainArgConfig) runLintCore(location string, targetMap map[string]bool
 
 	hasErrors := false
 	var allResults []lints.LintResult
+
+	// Run repository-level lints
+	if len(targetMap) == 0 && query == nil {
+		repoWarnings := lints.PerformRepoLintingResults(location, siteData)
+		var filteredRepoWarnings []lints.LintResult
+		for _, w := range repoWarnings {
+			if severityFilter != "" && !strings.EqualFold(string(w.RuleMetadata.Severity), severityFilter) {
+				continue
+			}
+			if sourceFilter != "" && string(w.RuleMetadata.Source) != sourceFilter {
+				continue
+			}
+			if tagFilter != "" {
+				hasTag := false
+				for _, t := range w.RuleMetadata.Tags {
+					if t == tagFilter {
+						hasTag = true
+						break
+					}
+				}
+				if !hasTag {
+					continue
+				}
+			}
+			isIgnored := false
+			if disableRule != "" {
+				disabled := strings.Split(disableRule, ",")
+				for _, dr := range disabled {
+					if strings.EqualFold(string(w.RuleMetadata.ID), strings.TrimSpace(dr)) {
+						isIgnored = true
+						break
+					}
+				}
+			}
+			if !isIgnored && ignoreTag != "" {
+				ignoredTags := strings.Split(ignoreTag, ",")
+				for _, it := range ignoredTags {
+					it = strings.TrimSpace(it)
+					for _, t := range w.RuleMetadata.Tags {
+						if strings.EqualFold(t, it) {
+							isIgnored = true
+							break
+						}
+					}
+					if isIgnored {
+						break
+					}
+				}
+			}
+			if isIgnored {
+				continue
+			}
+			if w.Package == "" {
+				w.Package = "repo"
+			}
+			filteredRepoWarnings = append(filteredRepoWarnings, w)
+		}
+		if len(filteredRepoWarnings) > 0 {
+			hasErrors = true
+			if format == "text" {
+				fmt.Printf("[Repository]\n")
+				for _, w := range filteredRepoWarnings {
+					fmt.Printf("  - %s\n", w.Message)
+				}
+			}
+			allResults = append(allResults, filteredRepoWarnings...)
+		}
+	}
 
 	for _, eclass := range siteData.Eclasses {
 		if query != nil {
@@ -613,9 +690,17 @@ func (cfg *MainArgConfig) cmdLintRepo(args []string) error {
 	disableRule := fs.String("disable-rule", "", "Comma-separated list of rule IDs to ignore (case-insensitive)")
 	ignoreTag := fs.String("ignore-tag", "", "Comma-separated list of tags to ignore")
 
+	enableLayoutLint := fs.Bool("enable-layout-lint", false, "Enable repository layout linting")
+	allowGithubAPI := fs.Bool("allow-github-api", false, "Allow fetching upstream categories via Github API for layout lint")
+	upstreamRepoPath := fs.String("upstream-repo-path", "", "Path to upstream repository on disk for layout lint (overrides github API)")
+
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
+
+	layout.LayoutLintEnabled = *enableLayoutLint
+	layout.AllowGithubAPI = *allowGithubAPI
+	layout.UpstreamRepoPath = *upstreamRepoPath
 
 	location := "."
 	if fs.NArg() > 0 {
@@ -641,9 +726,17 @@ func (cfg *MainArgConfig) cmdLintPackage(args []string) error {
 	disableRule := fs.String("disable-rule", "", "Comma-separated list of rule IDs to ignore (case-insensitive)")
 	ignoreTag := fs.String("ignore-tag", "", "Comma-separated list of tags to ignore")
 
+	enableLayoutLint := fs.Bool("enable-layout-lint", false, "Enable repository layout linting")
+	allowGithubAPI := fs.Bool("allow-github-api", false, "Allow fetching upstream categories via Github API for layout lint")
+	upstreamRepoPath := fs.String("upstream-repo-path", "", "Path to upstream repository on disk for layout lint (overrides github API)")
+
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
+
+	layout.LayoutLintEnabled = *enableLayoutLint
+	layout.AllowGithubAPI = *allowGithubAPI
+	layout.UpstreamRepoPath = *upstreamRepoPath
 
 	location := "."
 	var targetPkgs []string

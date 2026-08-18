@@ -48,6 +48,24 @@ type LintRule interface {
 	Lint(repoDir string, pkg *g2.PackageData) []LintResult
 }
 
+type RepoLintRule interface {
+	LintRepo(repoDir string, site *g2.SiteData) []LintResult
+}
+
+var repoLintRules []RepoLintRule
+
+func RegisterRepoLintRule(rule RepoLintRule) {
+	repoLintRules = append(repoLintRules, rule)
+}
+
+func PerformRepoLintingResults(repoDir string, site *g2.SiteData) []LintResult {
+	var results []LintResult
+	for _, rule := range repoLintRules {
+		results = append(results, rule.LintRepo(repoDir, site)...)
+	}
+	return results
+}
+
 type QAAwareLintRule interface {
 	LintWithQA(repoDir string, pkg *g2.PackageData, qa *g2.QAPolicy) []LintResult
 }
