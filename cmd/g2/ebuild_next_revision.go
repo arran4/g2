@@ -71,10 +71,43 @@ func compareEbuilds(file1, file2 string) (bool, error) {
 	return true, nil
 }
 
+func sanitizeVersion(v string) string {
+	for {
+		changed := false
+		for _, suffix := range []string{".ebuild", ".tmp", ".tbz2", ".tar.gz", ".tar.bz2", ".tar.xz", ".tar.zst"} {
+			if strings.HasSuffix(v, suffix) {
+				v = strings.TrimSuffix(v, suffix)
+				changed = true
+			}
+		}
+		if !changed {
+			break
+		}
+	}
+	atom := g2.ParsePackageAtom("=" + v)
+	if atom.Version != "" {
+		v = atom.Version
+	}
+	v = strings.TrimPrefix(v, "v")
+	return v
+}
+
 func getNextRevision(dir, version string, inspectFile string) (string, int, error) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return "", -1, fmt.Errorf("failed to read directory %s: %w", dir, err)
+	}
+
+	sanitized := sanitizeVersion(version)
+	targetGV := g2.ParseGentooVersion(sanitized)
+	var targetBase string
+	if targetGV.IsValid {
+		origRev := targetGV.Revision
+		targetGV.Revision = 0
+		targetBase = targetGV.String()
+		targetGV.Revision = origRev
+	} else {
+		targetBase = sanitized
 	}
 
 	var highestRevGV g2.GentooVersion
@@ -102,7 +135,7 @@ func getNextRevision(dir, version string, inspectFile string) (string, int, erro
 		base := gv.String()
 		gv.Revision = origRev
 
-		if base == version {
+		if base == targetBase {
 			if !found || gv.Revision > highestRevGV.Revision {
 				highestRevGV = gv
 				highestRevFile = filepath.Join(dir, name)
@@ -112,7 +145,7 @@ func getNextRevision(dir, version string, inspectFile string) (string, int, erro
 	}
 
 	if !found {
-		return version, 0, nil
+		return targetBase, 0, nil
 	}
 
 	if inspectFile != "" {

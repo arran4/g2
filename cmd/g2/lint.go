@@ -14,6 +14,7 @@ import (
 	"github.com/arran4/g2/lints/layout"
 
 	_ "github.com/arran4/g2/lints/ebuild"
+	_ "github.com/arran4/g2/lints/eclass"
 	_ "github.com/arran4/g2/lints/md5cache"
 	_ "github.com/arran4/g2/lints/metadata"
 	_ "github.com/arran4/g2/lints/news"
@@ -403,6 +404,103 @@ func (cfg *MainArgConfig) runLintCore(location string, targetMap map[string]bool
 		}
 	}
 
+	for _, eclass := range siteData.Eclasses {
+		if query != nil {
+			continue // Skip eclasses for package query
+		}
+		if len(targetMap) > 0 {
+			eclassName := filepath.Base(eclass.Path)
+			if !targetMap[eclassName] && !targetMap[eclass.Path] && !targetMap["eclass"] {
+				continue
+			}
+		}
+
+		eclassWarnings := lints.PerformEclassLintingResults(location, eclass)
+
+		var filteredEclassWarnings []lints.LintResult
+		for _, w := range eclassWarnings {
+			if severityFilter != "" && !strings.EqualFold(string(w.RuleMetadata.Severity), severityFilter) {
+				continue
+			}
+			if sourceFilter != "" && string(w.RuleMetadata.Source) != sourceFilter {
+				continue
+			}
+			if tagFilter != "" {
+				hasTag := false
+				for _, t := range w.RuleMetadata.Tags {
+					if t == tagFilter {
+						hasTag = true
+						break
+					}
+				}
+				if !hasTag {
+					continue
+				}
+			}
+			isIgnored := false
+			if disableRule != "" {
+				disabled := strings.Split(disableRule, ",")
+				for _, dr := range disabled {
+					if strings.EqualFold(string(w.RuleMetadata.ID), strings.TrimSpace(dr)) {
+						isIgnored = true
+						break
+					}
+				}
+			}
+			if !isIgnored && ignoreTag != "" {
+				ignoredTags := strings.Split(ignoreTag, ",")
+				for _, it := range ignoredTags {
+					it = strings.TrimSpace(it)
+					for _, t := range w.RuleMetadata.Tags {
+						if strings.EqualFold(t, it) {
+							isIgnored = true
+							break
+						}
+					}
+					if isIgnored {
+						break
+					}
+				}
+			}
+			if isIgnored {
+				continue
+			}
+
+			filteredEclassWarnings = append(filteredEclassWarnings, w)
+		}
+
+		for i := range filteredEclassWarnings {
+			if filteredEclassWarnings[i].Package == "" {
+				filteredEclassWarnings[i].Package = filepath.Base(eclass.Path)
+			}
+		}
+
+		if len(filteredEclassWarnings) > 0 {
+			hasErrors = true
+			if format == "text" {
+				packageGroups := make(map[string][]lints.LintResult)
+				for _, w := range filteredEclassWarnings {
+					packageGroups[w.Package] = append(packageGroups[w.Package], w)
+				}
+
+				var pkgNames []string
+				for k := range packageGroups {
+					pkgNames = append(pkgNames, k)
+				}
+				sort.Strings(pkgNames)
+
+				for _, pkgName := range pkgNames {
+					warnings := packageGroups[pkgName]
+					fmt.Printf("[%s]\n", pkgName)
+					for _, w := range warnings {
+						fmt.Printf("  - %s\n", w.Message)
+					}
+				}
+			}
+			allResults = append(allResults, filteredEclassWarnings...)
+		}
+	}
+
 	for _, cat := range siteData.Categories {
 		if query != nil && query.Category != "" && query.Category != cat.Name {
 			continue
@@ -592,9 +690,17 @@ func (cfg *MainArgConfig) cmdLintRepo(args []string) error {
 	disableRule := fs.String("disable-rule", "", "Comma-separated list of rule IDs to ignore (case-insensitive)")
 	ignoreTag := fs.String("ignore-tag", "", "Comma-separated list of tags to ignore")
 
+	enableLayoutLint := fs.Bool("enable-layout-lint", false, "Enable repository layout linting")
+	allowGithubAPI := fs.Bool("allow-github-api", false, "Allow fetching upstream categories via Github API for layout lint")
+	upstreamRepoPath := fs.String("upstream-repo-path", "", "Path to upstream repository on disk for layout lint (overrides github API)")
+
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
+
+	layout.LayoutLintEnabled = *enableLayoutLint
+	layout.AllowGithubAPI = *allowGithubAPI
+	layout.UpstreamRepoPath = *upstreamRepoPath
 
 	location := "."
 	if fs.NArg() > 0 {

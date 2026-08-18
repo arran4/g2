@@ -48,6 +48,12 @@ func TestGetNextRevision(t *testing.T) {
 		{"Existing revision, no inspect", "1.0", "", "1.0-r2", 0},
 		{"Existing revision, inspect match", "1.0", inspectMatch, "1.0-r1", 1},
 		{"Existing revision, inspect differ", "1.0", inspectDiffer, "1.0-r2", 0},
+		{"Sanitized .ebuild suffix", "1.0.ebuild", "", "1.0-r2", 0},
+		{"Sanitized .tmp suffix", "1.0.tmp", "", "1.0-r2", 0},
+		{"Sanitized v prefix", "v1.0", "", "1.0-r2", 0},
+		{"Sanitized package name", "foo-1.0", "", "1.0-r2", 0},
+		{"Sanitized package name and suffix", "foo-1.0.ebuild", "", "1.0-r2", 0},
+		{"Sanitized package name with revision", "foo-1.0-r5", "", "1.0-r2", 0},
 	}
 
 	for _, tt := range tests {
