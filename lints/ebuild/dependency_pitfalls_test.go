@@ -111,6 +111,141 @@ func TestDependencyPitfallsLintRule(t *testing.T) {
 			qaPolicy: nil,
 			expected: 1, // 1 warning
 		},
+		{
+			name: "Valid := outside any-of",
+			pkg: &g2.PackageData{
+				Category: "dev-libs",
+				Name:     "foo",
+				Versions: []g2.VersionData{
+					{
+						Version: "1.0",
+						Ebuild: &g2.Ebuild{
+							Vars: map[string]string{
+								"DEPEND":  "dev-libs/A:=",
+								"RDEPEND": "dev-libs/A:=",
+							},
+						},
+					},
+				},
+			},
+			qaPolicy: nil,
+			expected: 0,
+		},
+		{
+			name: "Any-of with normal slot dependency",
+			pkg: &g2.PackageData{
+				Category: "dev-libs",
+				Name:     "foo",
+				Versions: []g2.VersionData{
+					{
+						Version: "1.0",
+						Ebuild: &g2.Ebuild{
+							Vars: map[string]string{
+								"RDEPEND": "|| ( dev-libs/A:5 dev-libs/B )",
+							},
+						},
+					},
+				},
+			},
+			qaPolicy: nil,
+			expected: 0,
+		},
+		{
+			name: "Any-of with slot ignore dependency",
+			pkg: &g2.PackageData{
+				Category: "dev-libs",
+				Name:     "foo",
+				Versions: []g2.VersionData{
+					{
+						Version: "1.0",
+						Ebuild: &g2.Ebuild{
+							Vars: map[string]string{
+								"RDEPEND": "|| ( dev-libs/A:* dev-libs/B )",
+							},
+						},
+					},
+				},
+			},
+			qaPolicy: nil,
+			expected: 0,
+		},
+		{
+			name: "Weak blocker in RDEPEND",
+			pkg: &g2.PackageData{
+				Category: "dev-libs",
+				Name:     "foo",
+				Versions: []g2.VersionData{
+					{
+						Version: "1.0",
+						Ebuild: &g2.Ebuild{
+							Vars: map[string]string{
+								"RDEPEND": "!app-misc/foo",
+							},
+						},
+					},
+				},
+			},
+			qaPolicy: nil,
+			expected: 0,
+		},
+		{
+			name: "Weak blocker in PDEPEND",
+			pkg: &g2.PackageData{
+				Category: "dev-libs",
+				Name:     "foo",
+				Versions: []g2.VersionData{
+					{
+						Version: "1.0",
+						Ebuild: &g2.Ebuild{
+							Vars: map[string]string{
+								"PDEPEND": "!app-misc/foo",
+							},
+						},
+					},
+				},
+			},
+			qaPolicy: nil,
+			expected: 0,
+		},
+		{
+			name: "Weak blocker in DEPEND AND RDEPEND",
+			pkg: &g2.PackageData{
+				Category: "dev-libs",
+				Name:     "foo",
+				Versions: []g2.VersionData{
+					{
+						Version: "1.0",
+						Ebuild: &g2.Ebuild{
+							Vars: map[string]string{
+								"DEPEND":  "!app-misc/foo",
+								"RDEPEND": "!app-misc/foo",
+							},
+						},
+					},
+				},
+			},
+			qaPolicy: nil,
+			expected: 1, // Only DEPEND triggers warning
+		},
+		{
+			name: "Strong blocker in DEPEND",
+			pkg: &g2.PackageData{
+				Category: "dev-libs",
+				Name:     "foo",
+				Versions: []g2.VersionData{
+					{
+						Version: "1.0",
+						Ebuild: &g2.Ebuild{
+							Vars: map[string]string{
+								"DEPEND": "!!app-misc/foo",
+							},
+						},
+					},
+				},
+			},
+			qaPolicy: nil,
+			expected: 0,
+		},
 	}
 
 	for _, tc := range tests {
