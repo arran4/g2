@@ -19,9 +19,14 @@ func TestInvalidSlotLintRule(t *testing.T) {
 		{"Valid slot", "1", 0},
 		{"Valid subslot", "0/1", 0},
 		{"Valid complex", "1.2_alpha-r1", 0},
+		{"Valid with plus", "kde-frameworks+qt5", 0},
+		{"Valid subslot with plus", "good/sub-slot+1", 0},
 		{"Invalid character", "1:2", 1},
 		{"Invalid character space", "1 2", 1},
 		{"Invalid multiple slashes", "1/2/3", 1},
+		{"Invalid start plus", "+bad", 1},
+		{"Invalid start minus", "-bad", 1},
+		{"Invalid start dot", ".bad", 1},
 	}
 
 	for _, tt := range tests {

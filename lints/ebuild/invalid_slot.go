@@ -22,7 +22,7 @@ var ruleInvalidSlot = lints.RuleMetadata{
 
 // PMS 3.1.3: Alphanumeric, plus _, ., -
 // Can optionally have a subslot, separated by /
-var validSlotRegex = regexp.MustCompile(`^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)?$`)
+var validSlotRegex = regexp.MustCompile(`^[A-Za-z0-9_][A-Za-z0-9_.\-+]*(/[A-Za-z0-9_][A-Za-z0-9_.\-+]*)?$`)
 
 func init() {
 	lints.RegisterRuleMetadata(ruleInvalidSlot)
