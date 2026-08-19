@@ -129,7 +129,7 @@ func getNextRevision(dir, version string, inspectFile string) (string, int, erro
 			continue
 		}
 
-		gv := g2.ParseGentooVersion(vars["PV"])
+		gv := g2.ParseGentooVersion(vars["PVR"])
 		origRev := gv.Revision
 		gv.Revision = 0
 		base := gv.String()

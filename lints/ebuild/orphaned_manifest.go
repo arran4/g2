@@ -46,13 +46,8 @@ func (r *OrphanedManifestLintRule) LintWithQA(repoDir string, pkg *g2.PackageDat
 			if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".ebuild") {
 				parsedEbuild, err := g2.ParseEbuild(os.DirFS(pkgDir), entry.Name(), g2.ParseFull)
 				if err == nil {
-					srcUriVar := parsedEbuild.Vars["SRC_URI"]
-					dummyContent := fmt.Sprintf(`SRC_URI="%s"`, srcUriVar)
-					uris, err := g2.ExtractURIs(dummyContent, parsedEbuild.Vars)
-					if err == nil {
-						for _, uri := range uris {
-							usedFiles[uri.Filename] = true
-						}
+					for _, uri := range parsedEbuild.SrcUri {
+						usedFiles[uri.Filename] = true
 					}
 				} else {
 					parseFailed = true

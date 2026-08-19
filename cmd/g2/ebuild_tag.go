@@ -48,7 +48,7 @@ func (cfg *CmdEbuildArgConfig) cmdEbuildTag(args []string, opts ...any) error {
 		}
 
 		vars := g2.ParseEbuildVariables(entry.Name())
-		if vars == nil || vars["PV"] == "" {
+		if vars == nil || vars["PVR"] == "" {
 			continue
 		}
 
@@ -58,7 +58,7 @@ func (cfg *CmdEbuildArgConfig) cmdEbuildTag(args []string, opts ...any) error {
 			log.Printf("Warning: mixed package names found in directory: %s and %s", pn, vars["PN"])
 		}
 
-		versions = append(versions, vars["PV"])
+		versions = append(versions, vars["PVR"])
 	}
 
 	if len(versions) == 0 {

@@ -488,10 +488,19 @@ func ParseEbuildVariables(filename string) map[string]string {
 		gv := ParseGentooVersion(pvCandidate)
 		if gv.IsValid {
 			pn := strings.Join(parts[:i], "-")
+
+			origRev := gv.Revision
+			gv.Revision = 0
+			pvBase := gv.String()
+			gv.Revision = origRev
+
 			return map[string]string{
-				"P":  pn + "-" + pvCandidate,
 				"PN": pn,
-				"PV": pvCandidate,
+				"PV": pvBase,
+				"P":  pn + "-" + pvBase,
+				"PR": fmt.Sprintf("r%d", origRev),
+				"PVR": pvCandidate,
+				"PF": pn + "-" + pvCandidate,
 			}
 		}
 	}
@@ -1123,7 +1132,7 @@ func GetLatestMatchingPackageRevision(overlayFS fs.FS, category, pkgName, versio
 			continue
 		}
 
-		gv := ParseGentooVersion(vars["PV"])
+		gv := ParseGentooVersion(vars["PVR"])
 		origRev := gv.Revision
 		gv.Revision = 0
 		base := gv.String()
