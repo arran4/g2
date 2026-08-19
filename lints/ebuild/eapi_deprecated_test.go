@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/arran4/g2"
+	"github.com/arran4/g2/lints"
 	"github.com/arran4/g2/lints/ebuild"
 )
 
@@ -12,16 +13,18 @@ func TestEAPIDeprecatedLintRule(t *testing.T) {
 	rule := &ebuild.EAPIDeprecatedLintRule{}
 
 	tests := []struct {
-		name    string
-		eapi    string
-		hasWarn bool
+		name     string
+		eapi     string
+		hasErr   bool
+		hasWarn  bool
 	}{
-		{"EAPI 5", "5", true},
-		{"EAPI 0", "0", true},
-		{"EAPI 6", "6", false},
-		{"EAPI 7", "7", false},
-		{"EAPI 8", "8", false},
-		{"Missing EAPI (defaults to 0)", "", true},
+		{"EAPI 0", "0", true, false},
+		{"EAPI 4", "4", true, false},
+		{"EAPI 5", "5", false, true},
+		{"EAPI 6", "6", false, true},
+		{"EAPI 7", "7", false, false},
+		{"EAPI 8", "8", false, false},
+		{"Missing EAPI (defaults to 0)", "", true, false},
 	}
 
 	for _, tt := range tests {
@@ -39,13 +42,32 @@ func TestEAPIDeprecatedLintRule(t *testing.T) {
 				},
 			}
 			warnings := rule.Lint(".", pkg)
-			if tt.hasWarn && len(warnings) == 0 {
+
+			errs := 0
+			warns := 0
+			for _, res := range warnings {
+				switch res.RuleMetadata.Severity {
+				case lints.SeverityError:
+					errs++
+				case lints.SeverityWarning:
+					warns++
+				}
+			}
+
+			if tt.hasErr && errs == 0 {
+				t.Errorf("expected error for EAPI %s, got none", tt.eapi)
+			}
+			if !tt.hasErr && errs > 0 {
+				t.Errorf("expected no error for EAPI %s, got %d", tt.eapi, errs)
+			}
+			if tt.hasWarn && warns == 0 {
 				t.Errorf("expected warning for EAPI %s, got none", tt.eapi)
 			}
-			if !tt.hasWarn && len(warnings) > 0 {
-				t.Errorf("expected no warning for EAPI %s, got %v", tt.eapi, warnings)
+			if !tt.hasWarn && warns > 0 {
+				t.Errorf("expected no warning for EAPI %s, got %d", tt.eapi, warns)
 			}
-			if tt.hasWarn && len(warnings) > 0 {
+
+			if len(warnings) > 0 {
 				if !strings.Contains(warnings[0].Message, "EAPI") {
 					t.Errorf("expected warning to mention EAPI, got: %s", warnings[0].Message)
 				}

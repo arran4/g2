@@ -34,7 +34,7 @@ func TestNetworkSandboxLintRule(t *testing.T) {
 			}
 
 			memFS := fstest.MapFS{
-				tt.filename: {Data: content},
+				tt.filename: &fstest.MapFile{Data: content},
 			}
 
 			ebuildData, err := g2.ParseEbuild(memFS, tt.filename, g2.ParseVariables)
