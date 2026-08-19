@@ -46,7 +46,7 @@ func (l *RedundantSLintRule) Lint(repoDir string, pkgData *g2.PackageData) []lin
 			if assign, ok := node.(*syntax.Assign); ok {
 				if assign.Name != nil && assign.Name.Value == "S" && assign.Value != nil {
 					var buf strings.Builder
-					printer.Print(&buf, assign.Value)
+					_ = printer.Print(&buf, assign.Value)
 					val := buf.String()
 
 					if val == "${WORKDIR}/${P}" || val == "\"${WORKDIR}/${P}\"" || val == "${WORKDIR}/$P" || val == "\"${WORKDIR}/$P\"" {
