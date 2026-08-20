@@ -47,9 +47,9 @@ func hasRestrictTestForUnsetTest(restrictStr string) bool {
 				if i+1 < len(tokens) {
 					if tokens[i+1] == "test" {
 						if cond == "!test?" || len(conditions) == 0 {
-                            if cond == "!test?" {
-                                return true
-                            }
+							if cond == "!test?" {
+								return true
+							}
 						}
 					}
 					i++ // consume the token
@@ -101,18 +101,18 @@ func (r *RestrictTestLintRule) LintWithQA(repoDir string, pkg *g2.PackageData, q
 				continue
 			}
 
-            // Check if test is actually in IUSE (accounting for +test or -test)
-            hasTestIUSE := false
-            for _, token := range strings.Fields(iuseStr) {
-                if token == "test" || token == "+test" || token == "-test" {
-                    hasTestIUSE = true
-                    break
-                }
-            }
+			// Check if test is actually in IUSE (accounting for +test or -test)
+			hasTestIUSE := false
+			for _, token := range strings.Fields(iuseStr) {
+				if token == "test" || token == "+test" || token == "-test" {
+					hasTestIUSE = true
+					break
+				}
+			}
 
-            if !hasTestIUSE {
-                continue
-            }
+			if !hasTestIUSE {
+				continue
+			}
 
 			restrictStr := ver.Ebuild.Vars["RESTRICT"]
 			if !hasRestrictTestForUnsetTest(restrictStr) {

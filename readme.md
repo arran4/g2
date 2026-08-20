@@ -472,6 +472,17 @@ g2 conf all [--repo <path>] [--profile <profile_path>] [--make-conf <make.conf_p
 ```
 Outputs a complete overview of the system's Portage configuration, parsing variables from `make.conf` and the active profile's `make.defaults` cascade.
 
+#### `conf overlay`
+
+Manage repository-scoped local Portage policies (masks and unmasks) beneath `/etc/portage` (or `--config-root`).
+
+* `g2 conf overlay list [--repos-conf <path>] [--config-root <path>]`: List configured, enabled repositories from `repos.conf`.
+* `g2 conf overlay <repo> list [--config-root <path>] [--repos-conf <path>]`: List package masks and unmasks scoped to the selected repository across all Portage configuration files.
+* `g2 conf overlay <repo> mask <atom> [--config-root <path>] [--repos-conf <path>]`: Add a repository-qualified mask to the local Portage configuration (`package.mask`).
+* `g2 conf overlay <repo> unmask <atom> [--config-root <path>] [--repos-conf <path>]`: Add a repository-qualified unmask to the local Portage configuration (`package.unmask`).
+* `g2 conf overlay <repo> mask-reset <atom> [--config-root <path>] [--repos-conf <path>]`: Remove a repository-scoped mask rule from local Portage configuration.
+* `g2 conf overlay <repo> unmask-reset <atom> [--config-root <path>] [--repos-conf <path>]`: Remove a repository-scoped unmask rule from local Portage configuration.
+
 
 ## GitHub Action
 

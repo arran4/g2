@@ -11,15 +11,15 @@ import (
 
 	"github.com/arran4/g2"
 	"github.com/arran4/g2/lints"
-	"github.com/arran4/g2/lints/layout"
 	"github.com/arran4/g2/lints/ebuild"
+	"github.com/arran4/g2/lints/layout"
 
 	_ "github.com/arran4/g2/lints/ebuild"
-	_ "github.com/arran4/g2/lints/profiles"
 	_ "github.com/arran4/g2/lints/eclass"
 	_ "github.com/arran4/g2/lints/md5cache"
 	_ "github.com/arran4/g2/lints/metadata"
 	_ "github.com/arran4/g2/lints/news"
+	_ "github.com/arran4/g2/lints/profiles"
 )
 
 func (cfg *MainArgConfig) cmdLint(args []string) error {

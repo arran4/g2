@@ -1,6 +1,7 @@
 package g2
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -240,4 +241,91 @@ func (s *ReposConfSection) Unset(key string) {
 		newLines = append(newLines, line)
 	}
 	s.Lines = newLines
+}
+
+// RepoInfo describes a configured repository found in repos.conf.
+type RepoInfo struct {
+	Name       string // Section name in repos.conf
+	RepoName   string // Actual repository identity (from profiles/repo_name if present, else section name)
+	Location   string // Repository location directory
+	Disabled   bool   // True if disabled in repos.conf
+	ConfigFile string // Path to repos.conf file containing this section
+}
+
+// ListConfiguredRepos returns all active (enabled) repositories from repos.conf at location.
+func ListConfiguredRepos(location string) ([]*RepoInfo, error) {
+	rc, err := ParseReposConf(location)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("parsing repos.conf at %s: %w", location, err)
+	}
+
+	var repos []*RepoInfo
+	for _, f := range rc.Files {
+		for _, s := range f.Sections {
+			if strings.EqualFold(s.Name, "DEFAULT") {
+				continue
+			}
+			disabled := s.Disabled ||
+				strings.EqualFold(s.Get("disabled"), "true") ||
+				strings.EqualFold(s.Get("disabled"), "yes") ||
+				strings.EqualFold(s.Get("enabled"), "false") ||
+				strings.EqualFold(s.Get("enabled"), "no")
+			if disabled {
+				continue
+			}
+			loc := s.Get("location")
+			repoIdentity := s.Name
+			if loc != "" {
+				repoNameFile := filepath.Join(loc, "profiles", "repo_name")
+				if data, err := os.ReadFile(repoNameFile); err == nil {
+					trimmed := strings.TrimSpace(string(data))
+					if trimmed != "" {
+						repoIdentity = trimmed
+					}
+				}
+			}
+			repos = append(repos, &RepoInfo{
+				Name:       s.Name,
+				RepoName:   repoIdentity,
+				Location:   loc,
+				Disabled:   disabled,
+				ConfigFile: f.Path,
+			})
+		}
+	}
+	return repos, nil
+}
+
+// ResolveRepo finds a single configured repository by section name or Portage repository identity.
+func ResolveRepo(repoName string, reposConfPath string) (*RepoInfo, error) {
+	repos, err := ListConfiguredRepos(reposConfPath)
+	if err != nil {
+		return nil, err
+	}
+
+	var matches []*RepoInfo
+	for _, r := range repos {
+		if r.Name == repoName || r.RepoName == repoName {
+			matches = append(matches, r)
+		}
+	}
+
+	if len(matches) == 0 {
+		return nil, fmt.Errorf("repository %q not found or not enabled in %s", repoName, reposConfPath)
+	}
+
+	if len(matches) > 1 {
+		// Check if they are identical in identity and location
+		first := matches[0]
+		for _, m := range matches[1:] {
+			if m.RepoName != first.RepoName || m.Location != first.Location {
+				return nil, fmt.Errorf("ambiguous repository %q matches multiple configured repositories in %s", repoName, reposConfPath)
+			}
+		}
+	}
+
+	return matches[0], nil
 }

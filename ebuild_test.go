@@ -1013,6 +1013,37 @@ func TestParsePackageAtom(t *testing.T) {
 				UseFlags: "native-symlinks",
 			},
 		},
+		{
+			name: "with repo qualifier",
+			dep:  "app-misc/foo::arrans-overlay",
+			want: PackageAtom{
+				Category: "app-misc",
+				Name:     "foo",
+				Repo:     "arrans-overlay",
+			},
+		},
+		{
+			name: "with slot, repo, and use flags",
+			dep:  ">=dev-lang/python-3.10.4-r1:0/3.10::gentoo[sqlite,xml]",
+			want: PackageAtom{
+				Operator: ">=",
+				Category: "dev-lang",
+				Name:     "python",
+				Version:  "3.10.4-r1",
+				Slot:     "0/3.10",
+				Repo:     "gentoo",
+				UseFlags: "sqlite,xml",
+			},
+		},
+		{
+			name: "wildcard repo atom",
+			dep:  "*/*::guru",
+			want: PackageAtom{
+				Category: "*",
+				Name:     "*",
+				Repo:     "guru",
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -1020,6 +1051,78 @@ func TestParsePackageAtom(t *testing.T) {
 			got := ParsePackageAtom(tt.dep)
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("ParsePackageAtom(%q) = %+v, want %+v", tt.dep, got, tt.want)
+			}
+			// Test round-trip String() where applicable
+			if tt.want.Category != "" && tt.want.Name != "" {
+				formatted := got.String()
+				if formatted != tt.dep {
+					t.Errorf("got.String() = %q, want %q", formatted, tt.dep)
+				}
+			}
+		})
+	}
+}
+
+func TestQualifyAtomForRepo(t *testing.T) {
+	tests := []struct {
+		name       string
+		dep        string
+		targetRepo string
+		want       string
+		wantErr    bool
+	}{
+		{
+			name:       "unqualified atom",
+			dep:        "app-misc/foo",
+			targetRepo: "arrans-overlay",
+			want:       "app-misc/foo::arrans-overlay",
+		},
+		{
+			name:       "unqualified versioned atom",
+			dep:        ">=dev-util/bar-2.0",
+			targetRepo: "arrans-overlay",
+			want:       ">=dev-util/bar-2.0::arrans-overlay",
+		},
+		{
+			name:       "matching qualified atom",
+			dep:        "app-misc/foo::arrans-overlay",
+			targetRepo: "arrans-overlay",
+			want:       "app-misc/foo::arrans-overlay",
+		},
+		{
+			name:       "conflicting qualified atom",
+			dep:        "app-misc/foo::guru",
+			targetRepo: "arrans-overlay",
+			wantErr:    true,
+		},
+		{
+			name:       "empty atom",
+			dep:        "",
+			targetRepo: "arrans-overlay",
+			wantErr:    true,
+		},
+		{
+			name:       "empty repo",
+			dep:        "app-misc/foo",
+			targetRepo: "",
+			wantErr:    true,
+		},
+		{
+			name:       "wildcard atom",
+			dep:        "*/*",
+			targetRepo: "arrans-overlay",
+			want:       "*/*::arrans-overlay",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := QualifyAtomForRepo(tt.dep, tt.targetRepo)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("QualifyAtomForRepo(%q, %q) error = %v, wantErr %v", tt.dep, tt.targetRepo, err, tt.wantErr)
+			}
+			if err == nil && got != tt.want {
+				t.Errorf("QualifyAtomForRepo(%q, %q) = %q, want %q", tt.dep, tt.targetRepo, got, tt.want)
 			}
 		})
 	}

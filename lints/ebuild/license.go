@@ -2,9 +2,9 @@ package ebuild
 
 import (
 	"fmt"
-	"strings"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/arran4/g2"
 	"github.com/arran4/g2/lints"
@@ -72,7 +72,7 @@ func (r *LicenseLintRule) LintWithQA(repoDir string, pkg *g2.PackageData, qa *g2
 
 			// Virtuals don't require LICENSE
 			if pkg.Category == "virtual" {
-			    continue
+				continue
 			}
 
 			if license == "" {

@@ -1032,7 +1032,63 @@ type PackageAtom struct {
 	Name     string // e.g. "python"
 	Version  string // e.g. "3.10.4-r1"
 	Slot     string // e.g. "0/3.10"
+	Repo     string // e.g. "arrans-overlay"
 	UseFlags string // e.g. "sqlite,xml"
+}
+
+// String returns the Gentoo package atom specification as a string.
+func (a PackageAtom) String() string {
+	var sb strings.Builder
+	sb.WriteString(a.Operator)
+	if a.Category != "" {
+		sb.WriteString(a.Category)
+		sb.WriteString("/")
+	}
+	sb.WriteString(a.Name)
+	if a.Version != "" {
+		sb.WriteString("-")
+		sb.WriteString(a.Version)
+	}
+	if a.Slot != "" {
+		sb.WriteString(":")
+		sb.WriteString(a.Slot)
+	}
+	if a.Repo != "" {
+		sb.WriteString("::")
+		sb.WriteString(a.Repo)
+	}
+	if a.UseFlags != "" {
+		sb.WriteString("[")
+		sb.WriteString(a.UseFlags)
+		sb.WriteString("]")
+	}
+	return sb.String()
+}
+
+// QualifyAtomForRepo validates that the given package atom specification is valid and
+// belongs to targetRepo. If the atom has no repository qualifier, ::targetRepo is appended.
+// If the atom already specifies ::targetRepo, it is accepted.
+// If the atom specifies a conflicting repository qualifier, an error is returned.
+func QualifyAtomForRepo(dep string, targetRepo string) (string, error) {
+	dep = strings.TrimSpace(dep)
+	if dep == "" {
+		return "", fmt.Errorf("package atom cannot be empty")
+	}
+	if targetRepo == "" {
+		return "", fmt.Errorf("target repository cannot be empty")
+	}
+
+	atom := ParsePackageAtom(dep)
+	if atom.Name == "" {
+		return "", fmt.Errorf("invalid package atom: %q", dep)
+	}
+
+	if atom.Repo != "" && atom.Repo != targetRepo {
+		return "", fmt.Errorf("package qualifier %q does not match selected repository %q", atom.Repo, targetRepo)
+	}
+
+	atom.Repo = targetRepo
+	return atom.String(), nil
 }
 
 // ParsePackageAtom parses a raw dependency string into its constituent parts.
@@ -1053,13 +1109,19 @@ func ParsePackageAtom(dep string) PackageAtom {
 		}
 	}
 
-	// 3. Extract Slot
+	// 3. Extract Repo (::repo)
+	if idx := strings.Index(dep, "::"); idx != -1 {
+		atom.Repo = dep[idx+2:]
+		dep = dep[:idx] // strip repo
+	}
+
+	// 4. Extract Slot (:slot)
 	if idx := strings.Index(dep, ":"); idx != -1 {
 		atom.Slot = dep[idx+1:]
 		dep = dep[:idx] // strip slot
 	}
 
-	// 4. Extract Category, Name, and Version
+	// 5. Extract Category, Name, and Version
 	// dep is now something like "dev-lang/python-3.10.0-r1" or "virtual/pkgconfig"
 	parts := strings.Split(dep, "/")
 	var nameAndVer string

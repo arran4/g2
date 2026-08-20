@@ -51,17 +51,17 @@ func (r *UseGuiLintRule) LintWithQA(repoDir string, pkg *g2.PackageData, qa *g2.
 	}
 
 	historicToolkitFlags := map[string]bool{
-		"X":    true,
-		"gtk":  true,
-		"gtk2": true,
-		"gtk3": true,
-		"gtk4": true,
-		"qt4":  true,
-		"qt5":  true,
-		"qt6":  true,
+		"X":     true,
+		"gtk":   true,
+		"gtk2":  true,
+		"gtk3":  true,
+		"gtk4":  true,
+		"qt4":   true,
+		"qt5":   true,
+		"qt6":   true,
 		"motif": true,
-		"fltk": true,
-		"tk":   true,
+		"fltk":  true,
+		"tk":    true,
 	}
 
 	for _, ver := range pkg.Versions {

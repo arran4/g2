@@ -13,6 +13,8 @@ func (cfg *MainArgConfig) cmdConf(args []string) error {
 	switch subcmd {
 	case "all":
 		return cfg.cmdConfAll(args[1:])
+	case "overlay":
+		return cfg.cmdConfOverlay(args[1:])
 	default:
 		return fmt.Errorf("unknown conf subcommand: %s", subcmd)
 	}
