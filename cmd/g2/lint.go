@@ -12,6 +12,7 @@ import (
 	"github.com/arran4/g2"
 	"github.com/arran4/g2/lints"
 	"github.com/arran4/g2/lints/layout"
+	"github.com/arran4/g2/lints/ebuild"
 
 	_ "github.com/arran4/g2/lints/ebuild"
 	_ "github.com/arran4/g2/lints/eclass"
@@ -84,6 +85,7 @@ func (cfg *MainArgConfig) runOldLint(args []string) error {
 	enableLayoutLint := fs.Bool("enable-layout-lint", false, "Enable repository layout linting")
 	allowGithubAPI := fs.Bool("allow-github-api", false, "Allow fetching upstream categories via Github API for layout lint")
 	upstreamRepoPath := fs.String("upstream-repo-path", "", "Path to upstream repository on disk for layout lint (overrides github API)")
+	checkGLEP81Externally := fs.Bool("check-glep81-externally", false, "Enable external checking for GLEP 81 policy")
 
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -92,6 +94,7 @@ func (cfg *MainArgConfig) runOldLint(args []string) error {
 	layout.LayoutLintEnabled = *enableLayoutLint
 	layout.AllowGithubAPI = *allowGithubAPI
 	layout.UpstreamRepoPath = *upstreamRepoPath
+	ebuild.CheckGLEP81Externally = *checkGLEP81Externally
 
 	location := "."
 	var targetPkgs []string
@@ -693,6 +696,7 @@ func (cfg *MainArgConfig) cmdLintRepo(args []string) error {
 	enableLayoutLint := fs.Bool("enable-layout-lint", false, "Enable repository layout linting")
 	allowGithubAPI := fs.Bool("allow-github-api", false, "Allow fetching upstream categories via Github API for layout lint")
 	upstreamRepoPath := fs.String("upstream-repo-path", "", "Path to upstream repository on disk for layout lint (overrides github API)")
+	checkGLEP81Externally := fs.Bool("check-glep81-externally", false, "Enable external checking for GLEP 81 policy")
 
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -701,6 +705,7 @@ func (cfg *MainArgConfig) cmdLintRepo(args []string) error {
 	layout.LayoutLintEnabled = *enableLayoutLint
 	layout.AllowGithubAPI = *allowGithubAPI
 	layout.UpstreamRepoPath = *upstreamRepoPath
+	ebuild.CheckGLEP81Externally = *checkGLEP81Externally
 
 	location := "."
 	if fs.NArg() > 0 {
@@ -729,6 +734,7 @@ func (cfg *MainArgConfig) cmdLintPackage(args []string) error {
 	enableLayoutLint := fs.Bool("enable-layout-lint", false, "Enable repository layout linting")
 	allowGithubAPI := fs.Bool("allow-github-api", false, "Allow fetching upstream categories via Github API for layout lint")
 	upstreamRepoPath := fs.String("upstream-repo-path", "", "Path to upstream repository on disk for layout lint (overrides github API)")
+	checkGLEP81Externally := fs.Bool("check-glep81-externally", false, "Enable external checking for GLEP 81 policy")
 
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -737,6 +743,7 @@ func (cfg *MainArgConfig) cmdLintPackage(args []string) error {
 	layout.LayoutLintEnabled = *enableLayoutLint
 	layout.AllowGithubAPI = *allowGithubAPI
 	layout.UpstreamRepoPath = *upstreamRepoPath
+	ebuild.CheckGLEP81Externally = *checkGLEP81Externally
 
 	location := "."
 	var targetPkgs []string
