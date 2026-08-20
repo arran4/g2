@@ -67,11 +67,31 @@ func (r *LayoutConfRepoLintRule) LintRepo(repoDir string, site *g2.SiteData) []l
 		return nil
 	}
 
+	// Validator for hashes
+	validateHashes := func(contents ...string) error {
+		validHashes := map[string]bool{
+			"BLAKE2B": true,
+			"BLAKE2S": true,
+			"SHA512":  true,
+			"SHA256":  true,
+			"WHIRLPOOL": true,
+			"RMD160": true,
+			"SHA1": true,
+			"MD5": true,
+		}
+		for _, hash := range contents {
+			if !validHashes[hash] {
+				return fmt.Errorf("unknown hash algorithm '%s'", hash)
+			}
+		}
+		return nil
+	}
+
 	// 4. Check for unknown keys
 	validKeys := map[string]func(contents ...string) error{
 		"masters":                  validateList,
-		"manifest-hashes":          validateList,
-		"manifest-required-hashes": validateList,
+		"manifest-hashes":          validateHashes,
+		"manifest-required-hashes": validateHashes,
 		"use-manifests": func(contents ...string) error {
 			if len(contents) != 1 {
 				return fmt.Errorf("expected 1 value, got %d", len(contents))
