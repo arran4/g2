@@ -150,3 +150,98 @@ func (lc *LayoutConf) GetValuesAsSlice(key string) []string {
 	}
 	return strings.Fields(val)
 }
+
+// Masters returns the list of master repositories.
+func (lc *LayoutConf) Masters() []string {
+	return lc.GetValuesAsSlice("masters")
+}
+
+// ManifestHashes returns the list of allowed manifest hashes.
+func (lc *LayoutConf) ManifestHashes() []string {
+	return lc.GetValuesAsSlice("manifest-hashes")
+}
+
+// ManifestRequiredHashes returns the list of required manifest hashes.
+func (lc *LayoutConf) ManifestRequiredHashes() []string {
+	return lc.GetValuesAsSlice("manifest-required-hashes")
+}
+
+// UseManifests returns the policy for creating and using Manifest files (e.g., strict, true, false).
+func (lc *LayoutConf) UseManifests() string {
+	return lc.GetValue("use-manifests")
+}
+
+// UpdateChangelog indicates whether development tools should write ChangeLog files.
+func (lc *LayoutConf) UpdateChangelog() bool {
+	return lc.GetValue("update-changelog") == "true"
+}
+
+// CacheFormats returns the cache formats used by the repository.
+func (lc *LayoutConf) CacheFormats() []string {
+	return lc.GetValuesAsSlice("cache-formats")
+}
+
+// EapisDeprecated returns the list of deprecated EAPIs for ebuilds.
+func (lc *LayoutConf) EapisDeprecated() []string {
+	return lc.GetValuesAsSlice("eapis-deprecated")
+}
+
+// EapisBanned returns the list of banned EAPIs for ebuilds.
+func (lc *LayoutConf) EapisBanned() []string {
+	return lc.GetValuesAsSlice("eapis-banned")
+}
+
+// EapisTesting returns the list of testing EAPIs for ebuilds.
+func (lc *LayoutConf) EapisTesting() []string {
+	return lc.GetValuesAsSlice("eapis-testing")
+}
+
+// ProfileEapisDeprecated returns the list of deprecated EAPIs for profiles.
+func (lc *LayoutConf) ProfileEapisDeprecated() []string {
+	return lc.GetValuesAsSlice("profile-eapis-deprecated")
+}
+
+// ProfileEapisBanned returns the list of banned EAPIs for profiles.
+func (lc *LayoutConf) ProfileEapisBanned() []string {
+	return lc.GetValuesAsSlice("profile-eapis-banned")
+}
+
+// RepoName returns the specified repository name.
+func (lc *LayoutConf) RepoName() string {
+	return lc.GetValue("repo-name")
+}
+
+// Aliases returns the list of alternative names for the repository.
+func (lc *LayoutConf) Aliases() []string {
+	return lc.GetValuesAsSlice("aliases")
+}
+
+// ThinManifests indicates whether thin manifests are used.
+func (lc *LayoutConf) ThinManifests() bool {
+	return lc.GetValue("thin-manifests") == "true"
+}
+
+// SignCommits indicates whether git commits should be signed.
+func (lc *LayoutConf) SignCommits() bool {
+	return lc.GetValue("sign-commits") == "true"
+}
+
+// SignManifests indicates whether individual package manifests should be signed.
+func (lc *LayoutConf) SignManifests() bool {
+	return lc.GetValue("sign-manifests") == "true"
+}
+
+// PropertiesAllowed returns the list of properties permitted in ebuilds.
+func (lc *LayoutConf) PropertiesAllowed() []string {
+	return lc.GetValuesAsSlice("properties-allowed")
+}
+
+// RestrictAllowed returns the list of restrict tokens permitted in ebuilds.
+func (lc *LayoutConf) RestrictAllowed() []string {
+	return lc.GetValuesAsSlice("restrict-allowed")
+}
+
+// ProfileFormats returns the formats used by profiles.
+func (lc *LayoutConf) ProfileFormats() []string {
+	return lc.GetValuesAsSlice("profile-formats")
+}
