@@ -31,23 +31,16 @@ type GLEP81UserGroupLintRule struct{}
 func (l *GLEP81UserGroupLintRule) LintWithQA(repoDir string, pkgData *g2.PackageData, qa *g2.QAPolicy) []lints.LintResult {
 	var results []lints.LintResult
 
-	// Skip the check if external checking is required but the flag is not set
-	// Note: We're adding the flag logic here based on review feedback.
-	// Often external checks involve parsing uid-gid.txt or cross-referencing acct-* packages.
-	// For now, we add the global var and the ability to skip.
-	if !CheckGLEP81Externally {
-		// return results // Actually, we shouldn't skip the whole test if not checked externally. We might only skip external parts. Let's see.
-	}
-
 	rule := ruleGLEP81UserGroup
 
 	if qa != nil {
 		if val, ok := qa.Policies["PG0901"]; ok {
-			if val == "ignore" {
+			switch val {
+			case "ignore":
 				return results
-			} else if val == "error" {
+			case "error":
 				rule.Severity = lints.SeverityError
-			} else if val == "notice" {
+			case "notice":
 				rule.Severity = lints.SeverityNotice
 			}
 		}
