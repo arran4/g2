@@ -59,9 +59,8 @@ func (r *UseControlledOptionalRdependRule) LintWithQA(repoDir string, pkg *g2.Pa
 				}
 			}
 
-            // Look in IUSE for flags - wait, actually we want to see if it's used in src_*
-            // Just scan the raw text for the flag.
-            rawText := string(ver.Ebuild.RawText)
+			// Just scan the raw text for the flag usage.
+			rawText := string(ver.Ebuild.RawText)
 
 			for flag := range rdependFlags {
 				// If used in another dependency var, it's likely valid
@@ -70,14 +69,7 @@ func (r *UseControlledOptionalRdependRule) LintWithQA(repoDir string, pkg *g2.Pa
 				}
 
 				// If the flag is used in the ebuild body (e.g., `use flag`, `usex flag`), it's valid
-                // We'll use a simple string containment check, but bounded to avoid false positives on substrings
-                // Usually it's `use foo`, `use_with foo`, etc. Or `if use foo; then`.
-                // Checking for " foo" or "foo " or "-foo" might be too broad.
-                // Let's check for specific patterns: `use flag`, `usex flag`, `use_with flag`, `use_enable flag`
-                // Actually, just checking if `flag` is in the raw text at all (outside of IUSE and RDEPEND) is a start.
-                // But wait, it will be in IUSE. We should check if it appears in `use flag` or similar.
-
-                isUsedInBody := false
+				isUsedInBody := false
 
                 // Common use functions
                 useFuncs := []string{"use", "usev", "usex", "use_with", "use_enable"}
