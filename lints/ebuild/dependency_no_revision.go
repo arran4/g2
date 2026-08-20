@@ -38,6 +38,22 @@ func (r *DependencyNoRevisionLintRule) LintWithQA(repoDir string, pkg *g2.Packag
 	}
 	revisionRe := regexp.MustCompile(`-r\d+$`)
 
+	if qa != nil {
+		if val, ok := qa.Policies["PG0002"]; ok {
+			if val == "ignore" {
+				return nil
+			}
+			switch val {
+			case "error":
+				severity = "Error"
+			case "warning":
+				severity = "Warning"
+			case "notice":
+				severity = "Notice"
+			}
+		}
+	}
+
 	for _, ver := range pkg.Versions {
 		if ver.Ebuild != nil && ver.Ebuild.Vars != nil {
 			for _, depVar := range []string{"DEPEND", "RDEPEND", "PDEPEND", "BDEPEND", "IDEPEND"} {
@@ -53,9 +69,10 @@ func (r *DependencyNoRevisionLintRule) LintWithQA(repoDir string, pkg *g2.Packag
 						if !revisionRe.MatchString(atom.Version) {
 							res := lints.LintResult{
 								RuleMetadata: ruleDependencyNoRevision,
-								Message:      fmt.Sprintf("[%s] Ebuild %s uses a non-wildcard '=' dependency without an explicit revision in %s: %s", severity, ver.Version, depVar, atomStr),
+								Message:      fmt.Sprintf("[%s] Ebuild %s uses a non-wildcard '=' dependency without an explicit revision in %s: %s (PG0002).", severity, ver.Version, depVar, atomStr),
 								Package:      pkg.Category + "/" + pkg.Name,
 							}
+							res.RuleMetadata.Severity = lints.Severity(strings.ToLower(severity))
 							results = append(results, res)
 						}
 					}

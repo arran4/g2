@@ -151,3 +151,30 @@ func TestDependencyNoRevisionLintRule_FalsePositives(t *testing.T) {
 		})
 	}
 }
+
+func TestDependencyNoRevisionLintRule_PG0002(t *testing.T) {
+	rule := &DependencyNoRevisionLintRule{}
+	pkg := &g2.PackageData{
+		Category: "dev-libs",
+		Name:     "foo",
+		Versions: []g2.VersionData{
+			{
+				Version: "1.0",
+				Ebuild: &g2.Ebuild{
+					Vars: map[string]string{
+						"DEPEND": "=dev-libs/bar-1.0",
+					},
+				},
+			},
+		},
+	}
+
+	qaErr := &g2.QAPolicy{Policies: map[string]string{"PG0002": "error"}}
+	resultsErr := rule.LintWithQA("", pkg, qaErr)
+	assert.Len(t, resultsErr, 1)
+	assert.Contains(t, resultsErr[0].Message, "(PG0002)")
+
+	qaIgnore := &g2.QAPolicy{Policies: map[string]string{"PG0002": "ignore"}}
+	resultsIgnore := rule.LintWithQA("", pkg, qaIgnore)
+	assert.Len(t, resultsIgnore, 0)
+}

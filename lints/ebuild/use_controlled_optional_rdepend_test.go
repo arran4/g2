@@ -2,6 +2,7 @@ package ebuild
 
 import (
 	"testing"
+	"strings"
 
 	"github.com/arran4/g2"
 )
@@ -157,5 +158,39 @@ src_compile() {
 				}
 			}
 		})
+	}
+}
+
+func TestUseControlledOptionalRdependRule_PG0001(t *testing.T) {
+	rule := &UseControlledOptionalRdependRule{}
+	pkg := &g2.PackageData{
+		Category: "dev-libs",
+		Name:     "foo",
+		Versions: []g2.VersionData{
+			{
+				Version: "1.0",
+				Ebuild: &g2.Ebuild{
+					Vars: map[string]string{
+						"RDEPEND": "flag? ( dev-libs/bar )",
+					},
+					RawText: "foo",
+				},
+			},
+		},
+	}
+
+	qaErr := &g2.QAPolicy{Policies: map[string]string{"PG0001": "error"}}
+	resultsErr := rule.LintWithQA("", pkg, qaErr)
+	if len(resultsErr) != 1 {
+		t.Fatalf("expected 1 error, got %d", len(resultsErr))
+	}
+	if !strings.Contains(resultsErr[0].Message, "(PG0001)") {
+		t.Errorf("expected message to contain (PG0001), got: %s", resultsErr[0].Message)
+	}
+
+	qaIgnore := &g2.QAPolicy{Policies: map[string]string{"PG0001": "ignore"}}
+	resultsIgnore := rule.LintWithQA("", pkg, qaIgnore)
+	if len(resultsIgnore) != 0 {
+		t.Fatalf("expected 0 errors, got %d", len(resultsIgnore))
 	}
 }

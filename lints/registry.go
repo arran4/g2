@@ -28,6 +28,7 @@ type RuleMetadata struct {
 	Title       string   `json:"title"`
 	Description string   `json:"description"`
 	URL         string   `json:"url,omitempty"`
+	URLs        []string `json:"urls,omitempty"`
 	Severity    Severity `json:"severity"`
 	Source      Source   `json:"source"`
 	Tags        []string `json:"tags,omitempty"`
