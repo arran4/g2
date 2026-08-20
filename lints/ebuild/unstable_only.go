@@ -2,8 +2,8 @@ package ebuild
 
 import (
 	"fmt"
-	"strings"
 	"sort"
+	"strings"
 
 	"github.com/arran4/g2"
 	"github.com/arran4/g2/lints"
@@ -94,11 +94,11 @@ func (r *UnstableOnlyLintRule) LintWithQA(repoDir string, pkg *g2.PackageData, q
 
 		results = append(results, lints.LintResult{
 			RuleMetadata: ruleUnstableOnly,
-			Message:      fmt.Sprintf("[%s] Package has only unstable keywords for arch(es): [ %s ], all versions are unstable: [ %s ]",
+			Message: fmt.Sprintf("[%s] Package has only unstable keywords for arch(es): [ %s ], all versions are unstable: [ %s ]",
 				cases.Title(language.Und, cases.NoLower).String(string(lints.SeverityNotice)),
 				strings.Join(arches, ", "),
 				strings.Join(versions, ", ")),
-			Package:      pkg.Category + "/" + pkg.Name,
+			Package: pkg.Category + "/" + pkg.Name,
 		})
 	}
 

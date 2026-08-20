@@ -2,9 +2,9 @@ package ebuild
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
-	"os"
 
 	"github.com/arran4/g2"
 	"github.com/arran4/g2/lints"
@@ -57,122 +57,122 @@ func (r *EclassDeprecatedLintRule) LintRepo(repoDir string, site *g2.SiteData) [
 
 	deprecatedEclasses := make(map[string]bool)
 
-    // Helper to extract deprecated eclass names from an eclass file quickly
-    findDeprecatedEclasses := func(eclassPath string) {
-        content, err := os.ReadFile(eclassPath)
-        if err != nil {
-            return
-        }
+	// Helper to extract deprecated eclass names from an eclass file quickly
+	findDeprecatedEclasses := func(eclassPath string) {
+		content, err := os.ReadFile(eclassPath)
+		if err != nil {
+			return
+		}
 
-        // Convert content to string and split by newline, looking for @DEPRECATED
-        lines := strings.Split(string(content), "\n")
-        for _, line := range lines {
-            if strings.HasPrefix(strings.TrimSpace(line), "# @DEPRECATED:") {
-                eclassName := strings.TrimSuffix(filepath.Base(eclassPath), ".eclass")
-                deprecatedEclasses[eclassName] = true
-                break
-            }
-        }
-    }
+		// Convert content to string and split by newline, looking for @DEPRECATED
+		lines := strings.Split(string(content), "\n")
+		for _, line := range lines {
+			if strings.HasPrefix(strings.TrimSpace(line), "# @DEPRECATED:") {
+				eclassName := strings.TrimSuffix(filepath.Base(eclassPath), ".eclass")
+				deprecatedEclasses[eclassName] = true
+				break
+			}
+		}
+	}
 
-    // Helper to find deprecated eclasses in a directory
-    findDeprecatedEclassesInDir := func(eclassDir string) {
-        if info, err := os.Stat(eclassDir); err == nil && info.IsDir() {
-            entries, err := os.ReadDir(eclassDir)
-            if err == nil {
-                for _, e := range entries {
-                    if !e.IsDir() && strings.HasSuffix(e.Name(), ".eclass") {
-                        findDeprecatedEclasses(filepath.Join(eclassDir, e.Name()))
-                    }
-                }
-            }
-        }
-    }
+	// Helper to find deprecated eclasses in a directory
+	findDeprecatedEclassesInDir := func(eclassDir string) {
+		if info, err := os.Stat(eclassDir); err == nil && info.IsDir() {
+			entries, err := os.ReadDir(eclassDir)
+			if err == nil {
+				for _, e := range entries {
+					if !e.IsDir() && strings.HasSuffix(e.Name(), ".eclass") {
+						findDeprecatedEclasses(filepath.Join(eclassDir, e.Name()))
+					}
+				}
+			}
+		}
+	}
 
-    if site != nil {
-        // First check locally
-        for _, eclass := range site.Eclasses {
-            if eclass == nil {
-                continue
-            }
-            lines := strings.Split(eclass.RawText, "\n")
-            for _, line := range lines {
-                if strings.HasPrefix(strings.TrimSpace(line), "# @DEPRECATED:") {
-                    eclassName := strings.TrimSuffix(filepath.Base(eclass.Path), ".eclass")
-                    deprecatedEclasses[eclassName] = true
-                    break
-                }
-            }
-        }
+	if site != nil {
+		// First check locally
+		for _, eclass := range site.Eclasses {
+			if eclass == nil {
+				continue
+			}
+			lines := strings.Split(eclass.RawText, "\n")
+			for _, line := range lines {
+				if strings.HasPrefix(strings.TrimSpace(line), "# @DEPRECATED:") {
+					eclassName := strings.TrimSuffix(filepath.Base(eclass.Path), ".eclass")
+					deprecatedEclasses[eclassName] = true
+					break
+				}
+			}
+		}
 
-        // Parse metadata/layout.conf for masters (upstream overlays)
-        if site.LayoutConf != nil {
-            var masters []string
-            for _, entry := range site.LayoutConf.Entries {
-                if entry.Key == "masters" {
-                    masters = strings.Fields(entry.Value)
-                    break
-                }
-            }
+		// Parse metadata/layout.conf for masters (upstream overlays)
+		if site.LayoutConf != nil {
+			var masters []string
+			for _, entry := range site.LayoutConf.Entries {
+				if entry.Key == "masters" {
+					masters = strings.Fields(entry.Value)
+					break
+				}
+			}
 
-            if len(masters) > 0 {
-                // Determine paths for upstream masters
-                masterPaths := make(map[string]string)
+			if len(masters) > 0 {
+				// Determine paths for upstream masters
+				masterPaths := make(map[string]string)
 
-                // Usually gentoo puts its default repos.conf in /etc/portage/repos.conf
-                // We'll parse it if it exists to get absolute paths.
-                if rc, err := g2.ParseReposConf(DefaultReposConfPath); err == nil && rc != nil {
-                    for _, file := range rc.Files {
-                        for _, sec := range file.Sections {
-                            if loc := sec.Get("location"); loc != "" {
-                                masterPaths[sec.Name] = loc
-                            }
-                        }
-                    }
-                }
+				// Usually gentoo puts its default repos.conf in /etc/portage/repos.conf
+				// We'll parse it if it exists to get absolute paths.
+				if rc, err := g2.ParseReposConf(DefaultReposConfPath); err == nil && rc != nil {
+					for _, file := range rc.Files {
+						for _, sec := range file.Sections {
+							if loc := sec.Get("location"); loc != "" {
+								masterPaths[sec.Name] = loc
+							}
+						}
+					}
+				}
 
-                for _, master := range masters {
-                    loc, ok := masterPaths[master]
-                    if !ok {
-                        // fallback to a generic path if not found in repos.conf
-                        loc = filepath.Join(DefaultReposBasePath, master)
-                    }
-                    findDeprecatedEclassesInDir(filepath.Join(loc, "eclass"))
-                }
-            }
-        }
-    }
+				for _, master := range masters {
+					loc, ok := masterPaths[master]
+					if !ok {
+						// fallback to a generic path if not found in repos.conf
+						loc = filepath.Join(DefaultReposBasePath, master)
+					}
+					findDeprecatedEclassesInDir(filepath.Join(loc, "eclass"))
+				}
+			}
+		}
+	}
 
-    if site != nil {
-        // Loop over packages to check inheritance
-        for _, cat := range site.Categories {
-            for _, pkg := range cat.Packages {
-                for _, ver := range pkg.Versions {
-                    if ver.Ebuild == nil || ver.Ebuild.Vars == nil {
-                        continue
-                    }
+	if site != nil {
+		// Loop over packages to check inheritance
+		for _, cat := range site.Categories {
+			for _, pkg := range cat.Packages {
+				for _, ver := range pkg.Versions {
+					if ver.Ebuild == nil || ver.Ebuild.Vars == nil {
+						continue
+					}
 
-                    inheritedStr := ver.Ebuild.Vars["INHERITED"]
-                    if inheritedStr == "" {
-                        continue
-                    }
+					inheritedStr := ver.Ebuild.Vars["INHERITED"]
+					if inheritedStr == "" {
+						continue
+					}
 
-                    inheritedList := strings.Fields(inheritedStr)
-                    for _, inherited := range inheritedList {
-                        if deprecatedEclasses[inherited] {
-                            res := lints.LintResult{
-                                RuleMetadata: ruleEclassDeprecated,
-                                Message:      fmt.Sprintf("[%s] Ebuild %s inherits a deprecated eclass '%s'.", cases.Title(language.Und, cases.NoLower).String(string(severity)), ver.Version, inherited),
-                                Package:      pkg.Category + "/" + pkg.Name,
-                            }
-                            res.RuleMetadata.Severity = severity
-                            results = append(results, res)
-                        }
-                    }
-                }
-            }
-        }
-    }
+					inheritedList := strings.Fields(inheritedStr)
+					for _, inherited := range inheritedList {
+						if deprecatedEclasses[inherited] {
+							res := lints.LintResult{
+								RuleMetadata: ruleEclassDeprecated,
+								Message:      fmt.Sprintf("[%s] Ebuild %s inherits a deprecated eclass '%s'.", cases.Title(language.Und, cases.NoLower).String(string(severity)), ver.Version, inherited),
+								Package:      pkg.Category + "/" + pkg.Name,
+							}
+							res.RuleMetadata.Severity = severity
+							results = append(results, res)
+						}
+					}
+				}
+			}
+		}
+	}
 
 	return results
 }

@@ -84,7 +84,6 @@ func isBannedSubdir(path string) bool {
 	return false
 }
 
-
 func isInstallationPathsViolation(word *syntax.Word) (bool, string) {
 	var fullString strings.Builder
 	for _, part := range word.Parts {
@@ -126,7 +125,6 @@ func isInstallationPathsViolation(word *syntax.Word) (bool, string) {
 
 	return false, ""
 }
-
 
 func (l *InstallationPathsLintRule) Lint(repoDir string, pkgData *g2.PackageData) []lints.LintResult {
 	return l.LintWithQA(repoDir, pkgData, nil)
