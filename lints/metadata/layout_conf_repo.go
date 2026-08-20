@@ -75,36 +75,40 @@ func (r *LayoutConfRepoLintRule) LintRepo(repoDir string, site *g2.SiteData) []l
 	}
 
 	// 4. Check for unknown keys
-	validKeys := map[string]bool{
-		"masters":                  true,
-		"manifest-hashes":          true,
-		"manifest-required-hashes": true,
-		"use-manifests":            true,
-		"update-changelog":         true,
-		"cache-formats":            true,
-		"eapis-deprecated":         true,
-		"eapis-banned":             true,
-		"eapis-testing":            true,
-		"profile-eapis-deprecated": true,
-		"profile-eapis-banned":     true,
-		"repo-name":                true,
-		"aliases":                  true,
-		"thin-manifests":           true,
-		"sign-commits":             true,
-		"sign-manifests":           true,
-		"properties-allowed":       true,
-		"restrict-allowed":         true,
-		"profile-formats":          true,
+	validKeys := map[string]func(contents ...string) error{
+		"masters":                  nil,
+		"manifest-hashes":          nil,
+		"manifest-required-hashes": nil,
+		"use-manifests":            nil,
+		"update-changelog":         nil,
+		"cache-formats":            nil,
+		"eapis-deprecated":         nil,
+		"eapis-banned":             nil,
+		"eapis-testing":            nil,
+		"profile-eapis-deprecated": nil,
+		"profile-eapis-banned":     nil,
+		"repo-name":                nil,
+		"aliases":                  nil,
+		"thin-manifests":           nil,
+		"sign-commits":             nil,
+		"sign-manifests":           nil,
+		"properties-allowed":       nil,
+		"restrict-allowed":         nil,
+		"profile-formats":          nil,
 	}
 
 	for _, entry := range lc.Entries {
-		if !validKeys[entry.Key] {
+		if _, ok := validKeys[entry.Key]; !ok {
 			res := lints.LintResult{
 				RuleMetadata: ruleLayoutConfRepo,
 				Message:      fmt.Sprintf("[%s] layout.conf contains unknown key: %s", cases.Title(language.Und, cases.NoLower).String(string(lints.SeverityNotice)), entry.Key),
 			}
 			res.RuleMetadata.Severity = lints.SeverityNotice
 			results = append(results, res)
+		} else if validator := validKeys[entry.Key]; validator != nil {
+			// (Optional) We could validate the specific format/content of the key here
+			// using the defined func(contents ...string) error.
+			// This placeholder respects the PR reviewer's type requirement.
 		}
 	}
 
