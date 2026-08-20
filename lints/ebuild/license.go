@@ -170,7 +170,7 @@ func (r *LicenseExistsRepoLintRule) LintRepo(repoDir string, site *g2.SiteData) 
 					// Read license groups from master
 					masterLicenseGroupsPath := filepath.Join(loc, "profiles", "license_groups")
 					if f, err := os.Open(masterLicenseGroupsPath); err == nil {
-						defer f.Close()
+						defer func() { _ = f.Close() }()
 						if groups, err := g2.ParseLicenseGroups(f); err == nil {
 							for group := range groups {
 								validLicenses[group] = true
