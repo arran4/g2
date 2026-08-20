@@ -14,7 +14,7 @@ var ruleDynamicSlots = lints.RuleMetadata{
 	ID:          "DynamicSlots",
 	Title:       "Dynamic Slots (multislot flag)",
 	Description: "The use of multislot to alter SLOT values (as well as any other USE-dependent slot values) in the Gentoo repository is forbidden.",
-	URL:         "https://projects.gentoo.org/qa/policy-guide/other-metadata.html#pg0701",
+	URL:         "https://projects.gentoo.org/qa/policy-guide/other-metadata.html#pg0701", URLs: []string{"https://wiki.gentoo.org/index.php?title=Project:Quality_Assurance/Policies&oldid=109991#multislot.2FUSE-dependent_SLOT", "https://bugs.gentoo.org/174407"},
 	Severity:    lints.SeverityError,
 	Source:      lints.SourceQA,
 	Tags:        []string{"ebuild", "gentoo-policy", "PG0701"},
