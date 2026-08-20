@@ -106,9 +106,15 @@ func (r *LayoutConfRepoLintRule) LintRepo(repoDir string, site *g2.SiteData) []l
 			res.RuleMetadata.Severity = lints.SeverityNotice
 			results = append(results, res)
 		} else if validator := validKeys[entry.Key]; validator != nil {
-			// (Optional) We could validate the specific format/content of the key here
+			// Validate the specific format/content of the key here
 			// using the defined func(contents ...string) error.
-			// This placeholder respects the PR reviewer's type requirement.
+			if err := validator(entry.Value); err != nil {
+				res := lints.LintResult{
+					RuleMetadata: ruleLayoutConfRepo,
+					Message:      fmt.Sprintf("[%s] layout.conf key validation failed %s: %s", lints.SeverityError, entry.Key, err.Error()),
+				}
+				results = append(results, res)
+			}
 		}
 	}
 
