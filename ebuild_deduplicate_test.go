@@ -114,3 +114,35 @@ func TestDeduplicateEbuildsTxtar(t *testing.T) {
 		})
 	}
 }
+
+func TestDeduplicateEbuildsRevisionComparison(t *testing.T) {
+	tmpDir := t.TempDir()
+	pkgDir := filepath.Join(tmpDir, "app-test", "dummy")
+	if err := os.MkdirAll(pkgDir, 0755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+
+	// Two identical content ebuilds where one has a higher revision (-r1).
+	// Deduplication must retain the higher revision (dummy-1.2-r1.ebuild) and remove dummy-1.2.ebuild.
+	content := []byte("EAPI=8\nSLOT=\"0\"\n# Generated via: tool\nDESCRIPTION=\"Test\"\n")
+	if err := os.WriteFile(filepath.Join(pkgDir, "dummy-1.2.ebuild"), content, 0644); err != nil {
+		t.Fatalf("write dummy-1.2: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(pkgDir, "dummy-1.2-r1.ebuild"), content, 0644); err != nil {
+		t.Fatalf("write dummy-1.2-r1: %v", err)
+	}
+
+	removed, err := DeduplicateEbuilds([]string{tmpDir})
+	if err != nil {
+		t.Fatalf("DeduplicateEbuilds failed: %v", err)
+	}
+	if len(removed) != 1 {
+		t.Fatalf("expected 1 removed ebuild, got %d", len(removed))
+	}
+	if filepath.Base(removed[0]) != "dummy-1.2.ebuild" {
+		t.Errorf("expected dummy-1.2.ebuild to be removed, got: %s", removed[0])
+	}
+	if _, err := os.Stat(filepath.Join(pkgDir, "dummy-1.2-r1.ebuild")); err != nil {
+		t.Errorf("expected dummy-1.2-r1.ebuild to be retained: %v", err)
+	}
+}
