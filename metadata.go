@@ -34,6 +34,14 @@ func (s *StabilizeAllArches) MarshalXML(e *xml.Encoder, start xml.StartElement) 
 	return e.EncodeElement("", start)
 }
 
+type StraightToStable struct {
+	Restrict string `xml:"restrict,attr,omitempty"`
+}
+
+func (s *StraightToStable) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
+	return e.EncodeElement("", start)
+}
+
 // MetadataComments represents a list of XML comments.
 type MetadataComments []string
 
@@ -59,6 +67,7 @@ type PkgMetadata struct {
 	LongDescription    []LongDescription   `xml:"longdescription"`
 	Slots              *Slots              `xml:"slots"`
 	StabilizeAllArches *StabilizeAllArches `xml:"stabilize-allarches"`
+	StraightToStable   *StraightToStable   `xml:"straight-to-stable"`
 	Use                []Use               `xml:"use"`
 	Upstream           *Upstream           `xml:"upstream"`
 }

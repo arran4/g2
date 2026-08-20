@@ -18,8 +18,8 @@ type Projects struct {
 type Project struct {
 	Email       string       `xml:"email"`
 	Name        string       `xml:"name"`
-	URL         string       `xml:"url"`
-	Description string       `xml:"description"`
+	URL         string       `xml:"url,omitempty"`
+	Description string       `xml:"description,omitempty"`
 	Subprojects []Subproject `xml:"subproject"`
 	Members     []Member     `xml:"member"`
 }
@@ -33,8 +33,8 @@ type Subproject struct {
 type Member struct {
 	IsLead string `xml:"is-lead,attr,omitempty"` // 0|1
 	Email  string `xml:"email"`
-	Name   string `xml:"name"`
-	Role   string `xml:"role"`
+	Name   string `xml:"name,omitempty"`
+	Role   string `xml:"role,omitempty"`
 }
 
 // ParseProjects parses a projects.xml file and returns a Projects pointer, or an error.
