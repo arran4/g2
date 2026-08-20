@@ -736,16 +736,47 @@ location = ` + overlayDir + `
 			"cat / pkg",
 			"category/pkg::",
 			"category/pkg::repo1::repo2",
+			">=cat/pkg",
+			"cat/pkg-1.2",
+			"+cat/pkg",
+			".cat/pkg",
+			"cat/+pkg",
+			"cat/pkg.name",
+			"cat/pkg@name",
+			"=cat/pkg-1..2",
 		}
 
 		for _, invalidAtom := range invalidAtoms {
 			configRoot, reposConf := setupTestPortage(t)
+
+			// mask command
 			err := cfg.cmdConfOverlay([]string{"arrans-overlay", "mask", invalidAtom, "--config-root", configRoot, "--repos-conf", reposConf})
 			if err == nil {
-				t.Errorf("expected error for invalid atom %q, but got nil", invalidAtom)
+				t.Errorf("expected mask error for invalid atom %q, but got nil", invalidAtom)
 			}
 			if _, err := os.Stat(filepath.Join(configRoot, "package.mask")); !os.IsNotExist(err) {
 				t.Errorf("package.mask should not have been created for invalid atom %q", invalidAtom)
+			}
+
+			// unmask command
+			err = cfg.cmdConfOverlay([]string{"arrans-overlay", "unmask", invalidAtom, "--config-root", configRoot, "--repos-conf", reposConf})
+			if err == nil {
+				t.Errorf("expected unmask error for invalid atom %q, but got nil", invalidAtom)
+			}
+			if _, err := os.Stat(filepath.Join(configRoot, "package.unmask")); !os.IsNotExist(err) {
+				t.Errorf("package.unmask should not have been created for invalid atom %q", invalidAtom)
+			}
+
+			// mask-reset command
+			err = cfg.cmdConfOverlay([]string{"arrans-overlay", "mask-reset", invalidAtom, "--config-root", configRoot, "--repos-conf", reposConf})
+			if err == nil {
+				t.Errorf("expected mask-reset error for invalid atom %q, but got nil", invalidAtom)
+			}
+
+			// unmask-reset command
+			err = cfg.cmdConfOverlay([]string{"arrans-overlay", "unmask-reset", invalidAtom, "--config-root", configRoot, "--repos-conf", reposConf})
+			if err == nil {
+				t.Errorf("expected unmask-reset error for invalid atom %q, but got nil", invalidAtom)
 			}
 		}
 	})
@@ -782,6 +813,47 @@ location = ` + overlayDir + `
 		err = cfg.cmdConfOverlay([]string{"arrans-overlay", "unmask-reset", "cat/pkg", "extra_pkg", "--config-root", configRoot, "--repos-conf", reposConf})
 		if err == nil || !strings.Contains(err.Error(), "unexpected extra argument") {
 			t.Errorf("expected unexpected extra argument error for unmask-reset, got: %v", err)
+		}
+	})
+
+	// 34. malformed repository identity cannot cause package.mask / package.unmask write
+	t.Run("malformed repository identity prevents configuration mutation", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		overlayDir := filepath.Join(tmpDir, "overlay")
+		if err := os.MkdirAll(filepath.Join(overlayDir, "profiles"), 0755); err != nil {
+			t.Fatalf("mkdir: %v", err)
+		}
+		// Injection attempt in profiles/repo_name
+		if err := os.WriteFile(filepath.Join(overlayDir, "profiles", "repo_name"), []byte("real-repo\napp-misc/injected\n"), 0644); err != nil {
+			t.Fatalf("write repo_name: %v", err)
+		}
+
+		reposConf := filepath.Join(tmpDir, "repos.conf")
+		confContent := `[test-repo]
+location = ` + overlayDir + `
+`
+		if err := os.WriteFile(reposConf, []byte(confContent), 0644); err != nil {
+			t.Fatalf("write repos.conf: %v", err)
+		}
+
+		configRoot := filepath.Join(tmpDir, "portage")
+
+		// mask attempt
+		err := cfg.cmdConfOverlay([]string{"test-repo", "mask", "cat/pkg", "--config-root", configRoot, "--repos-conf", reposConf})
+		if err == nil {
+			t.Fatal("expected error on malformed repository identity, got nil")
+		}
+		if _, err := os.Stat(filepath.Join(configRoot, "package.mask")); !os.IsNotExist(err) {
+			t.Error("package.mask should not have been created on malformed repo identity")
+		}
+
+		// unmask attempt
+		err = cfg.cmdConfOverlay([]string{"test-repo", "unmask", "cat/pkg", "--config-root", configRoot, "--repos-conf", reposConf})
+		if err == nil {
+			t.Fatal("expected error on malformed repository identity, got nil")
+		}
+		if _, err := os.Stat(filepath.Join(configRoot, "package.unmask")); !os.IsNotExist(err) {
+			t.Error("package.unmask should not have been created on malformed repo identity")
 		}
 	})
 }

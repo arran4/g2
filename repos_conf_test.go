@@ -159,3 +159,62 @@ location = ` + overlayDir + `
 		t.Errorf("unexpected error message: %v", err)
 	}
 }
+
+func TestMalformedRepoNameFails(t *testing.T) {
+	cases := []struct {
+		name     string
+		content  string
+		expected string
+	}{
+		{name: "newline injection", content: "real-repo\napp-misc/injected\n", expected: "multiple lines"},
+		{name: "space in repo name", content: "repo name\n", expected: "invalid repository name"},
+		{name: "leading hyphen", content: "-repo\n", expected: "invalid repository name"},
+		{name: "empty content", content: "   \n", expected: "file is empty"},
+		{name: "invalid character @", content: "repo@name\n", expected: "invalid repository name"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			tmpDir := t.TempDir()
+			overlayDir := filepath.Join(tmpDir, "overlay")
+			if err := os.MkdirAll(filepath.Join(overlayDir, "profiles"), 0755); err != nil {
+				t.Fatalf("mkdir: %v", err)
+			}
+			if err := os.WriteFile(filepath.Join(overlayDir, "profiles", "repo_name"), []byte(tc.content), 0644); err != nil {
+				t.Fatalf("write repo_name: %v", err)
+			}
+
+			reposConf := filepath.Join(tmpDir, "repos.conf")
+			confContent := `[test-section]
+location = ` + overlayDir + `
+`
+			if err := os.WriteFile(reposConf, []byte(confContent), 0644); err != nil {
+				t.Fatalf("write repos.conf: %v", err)
+			}
+
+			_, err := ListConfiguredRepos(reposConf)
+			if err == nil {
+				t.Fatalf("expected error for content %q, got nil", tc.content)
+			}
+			if !strings.Contains(err.Error(), tc.expected) {
+				t.Errorf("error %q does not contain %q", err.Error(), tc.expected)
+			}
+		})
+	}
+
+	t.Run("fallback section name validation", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		reposConf := filepath.Join(tmpDir, "repos.conf")
+		confContent := `[-invalid-section-name]
+location = /var/db/repos/foo
+`
+		if err := os.WriteFile(reposConf, []byte(confContent), 0644); err != nil {
+			t.Fatalf("write repos.conf: %v", err)
+		}
+
+		_, err := ListConfiguredRepos(reposConf)
+		if err == nil {
+			t.Fatal("expected error for invalid section name fallback")
+		}
+	})
+}

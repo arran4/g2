@@ -243,6 +243,33 @@ func (s *ReposConfSection) Unset(key string) {
 	s.Lines = newLines
 }
 
+// ValidateRepoName validates a repository name according to Gentoo PMS rules.
+// Repository names must:
+// - be non-empty;
+// - contain only [A-Za-z0-9_-];
+// - not begin with '-';
+// - not begin with '+' or '.';
+// - contain no whitespace, CR, LF, NUL, or other delimiters.
+func ValidateRepoName(name string) error {
+	if name == "" {
+		return fmt.Errorf("repository name cannot be empty")
+	}
+	if strings.ContainsAny(name, " \t\r\n\x00") {
+		return fmt.Errorf("invalid repository name %q: contains whitespace or control characters", name)
+	}
+	if name[0] == '-' || name[0] == '+' || name[0] == '.' {
+		return fmt.Errorf("invalid repository name %q: must not begin with hyphen, plus, or dot", name)
+	}
+	for i := 0; i < len(name); i++ {
+		c := name[i]
+		if (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_' || c == '-' {
+			continue
+		}
+		return fmt.Errorf("invalid repository name %q: contains invalid character %q", name, string(c))
+	}
+	return nil
+}
+
 // RepoInfo describes a configured repository found in repos.conf.
 type RepoInfo struct {
 	Name       string // Section name in repos.conf
@@ -286,11 +313,23 @@ func ListConfiguredRepos(location string) ([]*RepoInfo, error) {
 						return nil, fmt.Errorf("reading repository identity at %s: %w", repoNameFile, err)
 					}
 				} else {
-					trimmed := strings.TrimSpace(string(data))
-					if trimmed != "" {
-						repoIdentity = trimmed
+					content := string(data)
+					lines := strings.Split(strings.TrimRight(content, "\r\n"), "\n")
+					if len(lines) == 0 || (len(lines) == 1 && strings.TrimSpace(lines[0]) == "") {
+						return nil, fmt.Errorf("invalid repository identity in %s: file is empty", repoNameFile)
 					}
+					if len(lines) > 1 {
+						return nil, fmt.Errorf("invalid repository identity in %s: contains multiple lines", repoNameFile)
+					}
+					trimmed := strings.TrimSpace(lines[0])
+					if err := ValidateRepoName(trimmed); err != nil {
+						return nil, fmt.Errorf("invalid repository identity in %s: %w", repoNameFile, err)
+					}
+					repoIdentity = trimmed
 				}
+			}
+			if err := ValidateRepoName(repoIdentity); err != nil {
+				return nil, fmt.Errorf("invalid repository identity for section [%s]: %w", s.Name, err)
 			}
 			repos = append(repos, &RepoInfo{
 				Name:       s.Name,

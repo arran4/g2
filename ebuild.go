@@ -1070,15 +1070,71 @@ func (a PackageAtom) String() string {
 // If the atom already specifies ::targetRepo, it is accepted.
 // If the atom specifies a conflicting repository qualifier, an error is returned.
 // Repo-wide wildcard atoms (e.g. */*) are rejected because repo-wide policy requires explicit commands.
+func validateCategoryName(cat string) error {
+	if cat == "" {
+		return fmt.Errorf("category cannot be empty")
+	}
+	if cat[0] == '-' || cat[0] == '+' || cat[0] == '.' {
+		return fmt.Errorf("category %q must not begin with %q", cat, string(cat[0]))
+	}
+	for i := 0; i < len(cat); i++ {
+		c := cat[i]
+		if (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '+' || c == '_' || c == '.' || c == '-' {
+			continue
+		}
+		return fmt.Errorf("category %q contains invalid character %q", cat, string(c))
+	}
+	return nil
+}
+
+func validatePackageName(pkg string) error {
+	if pkg == "" {
+		return fmt.Errorf("package name cannot be empty")
+	}
+	if pkg[0] == '-' || pkg[0] == '+' {
+		return fmt.Errorf("package name %q must not begin with %q", pkg, string(pkg[0]))
+	}
+	for i := 0; i < len(pkg); i++ {
+		c := pkg[i]
+		if (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '+' || c == '_' || c == '-' {
+			continue
+		}
+		return fmt.Errorf("package name %q contains invalid character %q", pkg, string(c))
+	}
+	return nil
+}
+
+func validateSlotName(name string) error {
+	if name == "" {
+		return fmt.Errorf("slot cannot be empty")
+	}
+	if name[0] == '-' || name[0] == '+' || name[0] == '.' {
+		return fmt.Errorf("slot %q must not begin with %q", name, string(name[0]))
+	}
+	for i := 0; i < len(name); i++ {
+		c := name[i]
+		if (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '+' || c == '_' || c == '.' || c == '-' {
+			continue
+		}
+		return fmt.Errorf("slot %q contains invalid character %q", name, string(c))
+	}
+	return nil
+}
+
+// QualifyAtomForRepo validates that the given package atom specification is valid according to
+// Gentoo PMS rules and belongs to targetRepo. If the atom has no repository qualifier, ::targetRepo is appended.
+// If the atom already specifies ::targetRepo, it is accepted.
+// If the atom specifies a conflicting repository qualifier, an error is returned.
+// Repo-wide wildcard atoms (e.g. */*) are rejected because repo-wide policy requires explicit commands.
 func QualifyAtomForRepo(dep string, targetRepo string) (string, error) {
 	if dep == "" {
 		return "", fmt.Errorf("package atom cannot be empty")
 	}
-	if strings.ContainsAny(dep, " \t\r\n") {
+	if strings.ContainsAny(dep, " \t\r\n\x00") {
 		return "", fmt.Errorf("invalid package atom %q: whitespace is not permitted", dep)
 	}
-	if targetRepo == "" {
-		return "", fmt.Errorf("target repository cannot be empty")
+	if err := ValidateRepoName(targetRepo); err != nil {
+		return "", fmt.Errorf("invalid target repository %q: %w", targetRepo, err)
 	}
 
 	// Reject repo-wide wildcard atoms (*/* or */*::...)
@@ -1086,65 +1142,178 @@ func QualifyAtomForRepo(dep string, targetRepo string) (string, error) {
 		return "", fmt.Errorf("repo-wide wildcard atom %q is not permitted in package-specific commands; repo-wide policy requires an explicit repo-wide command", dep)
 	}
 
-	// Validate repository qualifiers (::)
-	if strings.Count(dep, "::") > 1 {
-		return "", fmt.Errorf("invalid package atom %q: multiple repository qualifiers", dep)
-	}
-	if strings.HasSuffix(dep, "::") {
-		return "", fmt.Errorf("invalid package atom %q: empty repository qualifier", dep)
-	}
-	if idx := strings.Index(dep, "::"); idx != -1 {
-		repoPart := dep[idx+2:]
-		if uIdx := strings.Index(repoPart, "["); uIdx != -1 {
-			repoPart = repoPart[:uIdx]
+	s := dep
+
+	// 1. Extract USE flags ([...])
+	var useFlags string
+	if strings.Contains(s, "[") {
+		if !strings.HasSuffix(s, "]") {
+			return "", fmt.Errorf("invalid package atom %q: malformed USE flags specification", dep)
 		}
-		if repoPart == "" {
+		idx := strings.LastIndex(s, "[")
+		useFlags = s[idx+1 : len(s)-1]
+		if useFlags == "" {
+			return "", fmt.Errorf("invalid package atom %q: empty USE flags []", dep)
+		}
+		for i := 0; i < len(useFlags); i++ {
+			c := useFlags[i]
+			if (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') ||
+				c == '+' || c == '_' || c == '-' || c == '@' || c == ',' || c == '!' || c == '?' || c == '=' || c == '(' || c == ')' || c == '*' {
+				continue
+			}
+			return "", fmt.Errorf("invalid package atom %q: invalid character in USE flags %q", dep, string(c))
+		}
+		s = s[:idx]
+	}
+
+	// 2. Extract Repository qualifier (::repo)
+	var specifiedRepo string
+	if strings.Contains(s, "::") {
+		if strings.Count(s, "::") > 1 {
+			return "", fmt.Errorf("invalid package atom %q: multiple repository qualifiers", dep)
+		}
+		if strings.HasSuffix(s, "::") {
 			return "", fmt.Errorf("invalid package atom %q: empty repository qualifier", dep)
 		}
+		idx := strings.Index(s, "::")
+		repoPart := s[idx+2:]
+		if err := ValidateRepoName(repoPart); err != nil {
+			return "", fmt.Errorf("invalid package atom %q: %w", dep, err)
+		}
+		specifiedRepo = repoPart
+		s = s[:idx]
 	}
 
-	atom := ParsePackageAtom(dep)
+	// 3. Extract Slot / Subslot (:slot[/subslot])
+	var slotPart string
+	if strings.Contains(s, ":") {
+		idx := strings.LastIndex(s, ":")
+		slotPart = s[idx+1:]
+		if slotPart == "" {
+			return "", fmt.Errorf("invalid package atom %q: empty slot specification", dep)
+		}
+		s = s[:idx]
 
-	// Strict category and package name validation for Portage config
-	if atom.Category == "" {
-		return "", fmt.Errorf("invalid package atom %q: missing category", dep)
-	}
-	if atom.Name == "" {
-		return "", fmt.Errorf("invalid package atom %q: missing package name", dep)
-	}
-	if atom.Category == "*" || atom.Name == "*" {
-		return "", fmt.Errorf("repo-wide wildcard atom %q is not permitted in package-specific commands; repo-wide policy requires an explicit repo-wide command", dep)
+		slotBase := strings.TrimSuffix(slotPart, "=")
+		if slotBase != "*" && slotBase != "" {
+			if strings.Contains(slotBase, "/") {
+				parts := strings.Split(slotBase, "/")
+				if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
+					return "", fmt.Errorf("invalid package atom %q: malformed slot/subslot %q", dep, slotPart)
+				}
+				if err := validateSlotName(parts[0]); err != nil {
+					return "", fmt.Errorf("invalid package atom %q: invalid slot %q: %w", dep, parts[0], err)
+				}
+				if parts[1] != "*" && parts[1] != "=" {
+					if err := validateSlotName(parts[1]); err != nil {
+						return "", fmt.Errorf("invalid package atom %q: invalid subslot %q: %w", dep, parts[1], err)
+					}
+				}
+			} else {
+				if err := validateSlotName(slotBase); err != nil {
+					return "", fmt.Errorf("invalid package atom %q: invalid slot %q: %w", dep, slotBase, err)
+				}
+			}
+		}
 	}
 
-	// Validate category format
-	if strings.Contains(atom.Category, "/") || strings.HasPrefix(atom.Category, "-") || strings.HasPrefix(atom.Category, ".") {
-		return "", fmt.Errorf("invalid package atom %q: invalid category %q", dep, atom.Category)
+	// 4. Extract Blocker and Operator
+	var blocker string
+	if strings.HasPrefix(s, "!!") {
+		blocker = "!!"
+		s = s[2:]
+	} else if strings.HasPrefix(s, "!") {
+		blocker = "!"
+		s = s[1:]
 	}
 
-	// Validate that raw dep does not contain extra slash segments (e.g. cat/foo/extra)
-	depWithoutFlags := dep
-	if idx := strings.Index(depWithoutFlags, "["); idx != -1 {
-		depWithoutFlags = depWithoutFlags[:idx]
+	var op string
+	if strings.HasPrefix(s, ">=") || strings.HasPrefix(s, "<=") {
+		op = s[:2]
+		s = s[2:]
+	} else if strings.HasPrefix(s, "=") || strings.HasPrefix(s, "~") || strings.HasPrefix(s, ">") || strings.HasPrefix(s, "<") {
+		op = s[:1]
+		s = s[1:]
 	}
-	if idx := strings.Index(depWithoutFlags, "::"); idx != -1 {
-		depWithoutFlags = depWithoutFlags[:idx]
-	}
-	if idx := strings.Index(depWithoutFlags, ":"); idx != -1 {
-		depWithoutFlags = depWithoutFlags[:idx]
-	}
-	for len(depWithoutFlags) > 0 && (depWithoutFlags[0] == '>' || depWithoutFlags[0] == '<' || depWithoutFlags[0] == '=' || depWithoutFlags[0] == '~' || depWithoutFlags[0] == '!') {
-		depWithoutFlags = depWithoutFlags[1:]
-	}
-	if strings.Count(depWithoutFlags, "/") != 1 {
+
+	// 5. Category / Package[-version] split
+	if strings.Count(s, "/") != 1 {
 		return "", fmt.Errorf("invalid package atom %q: expected category/package format", dep)
 	}
+	slashIdx := strings.Index(s, "/")
+	catStr := s[:slashIdx]
+	pkgVerStr := s[slashIdx+1:]
 
-	if atom.Repo != "" && atom.Repo != targetRepo {
-		return "", fmt.Errorf("package qualifier %q does not match selected repository %q", atom.Repo, targetRepo)
+	if err := validateCategoryName(catStr); err != nil {
+		return "", fmt.Errorf("invalid package atom %q: %w", dep, err)
 	}
 
-	atom.Repo = targetRepo
-	return atom.String(), nil
+	// 6. Split pkgVerStr into pkgName and versionStr
+	var pkgName, versionStr string
+	parts := strings.Split(pkgVerStr, "-")
+	for i := 1; i < len(parts); i++ {
+		candidateVer := strings.Join(parts[i:], "-")
+		if len(candidateVer) > 0 && candidateVer[0] >= '0' && candidateVer[0] <= '9' {
+			gv := ParseGentooVersion(candidateVer)
+			if gv.IsValid {
+				pkgName = strings.Join(parts[:i], "-")
+				versionStr = candidateVer
+				break
+			}
+		}
+	}
+	if pkgName == "" {
+		pkgName = pkgVerStr
+	}
+
+	if err := validatePackageName(pkgName); err != nil {
+		return "", fmt.Errorf("invalid package atom %q: %w", dep, err)
+	}
+
+	// 7. Validate Operator vs Version consistency
+	if op != "" {
+		if versionStr == "" {
+			return "", fmt.Errorf("invalid package atom %q: operator %q requires a version", dep, op)
+		}
+		gv := ParseGentooVersion(versionStr)
+		if !gv.IsValid {
+			return "", fmt.Errorf("invalid package atom %q: invalid version %q", dep, versionStr)
+		}
+	} else {
+		if versionStr != "" {
+			return "", fmt.Errorf("invalid package atom %q: versioned package dependency requires an operator", dep)
+		}
+	}
+
+	// 8. Validate Repository matching
+	if specifiedRepo != "" && specifiedRepo != targetRepo {
+		return "", fmt.Errorf("package qualifier %q does not match selected repository %q", specifiedRepo, targetRepo)
+	}
+
+	// 9. Reassemble qualified atom string
+	var sb strings.Builder
+	sb.WriteString(blocker)
+	sb.WriteString(op)
+	sb.WriteString(catStr)
+	sb.WriteString("/")
+	sb.WriteString(pkgName)
+	if versionStr != "" {
+		sb.WriteString("-")
+		sb.WriteString(versionStr)
+	}
+	if slotPart != "" {
+		sb.WriteString(":")
+		sb.WriteString(slotPart)
+	}
+	sb.WriteString("::")
+	sb.WriteString(targetRepo)
+	if useFlags != "" {
+		sb.WriteString("[")
+		sb.WriteString(useFlags)
+		sb.WriteString("]")
+	}
+
+	return sb.String(), nil
 }
 
 // ParsePackageAtom parses a raw dependency string into its constituent parts.
