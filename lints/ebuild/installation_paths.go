@@ -38,11 +38,7 @@ func isAllowedTopLevel(path string) bool {
 		}
 	}
 
-	if strings.HasPrefix(path, "/lib") {
-		return true
-	}
-
-	return false
+	return strings.HasPrefix(path, "/lib")
 }
 
 func isAllowedUsrSubdir(path string) bool {
