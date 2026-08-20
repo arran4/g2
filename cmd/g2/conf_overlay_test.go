@@ -678,4 +678,110 @@ location = ` + overlayDir + `
 			t.Errorf("file mode = %v, want 0600", info.Mode().Perm())
 		}
 	})
+
+	// 31. repo-wide wildcard atom rejection (regression test for safety bypass)
+	t.Run("repo-wide wildcard atom is rejected from package operations", func(t *testing.T) {
+		configRoot, reposConf := setupTestPortage(t)
+
+		// unmask */* fails and does not create package.unmask
+		err := cfg.cmdConfOverlay([]string{"arrans-overlay", "unmask", "*/*", "--config-root", configRoot, "--repos-conf", reposConf})
+		if err == nil {
+			t.Fatal("expected error when unmasking wildcard */*")
+		}
+		if !strings.Contains(err.Error(), "repo-wide wildcard atom") {
+			t.Errorf("unexpected error message: %v", err)
+		}
+		if _, err := os.Stat(filepath.Join(configRoot, "package.unmask")); !os.IsNotExist(err) {
+			t.Error("package.unmask should not have been created on rejected wildcard unmask")
+		}
+
+		// unmask */*::repo fails and does not create package.unmask
+		err = cfg.cmdConfOverlay([]string{"arrans-overlay", "unmask", "*/*::arrans-overlay", "--config-root", configRoot, "--repos-conf", reposConf})
+		if err == nil {
+			t.Fatal("expected error when unmasking explicitly qualified wildcard */*::arrans-overlay")
+		}
+		if _, err := os.Stat(filepath.Join(configRoot, "package.unmask")); !os.IsNotExist(err) {
+			t.Error("package.unmask should not have been created on rejected wildcard unmask")
+		}
+
+		// mask */* fails and does not create package.mask
+		err = cfg.cmdConfOverlay([]string{"arrans-overlay", "mask", "*/*", "--config-root", configRoot, "--repos-conf", reposConf})
+		if err == nil {
+			t.Fatal("expected error when masking wildcard */*")
+		}
+		if _, err := os.Stat(filepath.Join(configRoot, "package.mask")); !os.IsNotExist(err) {
+			t.Error("package.mask should not have been created on rejected wildcard mask")
+		}
+
+		// mask-reset */* fails
+		err = cfg.cmdConfOverlay([]string{"arrans-overlay", "mask-reset", "*/*", "--config-root", configRoot, "--repos-conf", reposConf})
+		if err == nil {
+			t.Fatal("expected error when mask-reset wildcard */*")
+		}
+
+		// unmask-reset */* fails
+		err = cfg.cmdConfOverlay([]string{"arrans-overlay", "unmask-reset", "*/*", "--config-root", configRoot, "--repos-conf", reposConf})
+		if err == nil {
+			t.Fatal("expected error when unmask-reset wildcard */*")
+		}
+	})
+
+	// 32. malformed and invalid atoms rejected at command level without modifying config
+	t.Run("malformed atoms rejected without modifying config", func(t *testing.T) {
+		invalidAtoms := []string{
+			"bare-package",
+			"/leading-slash",
+			"category/",
+			"category/pkg/extra",
+			"cat / pkg",
+			"category/pkg::",
+			"category/pkg::repo1::repo2",
+		}
+
+		for _, invalidAtom := range invalidAtoms {
+			configRoot, reposConf := setupTestPortage(t)
+			err := cfg.cmdConfOverlay([]string{"arrans-overlay", "mask", invalidAtom, "--config-root", configRoot, "--repos-conf", reposConf})
+			if err == nil {
+				t.Errorf("expected error for invalid atom %q, but got nil", invalidAtom)
+			}
+			if _, err := os.Stat(filepath.Join(configRoot, "package.mask")); !os.IsNotExist(err) {
+				t.Errorf("package.mask should not have been created for invalid atom %q", invalidAtom)
+			}
+		}
+	})
+
+	// 33. surplus positional arguments produce clear errors
+	t.Run("surplus positional arguments produce clear errors", func(t *testing.T) {
+		configRoot, reposConf := setupTestPortage(t)
+
+		err := cfg.cmdConfOverlay([]string{"list", "unexpected", "--config-root", configRoot, "--repos-conf", reposConf})
+		if err == nil || !strings.Contains(err.Error(), "unexpected argument") {
+			t.Errorf("expected unexpected argument error for conf overlay list, got: %v", err)
+		}
+
+		err = cfg.cmdConfOverlay([]string{"arrans-overlay", "list", "unexpected", "--config-root", configRoot, "--repos-conf", reposConf})
+		if err == nil || !strings.Contains(err.Error(), "unexpected argument") {
+			t.Errorf("expected unexpected argument error for repo list, got: %v", err)
+		}
+
+		err = cfg.cmdConfOverlay([]string{"arrans-overlay", "mask", "cat/pkg", "extra_pkg", "--config-root", configRoot, "--repos-conf", reposConf})
+		if err == nil || !strings.Contains(err.Error(), "unexpected extra argument") {
+			t.Errorf("expected unexpected extra argument error for mask, got: %v", err)
+		}
+
+		err = cfg.cmdConfOverlay([]string{"arrans-overlay", "unmask", "cat/pkg", "extra_pkg", "--config-root", configRoot, "--repos-conf", reposConf})
+		if err == nil || !strings.Contains(err.Error(), "unexpected extra argument") {
+			t.Errorf("expected unexpected extra argument error for unmask, got: %v", err)
+		}
+
+		err = cfg.cmdConfOverlay([]string{"arrans-overlay", "mask-reset", "cat/pkg", "extra_pkg", "--config-root", configRoot, "--repos-conf", reposConf})
+		if err == nil || !strings.Contains(err.Error(), "unexpected extra argument") {
+			t.Errorf("expected unexpected extra argument error for mask-reset, got: %v", err)
+		}
+
+		err = cfg.cmdConfOverlay([]string{"arrans-overlay", "unmask-reset", "cat/pkg", "extra_pkg", "--config-root", configRoot, "--repos-conf", reposConf})
+		if err == nil || !strings.Contains(err.Error(), "unexpected extra argument") {
+			t.Errorf("expected unexpected extra argument error for unmask-reset, got: %v", err)
+		}
+	})
 }

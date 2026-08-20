@@ -3,6 +3,7 @@ package g2
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -131,5 +132,30 @@ location = ` + repoBDir + `
 
 	if _, err := ResolveRepo("common-identity", ambigConf); err == nil {
 		t.Error("expected ambiguity error when two distinct repos share identity")
+	}
+}
+
+func TestUnreadableRepoNameFails(t *testing.T) {
+	tmpDir := t.TempDir()
+	overlayDir := filepath.Join(tmpDir, "bad-overlay")
+	// Make repo_name a directory so os.ReadFile returns an error that is not NotExist
+	if err := os.MkdirAll(filepath.Join(overlayDir, "profiles", "repo_name"), 0755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+
+	reposConf := filepath.Join(tmpDir, "repos.conf")
+	confContent := `[bad-section]
+location = ` + overlayDir + `
+`
+	if err := os.WriteFile(reposConf, []byte(confContent), 0644); err != nil {
+		t.Fatalf("writing repos.conf: %v", err)
+	}
+
+	_, err := ListConfiguredRepos(reposConf)
+	if err == nil {
+		t.Fatal("expected error when profiles/repo_name cannot be read as a file")
+	}
+	if !strings.Contains(err.Error(), "reading repository identity") {
+		t.Errorf("unexpected error message: %v", err)
 	}
 }

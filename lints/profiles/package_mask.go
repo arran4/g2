@@ -311,7 +311,7 @@ func (l *Glep84FormatLintRule) LintRepo(repoDir string, site *g2.SiteData) []lin
 		// The package list must immediately follow the comment block (no blank line)
 		firstPkgLn := entry.PackageLNs[0]
 		lastCommentLn := entry.CommentLNs[len(entry.CommentLNs)-1]
-		if firstPkgLn != lastCommentLn+1 {
+		if firstPkgLn != lastCommentLn + 1 {
 			results = append(results, lints.LintResult{
 				RuleMetadata: ruleGlep84Format,
 				Message:      "No blank line is allowed between comments block and packages list",
@@ -335,7 +335,7 @@ func (l *Glep84FormatLintRule) LintRepo(repoDir string, site *g2.SiteData) []lin
 			lastLine = curr.CommentLNs[len(curr.CommentLNs)-1]
 		}
 
-		if next.StartLine <= lastLine+1 {
+		if next.StartLine <= lastLine + 1 {
 			results = append(results, lints.LintResult{
 				RuleMetadata: ruleGlep84Format,
 				Message:      "A mandatory blank line must appear between entries",

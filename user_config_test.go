@@ -308,4 +308,109 @@ app-misc/foo::repo # inline note
 			t.Errorf("f2 content = %q, want empty", string(c2))
 		}
 	})
+
+	t.Run("crlf line endings preserved exactly", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		filePath := filepath.Join(tmpDir, "package.mask")
+
+		initial := "# CRLF header\r\n\r\napp-misc/foo::repo\r\ndev-libs/bar::repo\r\n"
+		if err := os.WriteFile(filePath, []byte(initial), 0644); err != nil {
+			t.Fatalf("writing file: %v", err)
+		}
+
+		removed, err := RemoveUserConfigAtom(filePath, "app-misc/foo::repo")
+		if err != nil {
+			t.Fatalf("RemoveUserConfigAtom failed: %v", err)
+		}
+		if removed != 1 {
+			t.Fatalf("expected 1 removed, got %d", removed)
+		}
+
+		content, err := os.ReadFile(filePath)
+		if err != nil {
+			t.Fatalf("reading file: %v", err)
+		}
+		expected := "# CRLF header\r\n\r\ndev-libs/bar::repo\r\n"
+		if string(content) != expected {
+			t.Errorf("content = %q, want %q", string(content), expected)
+		}
+	})
+
+	t.Run("file without trailing newline preserves absence of trailing newline", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		filePath := filepath.Join(tmpDir, "package.mask")
+
+		initial := "app-misc/foo::repo\ndev-libs/bar::repo"
+		if err := os.WriteFile(filePath, []byte(initial), 0644); err != nil {
+			t.Fatalf("writing file: %v", err)
+		}
+
+		// Remove first line
+		removed, err := RemoveUserConfigAtom(filePath, "app-misc/foo::repo")
+		if err != nil {
+			t.Fatalf("RemoveUserConfigAtom failed: %v", err)
+		}
+		if removed != 1 {
+			t.Fatalf("expected 1 removed, got %d", removed)
+		}
+
+		content, err := os.ReadFile(filePath)
+		if err != nil {
+			t.Fatalf("reading file: %v", err)
+		}
+		expected := "dev-libs/bar::repo"
+		if string(content) != expected {
+			t.Errorf("content = %q, want %q", string(content), expected)
+		}
+
+		// Remove last line from a file without trailing newline
+		filePath2 := filepath.Join(tmpDir, "package2.mask")
+		initial2 := "dev-libs/keep::repo\napp-misc/last::repo"
+		if err := os.WriteFile(filePath2, []byte(initial2), 0644); err != nil {
+			t.Fatalf("writing file2: %v", err)
+		}
+
+		removed2, err := RemoveUserConfigAtom(filePath2, "app-misc/last::repo")
+		if err != nil {
+			t.Fatalf("RemoveUserConfigAtom failed: %v", err)
+		}
+		if removed2 != 1 {
+			t.Fatalf("expected 1 removed, got %d", removed2)
+		}
+
+		content2, err := os.ReadFile(filePath2)
+		if err != nil {
+			t.Fatalf("reading file2: %v", err)
+		}
+		expected2 := "dev-libs/keep::repo"
+		if string(content2) != expected2 {
+			t.Errorf("content2 = %q, want %q", string(content2), expected2)
+		}
+	})
+
+	t.Run("single line without trailing newline removed leaves empty file", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		filePath := filepath.Join(tmpDir, "package.mask")
+
+		initial := "app-misc/only::repo"
+		if err := os.WriteFile(filePath, []byte(initial), 0644); err != nil {
+			t.Fatalf("writing file: %v", err)
+		}
+
+		removed, err := RemoveUserConfigAtom(filePath, "app-misc/only::repo")
+		if err != nil {
+			t.Fatalf("RemoveUserConfigAtom failed: %v", err)
+		}
+		if removed != 1 {
+			t.Fatalf("expected 1 removed, got %d", removed)
+		}
+
+		content, err := os.ReadFile(filePath)
+		if err != nil {
+			t.Fatalf("reading file: %v", err)
+		}
+		if len(content) != 0 {
+			t.Errorf("expected empty file, got %q", string(content))
+		}
+	})
 }

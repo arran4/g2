@@ -68,10 +68,7 @@ func DeduplicateEbuilds(targets []string) ([]string, error) {
 		if vars == nil {
 			continue // Could not parse P/PN/PV
 		}
-		version := vars["PVR"]
-		if version == "" {
-			version = vars["PV"]
-		}
+		version := vars["PV"]
 
 		contentBytes, err := os.ReadFile(ebuildPath)
 		if err != nil {

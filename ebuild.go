@@ -1069,18 +1069,74 @@ func (a PackageAtom) String() string {
 // belongs to targetRepo. If the atom has no repository qualifier, ::targetRepo is appended.
 // If the atom already specifies ::targetRepo, it is accepted.
 // If the atom specifies a conflicting repository qualifier, an error is returned.
+// Repo-wide wildcard atoms (e.g. */*) are rejected because repo-wide policy requires explicit commands.
 func QualifyAtomForRepo(dep string, targetRepo string) (string, error) {
-	dep = strings.TrimSpace(dep)
 	if dep == "" {
 		return "", fmt.Errorf("package atom cannot be empty")
+	}
+	if strings.ContainsAny(dep, " \t\r\n") {
+		return "", fmt.Errorf("invalid package atom %q: whitespace is not permitted", dep)
 	}
 	if targetRepo == "" {
 		return "", fmt.Errorf("target repository cannot be empty")
 	}
 
+	// Reject repo-wide wildcard atoms (*/* or */*::...)
+	if dep == "*/*" || strings.HasPrefix(dep, "*/*::") {
+		return "", fmt.Errorf("repo-wide wildcard atom %q is not permitted in package-specific commands; repo-wide policy requires an explicit repo-wide command", dep)
+	}
+
+	// Validate repository qualifiers (::)
+	if strings.Count(dep, "::") > 1 {
+		return "", fmt.Errorf("invalid package atom %q: multiple repository qualifiers", dep)
+	}
+	if strings.HasSuffix(dep, "::") {
+		return "", fmt.Errorf("invalid package atom %q: empty repository qualifier", dep)
+	}
+	if idx := strings.Index(dep, "::"); idx != -1 {
+		repoPart := dep[idx+2:]
+		if uIdx := strings.Index(repoPart, "["); uIdx != -1 {
+			repoPart = repoPart[:uIdx]
+		}
+		if repoPart == "" {
+			return "", fmt.Errorf("invalid package atom %q: empty repository qualifier", dep)
+		}
+	}
+
 	atom := ParsePackageAtom(dep)
+
+	// Strict category and package name validation for Portage config
+	if atom.Category == "" {
+		return "", fmt.Errorf("invalid package atom %q: missing category", dep)
+	}
 	if atom.Name == "" {
-		return "", fmt.Errorf("invalid package atom: %q", dep)
+		return "", fmt.Errorf("invalid package atom %q: missing package name", dep)
+	}
+	if atom.Category == "*" || atom.Name == "*" {
+		return "", fmt.Errorf("repo-wide wildcard atom %q is not permitted in package-specific commands; repo-wide policy requires an explicit repo-wide command", dep)
+	}
+
+	// Validate category format
+	if strings.Contains(atom.Category, "/") || strings.HasPrefix(atom.Category, "-") || strings.HasPrefix(atom.Category, ".") {
+		return "", fmt.Errorf("invalid package atom %q: invalid category %q", dep, atom.Category)
+	}
+
+	// Validate that raw dep does not contain extra slash segments (e.g. cat/foo/extra)
+	depWithoutFlags := dep
+	if idx := strings.Index(depWithoutFlags, "["); idx != -1 {
+		depWithoutFlags = depWithoutFlags[:idx]
+	}
+	if idx := strings.Index(depWithoutFlags, "::"); idx != -1 {
+		depWithoutFlags = depWithoutFlags[:idx]
+	}
+	if idx := strings.Index(depWithoutFlags, ":"); idx != -1 {
+		depWithoutFlags = depWithoutFlags[:idx]
+	}
+	for len(depWithoutFlags) > 0 && (depWithoutFlags[0] == '>' || depWithoutFlags[0] == '<' || depWithoutFlags[0] == '=' || depWithoutFlags[0] == '~' || depWithoutFlags[0] == '!') {
+		depWithoutFlags = depWithoutFlags[1:]
+	}
+	if strings.Count(depWithoutFlags, "/") != 1 {
+		return "", fmt.Errorf("invalid package atom %q: expected category/package format", dep)
 	}
 
 	if atom.Repo != "" && atom.Repo != targetRepo {

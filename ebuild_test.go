@@ -1084,10 +1084,22 @@ func TestQualifyAtomForRepo(t *testing.T) {
 			want:       ">=dev-util/bar-2.0::arrans-overlay",
 		},
 		{
+			name:       "unqualified slot atom",
+			dep:        "cat/pkg:0",
+			targetRepo: "arrans-overlay",
+			want:       "cat/pkg:0::arrans-overlay",
+		},
+		{
 			name:       "matching qualified atom",
 			dep:        "app-misc/foo::arrans-overlay",
 			targetRepo: "arrans-overlay",
 			want:       "app-misc/foo::arrans-overlay",
+		},
+		{
+			name:       "matching qualified with version and slot",
+			dep:        ">=cat/pkg-2:0::arrans-overlay",
+			targetRepo: "arrans-overlay",
+			want:       ">=cat/pkg-2:0::arrans-overlay",
 		},
 		{
 			name:       "conflicting qualified atom",
@@ -1108,10 +1120,58 @@ func TestQualifyAtomForRepo(t *testing.T) {
 			wantErr:    true,
 		},
 		{
-			name:       "wildcard atom",
+			name:       "bare package without category",
+			dep:        "foo",
+			targetRepo: "arrans-overlay",
+			wantErr:    true,
+		},
+		{
+			name:       "leading slash",
+			dep:        "/foo",
+			targetRepo: "arrans-overlay",
+			wantErr:    true,
+		},
+		{
+			name:       "trailing slash",
+			dep:        "cat/",
+			targetRepo: "arrans-overlay",
+			wantErr:    true,
+		},
+		{
+			name:       "extra path component",
+			dep:        "cat/foo/extra",
+			targetRepo: "arrans-overlay",
+			wantErr:    true,
+		},
+		{
+			name:       "whitespace inside atom",
+			dep:        "cat / foo",
+			targetRepo: "arrans-overlay",
+			wantErr:    true,
+		},
+		{
+			name:       "empty repository qualifier",
+			dep:        "cat/pkg::",
+			targetRepo: "arrans-overlay",
+			wantErr:    true,
+		},
+		{
+			name:       "multiple repository qualifiers",
+			dep:        "cat/pkg::repo1::repo2",
+			targetRepo: "arrans-overlay",
+			wantErr:    true,
+		},
+		{
+			name:       "repo-wide wildcard atom unqualified",
 			dep:        "*/*",
 			targetRepo: "arrans-overlay",
-			want:       "*/*::arrans-overlay",
+			wantErr:    true,
+		},
+		{
+			name:       "repo-wide wildcard atom qualified",
+			dep:        "*/*::arrans-overlay",
+			targetRepo: "arrans-overlay",
+			wantErr:    true,
 		},
 	}
 

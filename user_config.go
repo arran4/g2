@@ -1,6 +1,7 @@
 package g2
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -171,6 +172,10 @@ func SafeWriteFileAtomic(targetPath string, content []byte, mode os.FileMode) er
 		return fmt.Errorf("writing temp file %s: %w", tmpPath, err)
 	}
 
+	if err := tmpFile.Sync(); err != nil {
+		return fmt.Errorf("syncing temp file %s: %w", tmpPath, err)
+	}
+
 	if err := tmpFile.Close(); err != nil {
 		return fmt.Errorf("closing temp file %s: %w", tmpPath, err)
 	}
@@ -251,7 +256,103 @@ func AddUserConfigAtom(configPath string, atomStr string) (bool, string, error) 
 	return true, targetFile, nil
 }
 
-// RemoveUserConfigAtom removes all occurrences of atomStr from all files under configPath.
+type lineByteRange struct {
+	start    int
+	end      int
+	delimEnd int
+	delimLen int
+	isMatch  bool
+}
+
+func scanLineByteRanges(data []byte, matchAtom string) ([]lineByteRange, int) {
+	var ranges []lineByteRange
+	matchCount := 0
+	n := len(data)
+	start := 0
+
+	for start < n {
+		end := start
+		for end < n && data[end] != '\n' && data[end] != '\r' {
+			end++
+		}
+		delimEnd := end
+		delimLen := 0
+		if delimEnd < n {
+			if data[delimEnd] == '\r' && delimEnd+1 < n && data[delimEnd+1] == '\n' {
+				delimEnd += 2
+				delimLen = 2
+			} else if data[delimEnd] == '\n' {
+				delimEnd += 1
+				delimLen = 1
+			} else if data[delimEnd] == '\r' {
+				delimEnd += 1
+				delimLen = 1
+			}
+		}
+
+		lineStr := string(data[start:end])
+		trimmed := strings.TrimSpace(lineStr)
+		isMatch := false
+		if trimmed != "" && !strings.HasPrefix(trimmed, "#") {
+			candidate := trimmed
+			if idx := strings.Index(candidate, "#"); idx != -1 {
+				candidate = strings.TrimSpace(candidate[:idx])
+			}
+			fields := strings.Fields(candidate)
+			if len(fields) > 0 && fields[0] == matchAtom {
+				isMatch = true
+				matchCount++
+			}
+		}
+
+		ranges = append(ranges, lineByteRange{
+			start:    start,
+			end:      end,
+			delimEnd: delimEnd,
+			delimLen: delimLen,
+			isMatch:  isMatch,
+		})
+
+		start = delimEnd
+	}
+
+	return ranges, matchCount
+}
+
+func removeMatchingLinesBytes(data []byte, matchAtom string) ([]byte, int) {
+	ranges, matchCount := scanLineByteRanges(data, matchAtom)
+	if matchCount == 0 {
+		return data, 0
+	}
+
+	isLastOriginalLineWithoutDelim := len(ranges) > 0 && ranges[len(ranges)-1].delimLen == 0
+
+	var buf bytes.Buffer
+	for i, r := range ranges {
+		if r.isMatch {
+			continue
+		}
+
+		isLastKeptLine := true
+		for j := i + 1; j < len(ranges); j++ {
+			if !ranges[j].isMatch {
+				isLastKeptLine = false
+				break
+			}
+		}
+
+		if isLastKeptLine && isLastOriginalLineWithoutDelim {
+			buf.Write(data[r.start:r.end])
+		} else {
+			buf.Write(data[r.start:r.delimEnd])
+		}
+	}
+
+	return buf.Bytes(), matchCount
+}
+
+// RemoveUserConfigAtom removes all occurrences of atomStr from all files under configPath,
+// preserving untouched bytes (such as CRLF line endings and absence of trailing newlines).
 // Returns the count of removed occurrences and error if any.
 func RemoveUserConfigAtom(configPath string, atomStr string) (int, error) {
 	info, err := os.Stat(configPath)
@@ -295,39 +396,10 @@ func RemoveUserConfigAtom(configPath string, atomStr string) (int, error) {
 			return totalRemoved, fmt.Errorf("reading %s: %w", filePath, err)
 		}
 
-		rawLines := strings.Split(strings.ReplaceAll(string(contentBytes), "\r\n", "\n"), "\n")
-		hasTrailingNewline := strings.HasSuffix(string(contentBytes), "\n")
-		if hasTrailingNewline && len(rawLines) > 0 && rawLines[len(rawLines)-1] == "" {
-			rawLines = rawLines[:len(rawLines)-1]
-		}
-
-		var newLines []string
-		fileRemoved := 0
-		for _, line := range rawLines {
-			trimmed := strings.TrimSpace(line)
-			if trimmed == "" || strings.HasPrefix(trimmed, "#") {
-				newLines = append(newLines, line)
-				continue
-			}
-			candidate := trimmed
-			if idx := strings.Index(candidate, "#"); idx != -1 {
-				candidate = strings.TrimSpace(candidate[:idx])
-			}
-			fields := strings.Fields(candidate)
-			if len(fields) > 0 && fields[0] == atomStr {
-				fileRemoved++
-				totalRemoved++
-				continue
-			}
-			newLines = append(newLines, line)
-		}
-
-		if fileRemoved > 0 {
-			var newContent []byte
-			if len(newLines) > 0 {
-				newContent = []byte(strings.Join(newLines, "\n") + "\n")
-			}
-			if err := SafeWriteFileAtomic(filePath, newContent, mode); err != nil {
+		newBytes, removed := removeMatchingLinesBytes(contentBytes, atomStr)
+		if removed > 0 {
+			totalRemoved += removed
+			if err := SafeWriteFileAtomic(filePath, newBytes, mode); err != nil {
 				return totalRemoved, fmt.Errorf("writing %s: %w", filePath, err)
 			}
 		}

@@ -42,11 +42,14 @@ func (cfg *MainArgConfig) cmdConfOverlay(args []string) error {
 
 	// Check if the command is `g2 conf overlay list`
 	if positional[0] == "list" {
+		if len(positional) > 1 {
+			return fmt.Errorf("unexpected argument %q for conf overlay list", positional[1])
+		}
 		rcPath := *reposConfOpt
 		if rcPath == "" {
 			rcPath = filepath.Join(*configRootOpt, "repos.conf")
 		}
-		return cfg.runConfOverlayListAll(rcPath, positional[1:])
+		return cfg.runConfOverlayListAll(rcPath)
 	}
 
 	repo := positional[0]
@@ -66,25 +69,40 @@ func (cfg *MainArgConfig) dispatchRepoSubcmd(repo, subcmd, defaultCfgRoot, defau
 
 	switch subcmd {
 	case "list":
+		if len(positional) > 0 {
+			return fmt.Errorf("unexpected argument %q for conf overlay %s list", positional[0], repo)
+		}
 		return cfg.cmdConfOverlayRepoList(repo, defaultCfgRoot, rcPath)
 	case "mask":
 		if len(positional) == 0 {
 			return fmt.Errorf("missing package atom")
+		}
+		if len(positional) > 1 {
+			return fmt.Errorf("unexpected extra argument %q for conf overlay %s mask", positional[1], repo)
 		}
 		return cfg.cmdConfOverlayRepoMask(repo, defaultCfgRoot, rcPath, positional[0])
 	case "unmask":
 		if len(positional) == 0 {
 			return fmt.Errorf("missing package atom")
 		}
+		if len(positional) > 1 {
+			return fmt.Errorf("unexpected extra argument %q for conf overlay %s unmask", positional[1], repo)
+		}
 		return cfg.cmdConfOverlayRepoUnmask(repo, defaultCfgRoot, rcPath, positional[0])
 	case "mask-reset":
 		if len(positional) == 0 {
 			return fmt.Errorf("missing package atom")
 		}
+		if len(positional) > 1 {
+			return fmt.Errorf("unexpected extra argument %q for conf overlay %s mask-reset", positional[1], repo)
+		}
 		return cfg.cmdConfOverlayRepoMaskReset(repo, defaultCfgRoot, rcPath, positional[0])
 	case "unmask-reset":
 		if len(positional) == 0 {
 			return fmt.Errorf("missing package atom")
+		}
+		if len(positional) > 1 {
+			return fmt.Errorf("unexpected extra argument %q for conf overlay %s unmask-reset", positional[1], repo)
 		}
 		return cfg.cmdConfOverlayRepoUnmaskReset(repo, defaultCfgRoot, rcPath, positional[0])
 	default:
@@ -92,7 +110,7 @@ func (cfg *MainArgConfig) dispatchRepoSubcmd(repo, subcmd, defaultCfgRoot, defau
 	}
 }
 
-func (cfg *MainArgConfig) runConfOverlayListAll(rcPath string, extraArgs []string) error {
+func (cfg *MainArgConfig) runConfOverlayListAll(rcPath string) error {
 	repos, err := g2.ListConfiguredRepos(rcPath)
 	if err != nil {
 		return fmt.Errorf("listing repositories: %w", err)

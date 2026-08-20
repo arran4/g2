@@ -280,7 +280,12 @@ func ListConfiguredRepos(location string) ([]*RepoInfo, error) {
 			repoIdentity := s.Name
 			if loc != "" {
 				repoNameFile := filepath.Join(loc, "profiles", "repo_name")
-				if data, err := os.ReadFile(repoNameFile); err == nil {
+				data, err := os.ReadFile(repoNameFile)
+				if err != nil {
+					if !os.IsNotExist(err) {
+						return nil, fmt.Errorf("reading repository identity at %s: %w", repoNameFile, err)
+					}
+				} else {
 					trimmed := strings.TrimSpace(string(data))
 					if trimmed != "" {
 						repoIdentity = trimmed
