@@ -20,7 +20,7 @@ var ruleEbuildHeader = lints.RuleMetadata{
 	Tags:        []string{"ebuild", "gentoo-policy"},
 }
 
-var validHeaderRegex = regexp.MustCompile(`^# Copyright (?:\d{4}-)?\d{4} .+\n# Distributed under the terms of the GNU General Public License v2\n\n`)
+var validHeaderRegex = regexp.MustCompile(`^# Copyright \d{4}(?:[-\s,]+\d{4})* .+\n# Distributed under the terms of the GNU General Public License v2\n\n`)
 
 func init() {
 	lints.RegisterRuleMetadata(ruleEbuildHeader)
