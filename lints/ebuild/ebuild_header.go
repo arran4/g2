@@ -20,7 +20,7 @@ var ruleEbuildHeader = lints.RuleMetadata{
 	Tags:        []string{"ebuild", "gentoo-policy"},
 }
 
-var validHeaderRegex = regexp.MustCompile(`^# Copyright 1999-\d{4} Gentoo Authors\n# Distributed under the terms of the GNU General Public License v2\n\n`)
+var validHeaderRegex = regexp.MustCompile(`^# Copyright \d{4}(?:[-\s,]+\d{4})* .+\n# Distributed under the terms of the GNU General Public License v2\n\n`)
 
 func init() {
 	lints.RegisterRuleMetadata(ruleEbuildHeader)
@@ -58,7 +58,7 @@ func (r *EbuildHeaderLintRule) LintWithQA(repoDir string, pkg *g2.PackageData, q
 			if !validHeaderRegex.MatchString(ver.Ebuild.RawText) {
 				res := lints.LintResult{
 					RuleMetadata: ruleEbuildHeader,
-					Message:      fmt.Sprintf("[%s] Ebuild %s has an invalid header. It should exactly match the first two lines of header.txt followed by an empty line.", cases.Title(language.Und, cases.NoLower).String(string(severity)), ver.Version),
+					Message:      fmt.Sprintf("[%s] Ebuild %s has an invalid header. It should start with a valid copyright line (e.g., '# Copyright YEARS MAIN-CONTRIBUTOR') and the GPLv2 distribution text followed by an empty line.", cases.Title(language.Und, cases.NoLower).String(string(severity)), ver.Version),
 					Package:      pkg.Category + "/" + pkg.Name,
 				}
 				res.RuleMetadata.Severity = severity

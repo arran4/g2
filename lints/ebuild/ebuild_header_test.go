@@ -49,7 +49,7 @@ func TestEbuildHeaderLintRule(t *testing.T) {
 			expected: 1,
 		},
 		{
-			name: "Incorrect year start",
+			name: "Valid header single year",
 			pkg: &g2.PackageData{
 				Category: "app-misc",
 				Name:     "foo",
@@ -57,7 +57,71 @@ func TestEbuildHeaderLintRule(t *testing.T) {
 					{
 						Version: "1.0",
 						Ebuild: &g2.Ebuild{
-							RawText: "# Copyright 2000-2024 Gentoo Authors\n# Distributed under the terms of the GNU General Public License v2\n\nEAPI=8",
+							RawText: "# Copyright 2024 Gentoo Authors\n# Distributed under the terms of the GNU General Public License v2\n\nEAPI=8",
+						},
+					},
+				},
+			},
+			expected: 0,
+		},
+		{
+			name: "Valid header alternative contributor",
+			pkg: &g2.PackageData{
+				Category: "app-misc",
+				Name:     "foo",
+				Versions: []g2.VersionData{
+					{
+						Version: "1.0",
+						Ebuild: &g2.Ebuild{
+							RawText: "# Copyright 2024 Main Contributor\n# Distributed under the terms of the GNU General Public License v2\n\nEAPI=8",
+						},
+					},
+				},
+			},
+			expected: 0,
+		},
+		{
+			name: "Valid header range alternative contributor",
+			pkg: &g2.PackageData{
+				Category: "app-misc",
+				Name:     "foo",
+				Versions: []g2.VersionData{
+					{
+						Version: "1.0",
+						Ebuild: &g2.Ebuild{
+							RawText: "# Copyright 1999-2024 Main Contributor\n# Distributed under the terms of the GNU General Public License v2\n\nEAPI=8",
+						},
+					},
+				},
+			},
+			expected: 0,
+		},
+		{
+			name: "Valid header complex years",
+			pkg: &g2.PackageData{
+				Category: "app-misc",
+				Name:     "foo",
+				Versions: []g2.VersionData{
+					{
+						Version: "1.0",
+						Ebuild: &g2.Ebuild{
+							RawText: "# Copyright 1999, 2001, 2003-2005 Main Contributor\n# Distributed under the terms of the GNU General Public License v2\n\nEAPI=8",
+						},
+					},
+				},
+			},
+			expected: 0,
+		},
+		{
+			name: "Malformed copyright string",
+			pkg: &g2.PackageData{
+				Category: "app-misc",
+				Name:     "foo",
+				Versions: []g2.VersionData{
+					{
+						Version: "1.0",
+						Ebuild: &g2.Ebuild{
+							RawText: "# Copyright 200X Gentoo Authors\n# Distributed under the terms of the GNU General Public License v2\n\nEAPI=8",
 						},
 					},
 				},
