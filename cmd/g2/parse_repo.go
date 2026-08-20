@@ -275,16 +275,16 @@ func parseRepoCategoriesAndPackages(sysFS fs.FS, repoDir string, repoName string
 			continue
 		}
 
-		if len(supportedCategories) > 0 && !supportedCategories[name] && name != "virtual" && !strings.HasPrefix(name, "virtual-") {
+		inRepo := len(supportedCategories) == 0 || supportedCategories[name]
+		mainCats := g2.FetchMainGentooCategories()
+		inMain := len(mainCats) == 0 || mainCats[name]
+
+		if len(supportedCategories) > 0 && !inRepo && !inMain && name != "virtual" && !strings.HasPrefix(name, "virtual-") {
 			continue
 		}
 
 		catData := g2.CategoryData{Name: name}
 		catPath := filepath.Join(repoDir, name)
-
-		inRepo := len(supportedCategories) == 0 || supportedCategories[name]
-		mainCats := g2.FetchMainGentooCategories()
-		inMain := len(mainCats) == 0 || mainCats[name]
 
 		pkgEntries, err := fs.ReadDir(sysFS, filepath.ToSlash(catPath))
 		if err != nil {
