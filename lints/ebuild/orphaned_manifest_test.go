@@ -20,9 +20,9 @@ func TestOrphanedManifestLintRule(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Create an ebuild that uses a DIST file
-	ebuildPath := filepath.Join(pkgDir, "testpkg-1.0.ebuild")
-	ebuildContent := `SRC_URI="https://example.com/file1.tar.gz"`
+	// Create an ebuild that uses a DIST file with PV variable
+	ebuildPath := filepath.Join(pkgDir, "testpkg-1.0-r1.ebuild")
+	ebuildContent := `SRC_URI="https://example.com/file1-v${PV}.tar.gz"`
 	if err := os.WriteFile(ebuildPath, []byte(ebuildContent), 0644); err != nil {
 		t.Fatal(err)
 	}
@@ -38,10 +38,13 @@ func TestOrphanedManifestLintRule(t *testing.T) {
 		Name:     "testpkg",
 		Versions: []g2.VersionData{
 			{
-				Version: "1.0",
+				Version: "1.0-r1",
 				Ebuild: &g2.Ebuild{
 					Vars: map[string]string{
-						"SRC_URI": "https://example.com/file1.tar.gz",
+						"SRC_URI": "https://example.com/file1-v${PV}.tar.gz",
+					},
+					SrcUri: []g2.URIEntry{
+						{Filename: "file1-v1.0.tar.gz"},
 					},
 				},
 			},
@@ -49,7 +52,7 @@ func TestOrphanedManifestLintRule(t *testing.T) {
 		Manifest: &g2.Manifest{
 			Entries: []*g2.ManifestEntry{
 				// Used DIST file (should not error)
-				{Type: "DIST", Filename: "file1.tar.gz"},
+				{Type: "DIST", Filename: "file1-v1.0.tar.gz"},
 				// Unused DIST file (should error)
 				{Type: "DIST", Filename: "file2.tar.gz"},
 				// Used AUX file (should not error)

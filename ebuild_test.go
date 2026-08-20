@@ -18,25 +18,67 @@ func TestParseEbuildVariables(t *testing.T) {
 		{
 			filename: "ollama-bin-0.10.1.ebuild",
 			want: map[string]string{
-				"P":  "ollama-bin-0.10.1",
 				"PN": "ollama-bin",
 				"PV": "0.10.1",
+				"P":  "ollama-bin-0.10.1",
+				"PR": "r0",
+				"PVR": "0.10.1",
+				"PF": "ollama-bin-0.10.1",
 			},
 		},
 		{
 			filename: "g2-bin-0.0.2.ebuild",
 			want: map[string]string{
-				"P":  "g2-bin-0.0.2",
 				"PN": "g2-bin",
 				"PV": "0.0.2",
+				"P":  "g2-bin-0.0.2",
+				"PR": "r0",
+				"PVR": "0.0.2",
+				"PF": "g2-bin-0.0.2",
 			},
 		},
 		{
 			filename: "app-1.2.3_rc4-r1.ebuild",
 			want: map[string]string{
-				"P":  "app-1.2.3_rc4-r1",
 				"PN": "app",
-				"PV": "1.2.3_rc4-r1",
+				"PV": "1.2.3_rc4",
+				"P":  "app-1.2.3_rc4",
+				"PR": "r1",
+				"PVR": "1.2.3_rc4-r1",
+				"PF": "app-1.2.3_rc4-r1",
+			},
+		},
+		{
+			filename: "foo-1.2.3.ebuild",
+			want: map[string]string{
+				"PN": "foo",
+				"PV": "1.2.3",
+				"P":  "foo-1.2.3",
+				"PR": "r0",
+				"PVR": "1.2.3",
+				"PF": "foo-1.2.3",
+			},
+		},
+		{
+			filename: "foo-1.2.3-r1.ebuild",
+			want: map[string]string{
+				"PN": "foo",
+				"PV": "1.2.3",
+				"P":  "foo-1.2.3",
+				"PR": "r1",
+				"PVR": "1.2.3-r1",
+				"PF": "foo-1.2.3-r1",
+			},
+		},
+		{
+			filename: "foo-bar-1.2.3-r12.ebuild",
+			want: map[string]string{
+				"PN": "foo-bar",
+				"PV": "1.2.3",
+				"P":  "foo-bar-1.2.3",
+				"PR": "r12",
+				"PVR": "1.2.3-r12",
+				"PF": "foo-bar-1.2.3-r12",
 			},
 		},
 		{

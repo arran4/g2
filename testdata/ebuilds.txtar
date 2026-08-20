@@ -953,6 +953,9 @@ src_install() {
 	systemd_dounit "${FILESDIR}/whoogle.service"
 }
 INHERITED="distutils-r1 systemd"
+PF="whoogle-search-0.9.3"
+PR="r0"
+PVR="0.9.3"
 SRC_URI="
 	https://github.com/benbusby/whoogle-search/archive/refs/tags/v0.9.3.tar.gz -> whoogle-search-0.9.3.gh.tar.gz
 "
