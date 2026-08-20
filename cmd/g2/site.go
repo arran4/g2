@@ -60,12 +60,6 @@ func (cfg *MainArgConfig) cmdOverlay(args []string) error {
 	if subcmd == "info-vars" {
 		return cfg.cmdOverlayInfoVars(args[1:])
 	}
-	if subcmd == "mask" {
-		return cfg.cmdOverlayMask(args[1:])
-	}
-	if subcmd == "unmask" {
-		return cfg.cmdOverlayUnmask(args[1:])
-	}
 	if subcmd == "info-pkgs" {
 		return cfg.cmdOverlayInfoPkgs(args[1:])
 	}
