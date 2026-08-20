@@ -33,7 +33,7 @@ func init() {
 
 type EclassDeprecatedLintRule struct{}
 
-func (r *EclassDeprecatedLintRule) LintRepo(repoDir string, site *g2.SiteData) []lints.LintResult {
+func (r *EclassDeprecatedLintRule) LintRepo(repoDir string, site *g2.SiteData, ctx *lints.LintContext) []lints.LintResult {
 	var results []lints.LintResult
 	severity := lints.SeverityWarning
 

@@ -77,7 +77,7 @@ func TestUnstableOnlyLintRule(t *testing.T) {
 				})
 			}
 
-			results := rule.Lint("", pkg)
+			results := rule.Lint("", pkg, nil)
 			if len(results) != tt.expected {
 				t.Errorf("expected %d results, got %d", tt.expected, len(results))
 				for _, r := range results {

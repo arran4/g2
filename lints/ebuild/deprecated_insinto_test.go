@@ -88,7 +88,7 @@ src_install() {
 				},
 			}
 
-			results := rule.LintWithQA("", pkgData, tt.qaPolicy)
+			results := rule.LintWithQA("", pkgData, tt.qaPolicy, nil)
 			assert.Len(t, results, tt.expected)
 		})
 	}

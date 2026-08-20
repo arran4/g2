@@ -16,7 +16,7 @@ func TestMaintainerMissingLintRule(t *testing.T) {
 				Maintainers: []g2.Maintainer{},
 			},
 		}
-		warnings := rule.Lint(".", pkg)
+		warnings := rule.Lint(".", pkg, nil)
 		if len(warnings) == 0 {
 			t.Error("expected warning for missing maintainer, got none")
 		}
@@ -30,7 +30,7 @@ func TestMaintainerMissingLintRule(t *testing.T) {
 				},
 			},
 		}
-		warnings := rule.Lint(".", pkg)
+		warnings := rule.Lint(".", pkg, nil)
 		if len(warnings) > 0 {
 			t.Errorf("expected no warnings, got %v", warnings)
 		}

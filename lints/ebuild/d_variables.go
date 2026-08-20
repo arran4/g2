@@ -28,11 +28,11 @@ func init() {
 
 type DVariablesLintRule struct{}
 
-func (r *DVariablesLintRule) Lint(repoDir string, pkg *g2.PackageData) []lints.LintResult {
-	return r.LintWithQA(repoDir, pkg, nil)
+func (r *DVariablesLintRule) Lint(repoDir string, pkg *g2.PackageData, ctx *lints.LintContext) []lints.LintResult {
+	return r.LintWithQA(repoDir, pkg, nil, ctx)
 }
 
-func (r *DVariablesLintRule) LintWithQA(repoDir string, pkg *g2.PackageData, qa *g2.QAPolicy) []lints.LintResult {
+func (r *DVariablesLintRule) LintWithQA(repoDir string, pkg *g2.PackageData, qa *g2.QAPolicy, ctx *lints.LintContext) []lints.LintResult {
 	var results []lints.LintResult
 	severity := lints.SeverityError
 

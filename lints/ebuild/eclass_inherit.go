@@ -26,7 +26,7 @@ func init() {
 
 type ConditionalInheritLintRule struct{}
 
-func (l *ConditionalInheritLintRule) Lint(repoDir string, pkgData *g2.PackageData) []lints.LintResult {
+func (l *ConditionalInheritLintRule) Lint(repoDir string, pkgData *g2.PackageData, ctx *lints.LintContext) []lints.LintResult {
 	var results []lints.LintResult
 
 	for _, version := range pkgData.Versions {

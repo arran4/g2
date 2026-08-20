@@ -38,7 +38,7 @@ func TestInvalidVirtual(t *testing.T) {
 			}
 
 			rule := &InvalidVirtualLintRule{}
-			results := rule.Lint("", pkg)
+			results := rule.Lint("", pkg, nil)
 
 			if len(results) != tt.want {
 				t.Errorf("Lint() returned %d results, want %d", len(results), tt.want)

@@ -45,14 +45,14 @@ func TestMD5CacheInvalidLintRule(t *testing.T) {
 
 	_ = os.WriteFile(cacheFile, []byte(fmt.Sprintf("_md5_=%s\n_eclasses_=test\t%s\n", md5sum, eclassMd5)), 0644)
 
-	results := rule.Lint(tempDir, pkg)
+	results := rule.Lint(tempDir, pkg, nil)
 	if len(results) != 0 {
 		t.Errorf("Expected 0 results for valid cache, got %d: %v", len(results), results)
 	}
 
 	// 2. Invalid ebuild md5
 	_ = os.WriteFile(cacheFile, []byte(fmt.Sprintf("_md5_=%s\n_eclasses_=test\t%s\n", "invalidmd5", eclassMd5)), 0644)
-	results = rule.Lint(tempDir, pkg)
+	results = rule.Lint(tempDir, pkg, nil)
 	if len(results) != 1 {
 		t.Errorf("Expected 1 result for invalid ebuild md5, got %d", len(results))
 	} else if results[0].Message != fmt.Sprintf("[Warning] Incorrect _md5_ in md5-cache for foo-1.0. Expected %s, got invalidmd5", md5sum) {
@@ -61,7 +61,7 @@ func TestMD5CacheInvalidLintRule(t *testing.T) {
 
 	// 3. Invalid eclass md5
 	_ = os.WriteFile(cacheFile, []byte(fmt.Sprintf("_md5_=%s\n_eclasses_=test\t%s\n", md5sum, "invalidmd5")), 0644)
-	results = rule.Lint(tempDir, pkg)
+	results = rule.Lint(tempDir, pkg, nil)
 	if len(results) != 1 {
 		t.Errorf("Expected 1 result for invalid eclass md5, got %d", len(results))
 	} else if results[0].Message != fmt.Sprintf("[Warning] Incorrect eclass md5 for test in md5-cache of foo-1.0. Expected %s, got invalidmd5", eclassMd5) {
@@ -70,7 +70,7 @@ func TestMD5CacheInvalidLintRule(t *testing.T) {
 
 	// 4. Missing _md5_
 	_ = os.WriteFile(cacheFile, []byte(fmt.Sprintf("_eclasses_=test\t%s\n", eclassMd5)), 0644)
-	results = rule.Lint(tempDir, pkg)
+	results = rule.Lint(tempDir, pkg, nil)
 	if len(results) != 1 {
 		t.Errorf("Expected 1 result for missing _md5_, got %d", len(results))
 	} else if results[0].Message != "[Warning] Missing _md5_ in md5-cache for foo-1.0" {
@@ -79,7 +79,7 @@ func TestMD5CacheInvalidLintRule(t *testing.T) {
 
 	// 5. Invalid format
 	_ = os.WriteFile(cacheFile, []byte(fmt.Sprintf("_md5_=%s\ninvalidline\n", md5sum)), 0644)
-	results = rule.Lint(tempDir, pkg)
+	results = rule.Lint(tempDir, pkg, nil)
 	if len(results) != 1 {
 		t.Errorf("Expected 1 result for invalid format, got %d", len(results))
 	} else if results[0].Message != "[Warning] Invalid format in md5-cache for foo-1.0: invalidline" {

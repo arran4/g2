@@ -120,7 +120,7 @@ coproc foo { die "7"; }
 				},
 			}
 
-			results := rule.Lint("", pkg)
+			results := rule.Lint("", pkg, nil)
 
 			if tt.expectError && len(results) == 0 {
 				t.Errorf("expected warning, but got none")

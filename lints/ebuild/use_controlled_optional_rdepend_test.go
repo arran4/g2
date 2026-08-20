@@ -148,7 +148,7 @@ src_compile() {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			results := rule.LintWithQA("", tc.pkg, tc.qaPolicy)
+			results := rule.LintWithQA("", tc.pkg, tc.qaPolicy, nil)
 
 			if len(results) != tc.expected {
 				t.Errorf("Expected %d results, got %d", tc.expected, len(results))

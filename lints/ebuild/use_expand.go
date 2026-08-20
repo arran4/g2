@@ -28,7 +28,7 @@ func (r *UseExpandRule) Metadata() lints.RuleMetadata {
 	}
 }
 
-func (r *UseExpandRule) Lint(repoDir string, pkgData *g2.PackageData) []lints.LintResult {
+func (r *UseExpandRule) Lint(repoDir string, pkgData *g2.PackageData, ctx *lints.LintContext) []lints.LintResult {
 	var results []lints.LintResult
 
 	// Load USE_EXPAND descriptions

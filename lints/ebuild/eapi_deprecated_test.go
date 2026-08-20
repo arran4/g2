@@ -41,7 +41,7 @@ func TestEAPIDeprecatedLintRule(t *testing.T) {
 					},
 				},
 			}
-			warnings := rule.Lint(".", pkg)
+			warnings := rule.Lint(".", pkg, nil)
 
 			errs := 0
 			warns := 0

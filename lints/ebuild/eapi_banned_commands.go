@@ -27,7 +27,7 @@ func init() {
 
 type BannedCommandsLintRule struct{}
 
-func (r *BannedCommandsLintRule) Lint(repoDir string, pkg *g2.PackageData) []lints.LintResult {
+func (r *BannedCommandsLintRule) Lint(repoDir string, pkg *g2.PackageData, ctx *lints.LintContext) []lints.LintResult {
 	var results []lints.LintResult
 
 	for _, ver := range pkg.Versions {

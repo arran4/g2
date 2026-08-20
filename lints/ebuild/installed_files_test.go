@@ -140,7 +140,7 @@ src_install() {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			results := rule.LintWithQA("", tc.pkg, tc.qaPolicy)
+			results := rule.LintWithQA("", tc.pkg, tc.qaPolicy, nil)
 
 			if len(results) != tc.expectedCount {
 				t.Fatalf("Expected %d results, got %d", tc.expectedCount, len(results))

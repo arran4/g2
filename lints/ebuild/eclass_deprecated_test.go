@@ -113,7 +113,7 @@ func TestEclassDeprecatedLintRule(t *testing.T) {
 	rule := &EclassDeprecatedLintRule{}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			results := rule.LintRepo(".", tt.site)
+			results := rule.LintRepo(".", tt.site, nil)
 			if len(results) != tt.wantCount {
 				t.Errorf("expected %d results, got %d", tt.wantCount, len(results))
 			}

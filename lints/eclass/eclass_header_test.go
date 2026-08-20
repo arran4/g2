@@ -133,7 +133,7 @@ func TestEclassHeaderLintRule(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			results := rule.LintWithQA(".", tt.eclass, tt.qa)
+			results := rule.LintWithQA(".", tt.eclass, tt.qa, nil)
 			if len(results) != tt.wantCount {
 				t.Errorf("expected %d results, got %d", tt.wantCount, len(results))
 			}

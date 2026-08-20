@@ -128,11 +128,11 @@ func isInstallationPathsViolation(word *syntax.Word) (bool, string) {
 }
 
 
-func (l *InstallationPathsLintRule) Lint(repoDir string, pkgData *g2.PackageData) []lints.LintResult {
-	return l.LintWithQA(repoDir, pkgData, nil)
+func (l *InstallationPathsLintRule) Lint(repoDir string, pkgData *g2.PackageData, ctx *lints.LintContext) []lints.LintResult {
+	return l.LintWithQA(repoDir, pkgData, nil, ctx)
 }
 
-func (l *InstallationPathsLintRule) LintWithQA(repoDir string, pkgData *g2.PackageData, qa *g2.QAPolicy) []lints.LintResult {
+func (l *InstallationPathsLintRule) LintWithQA(repoDir string, pkgData *g2.PackageData, qa *g2.QAPolicy, ctx *lints.LintContext) []lints.LintResult {
 	var results []lints.LintResult
 
 	severity := lints.SeverityError

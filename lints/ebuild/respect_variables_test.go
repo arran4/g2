@@ -108,7 +108,7 @@ src_prepare() {
 				},
 			}
 
-			results := rule.Lint(".", pkgData)
+			results := rule.Lint(".", pkgData, nil)
 
 			if tt.expectError {
 				if len(results) == 0 {

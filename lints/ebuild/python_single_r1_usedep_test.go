@@ -94,7 +94,7 @@ RDEPEND="dev-python/bar[${PYTHON_USEDEP}]"
 			}
 
 			rule := &PythonSingleR1UseDepLintRule{}
-			results := rule.Lint(".", pkg)
+			results := rule.Lint(".", pkg, nil)
 
 			if diff := cmp.Diff(tt.expected, results, cmpopts.IgnoreFields(lints.RuleMetadata{}, "Tags")); diff != "" {
 				t.Errorf("Lint results mismatch (-want +got):\n%s", diff)

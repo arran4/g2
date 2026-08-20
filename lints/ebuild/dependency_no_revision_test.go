@@ -88,7 +88,7 @@ func TestDependencyNoRevisionLintRule(t *testing.T) {
 				},
 			}
 
-			results := rule.Lint("", pkg)
+			results := rule.Lint("", pkg, nil)
 			assert.Len(t, results, tc.expectedCount)
 			if tc.expectedCount > 0 {
 				assert.Contains(t, results[0].Message, "uses a non-wildcard '=' dependency without an explicit revision")
@@ -143,7 +143,7 @@ func TestDependencyNoRevisionLintRule_FalsePositives(t *testing.T) {
 				},
 			}
 
-			results := rule.Lint("", pkg)
+			results := rule.Lint("", pkg, nil)
 			assert.Len(t, results, tc.expectedCount)
 			if tc.expectedCount > 0 {
 				assert.Contains(t, results[0].Message, "uses a non-wildcard '=' dependency without an explicit revision")

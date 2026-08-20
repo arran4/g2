@@ -26,11 +26,11 @@ func init() {
 
 type EclassHeaderLintRule struct{}
 
-func (r *EclassHeaderLintRule) Lint(repoDir string, eclass *g2.Ebuild) []lints.LintResult {
-	return r.LintWithQA(repoDir, eclass, nil)
+func (r *EclassHeaderLintRule) Lint(repoDir string, eclass *g2.Ebuild, ctx *lints.LintContext) []lints.LintResult {
+	return r.LintWithQA(repoDir, eclass, nil, ctx)
 }
 
-func (r *EclassHeaderLintRule) LintWithQA(repoDir string, eclass *g2.Ebuild, qa *g2.QAPolicy) []lints.LintResult {
+func (r *EclassHeaderLintRule) LintWithQA(repoDir string, eclass *g2.Ebuild, qa *g2.QAPolicy, ctx *lints.LintContext) []lints.LintResult {
 	var results []lints.LintResult
 	severity := lints.SeverityWarning
 

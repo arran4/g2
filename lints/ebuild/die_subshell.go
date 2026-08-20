@@ -27,7 +27,7 @@ func init() {
 
 type DieSubshellLintRule struct{}
 
-func (l *DieSubshellLintRule) Lint(repoDir string, pkgData *g2.PackageData) []lints.LintResult {
+func (l *DieSubshellLintRule) Lint(repoDir string, pkgData *g2.PackageData, ctx *lints.LintContext) []lints.LintResult {
 	var results []lints.LintResult
 
 	for _, version := range pkgData.Versions {

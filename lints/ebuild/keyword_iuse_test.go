@@ -73,7 +73,7 @@ func TestKeywordIUSELintRule(t *testing.T) {
 				},
 			}
 
-			results := rule.Lint(repoDir, pkgData)
+			results := rule.Lint(repoDir, pkgData, nil)
 			assert.Len(t, results, tt.expectedCount)
 		})
 	}

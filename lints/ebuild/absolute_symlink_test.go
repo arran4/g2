@@ -60,7 +60,7 @@ src_install() {
 				},
 			}
 
-			results := rule.LintWithQA("", pkg, tt.qaPolicy)
+			results := rule.LintWithQA("", pkg, tt.qaPolicy, nil)
 
 			if len(results) != tt.expected {
 				t.Errorf("Expected %d results, got %d", tt.expected, len(results))

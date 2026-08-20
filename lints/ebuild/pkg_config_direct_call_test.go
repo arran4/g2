@@ -58,7 +58,7 @@ func TestPkgConfigDirectCallLintRule(t *testing.T) {
 				},
 			}
 
-			results := rule.Lint("", pkgData)
+			results := rule.Lint("", pkgData, nil)
 			if len(results) != tt.expected {
 				t.Errorf("Expected %d results, got %d", tt.expected, len(results))
 			}

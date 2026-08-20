@@ -93,7 +93,7 @@ func TestBannedCommandsLintRule(t *testing.T) {
 					},
 				},
 			}
-			results := rule.Lint(".", pkg)
+			results := rule.Lint(".", pkg, nil)
 
 			errs := 0
 			warns := 0

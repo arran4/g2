@@ -54,7 +54,7 @@ func TestBannedVariablesLintRule(t *testing.T) {
 					},
 				},
 			}
-			results := rule.Lint(".", pkg)
+			results := rule.Lint(".", pkg, nil)
 
 			errs := 0
 			for _, res := range results {

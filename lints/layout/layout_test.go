@@ -53,7 +53,7 @@ func TestRepoLayoutLintRule(t *testing.T) {
 	UpstreamRepoPath = ""
 
 	rule := &RepoLayoutLintRule{}
-	results := rule.LintRepo(tempDir, &g2.SiteData{})
+	results := rule.LintRepo(tempDir, &g2.SiteData{}, nil)
 
 	// Expect exactly 1 error for stray-file.txt
 	if len(results) != 1 {

@@ -64,11 +64,11 @@ func NewNewsValidityLintRule(opts ...func(*NewsValidityLintRule)) *NewsValidityL
 // SkipForSiteGen disables this rule when it is already pre-calculated manually by site.go.
 var SkipForSiteGen bool
 
-func (r *NewsValidityLintRule) Lint(repoDir string, pkg *g2.PackageData) []lints.LintResult {
-	return r.LintWithQA(repoDir, pkg, nil)
+func (r *NewsValidityLintRule) Lint(repoDir string, pkg *g2.PackageData, ctx *lints.LintContext) []lints.LintResult {
+	return r.LintWithQA(repoDir, pkg, nil, ctx)
 }
 
-func (r *NewsValidityLintRule) LintWithQA(repoDir string, pkg *g2.PackageData, qa *g2.QAPolicy) []lints.LintResult {
+func (r *NewsValidityLintRule) LintWithQA(repoDir string, pkg *g2.PackageData, qa *g2.QAPolicy, ctx *lints.LintContext) []lints.LintResult {
 	if SkipForSiteGen {
 		return nil
 	}

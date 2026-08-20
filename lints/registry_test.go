@@ -10,11 +10,11 @@ import (
 
 type MockLintRule struct{}
 
-func (m *MockLintRule) Lint(repoDir string, pkg *g2.PackageData) []LintResult {
+func (m *MockLintRule) Lint(repoDir string, pkg *g2.PackageData, ctx *LintContext) []LintResult {
 	return []LintResult{{Message: "basic rule"}}
 }
 
-func (m *MockLintRule) LintWithQA(repoDir string, pkg *g2.PackageData, qa *g2.QAPolicy) []LintResult {
+func (m *MockLintRule) LintWithQA(repoDir string, pkg *g2.PackageData, qa *g2.QAPolicy, ctx *LintContext) []LintResult {
 	if qa != nil {
 		if val, ok := qa.Policies["PG123"]; ok {
 			return []LintResult{{Message: "qa rule " + val}}

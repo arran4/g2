@@ -63,11 +63,11 @@ func isAbsoluteSymlink(word *syntax.Word) (bool, string) {
 	return false, ""
 }
 
-func (l *AbsoluteSymlinkLintRule) Lint(repoDir string, pkgData *g2.PackageData) []lints.LintResult {
-	return l.LintWithQA(repoDir, pkgData, nil)
+func (l *AbsoluteSymlinkLintRule) Lint(repoDir string, pkgData *g2.PackageData, ctx *lints.LintContext) []lints.LintResult {
+	return l.LintWithQA(repoDir, pkgData, nil, ctx)
 }
 
-func (l *AbsoluteSymlinkLintRule) LintWithQA(repoDir string, pkgData *g2.PackageData, qa *g2.QAPolicy) []lints.LintResult {
+func (l *AbsoluteSymlinkLintRule) LintWithQA(repoDir string, pkgData *g2.PackageData, qa *g2.QAPolicy, ctx *lints.LintContext) []lints.LintResult {
 	var results []lints.LintResult
 
 	severity := lints.SeverityError

@@ -17,7 +17,7 @@ func TestMaintainerNeededLintRule(t *testing.T) {
 				Comments:    []string{},
 			},
 		}
-		warnings := rule.Lint(".", pkg)
+		warnings := rule.Lint(".", pkg, nil)
 		if len(warnings) == 0 {
 			t.Error("expected warning for missing maintainer-needed comment, got none")
 		} else if warnings[0].RuleMetadata.ID != "MaintainerNeeded" {
@@ -32,7 +32,7 @@ func TestMaintainerNeededLintRule(t *testing.T) {
 				Comments:    []string{" maintainer-needed "},
 			},
 		}
-		warnings := rule.Lint(".", pkg)
+		warnings := rule.Lint(".", pkg, nil)
 		if len(warnings) > 0 {
 			t.Errorf("expected no warnings, got %v", warnings)
 		}
@@ -47,7 +47,7 @@ func TestMaintainerNeededLintRule(t *testing.T) {
 				Comments: []string{" maintainer-needed "},
 			},
 		}
-		warnings := rule.Lint(".", pkg)
+		warnings := rule.Lint(".", pkg, nil)
 		if len(warnings) == 0 {
 			t.Error("expected warning for unneeded maintainer-needed comment, got none")
 		} else if warnings[0].RuleMetadata.ID != "MaintainerNeeded" {
@@ -64,7 +64,7 @@ func TestMaintainerNeededLintRule(t *testing.T) {
 				Comments: []string{},
 			},
 		}
-		warnings := rule.Lint(".", pkg)
+		warnings := rule.Lint(".", pkg, nil)
 		if len(warnings) > 0 {
 			t.Errorf("expected no warnings, got %v", warnings)
 		}

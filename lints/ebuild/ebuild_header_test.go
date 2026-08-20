@@ -84,7 +84,7 @@ func TestEbuildHeaderLintRule(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			results := rule.Lint("", tt.pkg)
+			results := rule.Lint("", tt.pkg, nil)
 			assert.Len(t, results, tt.expected)
 			if tt.expected > 0 {
 				assert.Equal(t, lints.SeverityNotice, results[0].RuleMetadata.Severity)

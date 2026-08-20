@@ -35,7 +35,7 @@ func TestIndentingWhitespaceLintRule(t *testing.T) {
 			},
 		}
 
-		results := rule.Lint("/tmp/dummyrepo", pkg)
+		results := rule.Lint("/tmp/dummyrepo", pkg, nil)
 		assert.Empty(t, results)
 	})
 
@@ -54,7 +54,7 @@ func TestIndentingWhitespaceLintRule(t *testing.T) {
 			},
 		}
 
-		results := rule.Lint("/tmp/dummyrepo", pkg)
+		results := rule.Lint("/tmp/dummyrepo", pkg, nil)
 		assert.Len(t, results, 3)
 		assert.Contains(t, results[0].Message, "trailing whitespace on line 1")
 		assert.Contains(t, results[1].Message, "trailing whitespace on line 2")
@@ -77,7 +77,7 @@ func TestIndentingWhitespaceLintRule(t *testing.T) {
 			},
 		}
 
-		results := rule.Lint("/tmp/dummyrepo", pkg)
+		results := rule.Lint("/tmp/dummyrepo", pkg, nil)
 		assert.Len(t, results, 1)
 		assert.Contains(t, results[0].Message, "uses spaces for indentation on line 2")
 	})
@@ -98,7 +98,7 @@ func TestIndentingWhitespaceLintRule(t *testing.T) {
 			},
 		}
 
-		results := rule.Lint("/tmp/dummyrepo", pkg)
+		results := rule.Lint("/tmp/dummyrepo", pkg, nil)
 		assert.Len(t, results, 1)
 		assert.Contains(t, results[0].Message, "uses spaces for indentation on line 2")
 	})
@@ -119,7 +119,7 @@ func TestIndentingWhitespaceLintRule(t *testing.T) {
 			},
 		}
 
-		results := rule.Lint("/tmp/dummyrepo", pkg)
+		results := rule.Lint("/tmp/dummyrepo", pkg, nil)
 		assert.Empty(t, results)
 	})
 
@@ -137,7 +137,7 @@ func TestIndentingWhitespaceLintRule(t *testing.T) {
 			},
 		}
 
-		results := rule.Lint("/tmp/dummyrepo", pkg)
+		results := rule.Lint("/tmp/dummyrepo", pkg, nil)
 		assert.Len(t, results, 1)
 		assert.Contains(t, results[0].Message, "has a tab character outside of indentation on line 1")
 	})
@@ -157,7 +157,7 @@ func TestIndentingWhitespaceLintRule(t *testing.T) {
 			},
 		}
 
-		results := rule.Lint("/tmp/dummyrepo", pkg)
+		results := rule.Lint("/tmp/dummyrepo", pkg, nil)
 		assert.Len(t, results, 1)
 		assert.Contains(t, results[0].Message, "has a line exceeding 80 positions on line 1")
 	})
@@ -177,7 +177,7 @@ func TestIndentingWhitespaceLintRule(t *testing.T) {
 			},
 		}
 
-		results := rule.Lint("/tmp/dummyrepo", pkg)
+		results := rule.Lint("/tmp/dummyrepo", pkg, nil)
 		assert.Len(t, results, 1)
 		assert.Contains(t, results[0].Message, "has a line exceeding 80 positions on line 1")
 	})

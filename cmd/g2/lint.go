@@ -80,10 +80,26 @@ func (cfg *MainArgConfig) runOldLint(args []string) error {
 	tagFilter := fs.String("only-tag", "", "Only show warnings with this tag")
 	disableRule := fs.String("disable-rule", "", "Comma-separated list of rule IDs to ignore (case-insensitive)")
 	ignoreTag := fs.String("ignore-tag", "", "Comma-separated list of tags to ignore")
+	reposXml := fs.String("repos-xml", "", "Path to repositories.xml")
+	reposDir := fs.String("repos-dir", "/var/db/repos", "Path to repositories directory")
+	reposXml := fs.String("repos-xml", "", "Path to repositories.xml")
+	reposDir := fs.String("repos-dir", "/var/db/repos", "Path to repositories directory")
+	reposXml := fs.String("repos-xml", "", "Path to repositories.xml")
+	reposDir := fs.String("repos-dir", "/var/db/repos", "Path to repositories directory")
+	reposXml := fs.String("repos-xml", "", "Path to repositories.xml")
+	reposDir := fs.String("repos-dir", "/var/db/repos", "Path to repositories directory")
 
 	enableLayoutLint := fs.Bool("enable-layout-lint", false, "Enable repository layout linting")
 	allowGithubAPI := fs.Bool("allow-github-api", false, "Allow fetching upstream categories via Github API for layout lint")
 	upstreamRepoPath := fs.String("upstream-repo-path", "", "Path to upstream repository on disk for layout lint (overrides github API)")
+	reposXml := fs.String("repos-xml", "", "Path to repositories.xml")
+	reposDir := fs.String("repos-dir", "/var/db/repos", "Path to repositories directory")
+	reposXml := fs.String("repos-xml", "", "Path to repositories.xml")
+	reposDir := fs.String("repos-dir", "/var/db/repos", "Path to repositories directory")
+	reposXml := fs.String("repos-xml", "", "Path to repositories.xml")
+	reposDir := fs.String("repos-dir", "/var/db/repos", "Path to repositories directory")
+	reposXml := fs.String("repos-xml", "", "Path to repositories.xml")
+	reposDir := fs.String("repos-dir", "/var/db/repos", "Path to repositories directory")
 
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -115,10 +131,76 @@ func (cfg *MainArgConfig) runOldLint(args []string) error {
 		}
 	}
 
+
+
 	siteData, err := parseRepo(os.DirFS(location), ".", "Linting", true, nil)
 	if err != nil {
 		return fmt.Errorf("parsing repo: %w", err)
 	}
+
+	otherRepos := make(map[string]*g2.SiteData)
+	if reposXml != "" {
+		repos, err := g2.ParseRepositories(reposXml)
+		if err == nil && repos != nil {
+			for _, r := range repos.Repositories {
+				if r.Name != "" {
+					repoPath := filepath.Join(reposDir, r.Name)
+					if _, err := os.Stat(repoPath); err == nil {
+						if otherSite, err := parseRepo(os.DirFS(repoPath), repoPath, r.Name, true, nil); err == nil {
+							otherRepos[r.Name] = otherSite
+						}
+					}
+				}
+			}
+		}
+	} else if reposDir != "" {
+		entries, err := os.ReadDir(reposDir)
+		if err == nil {
+			for _, e := range entries {
+				if e.IsDir() {
+					repoPath := filepath.Join(reposDir, e.Name())
+					if otherSite, err := parseRepo(os.DirFS(repoPath), repoPath, e.Name(), true, nil); err == nil {
+						otherRepos[e.Name()] = otherSite
+					}
+				}
+			}
+		}
+	}
+	ctx := &lints.LintContext{OtherRepos: otherRepos}
+
+
+	otherRepos := make(map[string]*g2.SiteData)
+	if reposXml != "" {
+		repos, err := g2.ParseRepositories(reposXml)
+		if err == nil && repos != nil {
+			for _, r := range repos.Repositories {
+				if r.Name != "" {
+					// We need the local path... this isn't in repositories.xml typically unless mapped.
+					// A fallback could just map /var/db/repos/ + r.Name
+					repoPath := filepath.Join(reposDir, r.Name)
+					if _, err := os.Stat(repoPath); err == nil {
+						if otherSite, err := parseRepo(os.DirFS(repoPath), repoPath, r.Name, true, nil); err == nil {
+							otherRepos[r.Name] = otherSite
+						}
+					}
+				}
+			}
+		}
+	} else if reposDir != "" {
+		entries, err := os.ReadDir(reposDir)
+		if err == nil {
+			for _, e := range entries {
+				if e.IsDir() {
+					repoPath := filepath.Join(reposDir, e.Name())
+					if otherSite, err := parseRepo(os.DirFS(repoPath), repoPath, e.Name(), true, nil); err == nil {
+						otherRepos[e.Name()] = otherSite
+					}
+				}
+			}
+		}
+	}
+	ctx := &lints.LintContext{OtherRepos: otherRepos}
+
 
 	var targetMap map[string]bool
 	if len(targetPkgs) > 0 {
@@ -327,18 +409,84 @@ type LintQuery struct {
 	VWildcard string // e.g. "3." for "v3"
 }
 
-func (cfg *MainArgConfig) runLintCore(location string, targetMap map[string]bool, query *LintQuery, format, severityFilter, sourceFilter, tagFilter, disableRule, ignoreTag string) error {
+func (cfg *MainArgConfig) runLintCore(location string, targetMap map[string]bool, query *LintQuery, format, severityFilter, sourceFilter, tagFilter, disableRule, ignoreTag string, reposXml string, reposDir string) error {
+
+
 	siteData, err := parseRepo(os.DirFS(location), ".", "Linting", true, nil)
 	if err != nil {
 		return fmt.Errorf("parsing repo: %w", err)
 	}
+
+	otherRepos := make(map[string]*g2.SiteData)
+	if reposXml != "" {
+		repos, err := g2.ParseRepositories(reposXml)
+		if err == nil && repos != nil {
+			for _, r := range repos.Repositories {
+				if r.Name != "" {
+					repoPath := filepath.Join(reposDir, r.Name)
+					if _, err := os.Stat(repoPath); err == nil {
+						if otherSite, err := parseRepo(os.DirFS(repoPath), repoPath, r.Name, true, nil); err == nil {
+							otherRepos[r.Name] = otherSite
+						}
+					}
+				}
+			}
+		}
+	} else if reposDir != "" {
+		entries, err := os.ReadDir(reposDir)
+		if err == nil {
+			for _, e := range entries {
+				if e.IsDir() {
+					repoPath := filepath.Join(reposDir, e.Name())
+					if otherSite, err := parseRepo(os.DirFS(repoPath), repoPath, e.Name(), true, nil); err == nil {
+						otherRepos[e.Name()] = otherSite
+					}
+				}
+			}
+		}
+	}
+	ctx := &lints.LintContext{OtherRepos: otherRepos}
+
+
+	otherRepos := make(map[string]*g2.SiteData)
+	if reposXml != "" {
+		repos, err := g2.ParseRepositories(reposXml)
+		if err == nil && repos != nil {
+			for _, r := range repos.Repositories {
+				if r.Name != "" {
+					// We need the local path... this isn't in repositories.xml typically unless mapped.
+					// A fallback could just map /var/db/repos/ + r.Name
+					repoPath := filepath.Join(reposDir, r.Name)
+					if _, err := os.Stat(repoPath); err == nil {
+						if otherSite, err := parseRepo(os.DirFS(repoPath), repoPath, r.Name, true, nil); err == nil {
+							otherRepos[r.Name] = otherSite
+						}
+					}
+				}
+			}
+		}
+	} else if reposDir != "" {
+		entries, err := os.ReadDir(reposDir)
+		if err == nil {
+			for _, e := range entries {
+				if e.IsDir() {
+					repoPath := filepath.Join(reposDir, e.Name())
+					if otherSite, err := parseRepo(os.DirFS(repoPath), repoPath, e.Name(), true, nil); err == nil {
+						otherRepos[e.Name()] = otherSite
+					}
+				}
+			}
+		}
+	}
+	ctx := &lints.LintContext{OtherRepos: otherRepos}
+
 
 	hasErrors := false
 	var allResults []lints.LintResult
 
 	// Run repository-level lints
 	if len(targetMap) == 0 && query == nil {
-		repoWarnings := lints.PerformRepoLintingResults(location, siteData)
+		repoWarnings := lints.PerformRepoLintingResults(location, siteData, ctx)
 		var filteredRepoWarnings []lints.LintResult
 		for _, w := range repoWarnings {
 			if severityFilter != "" && !strings.EqualFold(string(w.RuleMetadata.Severity), severityFilter) {
@@ -415,7 +563,7 @@ func (cfg *MainArgConfig) runLintCore(location string, targetMap map[string]bool
 			}
 		}
 
-		eclassWarnings := lints.PerformEclassLintingResults(location, eclass)
+		eclassWarnings := lints.PerformEclassLintingResults(location, eclass, ctx)
 
 		var filteredEclassWarnings []lints.LintResult
 		for _, w := range eclassWarnings {
@@ -689,10 +837,18 @@ func (cfg *MainArgConfig) cmdLintRepo(args []string) error {
 	tagFilter := fs.String("only-tag", "", "Only show warnings with this tag")
 	disableRule := fs.String("disable-rule", "", "Comma-separated list of rule IDs to ignore (case-insensitive)")
 	ignoreTag := fs.String("ignore-tag", "", "Comma-separated list of tags to ignore")
+	reposXml := fs.String("repos-xml", "", "Path to repositories.xml")
+	reposDir := fs.String("repos-dir", "/var/db/repos", "Path to repositories directory")
+	reposXml := fs.String("repos-xml", "", "Path to repositories.xml")
+	reposDir := fs.String("repos-dir", "/var/db/repos", "Path to repositories directory")
 
 	enableLayoutLint := fs.Bool("enable-layout-lint", false, "Enable repository layout linting")
 	allowGithubAPI := fs.Bool("allow-github-api", false, "Allow fetching upstream categories via Github API for layout lint")
 	upstreamRepoPath := fs.String("upstream-repo-path", "", "Path to upstream repository on disk for layout lint (overrides github API)")
+	reposXml := fs.String("repos-xml", "", "Path to repositories.xml")
+	reposDir := fs.String("repos-dir", "/var/db/repos", "Path to repositories directory")
+	reposXml := fs.String("repos-xml", "", "Path to repositories.xml")
+	reposDir := fs.String("repos-dir", "/var/db/repos", "Path to repositories directory")
 
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -707,7 +863,7 @@ func (cfg *MainArgConfig) cmdLintRepo(args []string) error {
 		location = fs.Arg(0)
 	}
 
-	return cfg.runLintCore(location, nil, nil, *format, *severityFilter, *sourceFilter, *tagFilter, *disableRule, *ignoreTag)
+	return cfg.runLintCore(location, nil, nil, *format, *severityFilter, *sourceFilter, *tagFilter, *disableRule, *ignoreTag, *reposXml, *reposDir)
 }
 
 func (cfg *MainArgConfig) cmdLintPackage(args []string) error {
@@ -725,10 +881,18 @@ func (cfg *MainArgConfig) cmdLintPackage(args []string) error {
 	tagFilter := fs.String("only-tag", "", "Only show warnings with this tag")
 	disableRule := fs.String("disable-rule", "", "Comma-separated list of rule IDs to ignore (case-insensitive)")
 	ignoreTag := fs.String("ignore-tag", "", "Comma-separated list of tags to ignore")
+	reposXml := fs.String("repos-xml", "", "Path to repositories.xml")
+	reposDir := fs.String("repos-dir", "/var/db/repos", "Path to repositories directory")
+	reposXml := fs.String("repos-xml", "", "Path to repositories.xml")
+	reposDir := fs.String("repos-dir", "/var/db/repos", "Path to repositories directory")
 
 	enableLayoutLint := fs.Bool("enable-layout-lint", false, "Enable repository layout linting")
 	allowGithubAPI := fs.Bool("allow-github-api", false, "Allow fetching upstream categories via Github API for layout lint")
 	upstreamRepoPath := fs.String("upstream-repo-path", "", "Path to upstream repository on disk for layout lint (overrides github API)")
+	reposXml := fs.String("repos-xml", "", "Path to repositories.xml")
+	reposDir := fs.String("repos-dir", "/var/db/repos", "Path to repositories directory")
+	reposXml := fs.String("repos-xml", "", "Path to repositories.xml")
+	reposDir := fs.String("repos-dir", "/var/db/repos", "Path to repositories directory")
 
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -770,7 +934,7 @@ func (cfg *MainArgConfig) cmdLintPackage(args []string) error {
 		targetMap[cleanP] = true
 	}
 
-	return cfg.runLintCore(location, targetMap, nil, *format, *severityFilter, *sourceFilter, *tagFilter, *disableRule, *ignoreTag)
+	return cfg.runLintCore(location, targetMap, nil, *format, *severityFilter, *sourceFilter, *tagFilter, *disableRule, *ignoreTag, *reposXml, *reposDir)
 }
 
 func parseLintQuery(queryStr string, defaultLocation string) (*LintQuery, error) {
@@ -890,6 +1054,10 @@ func (cfg *MainArgConfig) cmdLintQuery(args []string) error {
 	tagFilter := fs.String("only-tag", "", "Only show warnings with this tag")
 	disableRule := fs.String("disable-rule", "", "Comma-separated list of rule IDs to ignore (case-insensitive)")
 	ignoreTag := fs.String("ignore-tag", "", "Comma-separated list of tags to ignore")
+	reposXml := fs.String("repos-xml", "", "Path to repositories.xml")
+	reposDir := fs.String("repos-dir", "/var/db/repos", "Path to repositories directory")
+	reposXml := fs.String("repos-xml", "", "Path to repositories.xml")
+	reposDir := fs.String("repos-dir", "/var/db/repos", "Path to repositories directory")
 
 	if err := fs.Parse(args); err != nil {
 		return err

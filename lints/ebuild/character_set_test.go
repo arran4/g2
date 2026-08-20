@@ -32,7 +32,7 @@ func TestCharacterSetLintRule(t *testing.T) {
 			},
 		}
 
-		results := rule.Lint("/tmp/dummyrepo", pkg)
+		results := rule.Lint("/tmp/dummyrepo", pkg, nil)
 		assert.Empty(t, results)
 	})
 
@@ -51,7 +51,7 @@ func TestCharacterSetLintRule(t *testing.T) {
 			},
 		}
 
-		results := rule.Lint("/tmp/dummyrepo", pkg)
+		results := rule.Lint("/tmp/dummyrepo", pkg, nil)
 		assert.Len(t, results, 1)
 		assert.Contains(t, results[0].Message, "is not valid UTF-8")
 	})

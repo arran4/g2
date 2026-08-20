@@ -26,7 +26,7 @@ func init() {
 
 type RespectVariablesLintRule struct{}
 
-func (l *RespectVariablesLintRule) Lint(repoDir string, pkgData *g2.PackageData) []lints.LintResult {
+func (l *RespectVariablesLintRule) Lint(repoDir string, pkgData *g2.PackageData, ctx *lints.LintContext) []lints.LintResult {
 	var results []lints.LintResult
 
 	for _, version := range pkgData.Versions {

@@ -18,7 +18,7 @@ func TestProxiedMaintainerLintRule(t *testing.T) {
 				},
 			},
 		}
-		warnings := rule.Lint(".", pkg)
+		warnings := rule.Lint(".", pkg, nil)
 		if len(warnings) == 0 {
 			t.Error("expected warning for missing proxy, got none")
 		} else if warnings[0].RuleMetadata.ID != "ProxiedMaintainer" {
@@ -34,7 +34,7 @@ func TestProxiedMaintainerLintRule(t *testing.T) {
 				},
 			},
 		}
-		warnings := rule.Lint(".", pkg)
+		warnings := rule.Lint(".", pkg, nil)
 		if len(warnings) == 0 {
 			t.Error("expected warning for missing proxied, got none")
 		} else if warnings[0].RuleMetadata.ID != "ProxiedMaintainer" {
@@ -51,7 +51,7 @@ func TestProxiedMaintainerLintRule(t *testing.T) {
 				},
 			},
 		}
-		warnings := rule.Lint(".", pkg)
+		warnings := rule.Lint(".", pkg, nil)
 		if len(warnings) > 0 {
 			t.Errorf("expected no warnings, got %v", warnings)
 		}
@@ -65,7 +65,7 @@ func TestProxiedMaintainerLintRule(t *testing.T) {
 				},
 			},
 		}
-		warnings := rule.Lint(".", pkg)
+		warnings := rule.Lint(".", pkg, nil)
 		if len(warnings) > 0 {
 			t.Errorf("expected no warnings, got %v", warnings)
 		}

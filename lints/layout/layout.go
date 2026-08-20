@@ -33,7 +33,7 @@ var (
 	UpstreamRepoPath  string
 )
 
-func (l *RepoLayoutLintRule) LintRepo(repoDir string, site *g2.SiteData) []lints.LintResult {
+func (l *RepoLayoutLintRule) LintRepo(repoDir string, site *g2.SiteData, ctx *lints.LintContext) []lints.LintResult {
 	if !LayoutLintEnabled {
 		return nil
 	}

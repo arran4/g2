@@ -72,7 +72,7 @@ func TestManifestLintRule_MissingFiles(t *testing.T) {
 	}
 
 	rule := &ManifestLintRule{}
-	results := rule.Lint(tempDir, pkgData)
+	results := rule.Lint(tempDir, pkgData, nil)
 
 	if len(results) != 3 {
 		t.Fatalf("expected 3 results, got %d", len(results))
@@ -101,7 +101,7 @@ func TestManifestLintRule_MissingFiles(t *testing.T) {
 		t.Fatalf("failed to write patch: %v", err)
 	}
 
-	results = rule.Lint(tempDir, pkgData)
+	results = rule.Lint(tempDir, pkgData, nil)
 	if len(results) != 0 {
 		t.Fatalf("expected 0 results, got %d: %v", len(results), results)
 	}

@@ -34,7 +34,7 @@ func init() {
 	lints.RegisterLintRule(&CategorySanityLintRule{})
 }
 
-func (l *CategorySanityLintRule) Lint(repoDir string, pkg *g2.PackageData) []lints.LintResult {
+func (l *CategorySanityLintRule) Lint(repoDir string, pkg *g2.PackageData, ctx *lints.LintContext) []lints.LintResult {
 	if SkipForSiteGen {
 		return nil
 	}

@@ -28,7 +28,7 @@ func init() {
 var invalidCharsRegex = regexp.MustCompile(`[^A-Za-z0-9._+-]`)
 var invalidStartRegex = regexp.MustCompile(`^[.+-]`)
 
-func (l *TreeLayoutFilesLintRule) Lint(repoDir string, pkg *g2.PackageData) []lints.LintResult {
+func (l *TreeLayoutFilesLintRule) Lint(repoDir string, pkg *g2.PackageData, ctx *lints.LintContext) []lints.LintResult {
 	var results []lints.LintResult
 
 	for _, file := range pkg.Files {

@@ -84,11 +84,11 @@ func isStaticLib(word *syntax.Word) bool {
 }
 
 
-func (l *StaticLibrariesLintRule) Lint(repoDir string, pkgData *g2.PackageData) []lints.LintResult {
-	return l.LintWithQA(repoDir, pkgData, nil)
+func (l *StaticLibrariesLintRule) Lint(repoDir string, pkgData *g2.PackageData, ctx *lints.LintContext) []lints.LintResult {
+	return l.LintWithQA(repoDir, pkgData, nil, ctx)
 }
 
-func (l *StaticLibrariesLintRule) LintWithQA(repoDir string, pkgData *g2.PackageData, qa *g2.QAPolicy) []lints.LintResult {
+func (l *StaticLibrariesLintRule) LintWithQA(repoDir string, pkgData *g2.PackageData, qa *g2.QAPolicy, ctx *lints.LintContext) []lints.LintResult {
 	var results []lints.LintResult
 
 	severity := lints.SeverityError

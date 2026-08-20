@@ -22,7 +22,7 @@ func TestTreeLayoutFilesLintRule(t *testing.T) {
 		},
 	}
 
-	results := rule.Lint("", pkg)
+	results := rule.Lint("", pkg, nil)
 
 	expectedMessages := []string{
 		"file '.hidden' starts with a dot, hyphen, or plus sign",
