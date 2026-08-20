@@ -53,6 +53,15 @@ News-Item-Format: 2.0
 
 Body
 `)},
+		"metadata/news/2024-01-06-invalid-fields/2024-01-06-invalid-fields.en.txt": &fstest.MapFile{Data: []byte(`Title: This Title Is Much Longer Than Fifty Characters So It Should Fail The Linting Check
+Author: John Doe <john@example.com>
+Posted: 2024-01-06
+Revision: 1a
+News-Item-Format: 1.0
+Content-Type: text/html
+
+This	body contains a tab character and is definitely way too long, far exceeding the seventy-two character limit that is mandated by the standard we are supposed to be following here.
+`)},
 	}
 
 	rule := NewNewsValidityLintRule(WithFS(fsys))
@@ -67,6 +76,8 @@ Body
 
 	var hasAuthorErr, hasDisplayErr bool
 	var hasInvalidDirErr, hasInvalidFileErr, hasMismatchErr bool
+	var hasTitleLengthErr, hasRevisionIntErr, hasContentTypeErr, hasFormatOneErr bool
+	var hasTabErr, hasWrapErr bool
 	for _, res := range results {
 		if strings.Contains(res.Message, "Invalid Author format") {
 			hasAuthorErr = true
@@ -82,6 +93,24 @@ Body
 		}
 		if strings.Contains(res.Message, "does not match directory name") {
 			hasMismatchErr = true
+		}
+		if strings.Contains(res.Message, "Title exceeds maximum length of 50 characters") {
+			hasTitleLengthErr = true
+		}
+		if strings.Contains(res.Message, "Revision must be an integer") {
+			hasRevisionIntErr = true
+		}
+		if strings.Contains(res.Message, "Content-Type must be 'text/plain'") {
+			hasContentTypeErr = true
+		}
+		if strings.Contains(res.Message, "Content-Type: text/plain is mandatory for News-Item-Format 1.0") {
+			hasFormatOneErr = true
+		}
+		if strings.Contains(res.Message, "Body lines should not contain tab characters") {
+			hasTabErr = true
+		}
+		if strings.Contains(res.Message, "Body lines should wrap at 72 characters") {
+			hasWrapErr = true
 		}
 	}
 
@@ -99,5 +128,23 @@ Body
 	}
 	if !hasMismatchErr {
 		t.Errorf("expected prefix mismatch error")
+	}
+	if !hasTitleLengthErr {
+		t.Errorf("expected Title length error")
+	}
+	if !hasRevisionIntErr {
+		t.Errorf("expected Revision integer error")
+	}
+	if !hasContentTypeErr {
+		t.Errorf("expected Content-Type error")
+	}
+	if !hasFormatOneErr {
+		t.Errorf("expected Format 1.0 mandatory Content-Type error")
+	}
+	if !hasTabErr {
+		t.Errorf("expected Body tab character error")
+	}
+	if !hasWrapErr {
+		t.Errorf("expected Body line wrap error")
 	}
 }

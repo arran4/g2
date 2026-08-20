@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -238,9 +239,22 @@ func (r *NewsValidityLintRule) lintNewsItem(content string, relPath string) []li
 	hasPosted := false
 	hasRevision := false
 	hasFormat := false
+	hasContentType := false
+	newsItemFormat := ""
+	contentTypeVal := ""
 
 	for lineNum, line := range lines {
 		if inBody {
+			if strings.Contains(line, "\t") {
+				res := lints.LintResult{RuleMetadata: ruleNewsValidity, Message: fmt.Sprintf("[%s] Body lines should not contain tab characters", lints.SeverityWarning), File: relPath, Line: lineNum + 1}
+				res.RuleMetadata.Severity = lints.SeverityWarning
+				results = append(results, res)
+			}
+			if len(line) > 72 {
+				res := lints.LintResult{RuleMetadata: ruleNewsValidity, Message: fmt.Sprintf("[%s] Body lines should wrap at 72 characters", lints.SeverityWarning), File: relPath, Line: lineNum + 1}
+				res.RuleMetadata.Severity = lints.SeverityWarning
+				results = append(results, res)
+			}
 			continue
 		}
 		if strings.TrimSpace(line) == "" {
@@ -275,6 +289,10 @@ func (r *NewsValidityLintRule) lintNewsItem(content string, relPath string) []li
 				res := lints.LintResult{RuleMetadata: ruleNewsValidity, Message: fmt.Sprintf("[%s] Title cannot be empty", lints.SeverityError), File: relPath, Line: lineNum + 1}
 				res.RuleMetadata.Severity = lints.SeverityError
 				results = append(results, res)
+			} else if len(val) > 50 {
+				res := lints.LintResult{RuleMetadata: ruleNewsValidity, Message: fmt.Sprintf("[%s] Title exceeds maximum length of 50 characters", lints.SeverityError), File: relPath, Line: lineNum + 1}
+				res.RuleMetadata.Severity = lints.SeverityError
+				results = append(results, res)
 			}
 		case "Author":
 			hasAuthor = true
@@ -303,9 +321,25 @@ func (r *NewsValidityLintRule) lintNewsItem(content string, relPath string) []li
 				res := lints.LintResult{RuleMetadata: ruleNewsValidity, Message: fmt.Sprintf("[%s] Revision cannot be empty", lints.SeverityError), File: relPath, Line: lineNum + 1}
 				res.RuleMetadata.Severity = lints.SeverityError
 				results = append(results, res)
+			} else {
+				_, err := strconv.Atoi(val)
+				if err != nil {
+					res := lints.LintResult{RuleMetadata: ruleNewsValidity, Message: fmt.Sprintf("[%s] Revision must be an integer: '%s'", lints.SeverityError, val), File: relPath, Line: lineNum + 1}
+					res.RuleMetadata.Severity = lints.SeverityError
+					results = append(results, res)
+				}
+			}
+		case "Content-Type":
+			hasContentType = true
+			contentTypeVal = val
+			if val != "text/plain" {
+				res := lints.LintResult{RuleMetadata: ruleNewsValidity, Message: fmt.Sprintf("[%s] Content-Type must be 'text/plain', got: '%s'", lints.SeverityError, val), File: relPath, Line: lineNum + 1}
+				res.RuleMetadata.Severity = lints.SeverityError
+				results = append(results, res)
 			}
 		case "News-Item-Format":
 			hasFormat = true
+			newsItemFormat = val
 			if val != "1.0" && val != "2.0" {
 				res := lints.LintResult{RuleMetadata: ruleNewsValidity, Message: fmt.Sprintf("[%s] Unsupported News-Item-Format: '%s'", lints.SeverityWarning, val), File: relPath, Line: lineNum + 1}
 				res.RuleMetadata.Severity = lints.SeverityWarning
@@ -348,6 +382,10 @@ func (r *NewsValidityLintRule) lintNewsItem(content string, relPath string) []li
 	}
 	if !hasFormat {
 		res := lints.LintResult{RuleMetadata: ruleNewsValidity, Message: fmt.Sprintf("[%s] Missing required header: News-Item-Format", lints.SeverityError), File: relPath}
+		res.RuleMetadata.Severity = lints.SeverityError
+		results = append(results, res)
+	} else if newsItemFormat == "1.0" && (!hasContentType || contentTypeVal != "text/plain") {
+		res := lints.LintResult{RuleMetadata: ruleNewsValidity, Message: fmt.Sprintf("[%s] Content-Type: text/plain is mandatory for News-Item-Format 1.0", lints.SeverityError), File: relPath}
 		res.RuleMetadata.Severity = lints.SeverityError
 		results = append(results, res)
 	}
