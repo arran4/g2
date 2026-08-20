@@ -50,14 +50,15 @@ func (r *PythonCompatLintRule) LintWithQA(repoDir string, pkg *g2.PackageData, q
 	severity0501 := rulePythonCompatPG0501.Severity
 	if qa != nil && qa.Policies != nil {
 		if val, ok := qa.Policies["PG0501"]; ok {
-			if val == "ignore" {
+			switch val {
+			case "ignore":
 				// Don't report PG0501
 				severity0501 = ""
-			} else if val == "notice" {
+			case "notice":
 				severity0501 = lints.SeverityNotice
-			} else if val == "warning" {
+			case "warning":
 				severity0501 = lints.SeverityWarning
-			} else if val == "error" {
+			case "error":
 				severity0501 = lints.SeverityError
 			}
 		}
@@ -66,13 +67,14 @@ func (r *PythonCompatLintRule) LintWithQA(repoDir string, pkg *g2.PackageData, q
 	severity0502 := rulePythonCompatPG0502.Severity
 	if qa != nil && qa.Policies != nil {
 		if val, ok := qa.Policies["PG0502"]; ok {
-			if val == "ignore" {
+			switch val {
+			case "ignore":
 				severity0502 = ""
-			} else if val == "notice" {
+			case "notice":
 				severity0502 = lints.SeverityNotice
-			} else if val == "warning" {
+			case "warning":
 				severity0502 = lints.SeverityWarning
-			} else if val == "error" {
+			case "error":
 				severity0502 = lints.SeverityError
 			}
 		}
