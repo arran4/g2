@@ -83,7 +83,6 @@ func isStaticLib(word *syntax.Word) bool {
 	return false
 }
 
-
 func (l *StaticLibrariesLintRule) Lint(repoDir string, pkgData *g2.PackageData) []lints.LintResult {
 	return l.LintWithQA(repoDir, pkgData, nil)
 }
@@ -148,7 +147,7 @@ func (l *StaticLibrariesLintRule) LintWithQA(repoDir string, pkgData *g2.Package
 					}
 				}
 
-				if (cmdName == "doins" || cmdName == "dolib" || cmdName == "dolib.a" || cmdName == "dolib.so") {
+				if cmdName == "doins" || cmdName == "dolib" || cmdName == "dolib.a" || cmdName == "dolib.so" {
 					for i := 1; i < len(cmd.Args); i++ {
 						if isStaticLib(cmd.Args[i]) {
 							if currentInstallPath != "" { // Means we are in /lib*

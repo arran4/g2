@@ -2,8 +2,8 @@ package ebuild
 
 import (
 	"fmt"
-	"strings"
 	"sort"
+	"strings"
 
 	"github.com/arran4/g2"
 	"github.com/arran4/g2/lints"

@@ -18,21 +18,21 @@ func TestBannedVariablesLintRule(t *testing.T) {
 		expectedErrs int
 	}{
 		{
-			name:   "EAPI 6 valid references",
-			eapi:   "6",
-			script: "PORTDIR=\"test\"\necho ${PORTDIR}\necho $ECLASSDIR\nDESTTREE=\"foo\"\nINSDESTTREE=\"bar\"\necho $DESTTREE",
+			name:         "EAPI 6 valid references",
+			eapi:         "6",
+			script:       "PORTDIR=\"test\"\necho ${PORTDIR}\necho $ECLASSDIR\nDESTTREE=\"foo\"\nINSDESTTREE=\"bar\"\necho $DESTTREE",
 			expectedErrs: 0,
 		},
 		{
-			name:   "EAPI 7 banned references",
-			eapi:   "7",
-			script: "PORTDIR=\"test\"\necho ${PORTDIR}\necho $ECLASSDIR\nDESTTREE=\"foo\"\nINSDESTTREE=\"bar\"\necho $DESTTREE",
+			name:         "EAPI 7 banned references",
+			eapi:         "7",
+			script:       "PORTDIR=\"test\"\necho ${PORTDIR}\necho $ECLASSDIR\nDESTTREE=\"foo\"\nINSDESTTREE=\"bar\"\necho $DESTTREE",
 			expectedErrs: 6,
 		},
 		{
-			name:   "EAPI 7 regular vars OK",
-			eapi:   "7",
-			script: "MYVAR=\"test\"\necho $MYVAR",
+			name:         "EAPI 7 regular vars OK",
+			eapi:         "7",
+			script:       "MYVAR=\"test\"\necho $MYVAR",
 			expectedErrs: 0,
 		},
 	}

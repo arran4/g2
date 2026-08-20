@@ -71,14 +71,14 @@ func (r *UseControlledOptionalRdependRule) LintWithQA(repoDir string, pkg *g2.Pa
 				// If the flag is used in the ebuild body (e.g., `use flag`, `usex flag`), it's valid
 				isUsedInBody := false
 
-                // Common use functions
-                useFuncs := []string{"use", "usev", "usex", "use_with", "use_enable"}
-                for _, f := range useFuncs {
-                    if strings.Contains(rawText, f+" "+flag) || strings.Contains(rawText, f+"\t"+flag) {
-                        isUsedInBody = true
-                        break
-                    }
-                }
+				// Common use functions
+				useFuncs := []string{"use", "usev", "usex", "use_with", "use_enable"}
+				for _, f := range useFuncs {
+					if strings.Contains(rawText, f+" "+flag) || strings.Contains(rawText, f+"\t"+flag) {
+						isUsedInBody = true
+						break
+					}
+				}
 
 				if !isUsedInBody {
 					res := lints.LintResult{

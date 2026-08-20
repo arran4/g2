@@ -32,16 +32,16 @@ func TestEclassDeprecatedLintRule(t *testing.T) {
 		t.Fatalf("Failed to write repos.conf: %v", err)
 	}
 
-    // Override defaults for testing
-    DefaultReposConfPath = reposConfPath
-    DefaultReposBasePath = tempDir
+	// Override defaults for testing
+	DefaultReposConfPath = reposConfPath
+	DefaultReposBasePath = tempDir
 
 	site := &g2.SiteData{
 		LayoutConf: &g2.LayoutConf{
-            Entries: []g2.LayoutConfEntry{
-                {Key: "masters", Value: "gentoo"},
-            },
-        },
+			Entries: []g2.LayoutConfEntry{
+				{Key: "masters", Value: "gentoo"},
+			},
+		},
 		Eclasses: []*g2.Ebuild{
 			{
 				Path:    "eclass/deprecated-eclass.eclass",
@@ -100,7 +100,7 @@ func TestEclassDeprecatedLintRule(t *testing.T) {
 			wantCount: 2,
 			wantErrors: []string{
 				"[Warning] Ebuild 1.0 inherits a deprecated eclass 'deprecated-eclass'.",
-                "[Warning] Ebuild 1.0 inherits a deprecated eclass 'upstream-deprecated'.",
+				"[Warning] Ebuild 1.0 inherits a deprecated eclass 'upstream-deprecated'.",
 			},
 		},
 		{
@@ -118,15 +118,15 @@ func TestEclassDeprecatedLintRule(t *testing.T) {
 				t.Errorf("expected %d results, got %d", tt.wantCount, len(results))
 			}
 			if tt.wantCount > 0 && len(results) == tt.wantCount {
-                // Ensure all expected warnings exist
+				// Ensure all expected warnings exist
 				for _, want := range tt.wantErrors {
-                    found := false
-                    for _, res := range results {
-                        if res.Message == want {
-                            found = true
-                            break
-                        }
-                    }
+					found := false
+					for _, res := range results {
+						if res.Message == want {
+							found = true
+							break
+						}
+					}
 					if !found {
 						t.Errorf("expected result message %q not found", want)
 					}

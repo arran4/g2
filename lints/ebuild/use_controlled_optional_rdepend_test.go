@@ -105,7 +105,7 @@ func TestUseControlledOptionalRdependRule(t *testing.T) {
 							Vars: map[string]string{
 								"RDEPEND": "ssl? ( dev-libs/openssl )",
 							},
-                            RawText: `
+							RawText: `
 src_configure() {
     econf $(use_with ssl)
 }
@@ -127,10 +127,10 @@ src_configure() {
 						Version: "1.0",
 						Ebuild: &g2.Ebuild{
 							Vars: map[string]string{
-                                "DEPEND": "b? ( dev-libs/B )",
+								"DEPEND":  "b? ( dev-libs/B )",
 								"RDEPEND": "a? ( dev-libs/A ) !b? ( dev-libs/B ) c? ( dev-libs/C )",
 							},
-                            RawText: `
+							RawText: `
 src_compile() {
     if use c; then
         emake with-c
