@@ -200,7 +200,7 @@ func (r *InstalledFilesLintRule) LintWithQA(repoDir string, pkg *g2.PackageData,
 
 			// Fallback generic walk via reflection
 			val := reflect.ValueOf(node)
-			if val.Kind() == reflect.Ptr && !val.IsNil() {
+			if val.Kind() == reflect.Pointer && !val.IsNil() {
 				val = val.Elem()
 				for i := 0; i < val.NumField(); i++ {
 					field := val.Field(i)
