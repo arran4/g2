@@ -20,6 +20,7 @@ type Source string
 const (
 	SourceG2       Source = "g2"
 	SourcePkgcheck Source = "pkgcheck"
+	SourceQA       Source = "qa"
 )
 
 type RuleMetadata struct {
