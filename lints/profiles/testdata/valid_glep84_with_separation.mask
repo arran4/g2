@@ -1,0 +1,9 @@
+# Copyright 2023 Gentoo Authors
+# Uses GLEP 84 format
+
+# Some intro text that should be ignored
+# -------------------------------------
+
+# Author Name <author@example.com> (2023-10-21)
+# Some reason for masking.
+cat/pkg
