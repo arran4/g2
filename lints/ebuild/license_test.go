@@ -45,3 +45,74 @@ func TestLicenseLintRule(t *testing.T) {
 		})
 	}
 }
+
+func TestLicenseExistsRepoLintRule(t *testing.T) {
+	rule := &LicenseExistsRepoLintRule{}
+
+	site := &g2.SiteData{
+		ProvidedLicenses: []string{"GPL-2", "MIT"},
+		LicenseMapping: map[string][]string{
+			"FREE": {"GPL-2", "MIT"},
+		},
+		Categories: []g2.CategoryData{
+			{
+				Name: "app-misc",
+				Packages: []g2.PackageData{
+					{
+						Category: "app-misc",
+						Name:     "example1",
+						Versions: []g2.VersionData{
+							{
+								Version: "1.0",
+								Ebuild: &g2.Ebuild{
+									Vars: map[string]string{
+										"LICENSE": "GPL-2",
+									},
+								},
+							},
+						},
+					},
+					{
+						Category: "app-misc",
+						Name:     "example2",
+						Versions: []g2.VersionData{
+							{
+								Version: "1.0",
+								Ebuild: &g2.Ebuild{
+									Vars: map[string]string{
+										"LICENSE": "UNKNOWN",
+									},
+								},
+							},
+						},
+					},
+					{
+						Category: "app-misc",
+						Name:     "example3",
+						Versions: []g2.VersionData{
+							{
+								Version: "1.0",
+								Ebuild: &g2.Ebuild{
+									Vars: map[string]string{
+										"LICENSE": "FREE",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	results := rule.LintRepo("", site)
+
+	if len(results) != 1 {
+		t.Errorf("Expected 1 result for UNKNOWN license, got %d", len(results))
+		for _, res := range results {
+			t.Logf("Result: %v", res.Message)
+		}
+	} else if results[0].Package != "app-misc/example2" {
+		t.Errorf("Expected result for app-misc/example2, got %v", results[0].Package)
+	}
+}
