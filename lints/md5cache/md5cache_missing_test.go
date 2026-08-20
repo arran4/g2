@@ -44,7 +44,7 @@ func TestMD5CacheMissing(t *testing.T) {
 	// Test case 2: md5-cache directory does not exist, but explicitly enforced via QA policy
 	qaPolicy := &g2.QAPolicy{
 		Policies: map[string]string{
-			"PG0802": "error",
+			"Md5CacheMissing": "error",
 		},
 	}
 	results = rule.LintWithQA(repoDir, pkg, qaPolicy)
