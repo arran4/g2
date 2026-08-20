@@ -14,7 +14,7 @@ func TestGlep84FormatLintRule(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer func() { _ = os.RemoveAll(tempDir) }()
 
 	profilesDir := filepath.Join(tempDir, "profiles")
 	if err := os.MkdirAll(profilesDir, 0755); err != nil {

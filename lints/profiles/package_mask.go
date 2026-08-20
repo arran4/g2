@@ -49,7 +49,7 @@ func (l *Glep84FormatLintRule) LintRepo(repoDir string, site *g2.SiteData) []lin
 			File:         "profiles/package.mask",
 		}}
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	var results []lints.LintResult
 	scanner := bufio.NewScanner(f)
@@ -245,9 +245,6 @@ func (l *Glep84FormatLintRule) LintRepo(repoDir string, site *g2.SiteData) []lin
 				break
 			}
 			lastParagraph = append([]string{explanationLines[j]}, lastParagraph...)
-			if lastParagraphLineNum == 0 {
-			    // This gets overwritten every time, so it ends up being the FIRST line of the last paragraph
-			}
 			lastParagraphLineNum = explanationLNs[j]
 		}
 
