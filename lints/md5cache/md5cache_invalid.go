@@ -50,7 +50,7 @@ var ruleMD5CacheInvalid = lints.RuleMetadata{
 	URL:         "https://devmanual.gentoo.org/general-concepts/portage-cache/index.html",
 	Severity:    lints.SeverityWarning,
 	Source:      lints.SourceG2,
-	Tags:        []string{"md5-cache", "site-quality", "PG0803"},
+	Tags:        []string{"md5-cache", "site-quality"},
 }
 
 func init() {
@@ -70,7 +70,7 @@ func (r *MD5CacheInvalidLintRule) LintWithQA(repoDir string, pkg *g2.PackageData
 	severity := lints.SeverityWarning
 
 	if qa != nil && qa.Policies != nil {
-		if val, ok := qa.Policies["PG0803"]; ok {
+		if val, ok := qa.Policies["Md5CacheInvalid"]; ok {
 			if val == "ignore" {
 				return nil
 			}

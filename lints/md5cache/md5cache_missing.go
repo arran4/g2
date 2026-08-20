@@ -16,7 +16,7 @@ var ruleMD5CacheMissing = lints.RuleMetadata{
 	URL:         "https://devmanual.gentoo.org/general-concepts/overlay-layout/#md5-cache",
 	Severity:    lints.SeverityWarning,
 	Source:      lints.SourceG2,
-	Tags:        []string{"md5-cache", "site-quality", "PG0802"},
+	Tags:        []string{"md5-cache", "site-quality"},
 }
 
 func init() {
@@ -48,7 +48,7 @@ func (r *MD5CacheLintRule) LintWithQA(repoDir string, pkg *g2.PackageData, qa *g
 
 	policySet := false
 	if qa != nil && qa.Policies != nil {
-		if val, ok := qa.Policies["PG0802"]; ok {
+		if val, ok := qa.Policies["Md5CacheMissing"]; ok {
 			policySet = true
 			if val == "ignore" {
 				return nil

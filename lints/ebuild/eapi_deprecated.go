@@ -15,7 +15,7 @@ var ruleEAPIDeprecated = lints.RuleMetadata{
 	URL:         "https://devmanual.gentoo.org/ebuild-writing/eapi/",
 	Severity:    lints.SeverityWarning,
 	Source:      lints.SourceG2,
-	Tags:        []string{"ebuild", "gentoo-policy", "PG0803"},
+	Tags:        []string{"ebuild", "gentoo-policy", "PG1001"},
 }
 
 func init() {
@@ -33,7 +33,7 @@ func (r *EAPIDeprecatedLintRule) LintWithQA(repoDir string, pkg *g2.PackageData,
 	var results []lints.LintResult
 	severity := lints.SeverityWarning
 	if qa != nil && qa.Policies != nil {
-		if val, ok := qa.Policies["PG0803"]; ok {
+		if val, ok := qa.Policies["PG1001"]; ok {
 			if val == "ignore" {
 				return nil
 			}
