@@ -12,7 +12,7 @@ var ruleVersionedUse = lints.RuleMetadata{
 	ID:          "VersionedUse",
 	Title:       "Versioned USE flags",
 	Description: "If a need arises to create new USE flags responsible for switching between multiple versions of a specific dependency, it is recommended that flat, explicitly versioned flags are used (e.g. qt4, qt5). The hierarchical form used e.g. by GTK+ (gtk meaning 2-or-3, then optionally gtk2 or gtk3 to switch between both) is discouraged.",
-	URL:         "https://projects.gentoo.org/qa/policy-guide/use-flags.html#pg0801",
+	URLs:        []string{"https://projects.gentoo.org/qa/policy-guide/use-flags.html#pg0801"},
 	Severity:    lints.SeverityWarning,
 	Source:      lints.SourceQA,
 	Tags:        []string{"ebuild", "gentoo-policy", "use", "PG0801"},

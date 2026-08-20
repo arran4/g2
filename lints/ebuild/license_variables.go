@@ -15,7 +15,7 @@ var ruleLicenseVariables = lints.RuleMetadata{
 	ID:          "LicenseVariables",
 	Title:       "LICENSE contains variables",
 	Description: "LICENSE must specify all license names verbatim, without referring to variables, except for appending.",
-	URL:         "https://projects.gentoo.org/qa/policy-guide/ebuild-format.html#pg0106",
+	URLs:        []string{"https://projects.gentoo.org/qa/policy-guide/ebuild-format.html#pg0106"},
 	Severity:    lints.SeverityError,
 	Source:      lints.SourceQA,
 	Tags:        []string{"ebuild", "gentoo-policy", "PG0106"},

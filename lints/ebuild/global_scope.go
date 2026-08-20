@@ -13,7 +13,7 @@ var ruleGlobalScope = lints.RuleMetadata{
 	ID:          "GlobalScope",
 	Title:       "Invalid commands in global scope",
 	Description: "Warns about using external commands like sed, awk, grep, has_version, etc. in global scope.",
-	URL:         "https://devmanual.gentoo.org/appendices/common-problems/index.html#qa-notice-foo-in-global-scope",
+	URLs:        []string{"https://devmanual.gentoo.org/appendices/common-problems/index.html#qa-notice-foo-in-global-scope"},
 	Severity:    lints.SeverityError,
 	Source:      lints.SourceG2,
 	Tags:        []string{"ebuild", "gentoo-policy", "qa"},

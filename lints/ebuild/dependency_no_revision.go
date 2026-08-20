@@ -13,7 +13,7 @@ var ruleDependencyNoRevision = lints.RuleMetadata{
 	ID:          "DependencyNoRevision",
 	Title:       "=-dependencies with no revision",
 	Description: "Whenever a non-wildcard = (equals) dependency is used on a package, the requested revision must be specified explicitly.",
-	URL:         "https://projects.gentoo.org/qa/policy-guide/dependencies.html#pg0002",
+	URLs:        []string{"https://projects.gentoo.org/qa/policy-guide/dependencies.html#pg0002"},
 	Severity:    lints.SeverityWarning,
 	Source:      lints.SourceQA,
 	Tags:        []string{"ebuild", "gentoo-policy", "dependencies", "pg0002"},

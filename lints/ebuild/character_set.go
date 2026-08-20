@@ -14,7 +14,7 @@ var ruleCharacterSet = lints.RuleMetadata{
 	ID:          "CharacterSet",
 	Title:       "Character Set",
 	Description: "Validates that ebuild files use the UTF-8 character set.",
-	URL:         "https://devmanual.gentoo.org/ebuild-writing/file-format/index.html#character-set",
+	URLs:        []string{"https://devmanual.gentoo.org/ebuild-writing/file-format/index.html#character-set"},
 	Severity:    lints.SeverityError,
 	Source:      lints.SourceG2,
 	Tags:        []string{"ebuild", "gentoo-policy", "encoding"},

@@ -14,7 +14,7 @@ var ruleEbuildHeader = lints.RuleMetadata{
 	ID:          "EbuildHeader",
 	Title:       "Invalid Ebuild Header",
 	Description: "Validates that the ebuild header matches the expected Gentoo copyright header.",
-	URL:         "https://devmanual.gentoo.org/ebuild-writing/file-format/index.html",
+	URLs:        []string{"https://devmanual.gentoo.org/ebuild-writing/file-format/index.html"},
 	Severity:    lints.SeverityNotice,
 	Source:      lints.SourceG2,
 	Tags:        []string{"ebuild", "gentoo-policy"},

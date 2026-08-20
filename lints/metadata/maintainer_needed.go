@@ -14,7 +14,7 @@ var ruleMaintainerNeeded = lints.RuleMetadata{
 	ID:          "MaintainerNeeded",
 	Title:       "Maintainer Needed Comment Missing or Incorrect",
 	Description: "Ensures that a package with no maintainers has the <!-- maintainer-needed --> comment in its metadata.xml, and packages with maintainers do not have it.",
-	URL:         "https://devmanual.gentoo.org/general-concepts/package-maintainers/index.html#adding-and-removing-maintainers",
+	URLs:        []string{"https://devmanual.gentoo.org/general-concepts/package-maintainers/index.html#adding-and-removing-maintainers"},
 	Severity:    lints.SeverityError,
 	Source:      lints.SourceG2,
 	Tags:        []string{"metadata.xml", "site-quality", "PG0703"}, // Using a new tag, e.g., PG0703

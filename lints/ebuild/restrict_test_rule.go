@@ -14,7 +14,7 @@ var ruleRestrictTest = lints.RuleMetadata{
 	ID:          "RestrictTest",
 	Title:       "RESTRICT=test for USE=-test",
 	Description: "Whenever the package uses test flag to control test prerequisites (or another flag with a similar purpose), it must explicitly restrict tests when the flag is unset.",
-	URL:         "https://projects.gentoo.org/qa/policy-guide/other-metadata.html#pg0703",
+	URLs:        []string{"https://projects.gentoo.org/qa/policy-guide/other-metadata.html#pg0703"},
 	Severity:    lints.SeverityError,
 	Source:      lints.SourceQA,
 	Tags:        []string{"ebuild", "gentoo-policy", "PG0703"},

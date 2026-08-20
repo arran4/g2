@@ -47,7 +47,7 @@ var ruleMD5CacheInvalid = lints.RuleMetadata{
 	ID:          "Md5CacheInvalid",
 	Title:       "Invalid MD5 Cache",
 	Description: "Verifies that md5-cache entries are correctly formatted, contain correct ebuild md5sums, and valid eclass md5sums.",
-	URL:         "https://devmanual.gentoo.org/general-concepts/portage-cache/index.html",
+	URLs:        []string{"https://devmanual.gentoo.org/general-concepts/portage-cache/index.html"},
 	Severity:    lints.SeverityWarning,
 	Source:      lints.SourceG2,
 	Tags:        []string{"md5-cache", "site-quality"},

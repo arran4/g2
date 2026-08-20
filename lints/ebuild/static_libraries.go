@@ -14,7 +14,7 @@ var ruleStaticLibraries = lints.RuleMetadata{
 	ID:          "StaticLibraries",
 	Title:       "Static libraries and libtool files",
 	Description: "Static libraries and libtool files (.la) must be installed into /usr hierarchy and never to root filesystem (/lib*).",
-	URL:         "https://projects.gentoo.org/qa/policy-guide/filesystem.html#pg0204",
+	URLs:        []string{"https://projects.gentoo.org/qa/policy-guide/filesystem.html#pg0204"},
 	Severity:    lints.SeverityError,
 	Source:      lints.SourceQA,
 	Tags:        []string{"ebuild", "gentoo-policy", "filesystem", "PG0204"},

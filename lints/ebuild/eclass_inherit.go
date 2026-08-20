@@ -13,7 +13,7 @@ var ruleConditionalInherit = lints.RuleMetadata{
 	ID:          "ConditionalInherit",
 	Title:       "Conditional Eclass Inheritance",
 	Description: "Warns about conditional inheritance of eclasses, which is illegal unless based strictly on PN or PV.",
-	URL:         "https://devmanual.gentoo.org/appendices/common-problems/index.html#qa-notice-eclass-foo-inherited-illegally",
+	URLs:        []string{"https://devmanual.gentoo.org/appendices/common-problems/index.html#qa-notice-eclass-foo-inherited-illegally"},
 	Severity:    lints.SeverityError,
 	Source:      lints.SourceG2,
 	Tags:        []string{"ebuild", "gentoo-policy", "qa"},

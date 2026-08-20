@@ -14,7 +14,7 @@ var ruleDeprecatedInsinto = lints.RuleMetadata{
 	ID:          "DeprecatedInsinto",
 	Title:       "Deprecated insinto/exeinto Usage",
 	Description: "Detects the use of insinto or exeinto for paths that have dedicated install functions (e.g. doinitd for /etc/init.d).",
-	URL:         "https://devmanual.gentoo.org/tasks-reference/init-scripts/index.html",
+	URLs:        []string{"https://devmanual.gentoo.org/tasks-reference/init-scripts/index.html"},
 	Severity:    lints.SeverityWarning,
 	Source:      lints.SourceG2,
 	Tags:        []string{"ebuild", "gentoo-policy", "PG0805"},

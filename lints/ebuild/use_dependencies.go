@@ -9,7 +9,7 @@ var ruleUseDependenciesPG0021 = lints.RuleMetadata{
 	ID:          "UseDependenciesPG0021",
 	Title:       "USE dependencies on packages without the flag",
 	Description: "Whenever a package uses a 2-style USE-dependency on another package, all package versions matching the dependency must have the flag in question.",
-	URL:         "https://projects.gentoo.org/qa/policy-guide/dependencies.html#pg0021",
+	URLs:        []string{"https://projects.gentoo.org/qa/policy-guide/dependencies.html#pg0021"},
 	Severity:    lints.SeverityError,
 	Source:      lints.SourceQA,
 	Tags:        []string{"ebuild", "gentoo-policy", "dependencies", "PG0021"},

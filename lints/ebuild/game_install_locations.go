@@ -14,7 +14,7 @@ var ruleGameInstallLocations = lints.RuleMetadata{
 	ID:          "GameInstallLocations",
 	Title:       "Game Install Locations",
 	Description: "The historical game install locations (/usr/games and /etc/games) must not be used anymore.",
-	URL:         "https://projects.gentoo.org/qa/policy-guide/filesystem.html#pg0205",
+	URLs:        []string{"https://projects.gentoo.org/qa/policy-guide/filesystem.html#pg0205"},
 	Severity:    lints.SeverityError,
 	Source:      lints.SourceQA,
 	Tags:        []string{"ebuild", "gentoo-policy", "filesystem", "PG0205"},

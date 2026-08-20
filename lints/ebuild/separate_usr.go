@@ -15,7 +15,7 @@ var ruleSeparateUsr = lints.RuleMetadata{
 	ID:          "SeparateUsr",
 	Title:       "Support for separate /usr",
 	Description: "Developers are not required to support using separate /usr filesystem without an initramfs. Warnings regarding this are typically suppressed or not fatal.",
-	URL:         "https://projects.gentoo.org/qa/policy-guide/filesystem.html#pg0202",
+	URLs:        []string{"https://projects.gentoo.org/qa/policy-guide/filesystem.html#pg0202"},
 	Severity:    lints.SeverityInfo,
 	Source:      lints.SourceQA,
 	Tags:        []string{"ebuild", "gentoo-policy", "filesystem", "PG0202"},

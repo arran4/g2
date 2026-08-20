@@ -14,7 +14,7 @@ var ruleBannedVariables = lints.RuleMetadata{
 	ID:          "EAPIBannedVariables",
 	Title:       "Banned Variables in EAPI",
 	Description: "Detects the use of variables that have been banned or removed in specific EAPI versions.",
-	URL:         "https://devmanual.gentoo.org/ebuild-writing/eapi/index.html",
+	URLs:        []string{"https://devmanual.gentoo.org/ebuild-writing/eapi/index.html"},
 	Severity:    lints.SeverityError,
 	Source:      lints.SourceG2,
 	Tags:        []string{"ebuild", "gentoo-policy", "eapi"},

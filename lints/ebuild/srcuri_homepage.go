@@ -15,7 +15,7 @@ var ruleSrcUriHomepage = lints.RuleMetadata{
 	ID:          "SrcUriHomepage",
 	Title:       "SRC_URI refers to HOMEPAGE",
 	Description: "SRC_URI must not refer to ${HOMEPAGE}.",
-	URL:         "https://projects.gentoo.org/qa/policy-guide/ebuild-format.html#pg0104",
+	URLs:        []string{"https://projects.gentoo.org/qa/policy-guide/ebuild-format.html#pg0104"},
 	Severity:    lints.SeverityError,
 	Source:      lints.SourceQA,
 	Tags:        []string{"ebuild", "gentoo-policy", "PG0104"},

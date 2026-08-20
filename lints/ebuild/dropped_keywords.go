@@ -15,7 +15,7 @@ var ruleDroppedKeywords = lints.RuleMetadata{
 	ID:          "DroppedKeywords",
 	Title:       "Dropped Keywords",
 	Description: "Checks if arch keywords were dropped during version bumping.",
-	URL:         "https://projects.gentoo.org/qa/policy-guide/keywords.html#pg0401",
+	URLs:        []string{"https://projects.gentoo.org/qa/policy-guide/keywords.html#pg0401"},
 	Severity:    lints.SeverityWarning,
 	Source:      lints.SourceQA,
 	Tags:        []string{"ebuild", "keywords"},

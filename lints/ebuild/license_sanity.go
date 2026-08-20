@@ -14,7 +14,7 @@ var ruleLicenseSanity = lints.RuleMetadata{
 	ID:          "LicenseSanity",
 	Title:       "License Sanity",
 	Description: "Identifies ebuilds improperly placing full-text licenses in the LICENSE variable, missing alphanumeric characters (e.g., //), or containing URL-breaking slashes.",
-	URL:         "https://devmanual.gentoo.org/ebuild-writing/variables/index.html#license",
+	URLs:        []string{"https://devmanual.gentoo.org/ebuild-writing/variables/index.html#license"},
 	Severity:    lints.SeverityError,
 	Source:      lints.SourceG2,
 	Tags:        []string{"ebuild", "site-quality", "gentoo-policy", "PG0804"},

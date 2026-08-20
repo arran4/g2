@@ -15,7 +15,7 @@ var ruleLayoutConf = lints.RuleMetadata{
 	ID:          "LayoutConfRules",
 	Title:       "Layout Conf Checks",
 	Description: "Validates layout.conf elements like manifest-hashes and eapis-deprecated.",
-	URL:         "https://devmanual.gentoo.org/general-concepts/overlay-layout/",
+	URLs:        []string{"https://devmanual.gentoo.org/general-concepts/overlay-layout/"},
 	Severity:    lints.SeverityWarning,
 	Source:      lints.SourceG2,
 	Tags:        []string{"repo-layout", "manifest"},

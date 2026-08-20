@@ -13,7 +13,7 @@ var ruleRedefinedVariables = lints.RuleMetadata{
 	ID:          "RedefinedVariables",
 	Title:       "Redefined Variables",
 	Description: "Checks for ebuilds that redefine variables like P, PV, PN, or PF.",
-	URL:         "https://devmanual.gentoo.org/ebuild-writing/common-mistakes/index.html#redefined-p-pv-pn-pf-variables",
+	URLs:        []string{"https://devmanual.gentoo.org/ebuild-writing/common-mistakes/index.html#redefined-p-pv-pn-pf-variables"},
 	Severity:    lints.SeverityError,
 	Source:      lints.SourceG2,
 	Tags:        []string{"ebuild", "qa"},

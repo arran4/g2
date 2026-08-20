@@ -17,7 +17,7 @@ var ruleRepoNameMissing = lints.RuleMetadata{
 	ID:          "RepoNameMissing",
 	Title:       "Missing Repository Name",
 	Description: "Every Gentoo repository must define a unique repository name, either via repo-name in metadata/layout.conf or in profiles/repo_name.",
-	URL:         "https://devmanual.gentoo.org/general-concepts/overlay-layout/",
+	URLs:        []string{"https://devmanual.gentoo.org/general-concepts/overlay-layout/"},
 	Severity:    lints.SeverityError,
 	Source:      lints.SourceG2,
 	Tags:        []string{"repo-layout"},

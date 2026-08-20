@@ -14,7 +14,7 @@ var ruleIUSEDocumented = lints.RuleMetadata{
 	ID:          "IuseDocumented",
 	Title:       "IUSE Documented",
 	Description: "Verifies that all flags in IUSE have corresponding descriptions in metadata.xml or global/local use desc.",
-	URL:         "https://devmanual.gentoo.org/general-concepts/use-flags/",
+	URLs:        []string{"https://devmanual.gentoo.org/general-concepts/use-flags/"},
 	Severity:    lints.SeverityWarning,
 	Source:      lints.SourceG2,
 	Tags:        []string{"metadata.xml", "ebuild", "site-quality", "PG0701"},
