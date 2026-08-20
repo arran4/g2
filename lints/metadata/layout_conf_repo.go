@@ -49,52 +49,54 @@ func (r *LayoutConfRepoLintRule) LintRepo(repoDir string, site *g2.SiteData) []l
 		})
 	}
 
-	// 2. Check use-manifests
-	if lc.HasKey("use-manifests") {
-		um := lc.UseManifests()
-		if um != "strict" && um != "true" && um != "false" {
-			results = append(results, lints.LintResult{
-				RuleMetadata: ruleLayoutConfRepo,
-				Message:      fmt.Sprintf("[%s] layout.conf has invalid 'use-manifests' value: %s", lints.SeverityError, um),
-			})
+	// Helper validator for booleans
+	validateBool := func(contents ...string) error {
+		if len(contents) != 1 {
+			return fmt.Errorf("expected 1 value, got %d", len(contents))
 		}
+		if contents[0] != "true" && contents[0] != "false" {
+			return fmt.Errorf("must be 'true' or 'false'")
+		}
+		return nil
 	}
 
-	// 3. Check boolean values
-	boolKeys := []string{"update-changelog", "thin-manifests", "sign-commits", "sign-manifests"}
-	for _, key := range boolKeys {
-		if lc.HasKey(key) {
-			val := lc.GetValue(key)
-			if val != "true" && val != "false" {
-				results = append(results, lints.LintResult{
-					RuleMetadata: ruleLayoutConfRepo,
-					Message:      fmt.Sprintf("[%s] layout.conf has invalid boolean value for '%s': %s", lints.SeverityError, key, val),
-				})
-			}
-		}
+	// Helper validator for space-separated lists
+	validateList := func(contents ...string) error {
+		// Content is already the raw string, we just consider it valid if it's there
+		return nil
 	}
 
 	// 4. Check for unknown keys
 	validKeys := map[string]func(contents ...string) error{
-		"masters":                  nil,
-		"manifest-hashes":          nil,
-		"manifest-required-hashes": nil,
-		"use-manifests":            nil,
-		"update-changelog":         nil,
-		"cache-formats":            nil,
-		"eapis-deprecated":         nil,
-		"eapis-banned":             nil,
-		"eapis-testing":            nil,
-		"profile-eapis-deprecated": nil,
-		"profile-eapis-banned":     nil,
-		"repo-name":                nil,
-		"aliases":                  nil,
-		"thin-manifests":           nil,
-		"sign-commits":             nil,
-		"sign-manifests":           nil,
-		"properties-allowed":       nil,
-		"restrict-allowed":         nil,
-		"profile-formats":          nil,
+		"masters":                  validateList,
+		"manifest-hashes":          validateList,
+		"manifest-required-hashes": validateList,
+		"use-manifests": func(contents ...string) error {
+			if len(contents) != 1 {
+				return fmt.Errorf("expected 1 value, got %d", len(contents))
+			}
+			if contents[0] != "strict" && contents[0] != "true" && contents[0] != "false" {
+				return fmt.Errorf("must be 'strict', 'true', or 'false'")
+			}
+			return nil
+		},
+		"update-changelog":         validateBool,
+		"cache-formats":            validateList,
+		"eapis-deprecated":         validateList,
+		"eapis-banned":             validateList,
+		"eapis-testing":            validateList,
+		"profile-eapis-deprecated": validateList,
+		"profile-eapis-banned":     validateList,
+		"repo-name": func(contents ...string) error {
+			return nil // Any string is fine
+		},
+		"aliases":            validateList,
+		"thin-manifests":     validateBool,
+		"sign-commits":       validateBool,
+		"sign-manifests":     validateBool,
+		"properties-allowed": validateList,
+		"restrict-allowed":   validateList,
+		"profile-formats":    validateList,
 	}
 
 	for _, entry := range lc.Entries {
