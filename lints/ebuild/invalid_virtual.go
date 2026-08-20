@@ -14,7 +14,7 @@ var ruleInvalidVirtual = lints.RuleMetadata{
 	ID:          "InvalidVirtual",
 	Title:       "Invalid Virtual",
 	Description: "Checks if a virtual package defines HOMEPAGE or LICENSE variables, which it should not.",
-	URL:         "https://devmanual.gentoo.org/general-concepts/virtuals/index.html",
+	URLs:        []string{"https://devmanual.gentoo.org/general-concepts/virtuals/index.html"},
 	Severity:    lints.SeverityError,
 	Source:      lints.SourceG2,
 	Tags:        []string{"ebuild", "gentoo-policy"},

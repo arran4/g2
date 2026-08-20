@@ -16,7 +16,7 @@ var ruleLicense = lints.RuleMetadata{
 	ID:          "License",
 	Title:       "LICENSE variable must explicitly list all licenses",
 	Description: "The LICENSE variable must explicitly list all licenses pertaining to the corresponding source of the files installed by the package.",
-	URL:         "https://projects.gentoo.org/qa/policy-guide/other-metadata.html#pg0704",
+	URLs:        []string{"https://projects.gentoo.org/qa/policy-guide/other-metadata.html#pg0704"},
 	Severity:    lints.SeverityError,
 	Source:      lints.SourceQA,
 	Tags:        []string{"ebuild", "gentoo-policy", "PG0704"},

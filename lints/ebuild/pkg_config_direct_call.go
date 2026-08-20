@@ -13,7 +13,7 @@ var rulePkgConfigDirectCall = lints.RuleMetadata{
 	ID:          "PkgConfigDirectCall",
 	Title:       "Calling pkg-config directly",
 	Description: "You should not call pkg-config directly in ebuilds because this is problematic for e.g. cross-compiling. Instead, use tc-getPKG_CONFIG from toolchain-funcs.eclass.",
-	URL:         "https://devmanual.gentoo.org/ebuild-writing/common-mistakes/index.html#calling-pkg-config-directly",
+	URLs:        []string{"https://devmanual.gentoo.org/ebuild-writing/common-mistakes/index.html#calling-pkg-config-directly"},
 	Severity:    lints.SeverityError,
 	Source:      lints.SourceG2,
 	Tags:        []string{"ebuild", "qa"},

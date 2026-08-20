@@ -13,7 +13,7 @@ var ruleRedundantS = lints.RuleMetadata{
 	ID:          "RedundantS",
 	Title:       "Adding redundant S=${WORKDIR}/${P}",
 	Description: "If S=${WORKDIR}/${P}, then you should not add it to your ebuild. This is implied already.",
-	URL:         "https://devmanual.gentoo.org/ebuild-writing/common-mistakes/index.html#adding-redundant-sworkdirp",
+	URLs:        []string{"https://devmanual.gentoo.org/ebuild-writing/common-mistakes/index.html#adding-redundant-sworkdirp"},
 	Severity:    lints.SeverityWarning,
 	Source:      lints.SourceG2,
 	Tags:        []string{"ebuild", "qa"},

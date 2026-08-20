@@ -14,7 +14,7 @@ var ruleInvalidSlot = lints.RuleMetadata{
 	ID:          "InvalidSlot",
 	Title:       "Invalid SLOT",
 	Description: "Validates that the SLOT variable only contains valid characters.",
-	URL:         "https://devmanual.gentoo.org/general-concepts/slotting/",
+	URLs:        []string{"https://devmanual.gentoo.org/general-concepts/slotting/"},
 	Severity:    lints.SeverityError,
 	Source:      lints.SourceG2,
 	Tags:        []string{"ebuild", "gentoo-policy"},

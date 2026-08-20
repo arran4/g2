@@ -14,7 +14,7 @@ var ruleUseControlledOptionalRdepend = lints.RuleMetadata{
 	ID:          "UseControlledOptionalRdepend",
 	Title:       "USE-Controlled Optional RDEPENDS",
 	Description: "USE-controlled optional RDEPs are generally not acceptable except under very specific circumstances. A USE flag used only to pull in a runtime dependency without affecting the build should be avoided.",
-	URL:         "https://projects.gentoo.org/qa/policy-guide/dependencies.html#pg0001",
+	URLs:        []string{"https://projects.gentoo.org/qa/policy-guide/dependencies.html#pg0001"},
 	Severity:    lints.SeverityWarning,
 	Source:      lints.SourceQA,
 	Tags:        []string{"ebuild", "gentoo-policy", "rdepend", "use-flags", "PG0001"},

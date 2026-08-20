@@ -13,7 +13,7 @@ var ruleMaintainerMissing = lints.RuleMetadata{
 	ID:          "MaintainerMissing",
 	Title:       "Missing Maintainer",
 	Description: "Ensures that a package has at least one maintainer defined in its metadata.xml.",
-	URL:         "https://devmanual.gentoo.org/ebuild-writing/misc-files/metadata.xml/index.html#maintainer-field",
+	URLs:        []string{"https://devmanual.gentoo.org/ebuild-writing/misc-files/metadata.xml/index.html#maintainer-field"},
 	Severity:    lints.SeverityError,
 	Source:      lints.SourceG2,
 	Tags:        []string{"metadata.xml", "site-quality", "PG0702"},

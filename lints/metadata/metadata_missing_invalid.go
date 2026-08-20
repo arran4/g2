@@ -13,7 +13,7 @@ var ruleMetadataMissing = lints.RuleMetadata{
 	ID:          "MetadataMissing",
 	Title:       "Metadata Missing or Invalid",
 	Description: "Checks if metadata.xml is missing, invalid XML, or not parsable.",
-	URL:         "https://devmanual.gentoo.org/ebuild-writing/misc-files/metadata.xml/",
+	URLs:        []string{"https://devmanual.gentoo.org/ebuild-writing/misc-files/metadata.xml/"},
 	Severity:    lints.SeverityError,
 	Source:      lints.SourceG2,
 	Tags:        []string{"metadata.xml", "site-quality", "PG0701"},

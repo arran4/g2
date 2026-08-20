@@ -11,7 +11,7 @@ var ruleUseGui = lints.RuleMetadata{
 	ID:          "UseGui",
 	Title:       "USE=gui flag",
 	Description: "Whenever a package offers an optional GUI support, the gui flag must be used to control that support rather than historically used X or toolkit flags (like gtk, qt4, qt5). Toolkit flags can still be used to choose between multiple available GUIs, but gui is preferred.",
-	URL:         "https://projects.gentoo.org/qa/policy-guide/use-flags.html#pg0802",
+	URLs:        []string{"https://projects.gentoo.org/qa/policy-guide/use-flags.html#pg0802"},
 	Severity:    lints.SeverityWarning,
 	Source:      lints.SourceQA,
 	Tags:        []string{"ebuild", "gentoo-policy", "use", "PG0802"},

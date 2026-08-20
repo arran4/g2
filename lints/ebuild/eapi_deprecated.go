@@ -12,7 +12,7 @@ var ruleEAPIDeprecated = lints.RuleMetadata{
 	ID:          "EAPIDeprecated",
 	Title:       "Deprecated EAPI",
 	Description: "Detects the use of old, deprecated or obsolete EAPIs.",
-	URL:         "https://devmanual.gentoo.org/ebuild-writing/eapi/",
+	URLs:        []string{"https://devmanual.gentoo.org/ebuild-writing/eapi/"},
 	Severity:    lints.SeverityWarning,
 	Source:      lints.SourceG2,
 	Tags:        []string{"ebuild", "gentoo-policy", "PG1001"},

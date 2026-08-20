@@ -14,7 +14,7 @@ var ruleDieSubshell = lints.RuleMetadata{
 	ID:          "DieSubshell",
 	Title:       "die in subshell",
 	Description: "die will not work in a subshell unless you are using EAPI=7 and onwards.",
-	URL:         "https://devmanual.gentoo.org/ebuild-writing/error-handling/index.html#die-and-subshells",
+	URLs:        []string{"https://devmanual.gentoo.org/ebuild-writing/error-handling/index.html#die-and-subshells"},
 	Severity:    lints.SeverityWarning,
 	Source:      lints.SourceG2,
 	Tags:        []string{"ebuild", "gentoo-policy", "die"},

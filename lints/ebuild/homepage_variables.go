@@ -15,7 +15,7 @@ var ruleHomepageVariables = lints.RuleMetadata{
 	ID:          "HomepageVariables",
 	Title:       "HOMEPAGE contains variables",
 	Description: "HOMEPAGE must specify all URIs verbatim, without referring to variables.",
-	URL:         "https://projects.gentoo.org/qa/policy-guide/ebuild-format.html#pg0103",
+	URLs:        []string{"https://projects.gentoo.org/qa/policy-guide/ebuild-format.html#pg0103"},
 	Severity:    lints.SeverityError,
 	Source:      lints.SourceQA,
 	Tags:        []string{"ebuild", "gentoo-policy", "PG0103"},

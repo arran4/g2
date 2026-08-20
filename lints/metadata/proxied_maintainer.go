@@ -13,7 +13,7 @@ var ruleProxiedMaintainer = lints.RuleMetadata{
 	ID:          "ProxiedMaintainer",
 	Title:       "Proxied Maintainer Rules",
 	Description: "Ensures that packages maintained by proxied maintainers explicitly list their proxy developer or project.",
-	URL:         "https://devmanual.gentoo.org/general-concepts/package-maintainers/index.html#adding-and-removing-maintainers",
+	URLs:        []string{"https://devmanual.gentoo.org/general-concepts/package-maintainers/index.html#adding-and-removing-maintainers"},
 	Severity:    lints.SeverityError,
 	Source:      lints.SourceG2,
 	Tags:        []string{"metadata.xml", "site-quality", "PG0704"}, // Using a new tag, e.g., PG0704

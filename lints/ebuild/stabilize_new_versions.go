@@ -15,7 +15,7 @@ var ruleStabilizeNewVersions = lints.RuleMetadata{
 	ID:          "StabilizeNewVersions",
 	Title:       "Stabilize New Versions",
 	Description: "Checks if a stabilized version missed some architectures that had stable versions.",
-	URL:         "https://projects.gentoo.org/qa/policy-guide/keywords.html#pg0402",
+	URLs:        []string{"https://projects.gentoo.org/qa/policy-guide/keywords.html#pg0402"},
 	Severity:    lints.SeverityWarning,
 	Source:      lints.SourceQA,
 	Tags:        []string{"ebuild", "keywords"},

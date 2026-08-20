@@ -16,7 +16,7 @@ var ruleEclassDeprecated = lints.RuleMetadata{
 	ID:          "EclassDeprecated",
 	Title:       "Deprecated eclasses",
 	Description: "Deprecated eclasses should not be used in new ebuilds.",
-	URL:         "https://projects.gentoo.org/qa/policy-guide/deprecation.html#pg1003",
+	URLs:        []string{"https://projects.gentoo.org/qa/policy-guide/deprecation.html#pg1003"},
 	Severity:    lints.SeverityWarning,
 	Source:      lints.SourceG2,
 	Tags:        []string{"ebuild", "gentoo-policy", "PG1003"},

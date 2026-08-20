@@ -14,7 +14,7 @@ var ruleStrictMultilibLayout = lints.RuleMetadata{
 	ID:          "StrictMultilibLayout",
 	Title:       "Strict multilib layout",
 	Description: "Libraries must be installed into an appropriate /lib* or /usr/lib* directory corresponding to their ABI.",
-	URL:         "https://projects.gentoo.org/qa/policy-guide/filesystem.html#pg0203",
+	URLs:        []string{"https://projects.gentoo.org/qa/policy-guide/filesystem.html#pg0203"},
 	Severity:    lints.SeverityError,
 	Source:      lints.SourceQA,
 	Tags:        []string{"ebuild", "gentoo-policy", "filesystem", "PG0203"},

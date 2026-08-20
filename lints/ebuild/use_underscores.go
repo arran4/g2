@@ -13,7 +13,7 @@ var ruleUseUnderscores = lints.RuleMetadata{
 	ID:          "UseUnderscores",
 	Title:       "Underscores in USE flag names",
 	Description: "Underscores are reserved for USE_EXPAND flags, and must not be used within names of newly-defined regular flags.",
-	URL:         "https://projects.gentoo.org/qa/policy-guide/use-flags.html#pg0803",
+	URLs:        []string{"https://projects.gentoo.org/qa/policy-guide/use-flags.html#pg0803"},
 	Severity:    lints.SeverityWarning,
 	Source:      lints.SourceQA,
 	Tags:        []string{"ebuild", "gentoo-policy", "use", "PG0803"},

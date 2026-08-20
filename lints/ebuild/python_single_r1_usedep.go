@@ -13,7 +13,7 @@ var rulePythonSingleR1UseDep = lints.RuleMetadata{
 	ID:          "PythonSingleR1UseDep",
 	Title:       "Invalid PYTHON_USEDEP with python-single-r1",
 	Description: "inherit python-single-r1 and PYTHON_USEDEP shouldn't be used together without python_gen_cond_dep.",
-	URL:         "https://devmanual.gentoo.org/eclass-reference/python-single-r1.eclass/index.html",
+	URLs:        []string{"https://devmanual.gentoo.org/eclass-reference/python-single-r1.eclass/index.html"},
 	Severity:    lints.SeverityError,
 	Source:      lints.SourceG2,
 	Tags:        []string{"ebuild", "gentoo-policy"},

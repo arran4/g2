@@ -15,7 +15,7 @@ var ruleExternalCode = lints.RuleMetadata{
 	ID:          "ExternalCode",
 	Title:       "Code must be contained within ebuild and eclasses",
 	Description: "It is forbidden to load additional ebuild code from other files via source, eval or any other possible method.",
-	URL:         "https://projects.gentoo.org/qa/policy-guide/ebuild-format.html#pg0102",
+	URLs:        []string{"https://projects.gentoo.org/qa/policy-guide/ebuild-format.html#pg0102"},
 	Severity:    lints.SeverityError,
 	Source:      lints.SourceQA,
 	Tags:        []string{"ebuild", "gentoo-policy", "PG0102"},
