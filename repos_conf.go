@@ -267,6 +267,18 @@ func ValidateRepoName(name string) error {
 		}
 		return fmt.Errorf("invalid repository name %q: contains invalid character %q", name, string(c))
 	}
+	// Under Gentoo PMS, a repository name must also be a valid package name:
+	// it must not end in a hyphen followed by a valid Gentoo version.
+	parts := strings.Split(name, "-")
+	for i := 1; i < len(parts); i++ {
+		candidateVer := strings.Join(parts[i:], "-")
+		if len(candidateVer) > 0 && candidateVer[0] >= '0' && candidateVer[0] <= '9' {
+			gv := ParseGentooVersion(candidateVer)
+			if gv.IsValid {
+				return fmt.Errorf("invalid repository name %q: repository name must not end with a hyphen followed by a version", name)
+			}
+		}
+	}
 	return nil
 }
 

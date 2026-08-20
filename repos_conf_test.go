@@ -171,6 +171,7 @@ func TestMalformedRepoNameFails(t *testing.T) {
 		{name: "leading hyphen", content: "-repo\n", expected: "invalid repository name"},
 		{name: "empty content", content: "   \n", expected: "file is empty"},
 		{name: "invalid character @", content: "repo@name\n", expected: "invalid repository name"},
+		{name: "ending in version", content: "repo-1\n", expected: "must not end with a hyphen followed by a version"},
 	}
 
 	for _, tc := range cases {

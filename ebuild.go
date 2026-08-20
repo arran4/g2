@@ -1121,6 +1121,103 @@ func validateSlotName(name string) error {
 	return nil
 }
 
+func validateSlotSpec(slotPart string) error {
+	if slotPart == "" {
+		return fmt.Errorf("empty slot specification")
+	}
+	if slotPart == "*" || slotPart == "=" {
+		return nil
+	}
+	slotBase := strings.TrimSuffix(slotPart, "=")
+	if slotBase == "" {
+		return fmt.Errorf("invalid slot specification %q", slotPart)
+	}
+	if strings.Contains(slotBase, "/") {
+		parts := strings.Split(slotBase, "/")
+		if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
+			return fmt.Errorf("malformed slot/subslot %q", slotPart)
+		}
+		if err := validateSlotName(parts[0]); err != nil {
+			return fmt.Errorf("invalid slot %q: %w", parts[0], err)
+		}
+		if err := validateSlotName(parts[1]); err != nil {
+			return fmt.Errorf("invalid subslot %q: %w", parts[1], err)
+		}
+		return nil
+	}
+	return validateSlotName(slotBase)
+}
+
+func validateUSEElement(token string) error {
+	if token == "" {
+		return fmt.Errorf("empty USE flag dependency element")
+	}
+	hasExcl := false
+	if strings.HasPrefix(token, "!") {
+		hasExcl = true
+		token = token[1:]
+		if token == "" {
+			return fmt.Errorf("empty USE flag after '!'")
+		}
+	}
+
+	hasMinus := false
+	if strings.HasPrefix(token, "-") {
+		if hasExcl {
+			return fmt.Errorf("cannot combine '!' and '-' in USE dependency element")
+		}
+		hasMinus = true
+		token = token[1:]
+		if token == "" {
+			return fmt.Errorf("empty USE flag after '-'")
+		}
+	}
+
+	hasDefault := false
+	if strings.HasSuffix(token, "(+)") {
+		hasDefault = true
+		token = strings.TrimSuffix(token, "(+)")
+	} else if strings.HasSuffix(token, "(-)") {
+		hasDefault = true
+		token = strings.TrimSuffix(token, "(-)")
+	}
+
+	if strings.HasSuffix(token, "?") {
+		if hasMinus {
+			return fmt.Errorf("'-' cannot be combined with '?' in USE dependency")
+		}
+		if hasDefault {
+			return fmt.Errorf("default '(+)'/'(-)' cannot be combined with '?' in USE dependency")
+		}
+		token = strings.TrimSuffix(token, "?")
+	} else if strings.HasSuffix(token, "=") {
+		if hasMinus {
+			return fmt.Errorf("'-' cannot be combined with '=' in USE dependency")
+		}
+		if hasDefault {
+			return fmt.Errorf("default '(+)'/'(-)' cannot be combined with '=' in USE dependency")
+		}
+		token = strings.TrimSuffix(token, "=")
+	} else if hasExcl {
+		return fmt.Errorf("'!' is only permitted with '?' or '=' in USE dependency")
+	}
+
+	if token == "" {
+		return fmt.Errorf("empty USE flag name")
+	}
+	if token[0] == '-' || token[0] == '+' {
+		return fmt.Errorf("USE flag name %q must not begin with %q", token, string(token[0]))
+	}
+	for i := 0; i < len(token); i++ {
+		c := token[i]
+		if (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '+' || c == '_' || c == '-' {
+			continue
+		}
+		return fmt.Errorf("USE flag name %q contains invalid character %q", token, string(c))
+	}
+	return nil
+}
+
 // QualifyAtomForRepo validates that the given package atom specification is valid according to
 // Gentoo PMS rules and belongs to targetRepo. If the atom has no repository qualifier, ::targetRepo is appended.
 // If the atom already specifies ::targetRepo, it is accepted.
@@ -1150,18 +1247,19 @@ func QualifyAtomForRepo(dep string, targetRepo string) (string, error) {
 		if !strings.HasSuffix(s, "]") {
 			return "", fmt.Errorf("invalid package atom %q: malformed USE flags specification", dep)
 		}
-		idx := strings.LastIndex(s, "[")
+		idx := strings.Index(s, "[")
+		if strings.Count(s, "[") > 1 || strings.Count(s, "]") > 1 {
+			return "", fmt.Errorf("invalid package atom %q: multiple USE flags specifications", dep)
+		}
 		useFlags = s[idx+1 : len(s)-1]
 		if useFlags == "" {
 			return "", fmt.Errorf("invalid package atom %q: empty USE flags []", dep)
 		}
-		for i := 0; i < len(useFlags); i++ {
-			c := useFlags[i]
-			if (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') ||
-				c == '+' || c == '_' || c == '-' || c == '@' || c == ',' || c == '!' || c == '?' || c == '=' || c == '(' || c == ')' || c == '*' {
-				continue
+		elements := strings.Split(useFlags, ",")
+		for _, el := range elements {
+			if err := validateUSEElement(el); err != nil {
+				return "", fmt.Errorf("invalid package atom %q: %w", dep, err)
 			}
-			return "", fmt.Errorf("invalid package atom %q: invalid character in USE flags %q", dep, string(c))
 		}
 		s = s[:idx]
 	}
@@ -1189,32 +1287,10 @@ func QualifyAtomForRepo(dep string, targetRepo string) (string, error) {
 	if strings.Contains(s, ":") {
 		idx := strings.LastIndex(s, ":")
 		slotPart = s[idx+1:]
-		if slotPart == "" {
-			return "", fmt.Errorf("invalid package atom %q: empty slot specification", dep)
+		if err := validateSlotSpec(slotPart); err != nil {
+			return "", fmt.Errorf("invalid package atom %q: %w", dep, err)
 		}
 		s = s[:idx]
-
-		slotBase := strings.TrimSuffix(slotPart, "=")
-		if slotBase != "*" && slotBase != "" {
-			if strings.Contains(slotBase, "/") {
-				parts := strings.Split(slotBase, "/")
-				if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
-					return "", fmt.Errorf("invalid package atom %q: malformed slot/subslot %q", dep, slotPart)
-				}
-				if err := validateSlotName(parts[0]); err != nil {
-					return "", fmt.Errorf("invalid package atom %q: invalid slot %q: %w", dep, parts[0], err)
-				}
-				if parts[1] != "*" && parts[1] != "=" {
-					if err := validateSlotName(parts[1]); err != nil {
-						return "", fmt.Errorf("invalid package atom %q: invalid subslot %q: %w", dep, parts[1], err)
-					}
-				}
-			} else {
-				if err := validateSlotName(slotBase); err != nil {
-					return "", fmt.Errorf("invalid package atom %q: invalid slot %q: %w", dep, slotBase, err)
-				}
-			}
-		}
 	}
 
 	// 4. Extract Blocker and Operator
