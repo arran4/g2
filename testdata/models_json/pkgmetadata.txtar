@@ -36,6 +36,9 @@ test: PkgMetadata JSON to XML serialization
 	"StabilizeAllArches": {
 		"Restrict": "test"
 	},
+	"StraightToStable": {
+		"Restrict": "test"
+	},
 	"Use": [
 		{
 			"Flags": [
@@ -88,6 +91,7 @@ test: PkgMetadata JSON to XML serialization
 		<subslots>sub</subslots>
 	</slots>
 	<stabilize-allarches restrict="test"></stabilize-allarches>
+	<straight-to-stable restrict="test"></straight-to-stable>
 	<use lang="en">
 		<flag name="foo" restrict="test">Enable foo</flag>
 	</use>
@@ -136,6 +140,9 @@ test: PkgMetadata JSON to XML serialization
 		"Lang": "en"
 	},
 	"StabilizeAllArches": {
+		"Restrict": "test"
+	},
+	"StraightToStable": {
 		"Restrict": "test"
 	},
 	"Use": [
