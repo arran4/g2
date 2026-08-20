@@ -15,6 +15,7 @@ import (
 	"github.com/arran4/g2/lints/ebuild"
 
 	_ "github.com/arran4/g2/lints/ebuild"
+	_ "github.com/arran4/g2/lints/profiles"
 	_ "github.com/arran4/g2/lints/eclass"
 	_ "github.com/arran4/g2/lints/md5cache"
 	_ "github.com/arran4/g2/lints/metadata"
