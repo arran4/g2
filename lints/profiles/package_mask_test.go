@@ -1,6 +1,7 @@
 package profiles
 
 import (
+	"embed"
 	"os"
 	"path/filepath"
 	"strings"
@@ -8,6 +9,9 @@ import (
 
 	"github.com/arran4/g2"
 )
+
+//go:embed testdata/*.mask
+var testDataFS embed.FS
 
 func TestGlep84FormatLintRule(t *testing.T) {
 	tempDir, err := os.MkdirTemp("", "g2-lint-test")
@@ -23,121 +27,69 @@ func TestGlep84FormatLintRule(t *testing.T) {
 
 	testCases := []struct {
 		name     string
-		content  string
+		file     string
 		expected []string // substrings expected in error messages
 	}{
 		{
-			name: "Valid GLEP 84",
-			content: `# Copyright 2023 Gentoo Authors
-# Uses GLEP 84 format
-
-# Author Name <author@example.com> (2023-10-21)
-# Some reason for masking.
-cat/pkg
-
-# Another Name <test@test.com> (2023-10-22)
-# Reason
-#
-# Removal on 2023-11-22.  Bugs #123, #456.
-dev-util/tool
-`,
+			name:     "Valid GLEP 84",
+			file:     "testdata/valid_glep84.mask",
 			expected: nil,
 		},
 		{
-			name: "Invalid missing blank line between entries",
-			content: `# Uses GLEP 84 format
-# Author Name <author@example.com> (2023-10-21)
-# Some reason for masking.
-cat/pkg
-# Another Name <test@test.com> (2023-10-22)
-# Reason
-dev-util/tool
-`,
+			name:     "Invalid missing blank line between entries",
+			file:     "testdata/invalid_missing_blank_line.mask",
 			expected: []string{"mandatory blank line"},
 		},
 		{
-			name: "Invalid blank line between comments and packages",
-			content: `# Uses GLEP 84 format
-# Author Name <author@example.com> (2023-10-21)
-# Some reason for masking.
-
-cat/pkg
-`,
+			name:     "Invalid blank line between comments and packages",
+			file:     "testdata/invalid_blank_line_comments_packages.mask",
 			expected: []string{"No blank line is allowed between comments block and packages list"},
 		},
 		{
-			name: "Invalid multiple blank lines in comments",
-			content: `# Uses GLEP 84 format
-# Author Name <author@example.com> (2023-10-21)
-# Some reason for masking.
-#
-#
-# Another paragraph.
-cat/pkg
-`,
+			name:     "Invalid multiple blank lines in comments",
+			file:     "testdata/invalid_multiple_blank_lines_comments.mask",
 			expected: []string{"Multiple blank lines between paragraphs are prohibited"},
 		},
 		{
-			name: "Invalid > 80 char comment line",
-			content: `# Uses GLEP 84 format
-# Author Name <author@example.com> (2023-10-21)
-# Some reason for masking. 12345678901234567890123456789012345678901234567890123456789012345678901234567890
-cat/pkg
-`,
+			name:     "Invalid > 80 char comment line",
+			file:     "testdata/invalid_80_char.mask",
 			expected: []string{"Comment line exceeds 80 characters"},
 		},
 		{
-			name: "Invalid trailing space in package list",
-			content: `# Uses GLEP 84 format
-# Author Name <author@example.com> (2023-10-21)
-# Reason
-cat/pkg ` + `
-`,
+			name:     "Invalid trailing space in package list",
+			file:     "testdata/invalid_trailing_space.mask",
 			expected: []string{"leading or trailing whitespace"},
 		},
 		{
-			name: "Invalid last rite format",
-			content: `# Uses GLEP 84 format
-# Author Name <author@example.com> (2023-10-21)
-# Reason
-#
-# Removal on November 22nd. Bug #123
-cat/pkg
-`,
+			name:     "Invalid last rite format",
+			file:     "testdata/invalid_last_rite_format.mask",
 			expected: []string{"Invalid last-rite epilogue format"},
 		},
 		{
-			name: "Invalid last rite bugs list",
-			content: `# Uses GLEP 84 format
-# Author Name <author@example.com> (2023-10-21)
-# Reason
-#
-# Removal on 2023-11-22.  Bug #123, 456
-cat/pkg
-`,
+			name:     "Invalid last rite bugs list",
+			file:     "testdata/invalid_last_rite_bugs_list.mask",
 			expected: []string{"Invalid bugs list format"},
 		},
 		{
-			name: "Valid GLEP 84 with Separation Lines",
-			content: `# Copyright 2023 Gentoo Authors
-# Uses GLEP 84 format
-
-# Some intro text that should be ignored
-# -{5,}.*-{5,}
-# -------------------------------------
-
-# Author Name <author@example.com> (2023-10-21)
-# Some reason for masking.
-cat/pkg
-`,
+			name:     "Valid GLEP 84 with Separation Lines",
+			file:     "testdata/valid_glep84_with_separation.mask",
 			expected: nil, // Note: Need to adjust regex to actually match # -------
+		},
+		{
+			name:     "Invalid missing packages list",
+			file:     "testdata/invalid_missing_packages_list.mask",
+			expected: []string{"Missing packages list in entry"},
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			content, err := testDataFS.ReadFile(tc.file)
+			if err != nil {
+				t.Fatalf("Failed to read testdata file: %v", err)
+			}
 			maskPath := filepath.Join(profilesDir, "package.mask")
-			if err := os.WriteFile(maskPath, []byte(tc.content), 0644); err != nil {
+			if err := os.WriteFile(maskPath, content, 0644); err != nil {
 				t.Fatal(err)
 			}
 

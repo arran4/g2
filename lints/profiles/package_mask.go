@@ -130,10 +130,20 @@ func (l *Glep84FormatLintRule) LintRepo(repoDir string, site *g2.SiteData) []lin
 		}
 
 		isComment := strings.HasPrefix(line, "#")
+		isAuthorLine := authorLineRegex.MatchString(line)
+
 		if !inPackages {
 			if isComment {
-				currentEntry.Comments = append(currentEntry.Comments, line)
-				currentEntry.CommentLNs = append(currentEntry.CommentLNs, fileLineNum)
+				// If we see an author line while already collecting comments for an entry that hasn't seen a package yet...
+				// That means the previous entry is missing a package list. We start a new entry anyway.
+				if isAuthorLine && len(currentEntry.Comments) > 0 {
+					currentEntry.EndLine = fileLineNum - 1
+					entries = append(entries, currentEntry)
+					currentEntry = Entry{StartLine: fileLineNum, Comments: []string{line}, CommentLNs: []int{fileLineNum}}
+				} else {
+					currentEntry.Comments = append(currentEntry.Comments, line)
+					currentEntry.CommentLNs = append(currentEntry.CommentLNs, fileLineNum)
+				}
 			} else {
 				if strings.TrimSpace(line) != "" {
 					inPackages = true
@@ -273,6 +283,16 @@ func (l *Glep84FormatLintRule) LintRepo(repoDir string, site *g2.SiteData) []lin
 		}
 
 		// Packages List validations
+		if len(entry.Packages) == 0 {
+			results = append(results, lints.LintResult{
+				RuleMetadata: ruleGlep84Format,
+				Message:      "Missing packages list in entry",
+				File:         "profiles/package.mask",
+				Line:         entry.StartLine,
+			})
+			continue
+		}
+
 		// no comments in package list -> we already grouped them properly (a # starts a new entry)
 		// no leading or trailing whitespace -> we checked if strings.TrimSpace(line) != line
 		for j, pkgLine := range entry.Packages {
@@ -307,7 +327,15 @@ func (l *Glep84FormatLintRule) LintRepo(repoDir string, site *g2.SiteData) []lin
 		next := entries[i+1]
 
 		// The next entry must start AT LEAST 2 lines after the previous entry's last package line
-		if next.StartLine <= curr.PackageLNs[len(curr.PackageLNs)-1] + 1 {
+		// (assuming curr actually has packages; if not, we already flagged it, but use end line safely)
+		lastLine := curr.StartLine
+		if len(curr.PackageLNs) > 0 {
+			lastLine = curr.PackageLNs[len(curr.PackageLNs)-1]
+		} else if len(curr.CommentLNs) > 0 {
+			lastLine = curr.CommentLNs[len(curr.CommentLNs)-1]
+		}
+
+		if next.StartLine <= lastLine + 1 {
 			results = append(results, lints.LintResult{
 				RuleMetadata: ruleGlep84Format,
 				Message:      "A mandatory blank line must appear between entries",

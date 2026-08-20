@@ -1,0 +1,8 @@
+# Uses GLEP 84 format
+
+# Author Name <author@example.com> (2023-10-21)
+# Some reason for masking.
+
+# Another Name <author2@example.com> (2023-10-22)
+# Reason 2
+cat/pkg2
