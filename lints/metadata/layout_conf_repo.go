@@ -3,6 +3,7 @@ package metadata
 import (
 	"fmt"
 	"path/filepath"
+	"strings"
 
 	"github.com/arran4/g2"
 	"github.com/arran4/g2/lints"
@@ -110,7 +111,13 @@ func (r *LayoutConfRepoLintRule) LintRepo(repoDir string, site *g2.SiteData) []l
 		} else if validator := validKeys[entry.Key]; validator != nil {
 			// Validate the specific format/content of the key here
 			// using the defined func(contents ...string) error.
-			if err := validator(entry.Value); err != nil {
+
+			// For the validator, pass the fields if the value is meant to be space-separated
+			// We pass the fields to match the `contents ...string` signature,
+			// except if it's supposed to be treated as a single token we might pass it differently.
+			// Let's just pass `strings.Fields(entry.Value)...`.
+			// Wait, if it's a single token, `strings.Fields` splits on spaces. This works well for boolean and space-separated lists.
+			if err := validator(strings.Fields(entry.Value)...); err != nil {
 				res := lints.LintResult{
 					RuleMetadata: ruleLayoutConfRepo,
 					Message:      fmt.Sprintf("[%s] layout.conf key validation failed %s: %s", lints.SeverityError, entry.Key, err.Error()),
