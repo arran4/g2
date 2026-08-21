@@ -744,6 +744,17 @@ location = ` + overlayDir + `
 			"cat/pkg.name",
 			"cat/pkg@name",
 			"=cat/pkg-1..2",
+			"!cat/pkg",
+			"!!cat/pkg",
+			"!>=cat/pkg-2",
+			"cat/pkg[foo]",
+			"cat/pkg[-foo]",
+			"cat/pkg[foo,bar]",
+			"cat/pkg[]",
+			"cat/pkg:0/*",
+			"cat/pkg:/0",
+			"cat/pkg:0/",
+			"cat/pkg:**",
 		}
 
 		for _, invalidAtom := range invalidAtoms {
@@ -854,6 +865,67 @@ location = ` + overlayDir + `
 		}
 		if _, err := os.Stat(filepath.Join(configRoot, "package.unmask")); !os.IsNotExist(err) {
 			t.Error("package.unmask should not have been created on malformed repo identity")
+		}
+	})
+
+	// 35. pre-existing configuration remains completely untouched when invalid blockers or USE dependencies are rejected
+	t.Run("pre-existing configuration remains untouched on invalid blocker or USE input", func(t *testing.T) {
+		configRoot, reposConf := setupTestPortage(t)
+		initialMaskContent := "# Pre-existing comment\napp-misc/valid::arrans-overlay\n"
+		initialUnmaskContent := "# Pre-existing unmask\ndev-libs/valid::arrans-overlay\n"
+
+		maskFile := filepath.Join(configRoot, "package.mask")
+		unmaskFile := filepath.Join(configRoot, "package.unmask")
+
+		if err := os.WriteFile(maskFile, []byte(initialMaskContent), 0644); err != nil {
+			t.Fatalf("write maskFile: %v", err)
+		}
+		if err := os.WriteFile(unmaskFile, []byte(initialUnmaskContent), 0644); err != nil {
+			t.Fatalf("write unmaskFile: %v", err)
+		}
+
+		rejectedInputs := []string{"!cat/pkg", "!!cat/pkg", "cat/pkg[foo]", "cat/pkg[-foo,bar]"}
+
+		for _, input := range rejectedInputs {
+			// mask
+			err := cfg.cmdConfOverlay([]string{"arrans-overlay", "mask", input, "--config-root", configRoot, "--repos-conf", reposConf})
+			if err == nil {
+				t.Fatalf("expected error for input %q, got nil", input)
+			}
+			data, _ := os.ReadFile(maskFile)
+			if string(data) != initialMaskContent {
+				t.Errorf("maskFile was modified after rejected input %q", input)
+			}
+
+			// unmask
+			err = cfg.cmdConfOverlay([]string{"arrans-overlay", "unmask", input, "--config-root", configRoot, "--repos-conf", reposConf})
+			if err == nil {
+				t.Fatalf("expected error for input %q, got nil", input)
+			}
+			data, _ = os.ReadFile(unmaskFile)
+			if string(data) != initialUnmaskContent {
+				t.Errorf("unmaskFile was modified after rejected input %q", input)
+			}
+
+			// mask-reset
+			err = cfg.cmdConfOverlay([]string{"arrans-overlay", "mask-reset", input, "--config-root", configRoot, "--repos-conf", reposConf})
+			if err == nil {
+				t.Fatalf("expected error for input %q, got nil", input)
+			}
+			data, _ = os.ReadFile(maskFile)
+			if string(data) != initialMaskContent {
+				t.Errorf("maskFile was modified after rejected input %q", input)
+			}
+
+			// unmask-reset
+			err = cfg.cmdConfOverlay([]string{"arrans-overlay", "unmask-reset", input, "--config-root", configRoot, "--repos-conf", reposConf})
+			if err == nil {
+				t.Fatalf("expected error for input %q, got nil", input)
+			}
+			data, _ = os.ReadFile(unmaskFile)
+			if string(data) != initialUnmaskContent {
+				t.Errorf("unmaskFile was modified after rejected input %q", input)
+			}
 		}
 	})
 }

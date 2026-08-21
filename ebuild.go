@@ -1148,81 +1148,11 @@ func validateSlotSpec(slotPart string) error {
 	return validateSlotName(slotBase)
 }
 
-func validateUSEElement(token string) error {
-	if token == "" {
-		return fmt.Errorf("empty USE flag dependency element")
-	}
-	hasExcl := false
-	if strings.HasPrefix(token, "!") {
-		hasExcl = true
-		token = token[1:]
-		if token == "" {
-			return fmt.Errorf("empty USE flag after '!'")
-		}
-	}
-
-	hasMinus := false
-	if strings.HasPrefix(token, "-") {
-		if hasExcl {
-			return fmt.Errorf("cannot combine '!' and '-' in USE dependency element")
-		}
-		hasMinus = true
-		token = token[1:]
-		if token == "" {
-			return fmt.Errorf("empty USE flag after '-'")
-		}
-	}
-
-	hasDefault := false
-	if strings.HasSuffix(token, "(+)") {
-		hasDefault = true
-		token = strings.TrimSuffix(token, "(+)")
-	} else if strings.HasSuffix(token, "(-)") {
-		hasDefault = true
-		token = strings.TrimSuffix(token, "(-)")
-	}
-
-	if strings.HasSuffix(token, "?") {
-		if hasMinus {
-			return fmt.Errorf("'-' cannot be combined with '?' in USE dependency")
-		}
-		if hasDefault {
-			return fmt.Errorf("default '(+)'/'(-)' cannot be combined with '?' in USE dependency")
-		}
-		token = strings.TrimSuffix(token, "?")
-	} else if strings.HasSuffix(token, "=") {
-		if hasMinus {
-			return fmt.Errorf("'-' cannot be combined with '=' in USE dependency")
-		}
-		if hasDefault {
-			return fmt.Errorf("default '(+)'/'(-)' cannot be combined with '=' in USE dependency")
-		}
-		token = strings.TrimSuffix(token, "=")
-	} else if hasExcl {
-		return fmt.Errorf("'!' is only permitted with '?' or '=' in USE dependency")
-	}
-
-	if token == "" {
-		return fmt.Errorf("empty USE flag name")
-	}
-	if token[0] == '-' || token[0] == '+' {
-		return fmt.Errorf("USE flag name %q must not begin with %q", token, string(token[0]))
-	}
-	for i := 0; i < len(token); i++ {
-		c := token[i]
-		if (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '+' || c == '_' || c == '-' {
-			continue
-		}
-		return fmt.Errorf("USE flag name %q contains invalid character %q", token, string(c))
-	}
-	return nil
-}
-
 // QualifyAtomForRepo validates that the given package atom specification is valid according to
 // Gentoo PMS rules and belongs to targetRepo. If the atom has no repository qualifier, ::targetRepo is appended.
 // If the atom already specifies ::targetRepo, it is accepted.
 // If the atom specifies a conflicting repository qualifier, an error is returned.
-// Repo-wide wildcard atoms (e.g. */*) are rejected because repo-wide policy requires explicit commands.
+// Repo-wide wildcard atoms (e.g. */*), blockers (!/!!), and USE dependencies ([...]) are rejected.
 func QualifyAtomForRepo(dep string, targetRepo string) (string, error) {
 	if dep == "" {
 		return "", fmt.Errorf("package atom cannot be empty")
@@ -1239,32 +1169,19 @@ func QualifyAtomForRepo(dep string, targetRepo string) (string, error) {
 		return "", fmt.Errorf("repo-wide wildcard atom %q is not permitted in package-specific commands; repo-wide policy requires an explicit repo-wide command", dep)
 	}
 
-	s := dep
-
-	// 1. Extract USE flags ([...])
-	var useFlags string
-	if strings.Contains(s, "[") {
-		if !strings.HasSuffix(s, "]") {
-			return "", fmt.Errorf("invalid package atom %q: malformed USE flags specification", dep)
-		}
-		idx := strings.Index(s, "[")
-		if strings.Count(s, "[") > 1 || strings.Count(s, "]") > 1 {
-			return "", fmt.Errorf("invalid package atom %q: multiple USE flags specifications", dep)
-		}
-		useFlags = s[idx+1 : len(s)-1]
-		if useFlags == "" {
-			return "", fmt.Errorf("invalid package atom %q: empty USE flags []", dep)
-		}
-		elements := strings.Split(useFlags, ",")
-		for _, el := range elements {
-			if err := validateUSEElement(el); err != nil {
-				return "", fmt.Errorf("invalid package atom %q: %w", dep, err)
-			}
-		}
-		s = s[:idx]
+	// Reject dependency blockers (! and !!)
+	if strings.HasPrefix(dep, "!") {
+		return "", fmt.Errorf("invalid package atom %q: blocker syntax '!' or '!!' is not permitted in package mask/unmask policy", dep)
 	}
 
-	// 2. Extract Repository qualifier (::repo)
+	// Reject USE-dependency syntax ([...])
+	if strings.Contains(dep, "[") || strings.Contains(dep, "]") {
+		return "", fmt.Errorf("invalid package atom %q: USE dependency syntax is not supported by g2 conf overlay package policy yet", dep)
+	}
+
+	s := dep
+
+	// 1. Extract Repository qualifier (::repo)
 	var specifiedRepo string
 	if strings.Contains(s, "::") {
 		if strings.Count(s, "::") > 1 {
@@ -1282,7 +1199,7 @@ func QualifyAtomForRepo(dep string, targetRepo string) (string, error) {
 		s = s[:idx]
 	}
 
-	// 3. Extract Slot / Subslot (:slot[/subslot])
+	// 2. Extract Slot / Subslot (:slot[/subslot])
 	var slotPart string
 	if strings.Contains(s, ":") {
 		idx := strings.LastIndex(s, ":")
@@ -1293,16 +1210,7 @@ func QualifyAtomForRepo(dep string, targetRepo string) (string, error) {
 		s = s[:idx]
 	}
 
-	// 4. Extract Blocker and Operator
-	var blocker string
-	if strings.HasPrefix(s, "!!") {
-		blocker = "!!"
-		s = s[2:]
-	} else if strings.HasPrefix(s, "!") {
-		blocker = "!"
-		s = s[1:]
-	}
-
+	// 3. Extract Operator
 	var op string
 	if strings.HasPrefix(s, ">=") || strings.HasPrefix(s, "<=") {
 		op = s[:2]
@@ -1312,7 +1220,7 @@ func QualifyAtomForRepo(dep string, targetRepo string) (string, error) {
 		s = s[1:]
 	}
 
-	// 5. Category / Package[-version] split
+	// 4. Category / Package[-version] split
 	if strings.Count(s, "/") != 1 {
 		return "", fmt.Errorf("invalid package atom %q: expected category/package format", dep)
 	}
@@ -1324,8 +1232,9 @@ func QualifyAtomForRepo(dep string, targetRepo string) (string, error) {
 		return "", fmt.Errorf("invalid package atom %q: %w", dep, err)
 	}
 
-	// 6. Split pkgVerStr into pkgName and versionStr
-	var pkgName, versionStr string
+	// 5. Version extraction
+	var pkgName string
+	var versionStr string
 	parts := strings.Split(pkgVerStr, "-")
 	for i := 1; i < len(parts); i++ {
 		candidateVer := strings.Join(parts[i:], "-")
@@ -1346,7 +1255,7 @@ func QualifyAtomForRepo(dep string, targetRepo string) (string, error) {
 		return "", fmt.Errorf("invalid package atom %q: %w", dep, err)
 	}
 
-	// 7. Validate Operator vs Version consistency
+	// 6. Validate Operator vs Version consistency
 	if op != "" {
 		if versionStr == "" {
 			return "", fmt.Errorf("invalid package atom %q: operator %q requires a version", dep, op)
@@ -1361,14 +1270,13 @@ func QualifyAtomForRepo(dep string, targetRepo string) (string, error) {
 		}
 	}
 
-	// 8. Validate Repository matching
+	// 7. Validate Repository matching
 	if specifiedRepo != "" && specifiedRepo != targetRepo {
 		return "", fmt.Errorf("package qualifier %q does not match selected repository %q", specifiedRepo, targetRepo)
 	}
 
-	// 9. Reassemble qualified atom string
+	// 8. Reassemble qualified atom string
 	var sb strings.Builder
-	sb.WriteString(blocker)
 	sb.WriteString(op)
 	sb.WriteString(catStr)
 	sb.WriteString("/")
@@ -1383,11 +1291,6 @@ func QualifyAtomForRepo(dep string, targetRepo string) (string, error) {
 	}
 	sb.WriteString("::")
 	sb.WriteString(targetRepo)
-	if useFlags != "" {
-		sb.WriteString("[")
-		sb.WriteString(useFlags)
-		sb.WriteString("]")
-	}
 
 	return sb.String(), nil
 }
