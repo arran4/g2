@@ -6,7 +6,6 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/arran4/g2"
 )
 
 func TestGetGitModifiedPackagesChanged(t *testing.T) {
@@ -25,16 +24,8 @@ func TestGetGitModifiedPackagesChanged(t *testing.T) {
 		}
 	}
 
-	siteData := &g2.SiteData{
-		Categories: []g2.CategoryData{
-			{Name: "app-misc"},
-			{Name: "dev-util"},
-			{Name: "sys-apps"},
-		},
-	}
-
 	// 1. Not a git work tree
-	_, err = getGitModifiedPackagesChanged(tmpDir, "", siteData)
+	_, err = getGitModifiedPackagesChanged(tmpDir, "")
 	if err == nil {
 		t.Errorf("Expected error for non-git directory")
 	}
@@ -53,7 +44,7 @@ func TestGetGitModifiedPackagesChanged(t *testing.T) {
 	runCmd("git", "branch", "-M", "main")
 
 	// 3. Invalid base
-	_, err = getGitModifiedPackagesChanged(tmpDir, "nonexistent-branch", siteData)
+	_, err = getGitModifiedPackagesChanged(tmpDir, "nonexistent-branch")
 	if err == nil {
 		t.Errorf("Expected error for invalid explicit base")
 	}
@@ -100,7 +91,7 @@ func TestGetGitModifiedPackagesChanged(t *testing.T) {
 	if err != nil { t.Fatal(err) }
 
 	// Run without explicit base (no upstream configured)
-	pkgs, err := getGitModifiedPackagesChanged(tmpDir, "", siteData)
+	pkgs, err := getGitModifiedPackagesChanged(tmpDir, "")
 	if err != nil {
 		t.Fatalf("getGitModifiedPackagesChanged failed: %v", err)
 	}
@@ -130,7 +121,7 @@ func TestGetGitModifiedPackagesChanged(t *testing.T) {
 	runCmd("git", "mv", "app-misc/foo", "app-misc/foo2")
 
 	// 11. Explicit base
-	pkgs, err = getGitModifiedPackagesChanged(tmpDir, "main", siteData)
+	pkgs, err = getGitModifiedPackagesChanged(tmpDir, "main")
 	if err != nil {
 		t.Fatalf("getGitModifiedPackagesChanged explicit base failed: %v", err)
 	}

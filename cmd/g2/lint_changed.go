@@ -9,7 +9,6 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/arran4/g2"
 )
 
 func (cfg *MainArgConfig) cmdLintChanged(args []string) error {
@@ -43,12 +42,7 @@ func (cfg *MainArgConfig) cmdLintChanged(args []string) error {
 		location = fs.Arg(0)
 	}
 
-	siteData, err := parseRepo(os.DirFS(location), ".", "Linting", true, nil)
-	if err != nil {
-		return fmt.Errorf("parsing repo: %w", err)
-	}
-
-	pkgs, err := getGitModifiedPackagesChanged(location, *base, siteData)
+	pkgs, err := getGitModifiedPackagesChanged(location, *base)
 	if err != nil {
 		return fmt.Errorf("getting modified packages: %w", err)
 	}
@@ -68,7 +62,7 @@ func (cfg *MainArgConfig) cmdLintChanged(args []string) error {
 	return cfg.runLintCore(location, targetMap, nil, *format, *severityFilter, *sourceFilter, *tagFilter, *disableRule, *ignoreTag)
 }
 
-func getGitModifiedPackagesChanged(repoDir string, explicitBase string, siteData *g2.SiteData) ([]string, error) {
+func getGitModifiedPackagesChanged(repoDir string, explicitBase string) ([]string, error) {
 	// First check if it's a git repo
 	chkCmd := exec.Command("git", "rev-parse", "--is-inside-work-tree")
 	chkCmd.Dir = repoDir
@@ -131,22 +125,21 @@ func getGitModifiedPackagesChanged(repoDir string, explicitBase string, siteData
 		}
 	}
 
-	// Build a fast lookup map of valid categories
-	validCategories := make(map[string]bool)
-	if siteData != nil {
-		for _, cat := range siteData.Categories {
-			validCategories[cat.Name] = true
-		}
-	}
-
 	for _, f := range files {
 		f = filepath.ToSlash(f)
 		parts := strings.Split(f, "/")
 		if len(parts) >= 2 {
 			cat := parts[0]
 			pkg := parts[1]
-			if validCategories[cat] {
-				pkgMap[cat+"/"+pkg] = true
+
+			// Lightly validate category against the file system to avoid needing to do a full parseRepo
+			// A valid Gentoo package is in a category directory that actually exists and is a directory
+			catPath := filepath.Join(repoDir, cat)
+			if stat, err := os.Stat(catPath); err == nil && stat.IsDir() {
+				// Ignore infrastructure directories that happen to be at the root
+				if cat != "metadata" && cat != "profiles" && cat != "eclass" && cat != "licenses" && cat != "scripts" && cat != ".github" {
+					pkgMap[cat+"/"+pkg] = true
+				}
 			}
 		}
 	}
