@@ -32,8 +32,8 @@ func (cfg *MainArgConfig) cmdLint(args []string) error {
 			return cfg.cmdLintPackage(args[1:])
 		case "query":
 			return cfg.cmdLintQuery(args[1:])
-		case "commits":
-			return cfg.cmdLintCommits(args[1:])
+		case "changed":
+			return cfg.cmdLintChanged(args[1:])
 		}
 	}
 
