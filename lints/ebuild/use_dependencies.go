@@ -7,7 +7,7 @@ import (
 var ruleUseDependencies = lints.RuleMetadata{
 	ID:          "UseDependencies",
 	Title:       "USE dependencies",
-	Description: "Whenever a package depends on a multi-flag package or requires specific USE configurations, explicit USE dependencies should be specified where required (deferred checking).",
+	Description: "Whenever a package uses a 2-style USE-dependency, every matching package version must have the specified flag; otherwise the dependency must be narrowed or use a 4-style default (deferred checking).",
 	References: []lints.RuleReference{
 		{URL: "https://projects.gentoo.org/qa/policy-guide/dependencies.html#pg0021", Label: "Gentoo QA Policy Guide PG0021"},
 	},

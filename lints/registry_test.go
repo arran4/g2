@@ -2,9 +2,13 @@ package lints
 
 import (
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/arran4/g2"
 )
 
 func TestRuleMetadataReferencesSerialization(t *testing.T) {
@@ -90,9 +94,36 @@ func TestRuleMetadataLegacyURLCompatibility(t *testing.T) {
 	if !reflect.DeepEqual(metaURLs.References, expectedURLs) {
 		t.Errorf("expected references %v, got %v", expectedURLs, metaURLs.References)
 	}
+
+	// Test that explicit "references" is preserved when legacy "url"/"urls" are also present
+	bothJSON := `{
+		"id": "BothRule",
+		"title": "Title",
+		"description": "Desc",
+		"references": [{"url": "https://new.example", "label": "New"}],
+		"url": "https://old.example",
+		"urls": ["https://old-array.example"]
+	}`
+
+	var metaBoth RuleMetadata
+	if err := json.Unmarshal([]byte(bothJSON), &metaBoth); err != nil {
+		t.Fatalf("failed to unmarshal JSON with both fields: %v", err)
+	}
+
+	expectedBoth := []RuleReference{
+		{URL: "https://new.example", Label: "New"},
+	}
+	if !reflect.DeepEqual(metaBoth.References, expectedBoth) {
+		t.Errorf("expected references to be preserved as %v, got %v", expectedBoth, metaBoth.References)
+	}
 }
 
 func TestRegisterAndGetAllRules(t *testing.T) {
+	oldMetadata := registeredMetadata
+	defer func() {
+		registeredMetadata = oldMetadata
+	}()
+
 	testMeta := RuleMetadata{
 		ID:          "CustomRegisteredRule",
 		Title:       "Custom Registered Title",
@@ -118,5 +149,59 @@ func TestRegisterAndGetAllRules(t *testing.T) {
 	}
 	if !found {
 		t.Error("expected registered rule to be returned by GetAllRules()")
+	}
+}
+
+type mockQALintRule struct {
+	ruleMeta RuleMetadata
+}
+
+func (m *mockQALintRule) Lint(repoDir string, pkg *g2.PackageData) []LintResult {
+	return []LintResult{{RuleMetadata: m.ruleMeta, Message: "basic rule"}}
+}
+
+func (m *mockQALintRule) LintWithQA(repoDir string, pkg *g2.PackageData, qa *g2.QAPolicy) []LintResult {
+	if qa != nil {
+		if val, ok := qa.Policies["PG123"]; ok {
+			return []LintResult{{RuleMetadata: m.ruleMeta, Message: "qa rule " + val}}
+		}
+		return []LintResult{{RuleMetadata: m.ruleMeta, Message: "qa rule not found"}}
+	}
+	return []LintResult{{RuleMetadata: m.ruleMeta, Message: "qa rule no qa"}}
+}
+
+func TestPerformLintingWithQA(t *testing.T) {
+	oldRules := lintRules
+	defer func() {
+		lintRules = oldRules
+	}()
+
+	tmpDir := t.TempDir()
+	metaDir := filepath.Join(tmpDir, "metadata")
+	if err := os.MkdirAll(metaDir, 0755); err != nil {
+		t.Fatalf("mkdir metadata: %v", err)
+	}
+
+	if err := os.WriteFile(filepath.Join(metaDir, "qa-policy.conf"), []byte("[policy]\nPG123 = yes\n"), 0644); err != nil {
+		t.Fatalf("write qa-policy.conf: %v", err)
+	}
+
+	mockMeta := RuleMetadata{
+		ID:          "MockQARule",
+		Title:       "Mock QA Rule",
+		Description: "Mock QA Description",
+		Severity:    SeverityWarning,
+		Source:      SourceQA,
+	}
+	lintRules = []LintRule{&mockQALintRule{ruleMeta: mockMeta}}
+
+	warnings := PerformLinting(tmpDir, &g2.PackageData{})
+	if len(warnings) != 1 || warnings[0] != "qa rule yes" {
+		t.Errorf("Expected ['qa rule yes'], got %v", warnings)
+	}
+
+	results := PerformLintingResults(tmpDir, &g2.PackageData{})
+	if len(results) != 1 || results[0].Message != "qa rule yes" {
+		t.Errorf("Expected result message 'qa rule yes', got %v", results)
 	}
 }
