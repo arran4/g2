@@ -202,6 +202,26 @@ func (r *NewsValidityLintRule) LintWithQA(repoDir string, pkg *g2.PackageData, q
 	return results
 }
 
+type NewsItemState struct {
+	HasTitle       bool
+	HasAuthor      bool
+	HasPosted      bool
+	HasRevision    bool
+	HasFormat      bool
+	HasContentType bool
+	NewsItemFormat string
+	ContentTypeVal string
+}
+
+type HeaderContext struct {
+	Key     string
+	Value   string
+	RelPath string
+	LineNum int
+}
+
+type HeaderValidator func(ctx *HeaderContext, state *NewsItemState) []lints.LintResult
+
 func checkEmailFormat(val string) bool {
 	// Simple manual check for "^.+ <.+@.+>$" logic to avoid complex regex as per guidelines
 	startBracket := strings.Index(val, "<")
@@ -228,20 +248,155 @@ func checkEmailFormat(val string) bool {
 	return true
 }
 
+func validateTitleLength(ctx *HeaderContext, state *NewsItemState) []lints.LintResult {
+	if len(ctx.Value) == 0 {
+		res := lints.LintResult{RuleMetadata: ruleNewsValidity, Message: fmt.Sprintf("[%s] Title cannot be empty", lints.SeverityError), File: ctx.RelPath, Line: ctx.LineNum}
+		res.RuleMetadata.Severity = lints.SeverityError
+		return []lints.LintResult{res}
+	} else if len(ctx.Value) > 50 {
+		res := lints.LintResult{RuleMetadata: ruleNewsValidity, Message: fmt.Sprintf("[%s] Title exceeds maximum length of 50 characters", lints.SeverityError), File: ctx.RelPath, Line: ctx.LineNum}
+		res.RuleMetadata.Severity = lints.SeverityError
+		return []lints.LintResult{res}
+	}
+	return nil
+}
+
+func validateEmailFormat(ctx *HeaderContext, state *NewsItemState) []lints.LintResult {
+	if !checkEmailFormat(ctx.Value) {
+		res := lints.LintResult{RuleMetadata: ruleNewsValidity, Message: fmt.Sprintf("[%s] Invalid %s format, expected 'Name <email@domain.com>': '%s'", lints.SeverityError, ctx.Key, ctx.Value), File: ctx.RelPath, Line: ctx.LineNum}
+		res.RuleMetadata.Severity = lints.SeverityError
+		return []lints.LintResult{res}
+	}
+	return nil
+}
+
+func validatePostedDate(ctx *HeaderContext, state *NewsItemState) []lints.LintResult {
+	_, err := time.Parse("2006-01-02", ctx.Value)
+	if err != nil {
+		res := lints.LintResult{RuleMetadata: ruleNewsValidity, Message: fmt.Sprintf("[%s] Invalid Posted date format, expected YYYY-MM-DD: '%s'", lints.SeverityError, ctx.Value), File: ctx.RelPath, Line: ctx.LineNum}
+		res.RuleMetadata.Severity = lints.SeverityError
+		return []lints.LintResult{res}
+	}
+	return nil
+}
+
+func validateRevisionInteger(ctx *HeaderContext, state *NewsItemState) []lints.LintResult {
+	if len(ctx.Value) == 0 {
+		res := lints.LintResult{RuleMetadata: ruleNewsValidity, Message: fmt.Sprintf("[%s] Revision cannot be empty", lints.SeverityError), File: ctx.RelPath, Line: ctx.LineNum}
+		res.RuleMetadata.Severity = lints.SeverityError
+		return []lints.LintResult{res}
+	}
+	_, err := strconv.Atoi(ctx.Value)
+	if err != nil {
+		res := lints.LintResult{RuleMetadata: ruleNewsValidity, Message: fmt.Sprintf("[%s] Revision must be an integer: '%s'", lints.SeverityError, ctx.Value), File: ctx.RelPath, Line: ctx.LineNum}
+		res.RuleMetadata.Severity = lints.SeverityError
+		return []lints.LintResult{res}
+	}
+	return nil
+}
+
+func validateContentType(ctx *HeaderContext, state *NewsItemState) []lints.LintResult {
+	if ctx.Value != "text/plain" {
+		res := lints.LintResult{RuleMetadata: ruleNewsValidity, Message: fmt.Sprintf("[%s] Content-Type must be 'text/plain', got: '%s'", lints.SeverityError, ctx.Value), File: ctx.RelPath, Line: ctx.LineNum}
+		res.RuleMetadata.Severity = lints.SeverityError
+		return []lints.LintResult{res}
+	}
+	return nil
+}
+
+func validateNewsItemFormat(ctx *HeaderContext, state *NewsItemState) []lints.LintResult {
+	if ctx.Value != "1.0" && ctx.Value != "2.0" {
+		res := lints.LintResult{RuleMetadata: ruleNewsValidity, Message: fmt.Sprintf("[%s] Unsupported News-Item-Format: '%s'", lints.SeverityWarning, ctx.Value), File: ctx.RelPath, Line: ctx.LineNum}
+		res.RuleMetadata.Severity = lints.SeverityWarning
+		return []lints.LintResult{res}
+	}
+	return nil
+}
+
+func validateNoSpacesOrTabs(ctx *HeaderContext, state *NewsItemState) []lints.LintResult {
+	if strings.ContainsAny(ctx.Value, " \t") {
+		res := lints.LintResult{RuleMetadata: ruleNewsValidity, Message: fmt.Sprintf("[%s] Invalid %s format, should not contain multiple values or spaces: '%s'", lints.SeverityError, ctx.Key, ctx.Value), File: ctx.RelPath, Line: ctx.LineNum}
+		res.RuleMetadata.Severity = lints.SeverityError
+		return []lints.LintResult{res}
+	}
+	return nil
+}
+
+func validateCategoryPackage(ctx *HeaderContext, state *NewsItemState) []lints.LintResult {
+	if !strings.Contains(ctx.Value, "/") {
+		res := lints.LintResult{RuleMetadata: ruleNewsValidity, Message: fmt.Sprintf("[%s] Invalid Display-If-Installed format, expected category/package: '%s'", lints.SeverityError, ctx.Value), File: ctx.RelPath, Line: ctx.LineNum}
+		res.RuleMetadata.Severity = lints.SeverityError
+		return []lints.LintResult{res}
+	}
+	return nil
+}
+
+var headerValidators = map[string][]HeaderValidator{
+	"Title": {
+		func(ctx *HeaderContext, state *NewsItemState) []lints.LintResult {
+			state.HasTitle = true
+			return nil
+		},
+		validateTitleLength,
+	},
+	"Author": {
+		func(ctx *HeaderContext, state *NewsItemState) []lints.LintResult {
+			state.HasAuthor = true
+			return nil
+		},
+		validateEmailFormat,
+	},
+	"Translator": {
+		validateEmailFormat,
+	},
+	"Posted": {
+		func(ctx *HeaderContext, state *NewsItemState) []lints.LintResult {
+			state.HasPosted = true
+			return nil
+		},
+		validatePostedDate,
+	},
+	"Revision": {
+		func(ctx *HeaderContext, state *NewsItemState) []lints.LintResult {
+			state.HasRevision = true
+			return nil
+		},
+		validateRevisionInteger,
+	},
+	"Content-Type": {
+		func(ctx *HeaderContext, state *NewsItemState) []lints.LintResult {
+			state.HasContentType = true
+			state.ContentTypeVal = ctx.Value
+			return nil
+		},
+		validateContentType,
+	},
+	"News-Item-Format": {
+		func(ctx *HeaderContext, state *NewsItemState) []lints.LintResult {
+			state.HasFormat = true
+			state.NewsItemFormat = ctx.Value
+			return nil
+		},
+		validateNewsItemFormat,
+	},
+	"Display-If-Installed": {
+		validateNoSpacesOrTabs,
+		validateCategoryPackage,
+	},
+	"Display-If-Keyword": {
+		validateNoSpacesOrTabs,
+	},
+	"Display-If-Profile": {
+		validateNoSpacesOrTabs,
+	},
+}
+
 func (r *NewsValidityLintRule) lintNewsItem(content string, relPath string) []lints.LintResult {
 	var results []lints.LintResult
 	lines := strings.Split(content, "\n")
 
 	inBody := false
-
-	hasTitle := false
-	hasAuthor := false
-	hasPosted := false
-	hasRevision := false
-	hasFormat := false
-	hasContentType := false
-	newsItemFormat := ""
-	contentTypeVal := ""
+	state := &NewsItemState{}
 
 	for lineNum, line := range lines {
 		if inBody {
@@ -282,123 +437,49 @@ func (r *NewsValidityLintRule) lintNewsItem(content string, relPath string) []li
 		key := strings.TrimSpace(parts[0])
 		val := strings.TrimSpace(parts[1])
 
-		switch key {
-		case "Title":
-			hasTitle = true
-			if len(val) == 0 {
-				res := lints.LintResult{RuleMetadata: ruleNewsValidity, Message: fmt.Sprintf("[%s] Title cannot be empty", lints.SeverityError), File: relPath, Line: lineNum + 1}
-				res.RuleMetadata.Severity = lints.SeverityError
-				results = append(results, res)
-			} else if len(val) > 50 {
-				res := lints.LintResult{RuleMetadata: ruleNewsValidity, Message: fmt.Sprintf("[%s] Title exceeds maximum length of 50 characters", lints.SeverityError), File: relPath, Line: lineNum + 1}
-				res.RuleMetadata.Severity = lints.SeverityError
-				results = append(results, res)
+		ctx := &HeaderContext{
+			Key:     key,
+			Value:   val,
+			RelPath: relPath,
+			LineNum: lineNum + 1,
+		}
+
+		if validators, ok := headerValidators[key]; ok {
+			for _, validator := range validators {
+				results = append(results, validator(ctx, state)...)
 			}
-		case "Author":
-			hasAuthor = true
-			if !checkEmailFormat(val) {
-				res := lints.LintResult{RuleMetadata: ruleNewsValidity, Message: fmt.Sprintf("[%s] Invalid Author format, expected 'Name <email@domain.com>': '%s'", lints.SeverityError, val), File: relPath, Line: lineNum + 1}
-				res.RuleMetadata.Severity = lints.SeverityError
-				results = append(results, res)
-			}
-		case "Translator":
-			if !checkEmailFormat(val) {
-				res := lints.LintResult{RuleMetadata: ruleNewsValidity, Message: fmt.Sprintf("[%s] Invalid Translator format, expected 'Name <email@domain.com>': '%s'", lints.SeverityError, val), File: relPath, Line: lineNum + 1}
-				res.RuleMetadata.Severity = lints.SeverityError
-				results = append(results, res)
-			}
-		case "Posted":
-			hasPosted = true
-			_, err := time.Parse("2006-01-02", val)
-			if err != nil {
-				res := lints.LintResult{RuleMetadata: ruleNewsValidity, Message: fmt.Sprintf("[%s] Invalid Posted date format, expected YYYY-MM-DD: '%s'", lints.SeverityError, val), File: relPath, Line: lineNum + 1}
-				res.RuleMetadata.Severity = lints.SeverityError
-				results = append(results, res)
-			}
-		case "Revision":
-			hasRevision = true
-			if len(val) == 0 {
-				res := lints.LintResult{RuleMetadata: ruleNewsValidity, Message: fmt.Sprintf("[%s] Revision cannot be empty", lints.SeverityError), File: relPath, Line: lineNum + 1}
-				res.RuleMetadata.Severity = lints.SeverityError
-				results = append(results, res)
-			} else {
-				_, err := strconv.Atoi(val)
-				if err != nil {
-					res := lints.LintResult{RuleMetadata: ruleNewsValidity, Message: fmt.Sprintf("[%s] Revision must be an integer: '%s'", lints.SeverityError, val), File: relPath, Line: lineNum + 1}
-					res.RuleMetadata.Severity = lints.SeverityError
-					results = append(results, res)
-				}
-			}
-		case "Content-Type":
-			hasContentType = true
-			contentTypeVal = val
-			if val != "text/plain" {
-				res := lints.LintResult{RuleMetadata: ruleNewsValidity, Message: fmt.Sprintf("[%s] Content-Type must be 'text/plain', got: '%s'", lints.SeverityError, val), File: relPath, Line: lineNum + 1}
-				res.RuleMetadata.Severity = lints.SeverityError
-				results = append(results, res)
-			}
-		case "News-Item-Format":
-			hasFormat = true
-			newsItemFormat = val
-			if val != "1.0" && val != "2.0" {
-				res := lints.LintResult{RuleMetadata: ruleNewsValidity, Message: fmt.Sprintf("[%s] Unsupported News-Item-Format: '%s'", lints.SeverityWarning, val), File: relPath, Line: lineNum + 1}
-				res.RuleMetadata.Severity = lints.SeverityWarning
-				results = append(results, res)
-			}
-		case "Display-If-Installed":
-			if strings.ContainsAny(val, " \t") {
-				res := lints.LintResult{RuleMetadata: ruleNewsValidity, Message: fmt.Sprintf("[%s] Invalid Display-If-Installed format, should not contain multiple values or spaces: '%s'", lints.SeverityError, val), File: relPath, Line: lineNum + 1}
-				res.RuleMetadata.Severity = lints.SeverityError
-				results = append(results, res)
-			} else if !strings.Contains(val, "/") {
-				res := lints.LintResult{RuleMetadata: ruleNewsValidity, Message: fmt.Sprintf("[%s] Invalid Display-If-Installed format, expected category/package: '%s'", lints.SeverityError, val), File: relPath, Line: lineNum + 1}
-				res.RuleMetadata.Severity = lints.SeverityError
-				results = append(results, res)
-			}
-		case "Display-If-Keyword":
-			if strings.ContainsAny(val, " \t") {
-				res := lints.LintResult{RuleMetadata: ruleNewsValidity, Message: fmt.Sprintf("[%s] Invalid Display-If-Keyword format, should not contain multiple values or spaces: '%s'", lints.SeverityError, val), File: relPath, Line: lineNum + 1}
-				res.RuleMetadata.Severity = lints.SeverityError
-				results = append(results, res)
-			}
-		case "Display-If-Profile":
-			if strings.ContainsAny(val, " \t") {
-				res := lints.LintResult{RuleMetadata: ruleNewsValidity, Message: fmt.Sprintf("[%s] Invalid Display-If-Profile format, should not contain multiple values or spaces: '%s'", lints.SeverityError, val), File: relPath, Line: lineNum + 1}
-				res.RuleMetadata.Severity = lints.SeverityError
-				results = append(results, res)
-			}
-		default:
+		} else {
 			res := lints.LintResult{RuleMetadata: ruleNewsValidity, Message: fmt.Sprintf("[%s] Unknown header: '%s'", lints.SeverityWarning, key), File: relPath, Line: lineNum + 1}
 			res.RuleMetadata.Severity = lints.SeverityWarning
 			results = append(results, res)
 		}
 	}
 
-	if !hasTitle {
+	if !state.HasTitle {
 		res := lints.LintResult{RuleMetadata: ruleNewsValidity, Message: fmt.Sprintf("[%s] Missing required header: Title", lints.SeverityError), File: relPath}
 		res.RuleMetadata.Severity = lints.SeverityError
 		results = append(results, res)
 	}
-	if !hasAuthor {
+	if !state.HasAuthor {
 		res := lints.LintResult{RuleMetadata: ruleNewsValidity, Message: fmt.Sprintf("[%s] Missing required header: Author", lints.SeverityError), File: relPath}
 		res.RuleMetadata.Severity = lints.SeverityError
 		results = append(results, res)
 	}
-	if !hasPosted {
+	if !state.HasPosted {
 		res := lints.LintResult{RuleMetadata: ruleNewsValidity, Message: fmt.Sprintf("[%s] Missing required header: Posted", lints.SeverityError), File: relPath}
 		res.RuleMetadata.Severity = lints.SeverityError
 		results = append(results, res)
 	}
-	if !hasRevision {
+	if !state.HasRevision {
 		res := lints.LintResult{RuleMetadata: ruleNewsValidity, Message: fmt.Sprintf("[%s] Missing required header: Revision", lints.SeverityError), File: relPath}
 		res.RuleMetadata.Severity = lints.SeverityError
 		results = append(results, res)
 	}
-	if !hasFormat {
+	if !state.HasFormat {
 		res := lints.LintResult{RuleMetadata: ruleNewsValidity, Message: fmt.Sprintf("[%s] Missing required header: News-Item-Format", lints.SeverityError), File: relPath}
 		res.RuleMetadata.Severity = lints.SeverityError
 		results = append(results, res)
-	} else if newsItemFormat == "1.0" && (!hasContentType || contentTypeVal != "text/plain") {
+	} else if state.NewsItemFormat == "1.0" && (!state.HasContentType || state.ContentTypeVal != "text/plain") {
 		res := lints.LintResult{RuleMetadata: ruleNewsValidity, Message: fmt.Sprintf("[%s] Content-Type: text/plain is mandatory for News-Item-Format 1.0", lints.SeverityError), File: relPath}
 		res.RuleMetadata.Severity = lints.SeverityError
 		results = append(results, res)

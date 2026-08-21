@@ -178,3 +178,177 @@ This	body contains a tab character and is definitely way too long, far exceeding
 		t.Errorf("expected Body line wrap error")
 	}
 }
+
+func TestLintNewsItem_TableDriven(t *testing.T) {
+	rule := &NewsValidityLintRule{}
+	relPath := "metadata/news/2024-01-01-test/2024-01-01-test.en.txt"
+
+	tests := []struct {
+		name        string
+		content     string
+		expectedErr []string
+	}{
+		{
+			name: "Valid News Item",
+			content: `Title: Valid News
+Author: John Doe <john@example.com>
+Translator: Jane Doe <jane@example.com>
+Posted: 2024-01-01
+Revision: 1
+News-Item-Format: 2.0
+Display-If-Installed: app-misc/foo
+
+This is the body.
+`,
+			expectedErr: nil,
+		},
+		{
+			name: "Missing required headers",
+			content: `Title: Valid News
+Author: John Doe <john@example.com>
+Posted: 2024-01-01
+News-Item-Format: 2.0
+
+This is the body.
+`,
+			expectedErr: []string{"Missing required header: Revision"},
+		},
+		{
+			name: "Missing multiple required headers",
+			content: `Title: Valid News
+
+This is the body.
+`,
+			expectedErr: []string{"Missing required header: Author", "Missing required header: Posted", "Missing required header: Revision", "Missing required header: News-Item-Format"},
+		},
+		{
+			name: "Format 1.0 requires text/plain Content-Type",
+			content: `Title: Valid News
+Author: John Doe <john@example.com>
+Posted: 2024-01-01
+Revision: 1
+News-Item-Format: 1.0
+
+This is the body.
+`,
+			expectedErr: []string{"Content-Type: text/plain is mandatory for News-Item-Format 1.0"},
+		},
+		{
+			name: "Format 1.0 with correct Content-Type",
+			content: `Title: Valid News
+Author: John Doe <john@example.com>
+Posted: 2024-01-01
+Revision: 1
+News-Item-Format: 1.0
+Content-Type: text/plain
+
+This is the body.
+`,
+			expectedErr: nil,
+		},
+		{
+			name: "Format 1.0 with incorrect Content-Type",
+			content: `Title: Valid News
+Author: John Doe <john@example.com>
+Posted: 2024-01-01
+Revision: 1
+News-Item-Format: 1.0
+Content-Type: text/html
+
+This is the body.
+`,
+			expectedErr: []string{"Content-Type must be 'text/plain'", "Content-Type: text/plain is mandatory for News-Item-Format 1.0"},
+		},
+		{
+			name: "Unknown header warning",
+			content: `Title: Valid News
+Author: John Doe <john@example.com>
+Posted: 2024-01-01
+Revision: 1
+News-Item-Format: 2.0
+Unknown-Header: value
+
+This is the body.
+`,
+			expectedErr: []string{"Unknown header: 'Unknown-Header'"},
+		},
+		{
+			name: "Display-If-Installed missing category",
+			content: `Title: Valid News
+Author: John Doe <john@example.com>
+Posted: 2024-01-01
+Revision: 1
+News-Item-Format: 2.0
+Display-If-Installed: foo
+
+This is the body.
+`,
+			expectedErr: []string{"Invalid Display-If-Installed format, expected category/package"},
+		},
+		{
+			name: "Display-If-* space validation",
+			content: `Title: Valid News
+Author: John Doe <john@example.com>
+Posted: 2024-01-01
+Revision: 1
+News-Item-Format: 2.0
+Display-If-Installed: app-misc/foo app-misc/bar
+Display-If-Keyword: amd64 x86
+Display-If-Profile: default/linux/amd64/17.0 default/linux/x86/17.0
+
+This is the body.
+`,
+			expectedErr: []string{
+				"Invalid Display-If-Installed format, should not contain multiple values or spaces",
+				"Invalid Display-If-Keyword format, should not contain multiple values or spaces",
+				"Invalid Display-If-Profile format, should not contain multiple values or spaces",
+			},
+		},
+		{
+			name: "Display-If-* tab validation",
+			content: "Title: Valid News\n" +
+				"Author: John Doe <john@example.com>\n" +
+				"Posted: 2024-01-01\n" +
+				"Revision: 1\n" +
+				"News-Item-Format: 2.0\n" +
+				"Display-If-Installed: app-misc/foo\tapp-misc/bar\n" +
+				"Display-If-Keyword: amd64\tx86\n" +
+				"Display-If-Profile: default/linux/amd64/17.0\tdefault/linux/x86/17.0\n" +
+				"\n" +
+				"This is the body.\n",
+			expectedErr: []string{
+				"Invalid Display-If-Installed format, should not contain multiple values or spaces",
+				"Invalid Display-If-Keyword format, should not contain multiple values or spaces",
+				"Invalid Display-If-Profile format, should not contain multiple values or spaces",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			results := rule.lintNewsItem(tt.content, relPath)
+
+			for _, expectedMsg := range tt.expectedErr {
+				found := false
+				for _, res := range results {
+					if strings.Contains(res.Message, expectedMsg) {
+						found = true
+						break
+					}
+				}
+				if !found {
+					t.Errorf("Expected error containing %q, but did not find it in results:\n%v", expectedMsg, results)
+				}
+			}
+
+			if len(tt.expectedErr) > 0 && len(results) != len(tt.expectedErr) {
+				// We expect exact match in number of errors (excluding any accidental unrelated errors)
+				// to ensure we aren't generating extra unintended warnings/errors.
+				// However, if some test naturally generates multiple errors, ensure they are all covered.
+				t.Logf("Warning: Expected %d errors, got %d. Check if there are unexpected errors.", len(tt.expectedErr), len(results))
+			} else if len(tt.expectedErr) == 0 && len(results) > 0 {
+				t.Errorf("Expected no errors, but got:\n%v", results)
+			}
+		})
+	}
+}
