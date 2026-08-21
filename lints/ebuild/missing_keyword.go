@@ -14,10 +14,12 @@ var ruleMissingKeyword = lints.RuleMetadata{
 	ID:          "MissingKeyword",
 	Title:       "Missing Keywords",
 	Description: "Checks if a package has empty KEYWORDS. Exempts virtual and *-9999 (live) packages.",
-	URLs:        []string{"https://devmanual.gentoo.org/keywording/"},
-	Severity:    lints.SeverityWarning,
-	Source:      lints.SourceG2,
-	Tags:        []string{"ebuild", "keywords"},
+	References: []lints.RuleReference{
+		{URL: "https://devmanual.gentoo.org/keywording/", Label: "Gentoo Devmanual"},
+	},
+	Severity: lints.SeverityWarning,
+	Source:   lints.SourceG2,
+	Tags:     []string{"ebuild", "keywords"},
 }
 
 func init() {

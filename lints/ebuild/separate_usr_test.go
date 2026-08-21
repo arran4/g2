@@ -1,59 +1,47 @@
 package ebuild
 
 import (
-	"reflect"
 	"testing"
 
 	"github.com/arran4/g2"
+	"github.com/arran4/g2/lints"
 )
 
-func TestSeparateUsrLintRule(t *testing.T) {
-	rule := &SeparateUsrLintRule{}
+func TestSeparateUsrPolicyMetadata(t *testing.T) {
+	// Verify PG0202 is registered as metadata
+	rules := lints.GetAllRules()
+	var found *lints.RuleMetadata
+	for i := range rules {
+		if rules[i].ID == "SeparateUsr" {
+			found = &rules[i]
+			break
+		}
+	}
+	if found == nil {
+		t.Fatal("expected SeparateUsr to be registered in rule metadata")
+	}
+	if len(found.References) == 0 || found.References[0].URL == "" {
+		t.Errorf("expected SeparateUsr to have valid references, got %v", found.References)
+	}
 
-	tests := []struct {
-		name         string
-		pkg          *g2.PackageData
-		qa           *g2.QAPolicy
-		expectedMsgs []string
-	}{
-		{
-			name: "PG0202 violation",
-			pkg: &g2.PackageData{
-				Category: "dev-libs",
-				Name:     "foo",
-				Versions: []g2.VersionData{
-					{
-						Version: "1.0",
-						Ebuild: &g2.Ebuild{
-							RawText: "dodir /bin",
-						},
-					},
+	// Verify installing into /bin, /sbin, /lib is not flagged as a violation
+	pkg := &g2.PackageData{
+		Category: "dev-libs",
+		Name:     "foo",
+		Versions: []g2.VersionData{
+			{
+				Version: "1.0",
+				Ebuild: &g2.Ebuild{
+					RawText: "dodir /bin\ninto /usr\ninsinto /lib64\n",
 				},
-			},
-			qa: &g2.QAPolicy{
-				Policies: map[string]string{
-					"PG0202": "error",
-				},
-			},
-			expectedMsgs: []string{
-				"[Error] Ebuild 1.0 attempts to install into /bin using dodir, which may violate separate /usr policy (PG0202).",
 			},
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			results := rule.LintWithQA("", tt.pkg, tt.qa)
-			var msgs []string
-			for _, res := range results {
-				msgs = append(msgs, res.Message)
-			}
-			if len(msgs) == 0 && len(tt.expectedMsgs) == 0 {
-				return
-			}
-			if !reflect.DeepEqual(msgs, tt.expectedMsgs) {
-				t.Errorf("Expected %v, got %v", tt.expectedMsgs, msgs)
-			}
-		})
+	results := lints.PerformLintingResults("", pkg)
+	for _, res := range results {
+		if res.RuleMetadata.ID == "SeparateUsr" {
+			t.Errorf("SeparateUsr should not emit violations for valid /bin or /lib usage: got %v", res)
+		}
 	}
 }

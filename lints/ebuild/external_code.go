@@ -15,10 +15,12 @@ var ruleExternalCode = lints.RuleMetadata{
 	ID:          "ExternalCode",
 	Title:       "Code must be contained within ebuild and eclasses",
 	Description: "It is forbidden to load additional ebuild code from other files via source, eval or any other possible method.",
-	URLs:        []string{"https://projects.gentoo.org/qa/policy-guide/ebuild-format.html#pg0102"},
-	Severity:    lints.SeverityError,
-	Source:      lints.SourceQA,
-	Tags:        []string{"ebuild", "gentoo-policy", "PG0102"},
+	References: []lints.RuleReference{
+		{URL: "https://projects.gentoo.org/qa/policy-guide/ebuild-format.html#pg0102", Label: "Gentoo QA Policy Guide PG0102"},
+	},
+	Severity: lints.SeverityError,
+	Source:   lints.SourceQA,
+	Tags:     []string{"ebuild", "gentoo-policy", "PG0102"},
 }
 
 func init() {

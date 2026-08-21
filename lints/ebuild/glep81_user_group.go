@@ -15,10 +15,12 @@ var ruleGLEP81UserGroup = lints.RuleMetadata{
 	ID:          "GLEP81UserGroup",
 	Title:       "User and group account policy (GLEP 81)",
 	Description: "All new user/group accounts must be created via GLEP 81 packages (acct-user/acct-group). Usage of user.eclass and functions like enewuser/enewgroup are deprecated.",
-	URLs:        []string{"https://projects.gentoo.org/qa/policy-guide/user-group.html#pg0901"},
-	Severity:    lints.SeverityWarning,
-	Source:      lints.SourceQA,
-	Tags:        []string{"ebuild", "gentoo-policy", "PG0901"},
+	References: []lints.RuleReference{
+		{URL: "https://projects.gentoo.org/qa/policy-guide/user-group.html#pg0901", Label: "Gentoo QA Policy Guide PG0901"},
+	},
+	Severity: lints.SeverityWarning,
+	Source:   lints.SourceQA,
+	Tags:     []string{"ebuild", "gentoo-policy", "PG0901"},
 }
 
 func init() {

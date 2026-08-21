@@ -15,10 +15,12 @@ var ruleKeywordsSingleLine = lints.RuleMetadata{
 	ID:          "KeywordsSingleLine",
 	Title:       "KEYWORDS defined on a single line",
 	Description: "KEYWORDS must be defined at most once in an ebuild, on a single line, with literal content.",
-	URLs:        []string{"https://projects.gentoo.org/qa/policy-guide/ebuild-format.html#pg0105"},
-	Severity:    lints.SeverityError,
-	Source:      lints.SourceQA,
-	Tags:        []string{"ebuild", "gentoo-policy", "PG0105"},
+	References: []lints.RuleReference{
+		{URL: "https://projects.gentoo.org/qa/policy-guide/ebuild-format.html#pg0105", Label: "Gentoo QA Policy Guide PG0105"},
+	},
+	Severity: lints.SeverityError,
+	Source:   lints.SourceQA,
+	Tags:     []string{"ebuild", "gentoo-policy", "PG0105"},
 }
 
 func init() {

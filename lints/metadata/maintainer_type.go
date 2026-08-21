@@ -13,10 +13,12 @@ var ruleMaintainerType = lints.RuleMetadata{
 	ID:          "MaintainerType",
 	Title:       "Maintainer Type Must Be Explicit",
 	Description: "Ensures that all Gentoo maintainers in metadata.xml have their type explicitly set to either person or project.",
-	URL:         "https://www.gentoo.org/glep/glep-0067.html#new-metadata-xml-format",
-	Severity:    lints.SeverityError,
-	Source:      lints.SourceG2,
-	Tags:        []string{"metadata.xml", "site-quality", "GLEP67"},
+	References: []lints.RuleReference{
+		{URL: "https://www.gentoo.org/glep/glep-0067.html#new-metadata-xml-format", Label: "GLEP 67"},
+	},
+	Severity: lints.SeverityError,
+	Source:   lints.SourceG2,
+	Tags:     []string{"metadata.xml", "site-quality", "GLEP67"},
 }
 
 func init() {

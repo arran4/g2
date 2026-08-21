@@ -12,10 +12,12 @@ var ruleSubshellFunction = lints.RuleMetadata{
 	ID:          "SubshellFunction",
 	Title:       "Subshell Function Usage",
 	Description: "Warns about the use of subshell bodies `func() ( ... )` which is not standard PMS compliant but often found in older ebuilds.",
-	URLs:        []string{"https://devmanual.gentoo.org/ebuild-writing/functions/"},
-	Severity:    lints.SeverityWarning,
-	Source:      lints.SourceG2,
-	Tags:        []string{"ebuild", "gentoo-policy"},
+	References: []lints.RuleReference{
+		{URL: "https://devmanual.gentoo.org/ebuild-writing/functions/", Label: "Gentoo Devmanual"},
+	},
+	Severity: lints.SeverityWarning,
+	Source:   lints.SourceG2,
+	Tags:     []string{"ebuild", "gentoo-policy"},
 }
 
 func init() {

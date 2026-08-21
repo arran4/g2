@@ -15,10 +15,12 @@ var ruleDVariables = lints.RuleMetadata{
 	ID:          "DVariables",
 	Title:       "D used outside src_install and pkg_preinst",
 	Description: "The D and ED variables must be used only in the src_install and pkg_preinst phase functions.",
-	URLs:        []string{"https://projects.gentoo.org/qa/policy-guide/ebuild-format.html#pg0107"},
-	Severity:    lints.SeverityError,
-	Source:      lints.SourceQA,
-	Tags:        []string{"ebuild", "gentoo-policy", "PG0107"},
+	References: []lints.RuleReference{
+		{URL: "https://projects.gentoo.org/qa/policy-guide/ebuild-format.html#pg0107", Label: "Gentoo QA Policy Guide PG0107"},
+	},
+	Severity: lints.SeverityError,
+	Source:   lints.SourceQA,
+	Tags:     []string{"ebuild", "gentoo-policy", "PG0107"},
 }
 
 func init() {

@@ -14,10 +14,12 @@ var ruleRestrictTest = lints.RuleMetadata{
 	ID:          "RestrictTest",
 	Title:       "RESTRICT=test for USE=-test",
 	Description: "Whenever the package uses test flag to control test prerequisites (or another flag with a similar purpose), it must explicitly restrict tests when the flag is unset.",
-	URLs:        []string{"https://projects.gentoo.org/qa/policy-guide/other-metadata.html#pg0703"},
-	Severity:    lints.SeverityError,
-	Source:      lints.SourceQA,
-	Tags:        []string{"ebuild", "gentoo-policy", "PG0703"},
+	References: []lints.RuleReference{
+		{URL: "https://projects.gentoo.org/qa/policy-guide/other-metadata.html#pg0703", Label: "Gentoo QA Policy Guide PG0703"},
+	},
+	Severity: lints.SeverityError,
+	Source:   lints.SourceQA,
+	Tags:     []string{"ebuild", "gentoo-policy", "PG0703"},
 }
 
 func init() {
@@ -47,9 +49,9 @@ func hasRestrictTestForUnsetTest(restrictStr string) bool {
 				if i+1 < len(tokens) {
 					if tokens[i+1] == "test" {
 						if cond == "!test?" || len(conditions) == 0 {
-                            if cond == "!test?" {
-                                return true
-                            }
+							if cond == "!test?" {
+								return true
+							}
 						}
 					}
 					i++ // consume the token
@@ -101,18 +103,18 @@ func (r *RestrictTestLintRule) LintWithQA(repoDir string, pkg *g2.PackageData, q
 				continue
 			}
 
-            // Check if test is actually in IUSE (accounting for +test or -test)
-            hasTestIUSE := false
-            for _, token := range strings.Fields(iuseStr) {
-                if token == "test" || token == "+test" || token == "-test" {
-                    hasTestIUSE = true
-                    break
-                }
-            }
+			// Check if test is actually in IUSE (accounting for +test or -test)
+			hasTestIUSE := false
+			for _, token := range strings.Fields(iuseStr) {
+				if token == "test" || token == "+test" || token == "-test" {
+					hasTestIUSE = true
+					break
+				}
+			}
 
-            if !hasTestIUSE {
-                continue
-            }
+			if !hasTestIUSE {
+				continue
+			}
 
 			restrictStr := ver.Ebuild.Vars["RESTRICT"]
 			if !hasRestrictTestForUnsetTest(restrictStr) {

@@ -1,8 +1,8 @@
 package ebuild
 
 import (
-	"testing"
 	"strings"
+	"testing"
 
 	"github.com/arran4/g2"
 )

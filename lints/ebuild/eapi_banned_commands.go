@@ -14,10 +14,12 @@ var ruleBannedCommands = lints.RuleMetadata{
 	ID:          "EAPIBannedCommands",
 	Title:       "Banned Commands in EAPI",
 	Description: "Detects the use of commands that have been banned or deprecated in specific EAPI versions.",
-	URLs:        []string{"https://devmanual.gentoo.org/ebuild-writing/eapi/index.html"},
-	Severity:    lints.SeverityError,
-	Source:      lints.SourceG2,
-	Tags:        []string{"ebuild", "gentoo-policy", "eapi"},
+	References: []lints.RuleReference{
+		{URL: "https://devmanual.gentoo.org/ebuild-writing/eapi/index.html", Label: "Gentoo Devmanual"},
+	},
+	Severity: lints.SeverityError,
+	Source:   lints.SourceG2,
+	Tags:     []string{"ebuild", "gentoo-policy", "eapi"},
 }
 
 func init() {

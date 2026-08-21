@@ -14,10 +14,12 @@ var ruleDependencyPitfalls = lints.RuleMetadata{
 	ID:          "DependencyPitfalls",
 	Title:       "Dependency Pitfalls",
 	Description: "Checks for common dependency pitfalls such as := inside any-of groups or weak blockers in DEPEND.",
-	URLs:        []string{"https://devmanual.gentoo.org/general-concepts/dependencies/index.html#common-pitfalls"},
-	Severity:    lints.SeverityWarning, // Usually warnings
-	Source:      lints.SourceG2,
-	Tags:        []string{"ebuild", "gentoo-policy"},
+	References: []lints.RuleReference{
+		{URL: "https://devmanual.gentoo.org/general-concepts/dependencies/index.html#common-pitfalls", Label: "Gentoo Devmanual"},
+	},
+	Severity: lints.SeverityWarning, // Usually warnings
+	Source:   lints.SourceG2,
+	Tags:     []string{"ebuild", "gentoo-policy"},
 }
 
 func init() {

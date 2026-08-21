@@ -14,10 +14,12 @@ var ruleStrictMultilibLayout = lints.RuleMetadata{
 	ID:          "StrictMultilibLayout",
 	Title:       "Strict multilib layout",
 	Description: "Libraries must be installed into an appropriate /lib* or /usr/lib* directory corresponding to their ABI.",
-	URLs:        []string{"https://projects.gentoo.org/qa/policy-guide/filesystem.html#pg0203"},
-	Severity:    lints.SeverityError,
-	Source:      lints.SourceQA,
-	Tags:        []string{"ebuild", "gentoo-policy", "filesystem", "PG0203"},
+	References: []lints.RuleReference{
+		{URL: "https://projects.gentoo.org/qa/policy-guide/filesystem.html#pg0203", Label: "Gentoo QA Policy Guide PG0203"},
+	},
+	Severity: lints.SeverityError,
+	Source:   lints.SourceQA,
+	Tags:     []string{"ebuild", "gentoo-policy", "filesystem", "PG0203"},
 }
 
 func init() {

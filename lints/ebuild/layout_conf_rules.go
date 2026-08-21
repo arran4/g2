@@ -15,10 +15,12 @@ var ruleLayoutConf = lints.RuleMetadata{
 	ID:          "LayoutConfRules",
 	Title:       "Layout Conf Checks",
 	Description: "Validates layout.conf elements like manifest-hashes and eapis-deprecated.",
-	URLs:        []string{"https://devmanual.gentoo.org/general-concepts/overlay-layout/"},
-	Severity:    lints.SeverityWarning,
-	Source:      lints.SourceG2,
-	Tags:        []string{"repo-layout", "manifest"},
+	References: []lints.RuleReference{
+		{URL: "https://devmanual.gentoo.org/general-concepts/overlay-layout/", Label: "Gentoo Devmanual"},
+	},
+	Severity: lints.SeverityWarning,
+	Source:   lints.SourceG2,
+	Tags:     []string{"repo-layout", "manifest"},
 }
 
 func init() {

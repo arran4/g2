@@ -13,10 +13,12 @@ var ruleUsrLocal = lints.RuleMetadata{
 	ID:          "UsrLocal",
 	Title:       "Installation to /usr/local",
 	Description: "Ebuilds must not install into /usr/local as it is reserved for non-Portage applications.",
-	URLs:        []string{"https://devmanual.gentoo.org/general-concepts/filesystem/index.html"},
-	Severity:    lints.SeverityError,
-	Source:      lints.SourceG2,
-	Tags:        []string{"ebuild", "gentoo-policy", "filesystem"},
+	References: []lints.RuleReference{
+		{URL: "https://devmanual.gentoo.org/general-concepts/filesystem/index.html", Label: "Gentoo Devmanual"},
+	},
+	Severity: lints.SeverityError,
+	Source:   lints.SourceG2,
+	Tags:     []string{"ebuild", "gentoo-policy", "filesystem"},
 }
 
 func init() {

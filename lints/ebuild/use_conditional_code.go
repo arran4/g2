@@ -13,10 +13,12 @@ var ruleUseConditionalCode = lints.RuleMetadata{
 	ID:          "UseConditionalCode",
 	Title:       "USE flag conditional code",
 	Description: "Checks for deprecated useq and invalid [ \"`use foo`\" ] syntax.",
-	URL:         "https://devmanual.gentoo.org/ebuild-writing/use-conditional-code/index.html",
-	Severity:    lints.SeverityError,
-	Source:      lints.SourceG2,
-	Tags:        []string{"ebuild", "gentoo-policy", "use"},
+	References: []lints.RuleReference{
+		{URL: "https://devmanual.gentoo.org/ebuild-writing/use-conditional-code/index.html", Label: "Gentoo Devmanual"},
+	},
+	Severity: lints.SeverityError,
+	Source:   lints.SourceG2,
+	Tags:     []string{"ebuild", "gentoo-policy", "use"},
 }
 
 func init() {

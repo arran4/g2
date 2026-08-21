@@ -14,10 +14,12 @@ var ruleInvalidSlot = lints.RuleMetadata{
 	ID:          "InvalidSlot",
 	Title:       "Invalid SLOT",
 	Description: "Validates that the SLOT variable only contains valid characters.",
-	URLs:        []string{"https://devmanual.gentoo.org/general-concepts/slotting/"},
-	Severity:    lints.SeverityError,
-	Source:      lints.SourceG2,
-	Tags:        []string{"ebuild", "gentoo-policy"},
+	References: []lints.RuleReference{
+		{URL: "https://devmanual.gentoo.org/general-concepts/slotting/", Label: "Gentoo Devmanual"},
+	},
+	Severity: lints.SeverityError,
+	Source:   lints.SourceG2,
+	Tags:     []string{"ebuild", "gentoo-policy"},
 }
 
 // PMS 3.1.3: Alphanumeric, plus _, ., -

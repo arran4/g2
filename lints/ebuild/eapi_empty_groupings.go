@@ -13,10 +13,12 @@ var ruleEmptyGroupings = lints.RuleMetadata{
 	ID:          "EAPIEmptyGroupings",
 	Title:       "Empty Groupings in EAPI",
 	Description: "Detects empty groupings (e.g. || ( )) which are banned in EAPI 7 and later.",
-	URLs:        []string{"https://devmanual.gentoo.org/ebuild-writing/eapi/index.html"},
-	Severity:    lints.SeverityError,
-	Source:      lints.SourceG2,
-	Tags:        []string{"ebuild", "gentoo-policy", "eapi"},
+	References: []lints.RuleReference{
+		{URL: "https://devmanual.gentoo.org/ebuild-writing/eapi/index.html", Label: "Gentoo Devmanual"},
+	},
+	Severity: lints.SeverityError,
+	Source:   lints.SourceG2,
+	Tags:     []string{"ebuild", "gentoo-policy", "eapi"},
 }
 
 func init() {

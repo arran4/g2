@@ -13,10 +13,12 @@ var ruleSandboxFunctions = lints.RuleMetadata{
 	ID:          "SandboxFunctions",
 	Title:       "Sandbox Functions Usage",
 	Description: "Warns about inappropriate usage of sandbox functions like addwrite, or using multiple arguments for addread, addwrite, adddeny, and addpredict.",
-	URLs:        []string{"https://devmanual.gentoo.org/function-reference/sandbox-functions/index.html"},
-	Severity:    lints.SeverityError,
-	Source:      lints.SourceG2,
-	Tags:        []string{"ebuild", "gentoo-policy", "sandbox"},
+	References: []lints.RuleReference{
+		{URL: "https://devmanual.gentoo.org/function-reference/sandbox-functions/index.html", Label: "Gentoo Devmanual"},
+	},
+	Severity: lints.SeverityError,
+	Source:   lints.SourceG2,
+	Tags:     []string{"ebuild", "gentoo-policy", "sandbox"},
 }
 
 func init() {

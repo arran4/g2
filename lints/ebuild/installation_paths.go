@@ -14,10 +14,12 @@ var ruleInstallationPaths = lints.RuleMetadata{
 	ID:          "InstallationPaths",
 	Title:       "Installation paths",
 	Description: "Gentoo packages may only install into permitted top-level directories and subdirectories.",
-	URLs:        []string{"https://projects.gentoo.org/qa/policy-guide/filesystem.html#pg0201"},
-	Severity:    lints.SeverityError,
-	Source:      lints.SourceQA,
-	Tags:        []string{"ebuild", "gentoo-policy", "filesystem", "PG0201"},
+	References: []lints.RuleReference{
+		{URL: "https://projects.gentoo.org/qa/policy-guide/filesystem.html#pg0201", Label: "Gentoo QA Policy Guide PG0201"},
+	},
+	Severity: lints.SeverityError,
+	Source:   lints.SourceQA,
+	Tags:     []string{"ebuild", "gentoo-policy", "filesystem", "PG0201"},
 }
 
 func init() {

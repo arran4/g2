@@ -72,3 +72,17 @@ func TestParseLintQuery(t *testing.T) {
 		})
 	}
 }
+
+func TestCmdLintList(t *testing.T) {
+	cfg := &MainArgConfig{}
+
+	// Test text format
+	if err := cfg.cmdLintList([]string{"--format", "text"}); err != nil {
+		t.Fatalf("cmdLintList text format failed: %v", err)
+	}
+
+	// Test json format
+	if err := cfg.cmdLintList([]string{"--format", "json"}); err != nil {
+		t.Fatalf("cmdLintList json format failed: %v", err)
+	}
+}

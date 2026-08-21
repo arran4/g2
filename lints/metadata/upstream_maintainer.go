@@ -13,10 +13,12 @@ var ruleUpstreamMaintainer = lints.RuleMetadata{
 	ID:          "UpstreamMaintainer",
 	Title:       "Upstream Maintainer Rule",
 	Description: "Ensures that maintainers listed inside the <upstream> block do not use description or restrict tags/attributes.",
-	URL:         "https://www.gentoo.org/glep/glep-0068.html#upstream-block",
-	Severity:    lints.SeverityError,
-	Source:      lints.SourceG2,
-	Tags:        []string{"metadata.xml", "site-quality", "GLEP68"},
+	References: []lints.RuleReference{
+		{URL: "https://www.gentoo.org/glep/glep-0068.html#upstream-block", Label: "GLEP 68"},
+	},
+	Severity: lints.SeverityError,
+	Source:   lints.SourceG2,
+	Tags:     []string{"metadata.xml", "site-quality", "GLEP68"},
 }
 
 func init() {

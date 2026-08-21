@@ -15,10 +15,12 @@ var ruleStabilizeNewVersions = lints.RuleMetadata{
 	ID:          "StabilizeNewVersions",
 	Title:       "Stabilize New Versions",
 	Description: "Checks if a stabilized version missed some architectures that had stable versions.",
-	URLs:        []string{"https://projects.gentoo.org/qa/policy-guide/keywords.html#pg0402"},
-	Severity:    lints.SeverityWarning,
-	Source:      lints.SourceQA,
-	Tags:        []string{"ebuild", "keywords"},
+	References: []lints.RuleReference{
+		{URL: "https://projects.gentoo.org/qa/policy-guide/keywords.html#pg0402", Label: "Gentoo QA Policy Guide PG0402"},
+	},
+	Severity: lints.SeverityWarning,
+	Source:   lints.SourceQA,
+	Tags:     []string{"ebuild", "keywords"},
 }
 
 func init() {

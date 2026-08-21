@@ -16,30 +16,36 @@ var ruleInstalledSmallFiles = lints.RuleMetadata{
 	ID:          "InstalledSmallFiles",
 	Title:       "Installation of Small Files",
 	Description: "Ebuilds must not introduce USE flags to control installing files that are small in size, require no additional dependencies and not cause any negative consequences.",
-	URLs:        []string{"https://projects.gentoo.org/qa/policy-guide/installed-files.html#pg0301"},
-	Severity:    lints.SeverityWarning,
-	Source:      lints.SourceQA,
-	Tags:        []string{"ebuild", "gentoo-policy", "installed-files"},
+	References: []lints.RuleReference{
+		{URL: "https://projects.gentoo.org/qa/policy-guide/installed-files.html#pg0301", Label: "Gentoo QA Policy Guide PG0301"},
+	},
+	Severity: lints.SeverityWarning,
+	Source:   lints.SourceQA,
+	Tags:     []string{"ebuild", "gentoo-policy", "installed-files"},
 }
 
 var ruleInstalledStaticLibs = lints.RuleMetadata{
 	ID:          "InstalledStaticLibs",
 	Title:       "Installation of Static Libraries",
 	Description: "Packages must not install static libraries unless they are explicitly required. They should typically be behind a USE flag such as USE=static-libs.",
-	URLs:        []string{"https://projects.gentoo.org/qa/policy-guide/installed-files.html#pg0302"},
-	Severity:    lints.SeverityWarning,
-	Source:      lints.SourceQA,
-	Tags:        []string{"ebuild", "gentoo-policy", "installed-files"},
+	References: []lints.RuleReference{
+		{URL: "https://projects.gentoo.org/qa/policy-guide/installed-files.html#pg0302", Label: "Gentoo QA Policy Guide PG0302"},
+	},
+	Severity: lints.SeverityWarning,
+	Source:   lints.SourceQA,
+	Tags:     []string{"ebuild", "gentoo-policy", "installed-files"},
 }
 
 var ruleInstalledManpages = lints.RuleMetadata{
 	ID:          "InstalledManpages",
 	Title:       "Installation of Manpages",
 	Description: "Packages must not disable installing manpages via USE flags. They should be installed unconditionally.",
-	URLs:        []string{"https://projects.gentoo.org/qa/policy-guide/installed-files.html#pg0305"},
-	Severity:    lints.SeverityWarning,
-	Source:      lints.SourceQA,
-	Tags:        []string{"ebuild", "gentoo-policy", "installed-files"},
+	References: []lints.RuleReference{
+		{URL: "https://projects.gentoo.org/qa/policy-guide/installed-files.html#pg0305", Label: "Gentoo QA Policy Guide PG0305"},
+	},
+	Severity: lints.SeverityWarning,
+	Source:   lints.SourceQA,
+	Tags:     []string{"ebuild", "gentoo-policy", "installed-files"},
 }
 
 func init() {

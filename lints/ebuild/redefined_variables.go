@@ -13,10 +13,12 @@ var ruleRedefinedVariables = lints.RuleMetadata{
 	ID:          "RedefinedVariables",
 	Title:       "Redefined Variables",
 	Description: "Checks for ebuilds that redefine variables like P, PV, PN, or PF.",
-	URLs:        []string{"https://devmanual.gentoo.org/ebuild-writing/common-mistakes/index.html#redefined-p-pv-pn-pf-variables"},
-	Severity:    lints.SeverityError,
-	Source:      lints.SourceG2,
-	Tags:        []string{"ebuild", "qa"},
+	References: []lints.RuleReference{
+		{URL: "https://devmanual.gentoo.org/ebuild-writing/common-mistakes/index.html#redefined-p-pv-pn-pf-variables", Label: "Gentoo Devmanual"},
+	},
+	Severity: lints.SeverityError,
+	Source:   lints.SourceG2,
+	Tags:     []string{"ebuild", "qa"},
 }
 
 func init() {

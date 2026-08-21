@@ -15,10 +15,12 @@ var ruleDroppedKeywords = lints.RuleMetadata{
 	ID:          "DroppedKeywords",
 	Title:       "Dropped Keywords",
 	Description: "Checks if arch keywords were dropped during version bumping.",
-	URLs:        []string{"https://projects.gentoo.org/qa/policy-guide/keywords.html#pg0401"},
-	Severity:    lints.SeverityWarning,
-	Source:      lints.SourceQA,
-	Tags:        []string{"ebuild", "keywords"},
+	References: []lints.RuleReference{
+		{URL: "https://projects.gentoo.org/qa/policy-guide/keywords.html#pg0401", Label: "Gentoo QA Policy Guide PG0401"},
+	},
+	Severity: lints.SeverityWarning,
+	Source:   lints.SourceQA,
+	Tags:     []string{"ebuild", "keywords"},
 }
 
 func init() {
