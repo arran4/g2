@@ -14,10 +14,12 @@ var ruleUseControlledOptionalRdepend = lints.RuleMetadata{
 	ID:          "UseControlledOptionalRdepend",
 	Title:       "USE-Controlled Optional RDEPENDS",
 	Description: "USE-controlled optional RDEPs are generally not acceptable except under very specific circumstances. A USE flag used only to pull in a runtime dependency without affecting the build should be avoided.",
-	URL:         "https://wiki.gentoo.org/wiki/Project:Quality_Assurance/Policies#USE-Controlled_Optional_RDEPENDS",
-	Severity:    lints.SeverityWarning,
-	Source:      lints.SourceG2,
-	Tags:        []string{"ebuild", "gentoo-policy", "rdepend", "use-flags"},
+	References: []lints.RuleReference{
+		{URL: "https://projects.gentoo.org/qa/policy-guide/dependencies.html#pg0001", Label: "Gentoo QA Policy Guide PG0001"},
+	},
+	Severity: lints.SeverityWarning,
+	Source:   lints.SourceQA,
+	Tags:     []string{"ebuild", "gentoo-policy", "rdepend", "use-flags", "PG0001"},
 }
 
 func init() {
@@ -34,6 +36,22 @@ func (r *UseControlledOptionalRdependRule) Lint(repoDir string, pkg *g2.PackageD
 func (r *UseControlledOptionalRdependRule) LintWithQA(repoDir string, pkg *g2.PackageData, qa *g2.QAPolicy) []lints.LintResult {
 	var results []lints.LintResult
 	severity := ruleUseControlledOptionalRdepend.Severity
+
+	if qa != nil {
+		if val, ok := qa.Policies["PG0001"]; ok {
+			if val == "ignore" {
+				return nil
+			}
+			switch val {
+			case "error":
+				severity = lints.SeverityError
+			case "warning":
+				severity = lints.SeverityWarning
+			case "notice":
+				severity = lints.SeverityNotice
+			}
+		}
+	}
 
 	for _, ver := range pkg.Versions {
 		if ver.Ebuild != nil && ver.Ebuild.Vars != nil {
@@ -83,9 +101,10 @@ func (r *UseControlledOptionalRdependRule) LintWithQA(repoDir string, pkg *g2.Pa
 				if !isUsedInBody {
 					res := lints.LintResult{
 						RuleMetadata: ruleUseControlledOptionalRdepend,
-						Message:      fmt.Sprintf("[%s] Ebuild %s uses USE flag '%s' purely for an optional RDEPEND. USE-controlled optional RDEPs are not acceptable except under very specific circumstances.", cases.Title(language.Und, cases.NoLower).String(string(severity)), ver.Version, flag),
+						Message:      fmt.Sprintf("[%s] Ebuild %s uses USE flag '%s' purely for an optional RDEPEND. USE-controlled optional RDEPs are not acceptable except under very specific circumstances (PG0001).", cases.Title(language.Und, cases.NoLower).String(string(severity)), ver.Version, flag),
 						Package:      pkg.Category + "/" + pkg.Name,
 					}
+					res.RuleMetadata.Severity = severity
 					results = append(results, res)
 				}
 			}

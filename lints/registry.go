@@ -1,6 +1,7 @@
 package lints
 
 import (
+	"encoding/json"
 	"path/filepath"
 
 	"github.com/arran4/g2"
@@ -23,14 +24,46 @@ const (
 	SourceQA       Source = "qa"
 )
 
+type RuleReference struct {
+	URL   string `json:"url"`
+	Label string `json:"label,omitempty"`
+}
+
 type RuleMetadata struct {
-	ID          string   `json:"id"`
-	Title       string   `json:"title"`
-	Description string   `json:"description"`
-	URL         string   `json:"url,omitempty"`
-	Severity    Severity `json:"severity"`
-	Source      Source   `json:"source"`
-	Tags        []string `json:"tags,omitempty"`
+	ID          string          `json:"id"`
+	Title       string          `json:"title"`
+	Description string          `json:"description"`
+	References  []RuleReference `json:"references,omitempty"`
+	Severity    Severity        `json:"severity"`
+	Source      Source          `json:"source"`
+	Tags        []string        `json:"tags,omitempty"`
+}
+
+// UnmarshalJSON provides backward-compatible unmarshaling for legacy "url" and "urls" fields.
+func (r *RuleMetadata) UnmarshalJSON(data []byte) error {
+	type Alias RuleMetadata
+	aux := struct {
+		*Alias
+		LegacyURL  string   `json:"url,omitempty"`
+		LegacyURLs []string `json:"urls,omitempty"`
+	}{
+		Alias: (*Alias)(r),
+	}
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+	if len(r.References) == 0 {
+		if aux.LegacyURL != "" {
+			r.References = []RuleReference{{URL: aux.LegacyURL}}
+		} else if len(aux.LegacyURLs) > 0 {
+			for _, u := range aux.LegacyURLs {
+				if u != "" {
+					r.References = append(r.References, RuleReference{URL: u})
+				}
+			}
+		}
+	}
+	return nil
 }
 
 type LintResult struct {

@@ -15,10 +15,12 @@ var ruleLayoutConfRepo = lints.RuleMetadata{
 	ID:          "LayoutConfRepo",
 	Title:       "Layout Conf Repository Checks",
 	Description: "Ensures the layout.conf file exists and conforms to GLEP 82.",
-	URL:         "https://www.gentoo.org/glep/glep-0082.html",
-	Severity:    lints.SeverityError,
-	Source:      lints.SourceG2,
-	Tags:        []string{"repo-layout", "metadata"},
+	References: []lints.RuleReference{
+		{URL: "https://www.gentoo.org/glep/glep-0082.html", Label: "GLEP 82"},
+	},
+	Severity: lints.SeverityError,
+	Source:   lints.SourceG2,
+	Tags:     []string{"repo-layout", "metadata"},
 }
 
 func init() {
@@ -70,14 +72,14 @@ func (r *LayoutConfRepoLintRule) LintRepo(repoDir string, site *g2.SiteData) []l
 	// Validator for hashes
 	validateHashes := func(contents ...string) error {
 		validHashes := map[string]bool{
-			"BLAKE2B": true,
-			"BLAKE2S": true,
-			"SHA512":  true,
-			"SHA256":  true,
+			"BLAKE2B":   true,
+			"BLAKE2S":   true,
+			"SHA512":    true,
+			"SHA256":    true,
 			"WHIRLPOOL": true,
-			"RMD160": true,
-			"SHA1": true,
-			"MD5": true,
+			"RMD160":    true,
+			"SHA1":      true,
+			"MD5":       true,
 		}
 		for _, hash := range contents {
 			if !validHashes[hash] {

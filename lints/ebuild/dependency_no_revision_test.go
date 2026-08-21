@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/arran4/g2"
+	"github.com/arran4/g2/lints"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -150,4 +151,46 @@ func TestDependencyNoRevisionLintRule_FalsePositives(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestDependencyNoRevisionLintRule_PG0002(t *testing.T) {
+	rule := &DependencyNoRevisionLintRule{}
+	pkg := &g2.PackageData{
+		Category: "dev-libs",
+		Name:     "foo",
+		Versions: []g2.VersionData{
+			{
+				Version: "1.0",
+				Ebuild: &g2.Ebuild{
+					Vars: map[string]string{
+						"DEPEND": "=dev-libs/bar-1.0",
+					},
+				},
+			},
+		},
+	}
+
+	// Test Error override
+	qaErr := &g2.QAPolicy{Policies: map[string]string{"PG0002": "error"}}
+	resultsErr := rule.LintWithQA("", pkg, qaErr)
+	assert.Len(t, resultsErr, 1)
+	assert.Equal(t, lints.SeverityError, resultsErr[0].RuleMetadata.Severity)
+	assert.Contains(t, resultsErr[0].Message, "(PG0002)")
+
+	// Test Warning override
+	qaWarn := &g2.QAPolicy{Policies: map[string]string{"PG0002": "warning"}}
+	resultsWarn := rule.LintWithQA("", pkg, qaWarn)
+	assert.Len(t, resultsWarn, 1)
+	assert.Equal(t, lints.SeverityWarning, resultsWarn[0].RuleMetadata.Severity)
+
+	// Test Notice override
+	qaNotice := &g2.QAPolicy{Policies: map[string]string{"PG0002": "notice"}}
+	resultsNotice := rule.LintWithQA("", pkg, qaNotice)
+	assert.Len(t, resultsNotice, 1)
+	assert.Equal(t, lints.SeverityNotice, resultsNotice[0].RuleMetadata.Severity)
+
+	// Test Ignore override
+	qaIgnore := &g2.QAPolicy{Policies: map[string]string{"PG0002": "ignore"}}
+	resultsIgnore := rule.LintWithQA("", pkg, qaIgnore)
+	assert.Len(t, resultsIgnore, 0)
 }

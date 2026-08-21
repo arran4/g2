@@ -14,10 +14,14 @@ var ruleDynamicSlots = lints.RuleMetadata{
 	ID:          "DynamicSlots",
 	Title:       "Dynamic Slots (multislot flag)",
 	Description: "The use of multislot to alter SLOT values (as well as any other USE-dependent slot values) in the Gentoo repository is forbidden.",
-	URL:         "https://projects.gentoo.org/qa/policy-guide/other-metadata.html#pg0701",
-	Severity:    lints.SeverityError,
-	Source:      lints.SourceQA,
-	Tags:        []string{"ebuild", "gentoo-policy", "PG0701"},
+	References: []lints.RuleReference{
+		{URL: "https://projects.gentoo.org/qa/policy-guide/other-metadata.html#pg0701", Label: "Gentoo QA Policy Guide PG0701"},
+		{URL: "https://wiki.gentoo.org/index.php?title=Project:Quality_Assurance/Policies&oldid=109991#multislot.2FUSE-dependent_SLOT", Label: "Gentoo QA Policy Archive"},
+		{URL: "https://bugs.gentoo.org/174407", Label: "Gentoo Bug 174407"},
+	},
+	Severity: lints.SeverityError,
+	Source:   lints.SourceQA,
+	Tags:     []string{"ebuild", "gentoo-policy", "PG0701"},
 }
 
 func init() {

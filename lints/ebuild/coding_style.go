@@ -15,10 +15,12 @@ var ruleCodingStyle = lints.RuleMetadata{
 	ID:          "CodingStyle",
 	Title:       "Coding Style",
 	Description: "Validates ebuild coding style: no POSIX test ([ ... ] or test), use bracketed variables (${foo}).",
-	URL:         "https://projects.gentoo.org/qa/policy-guide/ebuild-format.html#pg0101",
-	Severity:    lints.SeverityWarning,
-	Source:      lints.SourceQA,
-	Tags:        []string{"ebuild", "gentoo-policy", "PG0101"},
+	References: []lints.RuleReference{
+		{URL: "https://projects.gentoo.org/qa/policy-guide/ebuild-format.html#pg0101", Label: "Gentoo QA Policy Guide PG0101"},
+	},
+	Severity: lints.SeverityWarning,
+	Source:   lints.SourceQA,
+	Tags:     []string{"ebuild", "gentoo-policy", "PG0101"},
 }
 
 func init() {

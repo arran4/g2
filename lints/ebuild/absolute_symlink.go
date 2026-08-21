@@ -14,10 +14,12 @@ var ruleAbsoluteSymlink = lints.RuleMetadata{
 	ID:          "AbsoluteSymlink",
 	Title:       "Absolute symbolic link targets",
 	Description: "Packages must not install symbolic links with absolute targets. Instead, relative paths must be used.",
-	URL:         "https://projects.gentoo.org/qa/policy-guide/filesystem.html#pg0206",
-	Severity:    lints.SeverityError,
-	Source:      lints.SourceQA,
-	Tags:        []string{"ebuild", "gentoo-policy", "filesystem", "PG0206"},
+	References: []lints.RuleReference{
+		{URL: "https://projects.gentoo.org/qa/policy-guide/filesystem.html#pg0206", Label: "Gentoo QA Policy Guide PG0206"},
+	},
+	Severity: lints.SeverityError,
+	Source:   lints.SourceQA,
+	Tags:     []string{"ebuild", "gentoo-policy", "filesystem", "PG0206"},
 }
 
 func init() {

@@ -14,10 +14,12 @@ var ruleIndentingWhitespace = lints.RuleMetadata{
 	ID:          "IndentingWhitespace",
 	Title:       "Indenting and Whitespace",
 	Description: "Validates that ebuilds use tabs for indentation and contain no trailing whitespace.",
-	URL:         "https://devmanual.gentoo.org/ebuild-writing/file-format/index.html#indenting-and-whitespace",
-	Severity:    lints.SeverityWarning,
-	Source:      lints.SourceG2,
-	Tags:        []string{"ebuild", "gentoo-policy", "whitespace"},
+	References: []lints.RuleReference{
+		{URL: "https://devmanual.gentoo.org/ebuild-writing/file-format/index.html#indenting-and-whitespace", Label: "Gentoo Devmanual"},
+	},
+	Severity: lints.SeverityWarning,
+	Source:   lints.SourceG2,
+	Tags:     []string{"ebuild", "gentoo-policy", "whitespace"},
 }
 
 func init() {

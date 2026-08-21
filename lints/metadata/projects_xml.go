@@ -14,10 +14,12 @@ var ruleProjectsXML = lints.RuleMetadata{
 	ID:          "ProjectsXML",
 	Title:       "Projects XML Rules",
 	Description: "Validates metadata/projects.xml structural integrity.",
-	URL:         "https://www.gentoo.org/glep/glep-0067.html#projects-xml-and-herds-xml",
-	Severity:    lints.SeverityError,
-	Source:      lints.SourceG2,
-	Tags:        []string{"projects.xml", "site-quality", "GLEP67"},
+	References: []lints.RuleReference{
+		{URL: "https://www.gentoo.org/glep/glep-0067.html#projects-xml-and-herds-xml", Label: "GLEP 67"},
+	},
+	Severity: lints.SeverityError,
+	Source:   lints.SourceG2,
+	Tags:     []string{"projects.xml", "site-quality", "GLEP67"},
 }
 
 func init() {

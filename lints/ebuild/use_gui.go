@@ -11,10 +11,12 @@ var ruleUseGui = lints.RuleMetadata{
 	ID:          "UseGui",
 	Title:       "USE=gui flag",
 	Description: "Whenever a package offers an optional GUI support, the gui flag must be used to control that support rather than historically used X or toolkit flags (like gtk, qt4, qt5). Toolkit flags can still be used to choose between multiple available GUIs, but gui is preferred.",
-	URL:         "https://projects.gentoo.org/qa/policy-guide/use-flags.html#pg0802",
-	Severity:    lints.SeverityWarning,
-	Source:      lints.SourceQA,
-	Tags:        []string{"ebuild", "gentoo-policy", "use", "PG0802"},
+	References: []lints.RuleReference{
+		{URL: "https://projects.gentoo.org/qa/policy-guide/use-flags.html#pg0802", Label: "Gentoo QA Policy Guide PG0802"},
+	},
+	Severity: lints.SeverityWarning,
+	Source:   lints.SourceQA,
+	Tags:     []string{"ebuild", "gentoo-policy", "use", "PG0802"},
 }
 
 func init() {
@@ -51,17 +53,17 @@ func (r *UseGuiLintRule) LintWithQA(repoDir string, pkg *g2.PackageData, qa *g2.
 	}
 
 	historicToolkitFlags := map[string]bool{
-		"X":    true,
-		"gtk":  true,
-		"gtk2": true,
-		"gtk3": true,
-		"gtk4": true,
-		"qt4":  true,
-		"qt5":  true,
-		"qt6":  true,
+		"X":     true,
+		"gtk":   true,
+		"gtk2":  true,
+		"gtk3":  true,
+		"gtk4":  true,
+		"qt4":   true,
+		"qt5":   true,
+		"qt6":   true,
 		"motif": true,
-		"fltk": true,
-		"tk":   true,
+		"fltk":  true,
+		"tk":    true,
 	}
 
 	for _, ver := range pkg.Versions {

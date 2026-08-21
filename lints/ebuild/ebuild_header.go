@@ -14,10 +14,12 @@ var ruleEbuildHeader = lints.RuleMetadata{
 	ID:          "EbuildHeader",
 	Title:       "Invalid Ebuild Header",
 	Description: "Validates that the ebuild header matches the expected Gentoo copyright header.",
-	URL:         "https://devmanual.gentoo.org/ebuild-writing/file-format/index.html",
-	Severity:    lints.SeverityNotice,
-	Source:      lints.SourceG2,
-	Tags:        []string{"ebuild", "gentoo-policy"},
+	References: []lints.RuleReference{
+		{URL: "https://devmanual.gentoo.org/ebuild-writing/file-format/index.html", Label: "Gentoo Devmanual"},
+	},
+	Severity: lints.SeverityNotice,
+	Source:   lints.SourceG2,
+	Tags:     []string{"ebuild", "gentoo-policy"},
 }
 
 var validHeaderRegex = regexp.MustCompile(`^# Copyright \d{4}(?:[-\s,]+\d{4})* .+\n# Distributed under the terms of the GNU General Public License v2\n\n`)

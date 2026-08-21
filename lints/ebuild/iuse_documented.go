@@ -14,10 +14,12 @@ var ruleIUSEDocumented = lints.RuleMetadata{
 	ID:          "IuseDocumented",
 	Title:       "IUSE Documented",
 	Description: "Verifies that all flags in IUSE have corresponding descriptions in metadata.xml or global/local use desc.",
-	URL:         "https://devmanual.gentoo.org/general-concepts/use-flags/",
-	Severity:    lints.SeverityWarning,
-	Source:      lints.SourceG2,
-	Tags:        []string{"metadata.xml", "ebuild", "site-quality", "PG0701"},
+	References: []lints.RuleReference{
+		{URL: "https://devmanual.gentoo.org/general-concepts/use-flags/", Label: "Gentoo Devmanual"},
+	},
+	Severity: lints.SeverityWarning,
+	Source:   lints.SourceG2,
+	Tags:     []string{"metadata.xml", "ebuild", "site-quality", "PG0701"},
 }
 
 func init() {

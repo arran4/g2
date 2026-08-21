@@ -13,10 +13,12 @@ var ruleWerrorCompilerFlag = lints.RuleMetadata{
 	ID:          "WerrorCompilerFlag",
 	Title:       "-Werror compiler flag not removed",
 	Description: "\"-Werror\" is a flag which turns all warnings into errors and thus will abort compiling if any warning is encountered. It is not recommended for releases and should always be disabled.",
-	URL:         "https://devmanual.gentoo.org/ebuild-writing/common-mistakes/index.html#-werror-compiler-flag-not-removed",
-	Severity:    lints.SeverityError,
-	Source:      lints.SourceG2,
-	Tags:        []string{"ebuild", "qa"},
+	References: []lints.RuleReference{
+		{URL: "https://devmanual.gentoo.org/ebuild-writing/common-mistakes/index.html#-werror-compiler-flag-not-removed", Label: "Gentoo Devmanual"},
+	},
+	Severity: lints.SeverityError,
+	Source:   lints.SourceG2,
+	Tags:     []string{"ebuild", "qa"},
 }
 
 func init() {

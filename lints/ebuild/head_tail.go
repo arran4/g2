@@ -13,10 +13,12 @@ var ruleHeadTail = lints.RuleMetadata{
 	ID:          "HeadAndTailUsage",
 	Title:       "Head and tail usage",
 	Description: "Checks for improper or deprecated use of head and tail commands, such as deprecated syntax, clumsy line counting, and unnecessary chaining with sed.",
-	URL:         "https://devmanual.gentoo.org/tools-reference/head-and-tail/index.html",
-	Severity:    lints.SeverityWarning,
-	Source:      lints.SourceG2,
-	Tags:        []string{"ebuild", "qa", "tools"},
+	References: []lints.RuleReference{
+		{URL: "https://devmanual.gentoo.org/tools-reference/head-and-tail/index.html", Label: "Gentoo Devmanual"},
+	},
+	Severity: lints.SeverityWarning,
+	Source:   lints.SourceG2,
+	Tags:     []string{"ebuild", "qa", "tools"},
 }
 
 func init() {

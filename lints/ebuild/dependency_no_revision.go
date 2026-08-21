@@ -13,10 +13,12 @@ var ruleDependencyNoRevision = lints.RuleMetadata{
 	ID:          "DependencyNoRevision",
 	Title:       "=-dependencies with no revision",
 	Description: "Whenever a non-wildcard = (equals) dependency is used on a package, the requested revision must be specified explicitly.",
-	URL:         "https://projects.gentoo.org/qa/policy-guide/dependencies.html#pg0002",
-	Severity:    lints.SeverityWarning,
-	Source:      lints.SourceQA,
-	Tags:        []string{"ebuild", "gentoo-policy", "dependencies", "pg0002"},
+	References: []lints.RuleReference{
+		{URL: "https://projects.gentoo.org/qa/policy-guide/dependencies.html#pg0002", Label: "Gentoo QA Policy Guide PG0002"},
+	},
+	Severity: lints.SeverityWarning,
+	Source:   lints.SourceQA,
+	Tags:     []string{"ebuild", "gentoo-policy", "dependencies", "pg0002"},
 }
 
 func init() {
@@ -32,11 +34,24 @@ func (r *DependencyNoRevisionLintRule) Lint(repoDir string, pkg *g2.PackageData)
 
 func (r *DependencyNoRevisionLintRule) LintWithQA(repoDir string, pkg *g2.PackageData, qa *g2.QAPolicy) []lints.LintResult {
 	var results []lints.LintResult
-	severity := string(ruleDependencyNoRevision.Severity)
-	if len(severity) > 0 {
-		severity = strings.ToUpper(severity[:1]) + severity[1:]
-	}
+	severity := ruleDependencyNoRevision.Severity
 	revisionRe := regexp.MustCompile(`-r\d+$`)
+
+	if qa != nil {
+		if val, ok := qa.Policies["PG0002"]; ok {
+			if val == "ignore" {
+				return nil
+			}
+			switch val {
+			case "error":
+				severity = lints.SeverityError
+			case "warning":
+				severity = lints.SeverityWarning
+			case "notice":
+				severity = lints.SeverityNotice
+			}
+		}
+	}
 
 	for _, ver := range pkg.Versions {
 		if ver.Ebuild != nil && ver.Ebuild.Vars != nil {
@@ -53,9 +68,10 @@ func (r *DependencyNoRevisionLintRule) LintWithQA(repoDir string, pkg *g2.Packag
 						if !revisionRe.MatchString(atom.Version) {
 							res := lints.LintResult{
 								RuleMetadata: ruleDependencyNoRevision,
-								Message:      fmt.Sprintf("[%s] Ebuild %s uses a non-wildcard '=' dependency without an explicit revision in %s: %s", severity, ver.Version, depVar, atomStr),
+								Message:      fmt.Sprintf("[%s] Ebuild %s uses a non-wildcard '=' dependency without an explicit revision in %s: %s (PG0002).", severity, ver.Version, depVar, atomStr),
 								Package:      pkg.Category + "/" + pkg.Name,
 							}
+							res.RuleMetadata.Severity = severity
 							results = append(results, res)
 						}
 					}

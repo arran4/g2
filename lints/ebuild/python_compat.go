@@ -15,20 +15,24 @@ var (
 		ID:          "PythonCompatPG0501",
 		Title:       "Missing PYTHON_COMPAT (PG0501)",
 		Description: "All ebuilds using Python must explicitly define supported Python implementations in PYTHON_COMPAT.",
-		URL:         "https://projects.gentoo.org/qa/policy-guide/languages.html#pg0501",
-		Severity:    lints.SeverityError,
-		Source:      lints.SourceQA,
-		Tags:        []string{"ebuild", "gentoo-policy", "PG0501"},
+		References: []lints.RuleReference{
+			{URL: "https://projects.gentoo.org/qa/policy-guide/languages.html#pg0501", Label: "Gentoo QA Policy Guide PG0501"},
+		},
+		Severity: lints.SeverityError,
+		Source:   lints.SourceQA,
+		Tags:     []string{"ebuild", "gentoo-policy", "PG0501"},
 	}
 
 	rulePythonCompatPG0502 = lints.RuleMetadata{
 		ID:          "PythonCompatPG0502",
 		Title:       "Python 2 usage (PG0502)",
 		Description: "Python 2 is being phased out. Python 2 support should not be introduced or maintained where possible.",
-		URL:         "https://projects.gentoo.org/qa/policy-guide/languages.html#pg0502",
-		Severity:    lints.SeverityWarning,
-		Source:      lints.SourceQA,
-		Tags:        []string{"ebuild", "gentoo-policy", "PG0502"},
+		References: []lints.RuleReference{
+			{URL: "https://projects.gentoo.org/qa/policy-guide/languages.html#pg0502", Label: "Gentoo QA Policy Guide PG0502"},
+		},
+		Severity: lints.SeverityWarning,
+		Source:   lints.SourceQA,
+		Tags:     []string{"ebuild", "gentoo-policy", "PG0502"},
 	}
 )
 

@@ -13,10 +13,12 @@ var ruleRespectVariables = lints.RuleMetadata{
 	ID:          "RespectVariables",
 	Title:       "Respect Variables",
 	Description: "Checks for assignments that overwrite CFLAGS, CXXFLAGS, or LDFLAGS without appending or referencing the original variable.",
-	URL:         "https://devmanual.gentoo.org/general-concepts/user-environment/index.html",
-	Severity:    lints.SeverityError,
-	Source:      lints.SourceG2,
-	Tags:        []string{"ebuild", "gentoo-policy", "qa"},
+	References: []lints.RuleReference{
+		{URL: "https://devmanual.gentoo.org/general-concepts/user-environment/index.html", Label: "Gentoo Devmanual"},
+	},
+	Severity: lints.SeverityError,
+	Source:   lints.SourceG2,
+	Tags:     []string{"ebuild", "gentoo-policy", "qa"},
 }
 
 func init() {

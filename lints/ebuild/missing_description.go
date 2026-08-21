@@ -14,10 +14,12 @@ var ruleMissingDescription = lints.RuleMetadata{
 	ID:          "MissingDescription",
 	Title:       "Missing or Short Description",
 	Description: "Checks if a package's DESCRIPTION is missing or unhelpfully short (less than 10 characters).",
-	URL:         "https://devmanual.gentoo.org/ebuild-writing/variables/index.html#description",
-	Severity:    lints.SeverityWarning,
-	Source:      lints.SourceG2,
-	Tags:        []string{"ebuild", "site-quality", "search-quality"},
+	References: []lints.RuleReference{
+		{URL: "https://devmanual.gentoo.org/ebuild-writing/variables/index.html#description", Label: "Gentoo Devmanual"},
+	},
+	Severity: lints.SeverityWarning,
+	Source:   lints.SourceG2,
+	Tags:     []string{"ebuild", "site-quality", "search-quality"},
 }
 
 func init() {
