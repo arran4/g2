@@ -251,29 +251,25 @@ func required() HeaderValidator {
 func single() HeaderValidator {
 	return func(key string, values []string) []Finding {
 		if len(values) > 1 {
-			return []Finding{{Severity: lints.SeverityError, Message: fmt.Sprintf("Header %s must appear at most once", key)}}
+			return []Finding{{Severity: lints.SeverityError, Message: fmt.Sprintf("Header %s must appear at most once", key), ValueIndex: 1}}
 		}
 		return nil
 	}
 }
 
-func nonEmpty() HeaderValidator {
-	return func(key string, values []string) []Finding {
-		for _, val := range values {
-			if len(val) == 0 {
-				return []Finding{{Severity: lints.SeverityError, Message: fmt.Sprintf("%s cannot be empty", key)}}
-			}
+func nonEmpty() func(key string, val string) []Finding {
+	return func(key string, val string) []Finding {
+		if len(val) == 0 {
+			return []Finding{{Severity: lints.SeverityError, Message: fmt.Sprintf("%s cannot be empty", key)}}
 		}
 		return nil
 	}
 }
 
-func maxLength(max int) HeaderValidator {
-	return func(key string, values []string) []Finding {
-		for _, val := range values {
-			if len(val) > max {
-				return []Finding{{Severity: lints.SeverityError, Message: fmt.Sprintf("%s exceeds maximum length of %d characters", key, max)}}
-			}
+func maxLength(max int) func(key string, val string) []Finding {
+	return func(key string, val string) []Finding {
+		if len(val) > max {
+			return []Finding{{Severity: lints.SeverityError, Message: fmt.Sprintf("%s exceeds maximum length of %d characters", key, max)}}
 		}
 		return nil
 	}
@@ -384,7 +380,7 @@ func header(key string, validators ...HeaderValidator) HeaderRule {
 }
 
 var headerRules = []HeaderRule{
-	header("Title", required(), single(), nonEmpty(), maxLength(50)),
+	header("Title", required(), single(), each(nonEmpty()), each(maxLength(50))),
 	header("Author", required(), each(validEmail())),
 	header("Translator", each(validEmail())),
 	header("Posted", required(), single(), each(validDate())),

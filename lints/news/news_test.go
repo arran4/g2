@@ -62,8 +62,22 @@ func TestHeaderValidators(t *testing.T) {
 		testHeader(t, "Title", nil, errorFinding("Missing required header: Title"))
 		testHeader(t, "Title", []string{""}, errorFinding("Title cannot be empty"))
 		testHeader(t, "Title", []string{"Valid Title"})
-		testHeader(t, "Title", []string{"Title 1", "Title 2"}, errorFinding("Header Title must appear at most once"))
+
+		// The single validator now pinpoints ValueIndex 1
+		singleFinding := errorFinding("Header Title must appear at most once")
+		singleFinding.ValueIndex = 1
+		testHeader(t, "Title", []string{"Title 1", "Title 2"}, singleFinding)
+
 		testHeader(t, "Title", []string{"This Title Is Much Longer Than Fifty Characters So It Should Fail"}, errorFinding("Title exceeds maximum length of 50 characters"))
+
+		// Second value invalid triggers index 1
+		emptyFinding := errorFinding("Title cannot be empty")
+		emptyFinding.ValueIndex = 1
+		testHeader(t, "Title", []string{"Title 1", ""}, singleFinding, emptyFinding)
+
+		lenFinding := errorFinding("Title exceeds maximum length of 50 characters")
+		lenFinding.ValueIndex = 1
+		testHeader(t, "Title", []string{"Title 1", "This Title Is Much Longer Than Fifty Characters So It Should Fail"}, singleFinding, lenFinding)
 	})
 
 	t.Run("Author", func(t *testing.T) {
@@ -83,7 +97,10 @@ func TestHeaderValidators(t *testing.T) {
 		testHeader(t, "Posted", nil, errorFinding("Missing required header: Posted"))
 		testHeader(t, "Posted", []string{"2024/01/01"}, errorFinding("Invalid Posted date format, expected YYYY-MM-DD: '2024/01/01'"))
 		testHeader(t, "Posted", []string{"2024-01-01"})
-		testHeader(t, "Posted", []string{"2024-01-01", "2024-01-02"}, errorFinding("Header Posted must appear at most once"))
+
+		singleFinding := errorFinding("Header Posted must appear at most once")
+		singleFinding.ValueIndex = 1
+		testHeader(t, "Posted", []string{"2024-01-01", "2024-01-02"}, singleFinding)
 	})
 
 	t.Run("Revision", func(t *testing.T) {
@@ -91,13 +108,19 @@ func TestHeaderValidators(t *testing.T) {
 		testHeader(t, "Revision", []string{""}, errorFinding("Revision cannot be empty"))
 		testHeader(t, "Revision", []string{"1a"}, errorFinding("Revision must be an integer: '1a'"))
 		testHeader(t, "Revision", []string{"1"})
-		testHeader(t, "Revision", []string{"1", "2"}, errorFinding("Header Revision must appear at most once"))
+
+		singleFinding := errorFinding("Header Revision must appear at most once")
+		singleFinding.ValueIndex = 1
+		testHeader(t, "Revision", []string{"1", "2"}, singleFinding)
 	})
 
 	t.Run("Content-Type", func(t *testing.T) {
 		testHeader(t, "Content-Type", []string{"text/html"}, errorFinding("Content-Type must be 'text/plain', got: 'text/html'"))
 		testHeader(t, "Content-Type", []string{"text/plain"})
-		testHeader(t, "Content-Type", []string{"text/plain", "text/plain"}, errorFinding("Header Content-Type must appear at most once"))
+
+		singleFinding := errorFinding("Header Content-Type must appear at most once")
+		singleFinding.ValueIndex = 1
+		testHeader(t, "Content-Type", []string{"text/plain", "text/plain"}, singleFinding)
 	})
 
 	t.Run("News-Item-Format", func(t *testing.T) {
@@ -105,7 +128,10 @@ func TestHeaderValidators(t *testing.T) {
 		testHeader(t, "News-Item-Format", []string{"3.0"}, warningFinding("Unsupported News-Item-Format: '3.0'"))
 		testHeader(t, "News-Item-Format", []string{"1.0"})
 		testHeader(t, "News-Item-Format", []string{"2.0"})
-		testHeader(t, "News-Item-Format", []string{"2.0", "2.0"}, errorFinding("Header News-Item-Format must appear at most once"))
+
+		singleFinding := errorFinding("Header News-Item-Format must appear at most once")
+		singleFinding.ValueIndex = 1
+		testHeader(t, "News-Item-Format", []string{"2.0", "2.0"}, singleFinding)
 	})
 
 	t.Run("Display-If-Installed", func(t *testing.T) {
@@ -165,6 +191,7 @@ Display-If-Installed: app-misc/bar
 This is the body.
 `)},
 		"metadata/news/2024-01-02-invalid-news/2024-01-02-invalid-news.en.txt": &fstest.MapFile{Data: []byte(`Title: Invalid News
+Title:
 Author: Valid Author <valid@example.com>
 Author: Invalid Author
 Posted: 2024-01-02
@@ -186,8 +213,8 @@ Body
 		t.Fatalf("expected lint results, got none")
 	}
 
-	var hasAuthorErr, hasDisplayErr, hasFormatOneErr, hasUnknownHeaderWarn bool
-	var authorErrLine int
+	var hasAuthorErr, hasDisplayErr, hasFormatOneErr, hasUnknownHeaderWarn, hasTitleEmptyErr, hasTitleSingleErr bool
+	var authorErrLine, titleEmptyErrLine, titleSingleErrLine int
 	for _, res := range results {
 		if strings.Contains(res.Message, "Invalid Author format") {
 			hasAuthorErr = true
@@ -202,12 +229,30 @@ Body
 		if strings.Contains(res.Message, "Content-Type: text/plain is mandatory for News-Item-Format 1.0") {
 			hasFormatOneErr = true
 		}
+		if strings.Contains(res.Message, "Title cannot be empty") {
+			hasTitleEmptyErr = true
+			titleEmptyErrLine = res.Line
+		}
+		if strings.Contains(res.Message, "must appear at most once") {
+			hasTitleSingleErr = true
+			titleSingleErrLine = res.Line
+		}
 	}
 
 	if !hasAuthorErr {
 		t.Errorf("expected Invalid Author format error")
-	} else if authorErrLine != 3 {
-		t.Errorf("expected Author error on line 3, got %d", authorErrLine)
+	} else if authorErrLine != 4 {
+		t.Errorf("expected Author error on line 4, got %d", authorErrLine)
+	}
+	if !hasTitleEmptyErr {
+		t.Errorf("expected Title empty error")
+	} else if titleEmptyErrLine != 2 {
+		t.Errorf("expected Title empty error on line 2, got %d", titleEmptyErrLine)
+	}
+	if !hasTitleSingleErr {
+		t.Errorf("expected Title single appearance error")
+	} else if titleSingleErrLine != 2 {
+		t.Errorf("expected Title single appearance error on line 2, got %d", titleSingleErrLine)
 	}
 	if !hasDisplayErr {
 		t.Errorf("expected Invalid Display-If-Installed format error")
