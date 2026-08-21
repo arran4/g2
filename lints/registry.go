@@ -52,6 +52,10 @@ type QAAwareLintRule interface {
 	LintWithQA(repoDir string, pkg *g2.PackageData, qa *g2.QAPolicy) []LintResult
 }
 
+type RuleSetAwareLintRule interface {
+	LintWithRuleSet(repoDir string, pkg *g2.PackageData, ruleSetID string, qa *g2.QAPolicy) []LintResult
+}
+
 var lintRules []LintRule
 
 func RegisterLintRule(rule LintRule) {
@@ -59,6 +63,10 @@ func RegisterLintRule(rule LintRule) {
 }
 
 func PerformLintingResults(repoDir string, pkg *g2.PackageData) []LintResult {
+	return PerformLintingResultsWithRuleSet(repoDir, pkg, "default")
+}
+
+func PerformLintingResultsWithRuleSet(repoDir string, pkg *g2.PackageData, ruleSetID string) []LintResult {
 	var results []LintResult
 
 	// Try to load QA Policy
@@ -66,7 +74,9 @@ func PerformLintingResults(repoDir string, pkg *g2.PackageData) []LintResult {
 	qa, _ := g2.ParseQAPolicy(qaPolicyPath)
 
 	for _, rule := range lintRules {
-		if qaRule, ok := rule.(QAAwareLintRule); ok {
+		if rsRule, ok := rule.(RuleSetAwareLintRule); ok {
+			results = append(results, rsRule.LintWithRuleSet(repoDir, pkg, ruleSetID, qa)...)
+		} else if qaRule, ok := rule.(QAAwareLintRule); ok {
 			results = append(results, qaRule.LintWithQA(repoDir, pkg, qa)...)
 		} else {
 			results = append(results, rule.Lint(repoDir, pkg)...)
