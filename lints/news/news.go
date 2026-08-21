@@ -215,6 +215,8 @@ type HeaderContext struct {
 
 type HeaderValidator func(ctx *HeaderContext, state *NewsItemState) []lints.LintResult
 
+type PostValidator func(state *NewsItemState, relPath string) []lints.LintResult
+
 func checkEmailFormat(val string) bool {
 	// Simple manual check for "^.+ <.+@.+>$" logic to avoid complex regex as per guidelines
 	startBracket := strings.Index(val, "<")
@@ -358,6 +360,38 @@ var headerValidators = map[string][]HeaderValidator{
 	},
 }
 
+func validateRequiredHeader(header string) PostValidator {
+	return func(state *NewsItemState, relPath string) []lints.LintResult {
+		if _, ok := state.Headers[header]; !ok {
+			res := lints.LintResult{RuleMetadata: ruleNewsValidity, Message: fmt.Sprintf("[%s] Missing required header: %s", lints.SeverityError, header), File: relPath}
+			res.RuleMetadata.Severity = lints.SeverityError
+			return []lints.LintResult{res}
+		}
+		return nil
+	}
+}
+
+func validateFormatContentTypeCrossCheck(state *NewsItemState, relPath string) []lints.LintResult {
+	if formatVal, hasFormat := state.Headers["News-Item-Format"]; hasFormat && formatVal == "1.0" {
+		contentType, hasContentType := state.Headers["Content-Type"]
+		if !hasContentType || contentType != "text/plain" {
+			res := lints.LintResult{RuleMetadata: ruleNewsValidity, Message: fmt.Sprintf("[%s] Content-Type: text/plain is mandatory for News-Item-Format 1.0", lints.SeverityError), File: relPath}
+			res.RuleMetadata.Severity = lints.SeverityError
+			return []lints.LintResult{res}
+		}
+	}
+	return nil
+}
+
+var postValidators = []PostValidator{
+	validateRequiredHeader("Title"),
+	validateRequiredHeader("Author"),
+	validateRequiredHeader("Posted"),
+	validateRequiredHeader("Revision"),
+	validateRequiredHeader("News-Item-Format"),
+	validateFormatContentTypeCrossCheck,
+}
+
 func (r *NewsValidityLintRule) lintNewsItem(content string, relPath string) []lints.LintResult {
 	var results []lints.LintResult
 	lines := strings.Split(content, "\n")
@@ -424,37 +458,8 @@ func (r *NewsValidityLintRule) lintNewsItem(content string, relPath string) []li
 		}
 	}
 
-	if _, ok := state.Headers["Title"]; !ok {
-		res := lints.LintResult{RuleMetadata: ruleNewsValidity, Message: fmt.Sprintf("[%s] Missing required header: Title", lints.SeverityError), File: relPath}
-		res.RuleMetadata.Severity = lints.SeverityError
-		results = append(results, res)
-	}
-	if _, ok := state.Headers["Author"]; !ok {
-		res := lints.LintResult{RuleMetadata: ruleNewsValidity, Message: fmt.Sprintf("[%s] Missing required header: Author", lints.SeverityError), File: relPath}
-		res.RuleMetadata.Severity = lints.SeverityError
-		results = append(results, res)
-	}
-	if _, ok := state.Headers["Posted"]; !ok {
-		res := lints.LintResult{RuleMetadata: ruleNewsValidity, Message: fmt.Sprintf("[%s] Missing required header: Posted", lints.SeverityError), File: relPath}
-		res.RuleMetadata.Severity = lints.SeverityError
-		results = append(results, res)
-	}
-	if _, ok := state.Headers["Revision"]; !ok {
-		res := lints.LintResult{RuleMetadata: ruleNewsValidity, Message: fmt.Sprintf("[%s] Missing required header: Revision", lints.SeverityError), File: relPath}
-		res.RuleMetadata.Severity = lints.SeverityError
-		results = append(results, res)
-	}
-	if formatVal, hasFormat := state.Headers["News-Item-Format"]; !hasFormat {
-		res := lints.LintResult{RuleMetadata: ruleNewsValidity, Message: fmt.Sprintf("[%s] Missing required header: News-Item-Format", lints.SeverityError), File: relPath}
-		res.RuleMetadata.Severity = lints.SeverityError
-		results = append(results, res)
-	} else if formatVal == "1.0" {
-		contentType, hasContentType := state.Headers["Content-Type"]
-		if !hasContentType || contentType != "text/plain" {
-			res := lints.LintResult{RuleMetadata: ruleNewsValidity, Message: fmt.Sprintf("[%s] Content-Type: text/plain is mandatory for News-Item-Format 1.0", lints.SeverityError), File: relPath}
-			res.RuleMetadata.Severity = lints.SeverityError
-			results = append(results, res)
-		}
+	for _, validator := range postValidators {
+		results = append(results, validator(state, relPath)...)
 	}
 
 	return results
