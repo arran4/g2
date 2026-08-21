@@ -205,8 +205,9 @@ func (r *NewsValidityLintRule) LintWithQA(repoDir string, pkg *g2.PackageData, q
 type Headers map[string][]string
 
 type Finding struct {
-	Severity lints.Severity
-	Message  string
+	Severity   lints.Severity
+	Message    string
+	ValueIndex int
 }
 
 type HeaderValidator func(key string, values []string) []Finding
@@ -281,8 +282,12 @@ func maxLength(max int) HeaderValidator {
 func each(valFn func(key string, val string) []Finding) HeaderValidator {
 	return func(key string, values []string) []Finding {
 		var findings []Finding
-		for _, val := range values {
-			findings = append(findings, valFn(key, val)...)
+		for i, val := range values {
+			valFindings := valFn(key, val)
+			for j := range valFindings {
+				valFindings[j].ValueIndex = i
+			}
+			findings = append(findings, valFindings...)
 		}
 		return findings
 	}
@@ -297,9 +302,9 @@ func validEmail() func(key string, val string) []Finding {
 	}
 }
 
-func validDate(format string) func(key string, val string) []Finding {
+func validDate() func(key string, val string) []Finding {
 	return func(key string, val string) []Finding {
-		if _, err := time.Parse(format, val); err != nil {
+		if _, err := time.Parse("2006-01-02", val); err != nil {
 			return []Finding{{Severity: lints.SeverityError, Message: fmt.Sprintf("Invalid %s date format, expected YYYY-MM-DD: '%s'", key, val)}}
 		}
 		return nil
@@ -366,48 +371,38 @@ func validProfile() func(key string, val string) []Finding {
 	}
 }
 
-var headerValidators = map[string][]HeaderValidator{
-	"Title": {
-		required(),
-		single(),
-		nonEmpty(),
-		maxLength(50),
-	},
-	"Author": {
-		required(),
-		each(validEmail()),
-	},
-	"Translator": {
-		each(validEmail()),
-	},
-	"Posted": {
-		required(),
-		single(),
-		each(validDate("2006-01-02")),
-	},
-	"Revision": {
-		required(),
-		single(),
-		each(validInteger()),
-	},
-	"Content-Type": {
-		single(),
-		each(validContentType()),
-	},
-	"News-Item-Format": {
-		required(),
-		single(),
-		each(validNewsItemFormat()),
-	},
-	"Display-If-Installed": {
-		each(validInstalledPackage()),
-	},
-	"Display-If-Keyword": {
-		each(validKeyword()),
-	},
-	"Display-If-Profile": {
-		each(validProfile()),
-	},
+type HeaderRule struct {
+	Key        string
+	Validators []HeaderValidator
+}
+
+func header(key string, validators ...HeaderValidator) HeaderRule {
+	return HeaderRule{
+		Key:        key,
+		Validators: validators,
+	}
+}
+
+var headerRules = []HeaderRule{
+	header("Title", required(), single(), nonEmpty(), maxLength(50)),
+	header("Author", required(), each(validEmail())),
+	header("Translator", each(validEmail())),
+	header("Posted", required(), single(), each(validDate())),
+	header("Revision", required(), single(), each(validInteger())),
+	header("Content-Type", single(), each(validContentType())),
+	header("News-Item-Format", required(), single(), each(validNewsItemFormat())),
+	header("Display-If-Installed", each(validInstalledPackage())),
+	header("Display-If-Keyword", each(validKeyword())),
+	header("Display-If-Profile", each(validProfile())),
+}
+
+var headerRegistry map[string][]HeaderValidator
+
+func init() {
+	headerRegistry = make(map[string][]HeaderValidator)
+	for _, rule := range headerRules {
+		headerRegistry[rule.Key] = rule.Validators
+	}
 }
 
 func validateFormatContentTypeCrossCheck(headers Headers) []Finding {
@@ -443,7 +438,8 @@ func (r *NewsValidityLintRule) lintNewsItem(content string, relPath string) []li
 
 	inBody := false
 	headers := make(Headers)
-	lineNumbers := make(map[string]int)
+	lineNumbers := make(map[string][]int)
+	var orderedKeys []string
 
 	for lineNum, line := range lines {
 		if inBody {
@@ -484,31 +480,38 @@ func (r *NewsValidityLintRule) lintNewsItem(content string, relPath string) []li
 		key := strings.TrimSpace(parts[0])
 		val := strings.TrimSpace(parts[1])
 
-		headers[key] = append(headers[key], val)
-
-		// Record the line number of the first occurrence of a header, mostly for simple errors
-		if _, exists := lineNumbers[key]; !exists {
-			lineNumbers[key] = lineNum + 1
+		if len(headers[key]) == 0 {
+			orderedKeys = append(orderedKeys, key)
 		}
+		headers[key] = append(headers[key], val)
+		lineNumbers[key] = append(lineNumbers[key], lineNum+1)
 	}
 
-	// Validate declared headers
-	for key, validators := range headerValidators {
-		vals := headers[key]
-		lineNum := lineNumbers[key]
-		for _, validator := range validators {
-			findings := validator(key, vals)
+	// Validate declared headers in deterministic order
+	for _, rule := range headerRules {
+		vals := headers[rule.Key]
+		for _, validator := range rule.Validators {
+			findings := validator(rule.Key, vals)
 			for _, f := range findings {
+				lineNum := 0
+				if f.ValueIndex >= 0 && f.ValueIndex < len(lineNumbers[rule.Key]) {
+					lineNum = lineNumbers[rule.Key][f.ValueIndex]
+				} else if len(lineNumbers[rule.Key]) > 0 {
+					lineNum = lineNumbers[rule.Key][0] // fallback to first occurrence
+				}
 				results = append(results, convertFinding(f, relPath, lineNum))
 			}
 		}
 	}
 
-	// Validate unknown headers
-	for key := range headers {
-		if _, ok := headerValidators[key]; !ok {
-			f := Finding{Severity: lints.SeverityWarning, Message: fmt.Sprintf("Unknown header: '%s'", key)}
-			results = append(results, convertFinding(f, relPath, lineNumbers[key]))
+	// Validate unknown headers in source order
+	for _, key := range orderedKeys {
+		if _, ok := headerRegistry[key]; !ok {
+			for i := range headers[key] {
+				f := Finding{Severity: lints.SeverityWarning, Message: fmt.Sprintf("Unknown header: '%s'", key), ValueIndex: i}
+				lineNum := lineNumbers[key][i]
+				results = append(results, convertFinding(f, relPath, lineNum))
+			}
 		}
 	}
 

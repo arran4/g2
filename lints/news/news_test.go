@@ -21,7 +21,7 @@ func warningFinding(msg string) Finding {
 func testHeader(t *testing.T, key string, values []string, expectedFindings ...Finding) {
 	t.Helper()
 	var actualFindings []Finding
-	if validators, ok := headerValidators[key]; ok {
+	if validators, ok := headerRegistry[key]; ok {
 		for _, v := range validators {
 			actualFindings = append(actualFindings, v(key, values)...)
 		}
@@ -165,6 +165,7 @@ Display-If-Installed: app-misc/bar
 This is the body.
 `)},
 		"metadata/news/2024-01-02-invalid-news/2024-01-02-invalid-news.en.txt": &fstest.MapFile{Data: []byte(`Title: Invalid News
+Author: Valid Author <valid@example.com>
 Author: Invalid Author
 Posted: 2024-01-02
 Revision: 1
@@ -186,9 +187,11 @@ Body
 	}
 
 	var hasAuthorErr, hasDisplayErr, hasFormatOneErr, hasUnknownHeaderWarn bool
+	var authorErrLine int
 	for _, res := range results {
 		if strings.Contains(res.Message, "Invalid Author format") {
 			hasAuthorErr = true
+			authorErrLine = res.Line
 		}
 		if strings.Contains(res.Message, "Invalid Display-If-Installed format, expected category/package") {
 			hasDisplayErr = true
@@ -203,6 +206,8 @@ Body
 
 	if !hasAuthorErr {
 		t.Errorf("expected Invalid Author format error")
+	} else if authorErrLine != 3 {
+		t.Errorf("expected Author error on line 3, got %d", authorErrLine)
 	}
 	if !hasDisplayErr {
 		t.Errorf("expected Invalid Display-If-Installed format error")
@@ -212,5 +217,76 @@ Body
 	}
 	if !hasFormatOneErr {
 		t.Errorf("expected Format 1.0 mandatory Content-Type error")
+	}
+}
+
+func TestDirectoryAndFileFormat(t *testing.T) {
+	fsys := fstest.MapFS{
+		"metadata/news/invalid_dir_name/2024-01-03-news.en.txt":                      &fstest.MapFile{Data: []byte("Title: Valid\nAuthor: a <a@b.com>\nPosted: 2024-01-01\nRevision: 1\nNews-Item-Format: 2.0\n\nBody")},
+		"metadata/news/2024-01-04-invalid-file/invalid_file_name.txt":                &fstest.MapFile{Data: []byte("Title: Valid\nAuthor: a <a@b.com>\nPosted: 2024-01-01\nRevision: 1\nNews-Item-Format: 2.0\n\nBody")},
+		"metadata/news/2024-01-05-mismatch-prefix/2024-01-06-mismatch-prefix.en.txt": &fstest.MapFile{Data: []byte("Title: Valid\nAuthor: a <a@b.com>\nPosted: 2024-01-01\nRevision: 1\nNews-Item-Format: 2.0\n\nBody")},
+	}
+
+	rule := NewNewsValidityLintRule(WithFS(fsys))
+	pkg := &g2.PackageData{Category: "app-misc", Name: "foo"}
+
+	results := rule.Lint(".", pkg)
+
+	var hasInvalidDirErr, hasInvalidFileErr, hasMismatchErr bool
+	for _, res := range results {
+		if strings.Contains(res.Message, "Invalid news directory name format") {
+			hasInvalidDirErr = true
+		}
+		if strings.Contains(res.Message, "Invalid news file name format") {
+			hasInvalidFileErr = true
+		}
+		if strings.Contains(res.Message, "does not match directory name") {
+			hasMismatchErr = true
+		}
+	}
+
+	if !hasInvalidDirErr {
+		t.Errorf("expected Invalid news directory name format error")
+	}
+	if !hasInvalidFileErr {
+		t.Errorf("expected Invalid news file name format error")
+	}
+	if !hasMismatchErr {
+		t.Errorf("expected prefix mismatch error")
+	}
+}
+
+func TestBodyValidation(t *testing.T) {
+	fsys := fstest.MapFS{
+		"metadata/news/2024-01-06-invalid-body/2024-01-06-invalid-body.en.txt": &fstest.MapFile{Data: []byte(`Title: Valid
+Author: a <a@b.com>
+Posted: 2024-01-01
+Revision: 1
+News-Item-Format: 2.0
+
+This	body contains a tab character and is definitely way too long, far exceeding the seventy-two character limit that is mandated by the standard we are supposed to be following here.
+`)},
+	}
+
+	rule := NewNewsValidityLintRule(WithFS(fsys))
+	pkg := &g2.PackageData{Category: "app-misc", Name: "foo"}
+
+	results := rule.Lint(".", pkg)
+
+	var hasTabErr, hasWrapErr bool
+	for _, res := range results {
+		if strings.Contains(res.Message, "Body lines should not contain tab characters") {
+			hasTabErr = true
+		}
+		if strings.Contains(res.Message, "Body lines should wrap at 72 characters") {
+			hasWrapErr = true
+		}
+	}
+
+	if !hasTabErr {
+		t.Errorf("expected Body tab character error")
+	}
+	if !hasWrapErr {
+		t.Errorf("expected Body line wrap error")
 	}
 }
