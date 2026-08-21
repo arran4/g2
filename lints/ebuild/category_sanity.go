@@ -76,12 +76,23 @@ func (l *CategorySanityLintRule) Lint(repoDir string, pkg *g2.PackageData) []lin
 		l.mu.Unlock()
 	}
 
-	inRepo := len(supportedCategories) == 0 || supportedCategories[name]
+	hasGentooMaster := false
+	if lc, err := g2.ParseLayoutConf(filepath.Join(repoDir, "metadata", "layout.conf")); err == nil && lc != nil {
+		for _, m := range lc.Masters() {
+			if m == "gentoo" {
+				hasGentooMaster = true
+				break
+			}
+		}
+	}
+
 	mainCats := g2.FetchMainGentooCategories()
 	inMain := len(mainCats) == 0 || mainCats[name]
 
-	if len(supportedCategories) > 0 && !inRepo {
-		if inMain {
+	if len(supportedCategories) > 0 && !supportedCategories[name] {
+		if hasGentooMaster && mainCats[name] {
+			// No warning, perfectly valid inherited category
+		} else if inMain {
 			res := lints.LintResult{
 				RuleMetadata: ruleCategorySanity,
 				Message:      fmt.Sprintf("Warning: category '%s' is not listed in repo's profiles/categories", name),

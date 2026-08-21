@@ -212,6 +212,25 @@ func parseRepoAuthors(repoDir string, site *g2.SiteData, remoteURL string) {
 	}
 }
 
+// isCategoryAllowed checks if a directory name should be accepted as a valid category.
+func isCategoryAllowed(repoCats map[string]bool, hasGentooMaster bool, mainCats map[string]bool, name string) bool {
+	if name == "virtual" || strings.HasPrefix(name, "virtual-") {
+		return true
+	}
+	if len(repoCats) > 0 && repoCats[name] {
+		return true
+	}
+	if hasGentooMaster && len(mainCats) > 0 && mainCats[name] {
+		return true
+	}
+	// Preserve backward compatibility for repos without profiles/categories.
+	// If the file is entirely absent or empty, allow all categories.
+	if len(repoCats) == 0 {
+		return true
+	}
+	return false
+}
+
 // parseRepoCategoriesAndPackages recursively crawls and parses the repo's categories, packages, and their ebuilds.
 func parseRepoCategoriesAndPackages(sysFS fs.FS, repoDir string, repoName string, fastGit bool, remoteURL string, site *g2.SiteData) error {
 	supportedCategories := make(map[string]bool)
@@ -261,6 +280,17 @@ func parseRepoCategoriesAndPackages(sysFS fs.FS, repoDir string, repoName string
 		infoPkgsMap[baseAtom] = true
 	}
 
+	hasGentooMaster := false
+	if site.LayoutConf != nil {
+		for _, master := range site.LayoutConf.Masters() {
+			if master == "gentoo" {
+				hasGentooMaster = true
+				break
+			}
+		}
+	}
+	mainCats := g2.FetchMainGentooCategories()
+
 	entries, err := fs.ReadDir(sysFS, filepath.ToSlash(repoDir))
 	if err != nil {
 		return fmt.Errorf("reading repo dir: %w", err)
@@ -275,15 +305,13 @@ func parseRepoCategoriesAndPackages(sysFS fs.FS, repoDir string, repoName string
 			continue
 		}
 
-		if len(supportedCategories) > 0 && !supportedCategories[name] && name != "virtual" && !strings.HasPrefix(name, "virtual-") {
+		if !isCategoryAllowed(supportedCategories, hasGentooMaster, mainCats, name) {
 			continue
 		}
 
 		catData := g2.CategoryData{Name: name}
 		catPath := filepath.Join(repoDir, name)
 
-		inRepo := len(supportedCategories) == 0 || supportedCategories[name]
-		mainCats := g2.FetchMainGentooCategories()
 		inMain := len(mainCats) == 0 || mainCats[name]
 
 		pkgEntries, err := fs.ReadDir(sysFS, filepath.ToSlash(catPath))
@@ -537,8 +565,10 @@ func parseRepoCategoriesAndPackages(sysFS fs.FS, repoDir string, repoName string
 
 			pkgData.LintWarnings = lints.PerformLinting(repoDir, &g2PkgData)
 
-			if len(supportedCategories) > 0 && !inRepo {
-				if inMain {
+			if len(supportedCategories) > 0 && !supportedCategories[name] {
+				if hasGentooMaster && mainCats[name] {
+					// No warning, perfectly valid inherited category
+				} else if inMain {
 					pkgData.LintWarnings = append(pkgData.LintWarnings, fmt.Sprintf("Warning: category '%s' is not listed in repo's profiles/categories", name))
 				} else {
 					pkgData.LintWarnings = append(pkgData.LintWarnings, fmt.Sprintf("Error: category '%s' is not listed in repo's profiles/categories or the main gentoo categories list", name))
@@ -551,8 +581,10 @@ func parseRepoCategoriesAndPackages(sysFS fs.FS, repoDir string, repoName string
 		}
 
 		if len(catData.Packages) > 0 {
-			if len(supportedCategories) > 0 && !inRepo {
-				if inMain {
+			if len(supportedCategories) > 0 && !supportedCategories[name] {
+				if hasGentooMaster && mainCats[name] {
+					// No warning, perfectly valid inherited category
+				} else if inMain {
 					log.Printf("Warning: category '%s' is not listed in repo's profiles/categories", name)
 				} else {
 					log.Printf("Error: category '%s' is not listed in repo's profiles/categories or the main gentoo categories list", name)

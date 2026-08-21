@@ -125,7 +125,18 @@ func (l *RepoLayoutLintRule) LintRepo(repoDir string, site *g2.SiteData) []lints
 				continue
 			}
 			inRepo := repoCategories[name]
-			inUpstream := upstreamCategories != nil && upstreamCategories[name]
+
+			hasGentooMaster := false
+			if site != nil && site.LayoutConf != nil {
+				for _, m := range site.LayoutConf.Masters() {
+					if m == "gentoo" {
+						hasGentooMaster = true
+						break
+					}
+				}
+			}
+
+			inUpstream := hasGentooMaster && upstreamCategories != nil && upstreamCategories[name]
 			if !inRepo && !inUpstream {
 				results = append(results, lints.LintResult{
 					RuleMetadata: ruleRepoLayout,
