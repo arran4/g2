@@ -1013,6 +1013,37 @@ func TestParsePackageAtom(t *testing.T) {
 				UseFlags: "native-symlinks",
 			},
 		},
+		{
+			name: "with repo qualifier",
+			dep:  "app-misc/foo::arrans-overlay",
+			want: PackageAtom{
+				Category: "app-misc",
+				Name:     "foo",
+				Repo:     "arrans-overlay",
+			},
+		},
+		{
+			name: "with slot, repo, and use flags",
+			dep:  ">=dev-lang/python-3.10.4-r1:0/3.10::gentoo[sqlite,xml]",
+			want: PackageAtom{
+				Operator: ">=",
+				Category: "dev-lang",
+				Name:     "python",
+				Version:  "3.10.4-r1",
+				Slot:     "0/3.10",
+				Repo:     "gentoo",
+				UseFlags: "sqlite,xml",
+			},
+		},
+		{
+			name: "wildcard repo atom",
+			dep:  "*/*::guru",
+			want: PackageAtom{
+				Category: "*",
+				Name:     "*",
+				Repo:     "guru",
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -1020,6 +1051,373 @@ func TestParsePackageAtom(t *testing.T) {
 			got := ParsePackageAtom(tt.dep)
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("ParsePackageAtom(%q) = %+v, want %+v", tt.dep, got, tt.want)
+			}
+			// Test round-trip String() where applicable
+			if tt.want.Category != "" && tt.want.Name != "" {
+				formatted := got.String()
+				if formatted != tt.dep {
+					t.Errorf("got.String() = %q, want %q", formatted, tt.dep)
+				}
+			}
+		})
+	}
+}
+
+func TestValidateRepoName(t *testing.T) {
+	tests := []struct {
+		name    string
+		repo    string
+		wantErr bool
+	}{
+		{name: "valid name", repo: "arrans-overlay", wantErr: false},
+		{name: "valid with underscores and numbers", repo: "my_repo_123", wantErr: false},
+		{name: "valid hyphen with non-digit", repo: "repo-v1", wantErr: false},
+		{name: "newline injection", repo: "repo\ncat/injected", wantErr: true},
+		{name: "space in name", repo: "repo name", wantErr: true},
+		{name: "leading hyphen", repo: "-repo", wantErr: true},
+		{name: "leading plus", repo: "+repo", wantErr: true},
+		{name: "leading dot", repo: ".repo", wantErr: true},
+		{name: "invalid character @", repo: "repo@name", wantErr: true},
+		{name: "empty name", repo: "", wantErr: true},
+		{name: "ending in digit version -1", repo: "repo-1", wantErr: true},
+		{name: "ending in version -2.3", repo: "overlay-2.3", wantErr: true},
+		{name: "ending in revision version -1.2-r1", repo: "foo-1.2-r1", wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateRepoName(tt.repo)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("ValidateRepoName(%q) error = %v, wantErr %v", tt.repo, err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestQualifyAtomForRepo(t *testing.T) {
+	tests := []struct {
+		name       string
+		dep        string
+		targetRepo string
+		want       string
+		wantErr    bool
+	}{
+		{
+			name:       "unqualified atom",
+			dep:        "app-misc/foo",
+			targetRepo: "arrans-overlay",
+			want:       "app-misc/foo::arrans-overlay",
+		},
+		{
+			name:       "unqualified versioned atom with operator",
+			dep:        ">=dev-util/bar-2.0",
+			targetRepo: "arrans-overlay",
+			want:       ">=dev-util/bar-2.0::arrans-overlay",
+		},
+		{
+			name:       "exact version atom",
+			dep:        "=cat/pkg-1.2",
+			targetRepo: "arrans-overlay",
+			want:       "=cat/pkg-1.2::arrans-overlay",
+		},
+		{
+			name:       "revision-agnostic version atom",
+			dep:        "~cat/pkg-1.2",
+			targetRepo: "arrans-overlay",
+			want:       "~cat/pkg-1.2::arrans-overlay",
+		},
+		{
+			name:       "unqualified slot atom",
+			dep:        "cat/pkg:0",
+			targetRepo: "arrans-overlay",
+			want:       "cat/pkg:0::arrans-overlay",
+		},
+		{
+			name:       "versioned with slot",
+			dep:        "=cat/pkg-1.2:0",
+			targetRepo: "arrans-overlay",
+			want:       "=cat/pkg-1.2:0::arrans-overlay",
+		},
+		{
+			name:       "matching qualified atom",
+			dep:        "app-misc/foo::arrans-overlay",
+			targetRepo: "arrans-overlay",
+			want:       "app-misc/foo::arrans-overlay",
+		},
+		{
+			name:       "matching qualified with version and slot",
+			dep:        ">=cat/pkg-2:0::arrans-overlay",
+			targetRepo: "arrans-overlay",
+			want:       ">=cat/pkg-2:0::arrans-overlay",
+		},
+		{
+			name:       "valid slot operator *",
+			dep:        "cat/pkg:*",
+			targetRepo: "arrans-overlay",
+			want:       "cat/pkg:*::arrans-overlay",
+		},
+		{
+			name:       "valid slot operator =",
+			dep:        "cat/pkg:=",
+			targetRepo: "arrans-overlay",
+			want:       "cat/pkg:=::arrans-overlay",
+		},
+		{
+			name:       "valid slot with equal suffix",
+			dep:        "cat/pkg:0=",
+			targetRepo: "arrans-overlay",
+			want:       "cat/pkg:0=::arrans-overlay",
+		},
+		{
+			name:       "valid slot and subslot",
+			dep:        "cat/pkg:0/1",
+			targetRepo: "arrans-overlay",
+			want:       "cat/pkg:0/1::arrans-overlay",
+		},
+		{
+			name:       "valid slot and subslot with equal suffix",
+			dep:        "cat/pkg:0/1=",
+			targetRepo: "arrans-overlay",
+			want:       "cat/pkg:0/1=::arrans-overlay",
+		},
+		{
+			name:       "invalid slot subslot with asterisk",
+			dep:        "cat/pkg:0/*",
+			targetRepo: "arrans-overlay",
+			wantErr:    true,
+		},
+		{
+			name:       "invalid slot with leading slash",
+			dep:        "cat/pkg:/0",
+			targetRepo: "arrans-overlay",
+			wantErr:    true,
+		},
+		{
+			name:       "invalid slot with trailing slash",
+			dep:        "cat/pkg:0/",
+			targetRepo: "arrans-overlay",
+			wantErr:    true,
+		},
+		{
+			name:       "invalid slot double asterisk",
+			dep:        "cat/pkg:**",
+			targetRepo: "arrans-overlay",
+			wantErr:    true,
+		},
+		{
+			name:       "invalid slot subslot double asterisk",
+			dep:        "cat/pkg:0/**",
+			targetRepo: "arrans-overlay",
+			wantErr:    true,
+		},
+		{
+			name:       "blocker ! is rejected",
+			dep:        "!cat/pkg",
+			targetRepo: "arrans-overlay",
+			wantErr:    true,
+		},
+		{
+			name:       "blocker !! is rejected",
+			dep:        "!!cat/pkg",
+			targetRepo: "arrans-overlay",
+			wantErr:    true,
+		},
+		{
+			name:       "blocker with versioned atom is rejected",
+			dep:        "!>=cat/pkg-2",
+			targetRepo: "arrans-overlay",
+			wantErr:    true,
+		},
+		{
+			name:       "USE dependency is rejected",
+			dep:        "cat/pkg[foo]",
+			targetRepo: "arrans-overlay",
+			wantErr:    true,
+		},
+		{
+			name:       "negative USE dependency is rejected",
+			dep:        "cat/pkg[-foo]",
+			targetRepo: "arrans-overlay",
+			wantErr:    true,
+		},
+		{
+			name:       "multi-flag USE dependency is rejected",
+			dep:        "cat/pkg[foo,bar]",
+			targetRepo: "arrans-overlay",
+			wantErr:    true,
+		},
+		{
+			name:       "empty USE dependency is rejected",
+			dep:        "cat/pkg[]",
+			targetRepo: "arrans-overlay",
+			wantErr:    true,
+		},
+		{
+			name:       "greater than operator with version",
+			dep:        ">cat/pkg-2",
+			targetRepo: "arrans-overlay",
+			want:       ">cat/pkg-2::arrans-overlay",
+		},
+		{
+			name:       "less than or equal operator with version",
+			dep:        "<=cat/pkg-2",
+			targetRepo: "arrans-overlay",
+			want:       "<=cat/pkg-2::arrans-overlay",
+		},
+		{
+			name:       "less than operator with version",
+			dep:        "<cat/pkg-2",
+			targetRepo: "arrans-overlay",
+			want:       "<cat/pkg-2::arrans-overlay",
+		},
+		{
+			name:       "conflicting qualified atom",
+			dep:        "app-misc/foo::guru",
+			targetRepo: "arrans-overlay",
+			wantErr:    true,
+		},
+		{
+			name:       "empty atom",
+			dep:        "",
+			targetRepo: "arrans-overlay",
+			wantErr:    true,
+		},
+		{
+			name:       "empty repo",
+			dep:        "app-misc/foo",
+			targetRepo: "",
+			wantErr:    true,
+		},
+		{
+			name:       "invalid repo ending in version",
+			dep:        "app-misc/foo",
+			targetRepo: "repo-1",
+			wantErr:    true,
+		},
+		{
+			name:       "invalid repo with newline",
+			dep:        "app-misc/foo",
+			targetRepo: "repo\ncat/injected",
+			wantErr:    true,
+		},
+		{
+			name:       "invalid repo with leading hyphen",
+			dep:        "app-misc/foo",
+			targetRepo: "-repo",
+			wantErr:    true,
+		},
+		{
+			name:       "bare package without category",
+			dep:        "foo",
+			targetRepo: "arrans-overlay",
+			wantErr:    true,
+		},
+		{
+			name:       "leading slash",
+			dep:        "/foo",
+			targetRepo: "arrans-overlay",
+			wantErr:    true,
+		},
+		{
+			name:       "trailing slash",
+			dep:        "cat/",
+			targetRepo: "arrans-overlay",
+			wantErr:    true,
+		},
+		{
+			name:       "extra path component",
+			dep:        "cat/foo/extra",
+			targetRepo: "arrans-overlay",
+			wantErr:    true,
+		},
+		{
+			name:       "whitespace inside atom",
+			dep:        "cat / foo",
+			targetRepo: "arrans-overlay",
+			wantErr:    true,
+		},
+		{
+			name:       "empty repository qualifier",
+			dep:        "cat/pkg::",
+			targetRepo: "arrans-overlay",
+			wantErr:    true,
+		},
+		{
+			name:       "multiple repository qualifiers",
+			dep:        "cat/pkg::repo1::repo2",
+			targetRepo: "arrans-overlay",
+			wantErr:    true,
+		},
+		{
+			name:       "repo-wide wildcard atom unqualified",
+			dep:        "*/*",
+			targetRepo: "arrans-overlay",
+			wantErr:    true,
+		},
+		{
+			name:       "repo-wide wildcard atom qualified",
+			dep:        "*/*::arrans-overlay",
+			targetRepo: "arrans-overlay",
+			wantErr:    true,
+		},
+		{
+			name:       "operator without version",
+			dep:        ">=cat/pkg",
+			targetRepo: "arrans-overlay",
+			wantErr:    true,
+		},
+		{
+			name:       "version without operator",
+			dep:        "cat/pkg-1.2",
+			targetRepo: "arrans-overlay",
+			wantErr:    true,
+		},
+		{
+			name:       "category leading plus",
+			dep:        "+cat/pkg",
+			targetRepo: "arrans-overlay",
+			wantErr:    true,
+		},
+		{
+			name:       "category leading dot",
+			dep:        ".cat/pkg",
+			targetRepo: "arrans-overlay",
+			wantErr:    true,
+		},
+		{
+			name:       "package name leading plus",
+			dep:        "cat/+pkg",
+			targetRepo: "arrans-overlay",
+			wantErr:    true,
+		},
+		{
+			name:       "package name contains dot",
+			dep:        "cat/pkg.name",
+			targetRepo: "arrans-overlay",
+			wantErr:    true,
+		},
+		{
+			name:       "package name contains at-sign",
+			dep:        "cat/pkg@name",
+			targetRepo: "arrans-overlay",
+			wantErr:    true,
+		},
+		{
+			name:       "invalid version format",
+			dep:        "=cat/pkg-1..2",
+			targetRepo: "arrans-overlay",
+			wantErr:    true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := QualifyAtomForRepo(tt.dep, tt.targetRepo)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("QualifyAtomForRepo(%q, %q) error = %v, wantErr %v", tt.dep, tt.targetRepo, err, tt.wantErr)
+			}
+			if err == nil && got != tt.want {
+				t.Errorf("QualifyAtomForRepo(%q, %q) = %q, want %q", tt.dep, tt.targetRepo, got, tt.want)
 			}
 		})
 	}

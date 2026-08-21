@@ -1032,7 +1032,267 @@ type PackageAtom struct {
 	Name     string // e.g. "python"
 	Version  string // e.g. "3.10.4-r1"
 	Slot     string // e.g. "0/3.10"
+	Repo     string // e.g. "arrans-overlay"
 	UseFlags string // e.g. "sqlite,xml"
+}
+
+// String returns the Gentoo package atom specification as a string.
+func (a PackageAtom) String() string {
+	var sb strings.Builder
+	sb.WriteString(a.Operator)
+	if a.Category != "" {
+		sb.WriteString(a.Category)
+		sb.WriteString("/")
+	}
+	sb.WriteString(a.Name)
+	if a.Version != "" {
+		sb.WriteString("-")
+		sb.WriteString(a.Version)
+	}
+	if a.Slot != "" {
+		sb.WriteString(":")
+		sb.WriteString(a.Slot)
+	}
+	if a.Repo != "" {
+		sb.WriteString("::")
+		sb.WriteString(a.Repo)
+	}
+	if a.UseFlags != "" {
+		sb.WriteString("[")
+		sb.WriteString(a.UseFlags)
+		sb.WriteString("]")
+	}
+	return sb.String()
+}
+
+// QualifyAtomForRepo validates that the given package atom specification is valid and
+// belongs to targetRepo. If the atom has no repository qualifier, ::targetRepo is appended.
+// If the atom already specifies ::targetRepo, it is accepted.
+// If the atom specifies a conflicting repository qualifier, an error is returned.
+// Repo-wide wildcard atoms (e.g. */*) are rejected because repo-wide policy requires explicit commands.
+func validateCategoryName(cat string) error {
+	if cat == "" {
+		return fmt.Errorf("category cannot be empty")
+	}
+	if cat[0] == '-' || cat[0] == '+' || cat[0] == '.' {
+		return fmt.Errorf("category %q must not begin with %q", cat, string(cat[0]))
+	}
+	for i := 0; i < len(cat); i++ {
+		c := cat[i]
+		if (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '+' || c == '_' || c == '.' || c == '-' {
+			continue
+		}
+		return fmt.Errorf("category %q contains invalid character %q", cat, string(c))
+	}
+	return nil
+}
+
+func validatePackageName(pkg string) error {
+	if pkg == "" {
+		return fmt.Errorf("package name cannot be empty")
+	}
+	if pkg[0] == '-' || pkg[0] == '+' {
+		return fmt.Errorf("package name %q must not begin with %q", pkg, string(pkg[0]))
+	}
+	for i := 0; i < len(pkg); i++ {
+		c := pkg[i]
+		if (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '+' || c == '_' || c == '-' {
+			continue
+		}
+		return fmt.Errorf("package name %q contains invalid character %q", pkg, string(c))
+	}
+	return nil
+}
+
+func validateSlotName(name string) error {
+	if name == "" {
+		return fmt.Errorf("slot cannot be empty")
+	}
+	if name[0] == '-' || name[0] == '+' || name[0] == '.' {
+		return fmt.Errorf("slot %q must not begin with %q", name, string(name[0]))
+	}
+	for i := 0; i < len(name); i++ {
+		c := name[i]
+		if (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '+' || c == '_' || c == '.' || c == '-' {
+			continue
+		}
+		return fmt.Errorf("slot %q contains invalid character %q", name, string(c))
+	}
+	return nil
+}
+
+func validateSlotSpec(slotPart string) error {
+	if slotPart == "" {
+		return fmt.Errorf("empty slot specification")
+	}
+	if slotPart == "*" || slotPart == "=" {
+		return nil
+	}
+	slotBase := strings.TrimSuffix(slotPart, "=")
+	if slotBase == "" {
+		return fmt.Errorf("invalid slot specification %q", slotPart)
+	}
+	if strings.Contains(slotBase, "/") {
+		parts := strings.Split(slotBase, "/")
+		if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
+			return fmt.Errorf("malformed slot/subslot %q", slotPart)
+		}
+		if err := validateSlotName(parts[0]); err != nil {
+			return fmt.Errorf("invalid slot %q: %w", parts[0], err)
+		}
+		if err := validateSlotName(parts[1]); err != nil {
+			return fmt.Errorf("invalid subslot %q: %w", parts[1], err)
+		}
+		return nil
+	}
+	return validateSlotName(slotBase)
+}
+
+// QualifyAtomForRepo validates that the given package atom specification is valid according to
+// Gentoo PMS rules and belongs to targetRepo. If the atom has no repository qualifier, ::targetRepo is appended.
+// If the atom already specifies ::targetRepo, it is accepted.
+// If the atom specifies a conflicting repository qualifier, an error is returned.
+// Repo-wide wildcard atoms (e.g. */*), blockers (!/!!), and USE dependencies ([...]) are rejected.
+func QualifyAtomForRepo(dep string, targetRepo string) (string, error) {
+	if dep == "" {
+		return "", fmt.Errorf("package atom cannot be empty")
+	}
+	if strings.ContainsAny(dep, " \t\r\n\x00") {
+		return "", fmt.Errorf("invalid package atom %q: whitespace is not permitted", dep)
+	}
+	if err := ValidateRepoName(targetRepo); err != nil {
+		return "", fmt.Errorf("invalid target repository %q: %w", targetRepo, err)
+	}
+
+	// Reject repo-wide wildcard atoms (*/* or */*::...)
+	if dep == "*/*" || strings.HasPrefix(dep, "*/*::") {
+		return "", fmt.Errorf("repo-wide wildcard atom %q is not permitted in package-specific commands; repo-wide policy requires an explicit repo-wide command", dep)
+	}
+
+	// Reject dependency blockers (! and !!)
+	if strings.HasPrefix(dep, "!") {
+		return "", fmt.Errorf("invalid package atom %q: blocker syntax '!' or '!!' is not permitted in package mask/unmask policy", dep)
+	}
+
+	// Reject USE-dependency syntax ([...])
+	if strings.Contains(dep, "[") || strings.Contains(dep, "]") {
+		return "", fmt.Errorf("invalid package atom %q: USE dependency syntax is not supported by g2 conf overlay package policy yet", dep)
+	}
+
+	s := dep
+
+	// 1. Extract Repository qualifier (::repo)
+	var specifiedRepo string
+	if strings.Contains(s, "::") {
+		if strings.Count(s, "::") > 1 {
+			return "", fmt.Errorf("invalid package atom %q: multiple repository qualifiers", dep)
+		}
+		if strings.HasSuffix(s, "::") {
+			return "", fmt.Errorf("invalid package atom %q: empty repository qualifier", dep)
+		}
+		idx := strings.Index(s, "::")
+		repoPart := s[idx+2:]
+		if err := ValidateRepoName(repoPart); err != nil {
+			return "", fmt.Errorf("invalid package atom %q: %w", dep, err)
+		}
+		specifiedRepo = repoPart
+		s = s[:idx]
+	}
+
+	// 2. Extract Slot / Subslot (:slot[/subslot])
+	var slotPart string
+	if strings.Contains(s, ":") {
+		idx := strings.LastIndex(s, ":")
+		slotPart = s[idx+1:]
+		if err := validateSlotSpec(slotPart); err != nil {
+			return "", fmt.Errorf("invalid package atom %q: %w", dep, err)
+		}
+		s = s[:idx]
+	}
+
+	// 3. Extract Operator
+	var op string
+	if strings.HasPrefix(s, ">=") || strings.HasPrefix(s, "<=") {
+		op = s[:2]
+		s = s[2:]
+	} else if strings.HasPrefix(s, "=") || strings.HasPrefix(s, "~") || strings.HasPrefix(s, ">") || strings.HasPrefix(s, "<") {
+		op = s[:1]
+		s = s[1:]
+	}
+
+	// 4. Category / Package[-version] split
+	if strings.Count(s, "/") != 1 {
+		return "", fmt.Errorf("invalid package atom %q: expected category/package format", dep)
+	}
+	slashIdx := strings.Index(s, "/")
+	catStr := s[:slashIdx]
+	pkgVerStr := s[slashIdx+1:]
+
+	if err := validateCategoryName(catStr); err != nil {
+		return "", fmt.Errorf("invalid package atom %q: %w", dep, err)
+	}
+
+	// 5. Version extraction
+	var pkgName string
+	var versionStr string
+	parts := strings.Split(pkgVerStr, "-")
+	for i := 1; i < len(parts); i++ {
+		candidateVer := strings.Join(parts[i:], "-")
+		if len(candidateVer) > 0 && candidateVer[0] >= '0' && candidateVer[0] <= '9' {
+			gv := ParseGentooVersion(candidateVer)
+			if gv.IsValid {
+				pkgName = strings.Join(parts[:i], "-")
+				versionStr = candidateVer
+				break
+			}
+		}
+	}
+	if pkgName == "" {
+		pkgName = pkgVerStr
+	}
+
+	if err := validatePackageName(pkgName); err != nil {
+		return "", fmt.Errorf("invalid package atom %q: %w", dep, err)
+	}
+
+	// 6. Validate Operator vs Version consistency
+	if op != "" {
+		if versionStr == "" {
+			return "", fmt.Errorf("invalid package atom %q: operator %q requires a version", dep, op)
+		}
+		gv := ParseGentooVersion(versionStr)
+		if !gv.IsValid {
+			return "", fmt.Errorf("invalid package atom %q: invalid version %q", dep, versionStr)
+		}
+	} else {
+		if versionStr != "" {
+			return "", fmt.Errorf("invalid package atom %q: versioned package dependency requires an operator", dep)
+		}
+	}
+
+	// 7. Validate Repository matching
+	if specifiedRepo != "" && specifiedRepo != targetRepo {
+		return "", fmt.Errorf("package qualifier %q does not match selected repository %q", specifiedRepo, targetRepo)
+	}
+
+	// 8. Reassemble qualified atom string
+	var sb strings.Builder
+	sb.WriteString(op)
+	sb.WriteString(catStr)
+	sb.WriteString("/")
+	sb.WriteString(pkgName)
+	if versionStr != "" {
+		sb.WriteString("-")
+		sb.WriteString(versionStr)
+	}
+	if slotPart != "" {
+		sb.WriteString(":")
+		sb.WriteString(slotPart)
+	}
+	sb.WriteString("::")
+	sb.WriteString(targetRepo)
+
+	return sb.String(), nil
 }
 
 // ParsePackageAtom parses a raw dependency string into its constituent parts.
@@ -1053,13 +1313,19 @@ func ParsePackageAtom(dep string) PackageAtom {
 		}
 	}
 
-	// 3. Extract Slot
+	// 3. Extract Repo (::repo)
+	if idx := strings.Index(dep, "::"); idx != -1 {
+		atom.Repo = dep[idx+2:]
+		dep = dep[:idx] // strip repo
+	}
+
+	// 4. Extract Slot (:slot)
 	if idx := strings.Index(dep, ":"); idx != -1 {
 		atom.Slot = dep[idx+1:]
 		dep = dep[:idx] // strip slot
 	}
 
-	// 4. Extract Category, Name, and Version
+	// 5. Extract Category, Name, and Version
 	// dep is now something like "dev-lang/python-3.10.0-r1" or "virtual/pkgconfig"
 	parts := strings.Split(dep, "/")
 	var nameAndVer string
