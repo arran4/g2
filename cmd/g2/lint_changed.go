@@ -3,9 +3,13 @@ package main
 import (
 	"flag"
 	"fmt"
+	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
+
+	"github.com/arran4/g2"
 )
 
 func (cfg *MainArgConfig) cmdLintChanged(args []string) error {
@@ -13,6 +17,12 @@ func (cfg *MainArgConfig) cmdLintChanged(args []string) error {
 	fs.Usage = func() {
 		fmt.Printf("Usage: g2 lint changed [flags] [<location>]\n\n")
 		fmt.Printf("  <location>\tOptional path to the overlay directory (defaults to '.').\n\n")
+		fmt.Printf("Description:\n")
+		fmt.Printf("  Lints only Gentoo packages modified in the current Git work tree or recent commits.\n")
+		fmt.Printf("  - Working tree, index, and untracked package changes are always considered.\n")
+		fmt.Printf("  - Committed changes are compared to the explicit --base if supplied.\n")
+		fmt.Printf("  - If --base is omitted, the configured upstream branch is used as the base.\n")
+		fmt.Printf("  - If neither an explicit base nor an upstream exists, only local changes are considered.\n\n")
 		fmt.Printf("Flags:\n")
 		fs.PrintDefaults()
 	}
@@ -33,7 +43,12 @@ func (cfg *MainArgConfig) cmdLintChanged(args []string) error {
 		location = fs.Arg(0)
 	}
 
-	pkgs, err := getGitModifiedPackagesChanged(location, *base)
+	siteData, err := parseRepo(os.DirFS(location), ".", "Linting", true, nil)
+	if err != nil {
+		return fmt.Errorf("parsing repo: %w", err)
+	}
+
+	pkgs, err := getGitModifiedPackagesChanged(location, *base, siteData)
 	if err != nil {
 		return fmt.Errorf("getting modified packages: %w", err)
 	}
@@ -53,7 +68,7 @@ func (cfg *MainArgConfig) cmdLintChanged(args []string) error {
 	return cfg.runLintCore(location, targetMap, nil, *format, *severityFilter, *sourceFilter, *tagFilter, *disableRule, *ignoreTag)
 }
 
-func getGitModifiedPackagesChanged(repoDir string, explicitBase string) ([]string, error) {
+func getGitModifiedPackagesChanged(repoDir string, explicitBase string, siteData *g2.SiteData) ([]string, error) {
 	// First check if it's a git repo
 	chkCmd := exec.Command("git", "rev-parse", "--is-inside-work-tree")
 	chkCmd.Dir = repoDir
@@ -80,10 +95,14 @@ func getGitModifiedPackagesChanged(repoDir string, explicitBase string) ([]strin
 	}
 
 	// Unstaged + Staged (tracked) modifications/additions/renames
-	_ = runZCmd("git", "diff", "-z", "--name-only", "HEAD")
+	if err := runZCmd("git", "diff", "-z", "--name-only", "HEAD"); err != nil {
+		return nil, fmt.Errorf("git diff HEAD failed: %w", err)
+	}
 
 	// Untracked non-ignored files
-	_ = runZCmd("git", "ls-files", "-z", "--others", "--exclude-standard")
+	if err := runZCmd("git", "ls-files", "-z", "--others", "--exclude-standard"); err != nil {
+		return nil, fmt.Errorf("git ls-files failed: %w", err)
+	}
 
 	base := explicitBase
 	if base == "" {
@@ -112,19 +131,23 @@ func getGitModifiedPackagesChanged(repoDir string, explicitBase string) ([]strin
 		}
 	}
 
+	// Build a fast lookup map of valid categories
+	validCategories := make(map[string]bool)
+	if siteData != nil {
+		for _, cat := range siteData.Categories {
+			validCategories[cat.Name] = true
+		}
+	}
+
 	for _, f := range files {
 		f = filepath.ToSlash(f)
 		parts := strings.Split(f, "/")
-		// typical gentoo package is category/package/...
-		// we ignore metadata/layout.conf and profiles/repo_name
-		if len(parts) >= 3 && parts[0] != "metadata" && parts[0] != "profiles" {
-			pkgMap[parts[0]+"/"+parts[1]] = true
-		} else if len(parts) == 2 && parts[0] != "metadata" && parts[0] != "profiles" {
-			// A file directly inside a category dir might be weird, but let's be safe.
-			// Actually Gentoo packages are cat/pkg/pkg-1.ebuild
-			// So len(parts) should be >= 3 to be inside a package.
-			// Let's just do len(parts) >= 2 and filter out infrastructure
-			pkgMap[parts[0]+"/"+parts[1]] = true
+		if len(parts) >= 2 {
+			cat := parts[0]
+			pkg := parts[1]
+			if validCategories[cat] {
+				pkgMap[cat+"/"+pkg] = true
+			}
 		}
 	}
 
@@ -132,6 +155,7 @@ func getGitModifiedPackagesChanged(repoDir string, explicitBase string) ([]strin
 	for p := range pkgMap {
 		pkgs = append(pkgs, p)
 	}
+	sort.Strings(pkgs)
 
 	return pkgs, nil
 }
