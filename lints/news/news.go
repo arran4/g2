@@ -346,13 +346,27 @@ func (r *NewsValidityLintRule) lintNewsItem(content string, relPath string) []li
 				results = append(results, res)
 			}
 		case "Display-If-Installed":
-			if !strings.Contains(val, "/") {
+			if strings.ContainsAny(val, " \t") {
+				res := lints.LintResult{RuleMetadata: ruleNewsValidity, Message: fmt.Sprintf("[%s] Invalid Display-If-Installed format, should not contain multiple values or spaces: '%s'", lints.SeverityError, val), File: relPath, Line: lineNum + 1}
+				res.RuleMetadata.Severity = lints.SeverityError
+				results = append(results, res)
+			} else if !strings.Contains(val, "/") {
 				res := lints.LintResult{RuleMetadata: ruleNewsValidity, Message: fmt.Sprintf("[%s] Invalid Display-If-Installed format, expected category/package: '%s'", lints.SeverityError, val), File: relPath, Line: lineNum + 1}
 				res.RuleMetadata.Severity = lints.SeverityError
 				results = append(results, res)
 			}
 		case "Display-If-Keyword":
+			if strings.ContainsAny(val, " \t") {
+				res := lints.LintResult{RuleMetadata: ruleNewsValidity, Message: fmt.Sprintf("[%s] Invalid Display-If-Keyword format, should not contain multiple values or spaces: '%s'", lints.SeverityError, val), File: relPath, Line: lineNum + 1}
+				res.RuleMetadata.Severity = lints.SeverityError
+				results = append(results, res)
+			}
 		case "Display-If-Profile":
+			if strings.ContainsAny(val, " \t") {
+				res := lints.LintResult{RuleMetadata: ruleNewsValidity, Message: fmt.Sprintf("[%s] Invalid Display-If-Profile format, should not contain multiple values or spaces: '%s'", lints.SeverityError, val), File: relPath, Line: lineNum + 1}
+				res.RuleMetadata.Severity = lints.SeverityError
+				results = append(results, res)
+			}
 		default:
 			res := lints.LintResult{RuleMetadata: ruleNewsValidity, Message: fmt.Sprintf("[%s] Unknown header: '%s'", lints.SeverityWarning, key), File: relPath, Line: lineNum + 1}
 			res.RuleMetadata.Severity = lints.SeverityWarning

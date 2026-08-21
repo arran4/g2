@@ -29,6 +29,17 @@ Display-If-Installed: invalid_format
 
 Body
 `)},
+		"metadata/news/2024-01-02-invalid-multiple-values/2024-01-02-invalid-multiple-values.en.txt": &fstest.MapFile{Data: []byte(`Title: Invalid Multiple Values
+Author: John Doe <john@example.com>
+Posted: 2024-01-02
+Revision: 1
+News-Item-Format: 2.0
+Display-If-Installed: app-misc/foo app-misc/bar
+Display-If-Keyword: amd64 x86
+Display-If-Profile: default/linux/amd64/17.0 default/linux/x86/17.0
+
+This is the body.
+`)},
 		"metadata/news/invalid_dir_name/2024-01-03-news.en.txt": &fstest.MapFile{Data: []byte(`Title: Invalid Dir
 Author: John Doe <john@example.com>
 Posted: 2024-01-03
@@ -75,6 +86,7 @@ This	body contains a tab character and is definitely way too long, far exceeding
 	}
 
 	var hasAuthorErr, hasDisplayErr bool
+	var hasDisplayInstalledSpaceErr, hasDisplayKeywordSpaceErr, hasDisplayProfileSpaceErr bool
 	var hasInvalidDirErr, hasInvalidFileErr, hasMismatchErr bool
 	var hasTitleLengthErr, hasRevisionIntErr, hasContentTypeErr, hasFormatOneErr bool
 	var hasTabErr, hasWrapErr bool
@@ -82,8 +94,17 @@ This	body contains a tab character and is definitely way too long, far exceeding
 		if strings.Contains(res.Message, "Invalid Author format") {
 			hasAuthorErr = true
 		}
-		if strings.Contains(res.Message, "Invalid Display-If-Installed format") {
+		if strings.Contains(res.Message, "Invalid Display-If-Installed format, expected category/package") {
 			hasDisplayErr = true
+		}
+		if strings.Contains(res.Message, "Invalid Display-If-Installed format, should not contain multiple values or spaces") {
+			hasDisplayInstalledSpaceErr = true
+		}
+		if strings.Contains(res.Message, "Invalid Display-If-Keyword format, should not contain multiple values or spaces") {
+			hasDisplayKeywordSpaceErr = true
+		}
+		if strings.Contains(res.Message, "Invalid Display-If-Profile format, should not contain multiple values or spaces") {
+			hasDisplayProfileSpaceErr = true
 		}
 		if strings.Contains(res.Message, "Invalid news directory name format") {
 			hasInvalidDirErr = true
@@ -119,6 +140,15 @@ This	body contains a tab character and is definitely way too long, far exceeding
 	}
 	if !hasDisplayErr {
 		t.Errorf("expected Invalid Display-If-Installed format error")
+	}
+	if !hasDisplayInstalledSpaceErr {
+		t.Errorf("expected Invalid Display-If-Installed format error (multiple values or spaces)")
+	}
+	if !hasDisplayKeywordSpaceErr {
+		t.Errorf("expected Invalid Display-If-Keyword format error (multiple values or spaces)")
+	}
+	if !hasDisplayProfileSpaceErr {
+		t.Errorf("expected Invalid Display-If-Profile format error (multiple values or spaces)")
 	}
 	if !hasInvalidDirErr {
 		t.Errorf("expected Invalid news directory name format error")
