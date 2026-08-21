@@ -203,14 +203,7 @@ func (r *NewsValidityLintRule) LintWithQA(repoDir string, pkg *g2.PackageData, q
 }
 
 type NewsItemState struct {
-	HasTitle       bool
-	HasAuthor      bool
-	HasPosted      bool
-	HasRevision    bool
-	HasFormat      bool
-	HasContentType bool
-	NewsItemFormat string
-	ContentTypeVal string
+	Headers map[string]string
 }
 
 type HeaderContext struct {
@@ -333,50 +326,24 @@ func validateCategoryPackage(ctx *HeaderContext, state *NewsItemState) []lints.L
 
 var headerValidators = map[string][]HeaderValidator{
 	"Title": {
-		func(ctx *HeaderContext, state *NewsItemState) []lints.LintResult {
-			state.HasTitle = true
-			return nil
-		},
 		validateTitleLength,
 	},
 	"Author": {
-		func(ctx *HeaderContext, state *NewsItemState) []lints.LintResult {
-			state.HasAuthor = true
-			return nil
-		},
 		validateEmailFormat,
 	},
 	"Translator": {
 		validateEmailFormat,
 	},
 	"Posted": {
-		func(ctx *HeaderContext, state *NewsItemState) []lints.LintResult {
-			state.HasPosted = true
-			return nil
-		},
 		validatePostedDate,
 	},
 	"Revision": {
-		func(ctx *HeaderContext, state *NewsItemState) []lints.LintResult {
-			state.HasRevision = true
-			return nil
-		},
 		validateRevisionInteger,
 	},
 	"Content-Type": {
-		func(ctx *HeaderContext, state *NewsItemState) []lints.LintResult {
-			state.HasContentType = true
-			state.ContentTypeVal = ctx.Value
-			return nil
-		},
 		validateContentType,
 	},
 	"News-Item-Format": {
-		func(ctx *HeaderContext, state *NewsItemState) []lints.LintResult {
-			state.HasFormat = true
-			state.NewsItemFormat = ctx.Value
-			return nil
-		},
 		validateNewsItemFormat,
 	},
 	"Display-If-Installed": {
@@ -396,7 +363,7 @@ func (r *NewsValidityLintRule) lintNewsItem(content string, relPath string) []li
 	lines := strings.Split(content, "\n")
 
 	inBody := false
-	state := &NewsItemState{}
+	state := &NewsItemState{Headers: make(map[string]string)}
 
 	for lineNum, line := range lines {
 		if inBody {
@@ -437,6 +404,8 @@ func (r *NewsValidityLintRule) lintNewsItem(content string, relPath string) []li
 		key := strings.TrimSpace(parts[0])
 		val := strings.TrimSpace(parts[1])
 
+		state.Headers[key] = val
+
 		ctx := &HeaderContext{
 			Key:     key,
 			Value:   val,
@@ -455,34 +424,37 @@ func (r *NewsValidityLintRule) lintNewsItem(content string, relPath string) []li
 		}
 	}
 
-	if !state.HasTitle {
+	if _, ok := state.Headers["Title"]; !ok {
 		res := lints.LintResult{RuleMetadata: ruleNewsValidity, Message: fmt.Sprintf("[%s] Missing required header: Title", lints.SeverityError), File: relPath}
 		res.RuleMetadata.Severity = lints.SeverityError
 		results = append(results, res)
 	}
-	if !state.HasAuthor {
+	if _, ok := state.Headers["Author"]; !ok {
 		res := lints.LintResult{RuleMetadata: ruleNewsValidity, Message: fmt.Sprintf("[%s] Missing required header: Author", lints.SeverityError), File: relPath}
 		res.RuleMetadata.Severity = lints.SeverityError
 		results = append(results, res)
 	}
-	if !state.HasPosted {
+	if _, ok := state.Headers["Posted"]; !ok {
 		res := lints.LintResult{RuleMetadata: ruleNewsValidity, Message: fmt.Sprintf("[%s] Missing required header: Posted", lints.SeverityError), File: relPath}
 		res.RuleMetadata.Severity = lints.SeverityError
 		results = append(results, res)
 	}
-	if !state.HasRevision {
+	if _, ok := state.Headers["Revision"]; !ok {
 		res := lints.LintResult{RuleMetadata: ruleNewsValidity, Message: fmt.Sprintf("[%s] Missing required header: Revision", lints.SeverityError), File: relPath}
 		res.RuleMetadata.Severity = lints.SeverityError
 		results = append(results, res)
 	}
-	if !state.HasFormat {
+	if formatVal, hasFormat := state.Headers["News-Item-Format"]; !hasFormat {
 		res := lints.LintResult{RuleMetadata: ruleNewsValidity, Message: fmt.Sprintf("[%s] Missing required header: News-Item-Format", lints.SeverityError), File: relPath}
 		res.RuleMetadata.Severity = lints.SeverityError
 		results = append(results, res)
-	} else if state.NewsItemFormat == "1.0" && (!state.HasContentType || state.ContentTypeVal != "text/plain") {
-		res := lints.LintResult{RuleMetadata: ruleNewsValidity, Message: fmt.Sprintf("[%s] Content-Type: text/plain is mandatory for News-Item-Format 1.0", lints.SeverityError), File: relPath}
-		res.RuleMetadata.Severity = lints.SeverityError
-		results = append(results, res)
+	} else if formatVal == "1.0" {
+		contentType, hasContentType := state.Headers["Content-Type"]
+		if !hasContentType || contentType != "text/plain" {
+			res := lints.LintResult{RuleMetadata: ruleNewsValidity, Message: fmt.Sprintf("[%s] Content-Type: text/plain is mandatory for News-Item-Format 1.0", lints.SeverityError), File: relPath}
+			res.RuleMetadata.Severity = lints.SeverityError
+			results = append(results, res)
+		}
 	}
 
 	return results
