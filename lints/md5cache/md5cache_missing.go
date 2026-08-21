@@ -13,10 +13,12 @@ var ruleMD5CacheMissing = lints.RuleMetadata{
 	ID:          "Md5CacheMissing",
 	Title:       "Missing MD5 Cache",
 	Description: "Verifies that an md5-cache entry exists for every ebuild version.",
-	URL:         "https://devmanual.gentoo.org/general-concepts/overlay-layout/#md5-cache",
-	Severity:    lints.SeverityWarning,
-	Source:      lints.SourceG2,
-	Tags:        []string{"md5-cache", "site-quality"},
+	References: []lints.RuleReference{
+		{URL: "https://devmanual.gentoo.org/general-concepts/overlay-layout/#md5-cache", Label: "Gentoo Devmanual"},
+	},
+	Severity: lints.SeverityWarning,
+	Source:   lints.SourceG2,
+	Tags:     []string{"md5-cache", "site-quality"},
 }
 
 func init() {

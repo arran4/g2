@@ -14,10 +14,12 @@ var ruleMeaningfulHomepage = lints.RuleMetadata{
 	ID:          "MeaningfulHomepage",
 	Title:       "HOMEPAGE value must be meaningful",
 	Description: "HOMEPAGE must be meaningful. Packages must not use https://www.gentoo.org/ or a similar generic homepage.",
-	URL:         "https://projects.gentoo.org/qa/policy-guide/other-metadata.html#pg0702",
-	Severity:    lints.SeverityError,
-	Source:      lints.SourceQA,
-	Tags:        []string{"ebuild", "gentoo-policy", "PG0702"},
+	References: []lints.RuleReference{
+		{URL: "https://projects.gentoo.org/qa/policy-guide/other-metadata.html#pg0702", Label: "Gentoo QA Policy Guide PG0702"},
+	},
+	Severity: lints.SeverityError,
+	Source:   lints.SourceQA,
+	Tags:     []string{"ebuild", "gentoo-policy", "PG0702"},
 }
 
 func init() {

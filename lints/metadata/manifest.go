@@ -15,10 +15,12 @@ var ruleManifestChecks = lints.RuleMetadata{
 	ID:          "ManifestChecks",
 	Title:       "Manifest File Checks",
 	Description: "Ensures the Manifest file exists and conforms to layout.conf.",
-	URL:         "https://devmanual.gentoo.org/general-concepts/manifest/index.html",
-	Severity:    lints.SeverityError,
-	Source:      lints.SourceG2,
-	Tags:        []string{"manifest"},
+	References: []lints.RuleReference{
+		{URL: "https://devmanual.gentoo.org/general-concepts/manifest/index.html", Label: "Gentoo Devmanual"},
+	},
+	Severity: lints.SeverityError,
+	Source:   lints.SourceG2,
+	Tags:     []string{"manifest"},
 }
 
 func init() {

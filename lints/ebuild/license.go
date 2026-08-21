@@ -2,9 +2,9 @@ package ebuild
 
 import (
 	"fmt"
-	"strings"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/arran4/g2"
 	"github.com/arran4/g2/lints"
@@ -16,20 +16,24 @@ var ruleLicense = lints.RuleMetadata{
 	ID:          "License",
 	Title:       "LICENSE variable must explicitly list all licenses",
 	Description: "The LICENSE variable must explicitly list all licenses pertaining to the corresponding source of the files installed by the package.",
-	URL:         "https://projects.gentoo.org/qa/policy-guide/other-metadata.html#pg0704",
-	Severity:    lints.SeverityError,
-	Source:      lints.SourceQA,
-	Tags:        []string{"ebuild", "gentoo-policy", "PG0704"},
+	References: []lints.RuleReference{
+		{URL: "https://projects.gentoo.org/qa/policy-guide/other-metadata.html#pg0704", Label: "Gentoo QA Policy Guide PG0704"},
+	},
+	Severity: lints.SeverityError,
+	Source:   lints.SourceQA,
+	Tags:     []string{"ebuild", "gentoo-policy", "PG0704"},
 }
 
 var ruleLicenseExists = lints.RuleMetadata{
 	ID:          "LicenseExists",
 	Title:       "LICENSE variable must only list valid licenses",
 	Description: "The licenses specified in the LICENSE variable must exist in the repository or its masters.",
-	URL:         "https://devmanual.gentoo.org/general-concepts/licenses/index.html",
-	Severity:    lints.SeverityError,
-	Source:      lints.SourceQA,
-	Tags:        []string{"ebuild", "gentoo-policy"},
+	References: []lints.RuleReference{
+		{URL: "https://devmanual.gentoo.org/general-concepts/licenses/index.html", Label: "Gentoo Devmanual"},
+	},
+	Severity: lints.SeverityError,
+	Source:   lints.SourceQA,
+	Tags:     []string{"ebuild", "gentoo-policy"},
 }
 
 func init() {
@@ -72,7 +76,7 @@ func (r *LicenseLintRule) LintWithQA(repoDir string, pkg *g2.PackageData, qa *g2
 
 			// Virtuals don't require LICENSE
 			if pkg.Category == "virtual" {
-			    continue
+				continue
 			}
 
 			if license == "" {

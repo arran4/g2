@@ -13,10 +13,12 @@ var ruleRemoteIDType = lints.RuleMetadata{
 	ID:          "RemoteIDType",
 	Title:       "Valid Remote ID Type",
 	Description: "Validates that the type attribute for <remote-id> elements matches the allowed enumeration in the DTD.",
-	URL:         "https://devmanual.gentoo.org/ebuild-writing/misc-files/metadata.xml/#upstream",
-	Severity:    lints.SeverityError,
-	Source:      lints.SourceG2,
-	Tags:        []string{"metadata.xml", "site-quality"},
+	References: []lints.RuleReference{
+		{URL: "https://devmanual.gentoo.org/ebuild-writing/misc-files/metadata.xml/#upstream", Label: "Gentoo Devmanual"},
+	},
+	Severity: lints.SeverityError,
+	Source:   lints.SourceG2,
+	Tags:     []string{"metadata.xml", "site-quality"},
 }
 
 func init() {

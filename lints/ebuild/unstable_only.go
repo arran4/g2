@@ -15,7 +15,6 @@ var ruleUnstableOnly = lints.RuleMetadata{
 	ID:          "UnstableOnly",
 	Title:       "Unstable Only",
 	Description: "Checks if a package has only unstable keywords for an architecture.",
-	URL:         "",
 	Severity:    lints.SeverityNotice, // pkgcheck puts it as Info
 	Source:      lints.SourcePkgcheck,
 	Tags:        []string{"ebuild", "keywords"},

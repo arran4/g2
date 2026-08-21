@@ -11,15 +11,15 @@ import (
 
 	"github.com/arran4/g2"
 	"github.com/arran4/g2/lints"
-	"github.com/arran4/g2/lints/layout"
 	"github.com/arran4/g2/lints/ebuild"
+	"github.com/arran4/g2/lints/layout"
 
 	_ "github.com/arran4/g2/lints/ebuild"
-	_ "github.com/arran4/g2/lints/profiles"
 	_ "github.com/arran4/g2/lints/eclass"
 	_ "github.com/arran4/g2/lints/md5cache"
 	_ "github.com/arran4/g2/lints/metadata"
 	_ "github.com/arran4/g2/lints/news"
+	_ "github.com/arran4/g2/lints/profiles"
 )
 
 func (cfg *MainArgConfig) cmdLint(args []string) error {
@@ -60,8 +60,12 @@ func (cfg *MainArgConfig) cmdLintList(args []string) error {
 	fmt.Println("Available Lint Rules:")
 	for _, r := range rules {
 		fmt.Printf("- %s [%s] (%s): %s\n", r.ID, r.Severity, r.Source, r.Description)
-		if r.URL != "" {
-			fmt.Printf("  URL: %s\n", r.URL)
+		for _, ref := range r.References {
+			if ref.Label != "" {
+				fmt.Printf("  Reference (%s): %s\n", ref.Label, ref.URL)
+			} else {
+				fmt.Printf("  URL: %s\n", ref.URL)
+			}
 		}
 	}
 	return nil

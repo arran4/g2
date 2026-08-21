@@ -13,10 +13,12 @@ var ruleEclassHeader = lints.RuleMetadata{
 	ID:          "EclassHeader",
 	Title:       "Eclass Header Documentation",
 	Description: "Validates the presence of required documentation tags in eclasses.",
-	URL:         "https://devmanual.gentoo.org/eclass-writing/index.html",
-	Severity:    lints.SeverityWarning,
-	Source:      lints.SourceG2,
-	Tags:        []string{"eclass", "gentoo-policy", "PG0804"},
+	References: []lints.RuleReference{
+		{URL: "https://devmanual.gentoo.org/eclass-writing/index.html", Label: "Gentoo Devmanual"},
+	},
+	Severity: lints.SeverityWarning,
+	Source:   lints.SourceG2,
+	Tags:     []string{"eclass", "gentoo-policy", "PG0804"},
 }
 
 func init() {

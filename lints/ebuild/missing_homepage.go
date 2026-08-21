@@ -14,10 +14,12 @@ var ruleMissingHomepage = lints.RuleMetadata{
 	ID:          "MissingHomepage",
 	Title:       "Missing Homepage",
 	Description: "Checks if a package's HOMEPAGE is missing or invalid. Note: virtuals are exempt.",
-	URL:         "https://devmanual.gentoo.org/ebuild-writing/variables/index.html#homepage",
-	Severity:    lints.SeverityWarning,
-	Source:      lints.SourceG2,
-	Tags:        []string{"ebuild", "site-quality"},
+	References: []lints.RuleReference{
+		{URL: "https://devmanual.gentoo.org/ebuild-writing/variables/index.html#homepage", Label: "Gentoo Devmanual"},
+	},
+	Severity: lints.SeverityWarning,
+	Source:   lints.SourceG2,
+	Tags:     []string{"ebuild", "site-quality"},
 }
 
 func init() {
