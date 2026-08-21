@@ -202,20 +202,15 @@ func (r *NewsValidityLintRule) LintWithQA(repoDir string, pkg *g2.PackageData, q
 	return results
 }
 
-type NewsItemState struct {
-	Headers map[string]string
+type Headers map[string][]string
+
+type Finding struct {
+	Severity lints.Severity
+	Message  string
 }
 
-type HeaderContext struct {
-	Key     string
-	Value   string
-	RelPath string
-	LineNum int
-}
-
-type HeaderValidator func(ctx *HeaderContext, state *NewsItemState) []lints.LintResult
-
-type PostValidator func(state *NewsItemState, relPath string) []lints.LintResult
+type HeaderValidator func(key string, values []string) []Finding
+type Validator func(headers Headers) []Finding
 
 func checkEmailFormat(val string) bool {
 	// Simple manual check for "^.+ <.+@.+>$" logic to avoid complex regex as per guidelines
@@ -243,153 +238,203 @@ func checkEmailFormat(val string) bool {
 	return true
 }
 
-func validateTitleLength(ctx *HeaderContext, state *NewsItemState) []lints.LintResult {
-	if len(ctx.Value) == 0 {
-		res := lints.LintResult{RuleMetadata: ruleNewsValidity, Message: fmt.Sprintf("[%s] Title cannot be empty", lints.SeverityError), File: ctx.RelPath, Line: ctx.LineNum}
-		res.RuleMetadata.Severity = lints.SeverityError
-		return []lints.LintResult{res}
-	} else if len(ctx.Value) > 50 {
-		res := lints.LintResult{RuleMetadata: ruleNewsValidity, Message: fmt.Sprintf("[%s] Title exceeds maximum length of 50 characters", lints.SeverityError), File: ctx.RelPath, Line: ctx.LineNum}
-		res.RuleMetadata.Severity = lints.SeverityError
-		return []lints.LintResult{res}
-	}
-	return nil
-}
-
-func validateEmailFormat(ctx *HeaderContext, state *NewsItemState) []lints.LintResult {
-	if !checkEmailFormat(ctx.Value) {
-		res := lints.LintResult{RuleMetadata: ruleNewsValidity, Message: fmt.Sprintf("[%s] Invalid %s format, expected 'Name <email@domain.com>': '%s'", lints.SeverityError, ctx.Key, ctx.Value), File: ctx.RelPath, Line: ctx.LineNum}
-		res.RuleMetadata.Severity = lints.SeverityError
-		return []lints.LintResult{res}
-	}
-	return nil
-}
-
-func validatePostedDate(ctx *HeaderContext, state *NewsItemState) []lints.LintResult {
-	_, err := time.Parse("2006-01-02", ctx.Value)
-	if err != nil {
-		res := lints.LintResult{RuleMetadata: ruleNewsValidity, Message: fmt.Sprintf("[%s] Invalid Posted date format, expected YYYY-MM-DD: '%s'", lints.SeverityError, ctx.Value), File: ctx.RelPath, Line: ctx.LineNum}
-		res.RuleMetadata.Severity = lints.SeverityError
-		return []lints.LintResult{res}
-	}
-	return nil
-}
-
-func validateRevisionInteger(ctx *HeaderContext, state *NewsItemState) []lints.LintResult {
-	if len(ctx.Value) == 0 {
-		res := lints.LintResult{RuleMetadata: ruleNewsValidity, Message: fmt.Sprintf("[%s] Revision cannot be empty", lints.SeverityError), File: ctx.RelPath, Line: ctx.LineNum}
-		res.RuleMetadata.Severity = lints.SeverityError
-		return []lints.LintResult{res}
-	}
-	_, err := strconv.Atoi(ctx.Value)
-	if err != nil {
-		res := lints.LintResult{RuleMetadata: ruleNewsValidity, Message: fmt.Sprintf("[%s] Revision must be an integer: '%s'", lints.SeverityError, ctx.Value), File: ctx.RelPath, Line: ctx.LineNum}
-		res.RuleMetadata.Severity = lints.SeverityError
-		return []lints.LintResult{res}
-	}
-	return nil
-}
-
-func validateContentType(ctx *HeaderContext, state *NewsItemState) []lints.LintResult {
-	if ctx.Value != "text/plain" {
-		res := lints.LintResult{RuleMetadata: ruleNewsValidity, Message: fmt.Sprintf("[%s] Content-Type must be 'text/plain', got: '%s'", lints.SeverityError, ctx.Value), File: ctx.RelPath, Line: ctx.LineNum}
-		res.RuleMetadata.Severity = lints.SeverityError
-		return []lints.LintResult{res}
-	}
-	return nil
-}
-
-func validateNewsItemFormat(ctx *HeaderContext, state *NewsItemState) []lints.LintResult {
-	if ctx.Value != "1.0" && ctx.Value != "2.0" {
-		res := lints.LintResult{RuleMetadata: ruleNewsValidity, Message: fmt.Sprintf("[%s] Unsupported News-Item-Format: '%s'", lints.SeverityWarning, ctx.Value), File: ctx.RelPath, Line: ctx.LineNum}
-		res.RuleMetadata.Severity = lints.SeverityWarning
-		return []lints.LintResult{res}
-	}
-	return nil
-}
-
-func validateNoSpacesOrTabs(ctx *HeaderContext, state *NewsItemState) []lints.LintResult {
-	if strings.ContainsAny(ctx.Value, " \t") {
-		res := lints.LintResult{RuleMetadata: ruleNewsValidity, Message: fmt.Sprintf("[%s] Invalid %s format, should not contain multiple values or spaces: '%s'", lints.SeverityError, ctx.Key, ctx.Value), File: ctx.RelPath, Line: ctx.LineNum}
-		res.RuleMetadata.Severity = lints.SeverityError
-		return []lints.LintResult{res}
-	}
-	return nil
-}
-
-func validateCategoryPackage(ctx *HeaderContext, state *NewsItemState) []lints.LintResult {
-	if !strings.Contains(ctx.Value, "/") {
-		res := lints.LintResult{RuleMetadata: ruleNewsValidity, Message: fmt.Sprintf("[%s] Invalid Display-If-Installed format, expected category/package: '%s'", lints.SeverityError, ctx.Value), File: ctx.RelPath, Line: ctx.LineNum}
-		res.RuleMetadata.Severity = lints.SeverityError
-		return []lints.LintResult{res}
-	}
-	return nil
-}
-
-var headerValidators = map[string][]HeaderValidator{
-	"Title": {
-		validateTitleLength,
-	},
-	"Author": {
-		validateEmailFormat,
-	},
-	"Translator": {
-		validateEmailFormat,
-	},
-	"Posted": {
-		validatePostedDate,
-	},
-	"Revision": {
-		validateRevisionInteger,
-	},
-	"Content-Type": {
-		validateContentType,
-	},
-	"News-Item-Format": {
-		validateNewsItemFormat,
-	},
-	"Display-If-Installed": {
-		validateNoSpacesOrTabs,
-		validateCategoryPackage,
-	},
-	"Display-If-Keyword": {
-		validateNoSpacesOrTabs,
-	},
-	"Display-If-Profile": {
-		validateNoSpacesOrTabs,
-	},
-}
-
-func validateRequiredHeader(header string) PostValidator {
-	return func(state *NewsItemState, relPath string) []lints.LintResult {
-		if _, ok := state.Headers[header]; !ok {
-			res := lints.LintResult{RuleMetadata: ruleNewsValidity, Message: fmt.Sprintf("[%s] Missing required header: %s", lints.SeverityError, header), File: relPath}
-			res.RuleMetadata.Severity = lints.SeverityError
-			return []lints.LintResult{res}
+func required() HeaderValidator {
+	return func(key string, values []string) []Finding {
+		if len(values) == 0 {
+			return []Finding{{Severity: lints.SeverityError, Message: fmt.Sprintf("Missing required header: %s", key)}}
 		}
 		return nil
 	}
 }
 
-func validateFormatContentTypeCrossCheck(state *NewsItemState, relPath string) []lints.LintResult {
-	if formatVal, hasFormat := state.Headers["News-Item-Format"]; hasFormat && formatVal == "1.0" {
-		contentType, hasContentType := state.Headers["Content-Type"]
-		if !hasContentType || contentType != "text/plain" {
-			res := lints.LintResult{RuleMetadata: ruleNewsValidity, Message: fmt.Sprintf("[%s] Content-Type: text/plain is mandatory for News-Item-Format 1.0", lints.SeverityError), File: relPath}
-			res.RuleMetadata.Severity = lints.SeverityError
-			return []lints.LintResult{res}
+func single() HeaderValidator {
+	return func(key string, values []string) []Finding {
+		if len(values) > 1 {
+			return []Finding{{Severity: lints.SeverityError, Message: fmt.Sprintf("Header %s must appear at most once", key)}}
+		}
+		return nil
+	}
+}
+
+func nonEmpty() HeaderValidator {
+	return func(key string, values []string) []Finding {
+		for _, val := range values {
+			if len(val) == 0 {
+				return []Finding{{Severity: lints.SeverityError, Message: fmt.Sprintf("%s cannot be empty", key)}}
+			}
+		}
+		return nil
+	}
+}
+
+func maxLength(max int) HeaderValidator {
+	return func(key string, values []string) []Finding {
+		for _, val := range values {
+			if len(val) > max {
+				return []Finding{{Severity: lints.SeverityError, Message: fmt.Sprintf("%s exceeds maximum length of %d characters", key, max)}}
+			}
+		}
+		return nil
+	}
+}
+
+func each(valFn func(key string, val string) []Finding) HeaderValidator {
+	return func(key string, values []string) []Finding {
+		var findings []Finding
+		for _, val := range values {
+			findings = append(findings, valFn(key, val)...)
+		}
+		return findings
+	}
+}
+
+func validEmail() func(key string, val string) []Finding {
+	return func(key string, val string) []Finding {
+		if !checkEmailFormat(val) {
+			return []Finding{{Severity: lints.SeverityError, Message: fmt.Sprintf("Invalid %s format, expected 'Name <email@domain.com>': '%s'", key, val)}}
+		}
+		return nil
+	}
+}
+
+func validDate(format string) func(key string, val string) []Finding {
+	return func(key string, val string) []Finding {
+		if _, err := time.Parse(format, val); err != nil {
+			return []Finding{{Severity: lints.SeverityError, Message: fmt.Sprintf("Invalid %s date format, expected YYYY-MM-DD: '%s'", key, val)}}
+		}
+		return nil
+	}
+}
+
+func validInteger() func(key string, val string) []Finding {
+	return func(key string, val string) []Finding {
+		if len(val) == 0 {
+			return []Finding{{Severity: lints.SeverityError, Message: fmt.Sprintf("%s cannot be empty", key)}}
+		}
+		if _, err := strconv.Atoi(val); err != nil {
+			return []Finding{{Severity: lints.SeverityError, Message: fmt.Sprintf("%s must be an integer: '%s'", key, val)}}
+		}
+		return nil
+	}
+}
+
+func validContentType() func(key string, val string) []Finding {
+	return func(key string, val string) []Finding {
+		if val != "text/plain" {
+			return []Finding{{Severity: lints.SeverityError, Message: fmt.Sprintf("Content-Type must be 'text/plain', got: '%s'", val)}}
+		}
+		return nil
+	}
+}
+
+func validNewsItemFormat() func(key string, val string) []Finding {
+	return func(key string, val string) []Finding {
+		if val != "1.0" && val != "2.0" {
+			return []Finding{{Severity: lints.SeverityWarning, Message: fmt.Sprintf("Unsupported News-Item-Format: '%s'", val)}}
+		}
+		return nil
+	}
+}
+
+func validInstalledPackage() func(key string, val string) []Finding {
+	return func(key string, val string) []Finding {
+		if strings.ContainsAny(val, " \t") {
+			return []Finding{{Severity: lints.SeverityError, Message: fmt.Sprintf("Invalid %s format, should not contain multiple values or spaces: '%s'", key, val)}}
+		}
+		if !strings.Contains(val, "/") {
+			return []Finding{{Severity: lints.SeverityError, Message: fmt.Sprintf("Invalid Display-If-Installed format, expected category/package: '%s'", val)}}
+		}
+		return nil
+	}
+}
+
+func validKeyword() func(key string, val string) []Finding {
+	return func(key string, val string) []Finding {
+		if strings.ContainsAny(val, " \t") {
+			return []Finding{{Severity: lints.SeverityError, Message: fmt.Sprintf("Invalid %s format, should not contain multiple values or spaces: '%s'", key, val)}}
+		}
+		return nil
+	}
+}
+
+func validProfile() func(key string, val string) []Finding {
+	return func(key string, val string) []Finding {
+		if strings.ContainsAny(val, " \t") {
+			return []Finding{{Severity: lints.SeverityError, Message: fmt.Sprintf("Invalid %s format, should not contain multiple values or spaces: '%s'", key, val)}}
+		}
+		return nil
+	}
+}
+
+var headerValidators = map[string][]HeaderValidator{
+	"Title": {
+		required(),
+		single(),
+		nonEmpty(),
+		maxLength(50),
+	},
+	"Author": {
+		required(),
+		each(validEmail()),
+	},
+	"Translator": {
+		each(validEmail()),
+	},
+	"Posted": {
+		required(),
+		single(),
+		each(validDate("2006-01-02")),
+	},
+	"Revision": {
+		required(),
+		single(),
+		each(validInteger()),
+	},
+	"Content-Type": {
+		single(),
+		each(validContentType()),
+	},
+	"News-Item-Format": {
+		required(),
+		single(),
+		each(validNewsItemFormat()),
+	},
+	"Display-If-Installed": {
+		each(validInstalledPackage()),
+	},
+	"Display-If-Keyword": {
+		each(validKeyword()),
+	},
+	"Display-If-Profile": {
+		each(validProfile()),
+	},
+}
+
+func validateFormatContentTypeCrossCheck(headers Headers) []Finding {
+	if formatVals, hasFormat := headers["News-Item-Format"]; hasFormat && len(formatVals) > 0 && formatVals[0] == "1.0" {
+		contentTypeVals, hasContentType := headers["Content-Type"]
+		if !hasContentType || len(contentTypeVals) == 0 || contentTypeVals[0] != "text/plain" {
+			return []Finding{{Severity: lints.SeverityError, Message: "Content-Type: text/plain is mandatory for News-Item-Format 1.0"}}
 		}
 	}
 	return nil
 }
 
-var postValidators = []PostValidator{
-	validateRequiredHeader("Title"),
-	validateRequiredHeader("Author"),
-	validateRequiredHeader("Posted"),
-	validateRequiredHeader("Revision"),
-	validateRequiredHeader("News-Item-Format"),
+var postValidators = []Validator{
 	validateFormatContentTypeCrossCheck,
+}
+
+func convertFinding(f Finding, relPath string, lineNum int) lints.LintResult {
+	res := lints.LintResult{
+		RuleMetadata: ruleNewsValidity,
+		Message:      fmt.Sprintf("[%s] %s", f.Severity, f.Message),
+		File:         relPath,
+	}
+	if lineNum > 0 {
+		res.Line = lineNum
+	}
+	res.RuleMetadata.Severity = f.Severity
+	return res
 }
 
 func (r *NewsValidityLintRule) lintNewsItem(content string, relPath string) []lints.LintResult {
@@ -397,7 +442,8 @@ func (r *NewsValidityLintRule) lintNewsItem(content string, relPath string) []li
 	lines := strings.Split(content, "\n")
 
 	inBody := false
-	state := &NewsItemState{Headers: make(map[string]string)}
+	headers := make(Headers)
+	lineNumbers := make(map[string]int)
 
 	for lineNum, line := range lines {
 		if inBody {
@@ -438,28 +484,41 @@ func (r *NewsValidityLintRule) lintNewsItem(content string, relPath string) []li
 		key := strings.TrimSpace(parts[0])
 		val := strings.TrimSpace(parts[1])
 
-		state.Headers[key] = val
+		headers[key] = append(headers[key], val)
 
-		ctx := &HeaderContext{
-			Key:     key,
-			Value:   val,
-			RelPath: relPath,
-			LineNum: lineNum + 1,
-		}
-
-		if validators, ok := headerValidators[key]; ok {
-			for _, validator := range validators {
-				results = append(results, validator(ctx, state)...)
-			}
-		} else {
-			res := lints.LintResult{RuleMetadata: ruleNewsValidity, Message: fmt.Sprintf("[%s] Unknown header: '%s'", lints.SeverityWarning, key), File: relPath, Line: lineNum + 1}
-			res.RuleMetadata.Severity = lints.SeverityWarning
-			results = append(results, res)
+		// Record the line number of the first occurrence of a header, mostly for simple errors
+		if _, exists := lineNumbers[key]; !exists {
+			lineNumbers[key] = lineNum + 1
 		}
 	}
 
+	// Validate declared headers
+	for key, validators := range headerValidators {
+		vals := headers[key]
+		lineNum := lineNumbers[key]
+		for _, validator := range validators {
+			findings := validator(key, vals)
+			for _, f := range findings {
+				results = append(results, convertFinding(f, relPath, lineNum))
+			}
+		}
+	}
+
+	// Validate unknown headers
+	for key := range headers {
+		if _, ok := headerValidators[key]; !ok {
+			f := Finding{Severity: lints.SeverityWarning, Message: fmt.Sprintf("Unknown header: '%s'", key)}
+			results = append(results, convertFinding(f, relPath, lineNumbers[key]))
+		}
+	}
+
+	// Run cross-header post validators
 	for _, validator := range postValidators {
-		results = append(results, validator(state, relPath)...)
+		findings := validator(headers)
+		for _, f := range findings {
+			// Since cross header doesn't tie cleanly to a single line number, pass 0
+			results = append(results, convertFinding(f, relPath, 0))
+		}
 	}
 
 	return results
