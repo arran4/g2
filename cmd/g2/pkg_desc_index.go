@@ -1,8 +1,10 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
+	"io/fs"
 	"log"
 	"os"
 	"path/filepath"
@@ -110,16 +112,17 @@ func (cfg *MainArgConfig) cmdPkgDescIndexVerify(args []string) error {
 		return err
 	}
 
-	indexPath := filepath.Join(*repoDir, "metadata", "pkg_desc_index")
-	index, err := g2.ParsePkgDescIndexFile(indexPath)
+	cfs := g2.NewOsCacheFS(*repoDir)
+	indexPath := "metadata/pkg_desc_index"
+
+	index, err := g2.ParsePkgDescIndexFile(indexPath, cfs)
 	if err != nil {
-		if os.IsNotExist(err) {
-			return fmt.Errorf("pkg_desc_index not found at %s. run generate first", indexPath)
+		if errors.Is(err, fs.ErrNotExist) {
+			return fmt.Errorf("pkg_desc_index not found at %s. run generate first", filepath.Join(*repoDir, indexPath))
 		}
 		return fmt.Errorf("parsing existing index: %w", err)
 	}
 
-	cfs := g2.NewOsCacheFS(*repoDir)
 	siteData, err := parseRepo(cfs, ".", "Pkg Desc Index Verification", true, nil)
 	if err != nil {
 		return fmt.Errorf("parsing repo: %w", err)
