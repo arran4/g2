@@ -111,17 +111,14 @@ func (cfg *MainArgConfig) cmdPkgDescIndexVerify(args []string) error {
 		return err
 	}
 
-	indexPath := filepath.Join(*repoDir, "metadata", "pkg_desc_index")
 	cfs := g2.NewOsCacheFS(*repoDir)
+	indexPath := filepath.Join("metadata", "pkg_desc_index")
 
-	file, err := cfs.Open(filepath.Join("metadata", "pkg_desc_index"))
+	index, err := g2.ParsePkgDescIndexFile(indexPath, cfs)
 	if err != nil {
-		return fmt.Errorf("pkg_desc_index not found at %s. run generate first", indexPath)
-	}
-	defer func() { _ = file.Close() }()
-
-	index, err := g2.ParsePkgDescIndex(file)
-	if err != nil {
+		if os.IsNotExist(err) {
+			return fmt.Errorf("pkg_desc_index not found at %s. run generate first", filepath.Join(*repoDir, indexPath))
+		}
 		return fmt.Errorf("parsing existing index: %w", err)
 	}
 

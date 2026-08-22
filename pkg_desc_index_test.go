@@ -2,10 +2,9 @@ package g2
 
 import (
 	"bytes"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
+	"testing/fstest"
 )
 
 func TestParsePkgDescIndex(t *testing.T) {
@@ -79,19 +78,13 @@ app-admin/amazon-ec2-init 20101127-r2: Init script to setup Amazon EC2 instance 
 }
 
 func TestParsePkgDescIndexFile(t *testing.T) {
-	// Test with a valid file
-	tempDir := t.TempDir()
-	filePath := filepath.Join(tempDir, "pkg_desc_index")
-
-	input := `app-admin/aerospike-amc-community 4.0.19-r2 5.0.0: Web UI based monitoring tool for Aerospike Community Edition Server
-app-admin/amazon-ec2-init 20101127-r2: Init script to setup Amazon EC2 instance parameters
-`
-	err := os.WriteFile(filePath, []byte(input), 0644)
-	if err != nil {
-		t.Fatalf("Failed to write temporary file: %v", err)
+	input := "app-admin/aerospike-amc-community 4.0.19-r2 5.0.0: Web UI based monitoring tool for Aerospike Community Edition Server\n" +
+		"app-admin/amazon-ec2-init 20101127-r2: Init script to setup Amazon EC2 instance parameters\n"
+	fsys := fstest.MapFS{
+		"pkg_desc_index": &fstest.MapFile{Data: []byte(input)},
 	}
 
-	idx, err := ParsePkgDescIndexFile(filePath)
+	idx, err := ParsePkgDescIndexFile("pkg_desc_index", fsys)
 	if err != nil {
 		t.Fatalf("ParsePkgDescIndexFile failed: %v", err)
 	}
@@ -112,8 +105,7 @@ app-admin/amazon-ec2-init 20101127-r2: Init script to setup Amazon EC2 instance 
 	}
 
 	// Test with non-existent file
-	invalidFilePath := filepath.Join(tempDir, "non_existent_file")
-	_, err = ParsePkgDescIndexFile(invalidFilePath)
+	_, err = ParsePkgDescIndexFile("non_existent_file", fsys)
 	if err == nil {
 		t.Errorf("ParsePkgDescIndexFile should fail for non-existent file")
 	}
