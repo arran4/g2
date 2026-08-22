@@ -31,6 +31,8 @@ func TestGetGitModifiedPackagesChanged(t *testing.T) {
 	}
 
 	runCmd("git", "init")
+	runCmd("git", "config", "user.name", "g2 test")
+	runCmd("git", "config", "user.email", "g2-test@example.invalid")
 
 	// 2. Initial state
 	err = os.MkdirAll(filepath.Join(tmpDir, "app-misc", "foo"), 0755)
@@ -118,7 +120,9 @@ func TestGetGitModifiedPackagesChanged(t *testing.T) {
 	runCmd("git", "branch", "--set-upstream-to=main", "feature")
 
 	// 10. Genuine git rename
-	runCmd("git", "mv", "app-misc/foo", "app-misc/foo2")
+	err = os.MkdirAll(filepath.Join(tmpDir, "app-misc", "foo2"), 0755)
+	if err != nil { t.Fatal(err) }
+	runCmd("git", "mv", "app-misc/foo/foo-1.ebuild", "app-misc/foo2/foo-1.ebuild")
 
 	// 11. Explicit base
 	pkgs, err = getGitModifiedPackagesChanged(tmpDir, "main")
@@ -130,7 +134,12 @@ func TestGetGitModifiedPackagesChanged(t *testing.T) {
 		foundMap[p] = true
 	}
 	if !foundMap["sys-apps/baz"] { t.Errorf("Missing committed sys-apps/baz against explicit base main") }
-	if !foundMap["app-misc/foo"] { t.Errorf("Missing rename source app-misc/foo") }
+
+	// The vanished rename source should NOT be selected, as the directory itself is no longer a valid package containing ebuilds
+	// unless we kept the empty directory, but foo-1.ebuild is gone. Wait, the old directory isn't guaranteed to be deleted unless git clean or similar.
+	// But `getGitModifiedPackagesChanged` checks if the path has an ebuild/manifest. Since we `git mv` the ebuild, the original directory
+	// either doesn't exist, or doesn't have the ebuild. Either way it's not selected.
+	if foundMap["app-misc/foo"] { t.Errorf("Vanished rename source app-misc/foo should not be returned") }
 	if !foundMap["app-misc/foo2"] { t.Errorf("Missing rename destination app-misc/foo2") }
 
 	// Test deterministic order

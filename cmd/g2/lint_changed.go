@@ -132,13 +132,29 @@ func getGitModifiedPackagesChanged(repoDir string, explicitBase string) ([]strin
 			cat := parts[0]
 			pkg := parts[1]
 
-			// Lightly validate category against the file system to avoid needing to do a full parseRepo
-			// A valid Gentoo package is in a category directory that actually exists and is a directory
-			catPath := filepath.Join(repoDir, cat)
-			if stat, err := os.Stat(catPath); err == nil && stat.IsDir() {
-				// Ignore infrastructure directories that happen to be at the root
+			// Lightly validate package against the file system to avoid needing to do a full parseRepo
+			// A valid Gentoo package is in a category/package directory that actually exists and is a directory
+			// containing at least one .ebuild file or manifest
+			pkgPath := filepath.Join(repoDir, cat, pkg)
+			if stat, err := os.Stat(pkgPath); err == nil && stat.IsDir() {
+				// To be a real package, it shouldn't just be an arbitrary directory.
+				// Although just being a directory under a valid category is a strong hint,
+				// let's ensure it's not a top-level infra directory masking as a category.
 				if cat != "metadata" && cat != "profiles" && cat != "eclass" && cat != "licenses" && cat != "scripts" && cat != ".github" {
-					pkgMap[cat+"/"+pkg] = true
+					// Check if it contains an .ebuild file or a Manifest to confirm it's a package.
+					// Or just being a directory is enough for our lightweight check if we trust the category?
+					// Wait, the instructions said: "At minimum, a normal package directory containing an .ebuild must be recognised."
+					entries, _ := os.ReadDir(pkgPath)
+					isPkg := false
+					for _, e := range entries {
+						if strings.HasSuffix(e.Name(), ".ebuild") || e.Name() == "Manifest" || e.Name() == "metadata.xml" {
+							isPkg = true
+							break
+						}
+					}
+					if isPkg {
+						pkgMap[cat+"/"+pkg] = true
+					}
 				}
 			}
 		}
