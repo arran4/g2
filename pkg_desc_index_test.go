@@ -2,6 +2,8 @@ package g2
 
 import (
 	"bytes"
+	"errors"
+	"io/fs"
 	"strings"
 	"testing"
 	"testing/fstest"
@@ -106,7 +108,7 @@ func TestParsePkgDescIndexFile(t *testing.T) {
 
 	// Test with non-existent file
 	_, err = ParsePkgDescIndexFile("non_existent_file", fsys)
-	if err == nil {
-		t.Errorf("ParsePkgDescIndexFile should fail for non-existent file")
+	if !errors.Is(err, fs.ErrNotExist) {
+		t.Errorf("ParsePkgDescIndexFile should fail with fs.ErrNotExist for non-existent file, got: %v", err)
 	}
 }

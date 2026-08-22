@@ -1,8 +1,10 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
+	"io/fs"
 	"log"
 	"os"
 	"path/filepath"
@@ -112,11 +114,11 @@ func (cfg *MainArgConfig) cmdPkgDescIndexVerify(args []string) error {
 	}
 
 	cfs := g2.NewOsCacheFS(*repoDir)
-	indexPath := filepath.Join("metadata", "pkg_desc_index")
+	indexPath := "metadata/pkg_desc_index"
 
 	index, err := g2.ParsePkgDescIndexFile(indexPath, cfs)
 	if err != nil {
-		if os.IsNotExist(err) {
+		if errors.Is(err, fs.ErrNotExist) {
 			return fmt.Errorf("pkg_desc_index not found at %s. run generate first", filepath.Join(*repoDir, indexPath))
 		}
 		return fmt.Errorf("parsing existing index: %w", err)
