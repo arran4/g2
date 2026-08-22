@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
-
 )
 
 func (cfg *MainArgConfig) cmdLintChanged(args []string) error {
@@ -134,7 +133,7 @@ func getGitModifiedPackagesChanged(repoDir string, explicitBase string) ([]strin
 
 			// Lightly validate package against the file system to avoid needing to do a full parseRepo
 			// A valid Gentoo package is in a category/package directory that actually exists and is a directory
-			// containing at least one .ebuild file or manifest
+			// containing at least one .ebuild file.
 			pkgPath := filepath.Join(repoDir, cat, pkg)
 			if stat, err := os.Stat(pkgPath); err == nil && stat.IsDir() {
 				// To be a real package, it shouldn't just be an arbitrary directory.
