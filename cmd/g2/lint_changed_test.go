@@ -135,12 +135,49 @@ func TestGetGitModifiedPackagesChanged(t *testing.T) {
 	}
 	if !foundMap["sys-apps/baz"] { t.Errorf("Missing committed sys-apps/baz against explicit base main") }
 
-	// The vanished rename source should NOT be selected, as the directory itself is no longer a valid package containing ebuilds
-	// unless we kept the empty directory, but foo-1.ebuild is gone. Wait, the old directory isn't guaranteed to be deleted unless git clean or similar.
-	// But `getGitModifiedPackagesChanged` checks if the path has an ebuild/manifest. Since we `git mv` the ebuild, the original directory
-	// either doesn't exist, or doesn't have the ebuild. Either way it's not selected.
 	if foundMap["app-misc/foo"] { t.Errorf("Vanished rename source app-misc/foo should not be returned") }
 	if !foundMap["app-misc/foo2"] { t.Errorf("Missing rename destination app-misc/foo2") }
+
+	// 12. Deleting final ebuild leaves stale metadata.xml
+	err = os.MkdirAll(filepath.Join(tmpDir, "dev-util", "stale"), 0755)
+	if err != nil { t.Fatal(err) }
+	err = os.WriteFile(filepath.Join(tmpDir, "dev-util", "stale", "metadata.xml"), []byte(""), 0644)
+	if err != nil { t.Fatal(err) }
+	err = os.WriteFile(filepath.Join(tmpDir, "dev-util", "stale", "stale-1.ebuild"), []byte(""), 0644)
+	if err != nil { t.Fatal(err) }
+
+	runCmd("git", "add", "dev-util/stale")
+	runCmd("git", "commit", "-m", "Add stale package")
+
+	runCmd("git", "rm", "dev-util/stale/stale-1.ebuild")
+	// The file metadata.xml remains, but the package should not be selected
+	pkgs, err = getGitModifiedPackagesChanged(tmpDir, "")
+	if err != nil {
+		t.Fatalf("getGitModifiedPackagesChanged failed: %v", err)
+	}
+	foundMap = make(map[string]bool)
+	for _, p := range pkgs {
+		foundMap[p] = true
+	}
+	if foundMap["dev-util/stale"] { t.Errorf("Package with deleted final ebuild should not be selected") }
+
+	// 13. Deleting one file but another ebuild remains
+	err = os.WriteFile(filepath.Join(tmpDir, "dev-util", "bar", "bar-3.ebuild"), []byte("new file"), 0644)
+	if err != nil { t.Fatal(err) }
+
+	runCmd("git", "add", "dev-util/bar/bar-3.ebuild")
+	runCmd("git", "commit", "-m", "Add another ebuild to bar")
+
+	runCmd("git", "rm", "dev-util/bar/bar-2.ebuild") // bar-3 still exists
+	pkgs, err = getGitModifiedPackagesChanged(tmpDir, "")
+	if err != nil {
+		t.Fatalf("getGitModifiedPackagesChanged failed: %v", err)
+	}
+	foundMap = make(map[string]bool)
+	for _, p := range pkgs {
+		foundMap[p] = true
+	}
+	if !foundMap["dev-util/bar"] { t.Errorf("Package with deleted ebuild but remaining ebuilds should be selected") }
 
 	// Test deterministic order
 	isSorted := true

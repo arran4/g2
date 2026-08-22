@@ -141,13 +141,11 @@ func getGitModifiedPackagesChanged(repoDir string, explicitBase string) ([]strin
 				// Although just being a directory under a valid category is a strong hint,
 				// let's ensure it's not a top-level infra directory masking as a category.
 				if cat != "metadata" && cat != "profiles" && cat != "eclass" && cat != "licenses" && cat != "scripts" && cat != ".github" {
-					// Check if it contains an .ebuild file or a Manifest to confirm it's a package.
-					// Or just being a directory is enough for our lightweight check if we trust the category?
-					// Wait, the instructions said: "At minimum, a normal package directory containing an .ebuild must be recognised."
+					// Require at least one .ebuild file for it to be considered a current package target
 					entries, _ := os.ReadDir(pkgPath)
 					isPkg := false
 					for _, e := range entries {
-						if strings.HasSuffix(e.Name(), ".ebuild") || e.Name() == "Manifest" || e.Name() == "metadata.xml" {
+						if strings.HasSuffix(e.Name(), ".ebuild") {
 							isPkg = true
 							break
 						}
