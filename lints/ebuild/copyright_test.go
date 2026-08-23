@@ -142,9 +142,14 @@ func TestGentooCopyrightHeaderLintRule(t *testing.T) {
 			want:    0,
 		},
 		{
-			name:    "Valid Gentoo Foundation historical",
+			name:    "Gentoo Foundation header fails Gentoo policy",
 			rawText: "# Copyright 1999-2020 Gentoo Foundation\nEAPI=8\n",
-			want:    0,
+			want:    1,
+		},
+		{
+			name:    "Gentoo Foundation single year fails Gentoo policy",
+			rawText: "# Copyright 2026 Gentoo Foundation\nEAPI=8\n",
+			want:    1,
 		},
 		{
 			name:    "Non-Gentoo authors fails Gentoo policy",
@@ -164,11 +169,6 @@ func TestGentooCopyrightHeaderLintRule(t *testing.T) {
 		{
 			name:    "Gentoo Authors with trailing garbage rejected",
 			rawText: "# Copyright 1999-2024 Gentoo Authors trailing garbage\nEAPI=8\n",
-			want:    1,
-		},
-		{
-			name:    "Gentoo Foundation historical with trailing garbage rejected",
-			rawText: "# Copyright 1999-2020 Gentoo Foundation trailing garbage\nEAPI=8\n",
 			want:    1,
 		},
 	}

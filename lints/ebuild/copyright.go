@@ -46,10 +46,9 @@ var (
 	reLicenseTokens = regexp.MustCompile(`\b(?i:gpl|lgpl|agpl|bsd|mit|apache|mpl|isc|unlicense|zlib|epl|artistic)\b`)
 
 	// reGentooCopyright matches the complete canonical Gentoo copyright line format.
-	// Note: "Gentoo Authors" is required by current Gentoo policy; "Gentoo Foundation"
-	// is retained only for backward-compatibility with historical Gentoo ebuilds (prior to 2017).
+	// Note: "Gentoo Authors" is required by current Gentoo policy.
 	// The regex is anchored to disallow trailing garbage.
-	reGentooCopyright = regexp.MustCompile(`^#\s*Copyright\s+\d{4}(?:[-\s,]+\d{4})*\s+(?:Gentoo Authors|Gentoo Foundation)\s*$`)
+	reGentooCopyright = regexp.MustCompile(`^#\s*Copyright\s+\d{4}(?:[-\s,]+\d{4})*\s+Gentoo Authors\s*$`)
 )
 
 // getInitialCommentBlock extracts the initial contiguous shell-comment lines from the top of an ebuild.
