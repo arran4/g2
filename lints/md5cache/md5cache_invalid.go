@@ -2,11 +2,14 @@ package md5cache
 
 import (
 	"bufio"
+	"container/list"
 	"crypto/md5"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/arran4/g2"
 	"github.com/arran4/g2/lints"
@@ -43,6 +46,8 @@ The `_md5_` key contains the md5sum of the ebuild.
 The `_eclasses_` key contains pairs of `eclass_name eclass_md5` separated by whitespace (tab).
 */
 
+const defaultEclassMD5CacheLimit = 5000
+
 var ruleMD5CacheInvalid = lints.RuleMetadata{
 	ID:          "Md5CacheInvalid",
 	Title:       "Invalid MD5 Cache",
@@ -60,7 +65,143 @@ func init() {
 	lints.RegisterLintRule(&MD5CacheInvalidLintRule{})
 }
 
+type cacheEntry struct {
+	path string
+	md5  string
+	info os.FileInfo
+}
+
 type MD5CacheInvalidLintRule struct {
+	mu    sync.Mutex
+	cache map[string]*list.Element
+	lru   *list.List
+	limit int
+}
+
+func canonicalEclassPath(path string) string {
+	absPath, err := filepath.Abs(path)
+	if err != nil {
+		return path
+	}
+	resolvedPath, err := filepath.EvalSymlinks(absPath)
+	if err != nil {
+		return absPath
+	}
+	return resolvedPath
+}
+
+func (r *MD5CacheInvalidLintRule) ensureCacheLocked() {
+	if r.cache == nil {
+		r.cache = make(map[string]*list.Element)
+		r.lru = list.New()
+		if r.limit == 0 {
+			r.limit = defaultEclassMD5CacheLimit
+		}
+	}
+}
+
+func (r *MD5CacheInvalidLintRule) getEclassMD5(path string) (string, error) {
+	canonicalPath := canonicalEclassPath(path)
+
+	stat, err := os.Stat(canonicalPath)
+	if err != nil {
+		return "", err
+	}
+
+	r.mu.Lock()
+	r.ensureCacheLocked()
+	if elem, ok := r.cache[canonicalPath]; ok {
+		entry := elem.Value.(*cacheEntry)
+		// Validate using Size, ModTime, and os.SameFile
+		if entry.info != nil && entry.info.Size() == stat.Size() && entry.info.ModTime().Equal(stat.ModTime()) && os.SameFile(entry.info, stat) {
+			r.lru.MoveToFront(elem)
+			r.mu.Unlock()
+			return entry.md5, nil
+		}
+		// Invalidated, remove old entry
+		r.lru.Remove(elem)
+		delete(r.cache, canonicalPath)
+	}
+	r.mu.Unlock()
+
+	// Hash outside lock to allow concurrency.
+	var hash string
+	var finalInfo os.FileInfo
+
+	// Bounded retry if file mutates during read
+	success := false
+	for i := 0; i < 3; i++ {
+		f, err := os.Open(canonicalPath)
+		if err != nil {
+			return "", err
+		}
+
+		before, err := f.Stat()
+		if err != nil {
+			_ = f.Close()
+			return "", err
+		}
+
+		data, err := io.ReadAll(f)
+		if err != nil {
+			_ = f.Close()
+			return "", err
+		}
+
+		after, err := f.Stat()
+		_ = f.Close()
+
+		if err != nil {
+			return "", err
+		}
+
+		if before.Size() == after.Size() && before.ModTime().Equal(after.ModTime()) && os.SameFile(before, after) {
+			hash = fmt.Sprintf("%x", md5.Sum(data))
+			finalInfo = after
+			success = true
+			break
+		}
+	}
+
+	if !success {
+		return "", fmt.Errorf("file mutated concurrently during read: %s", canonicalPath)
+	}
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	// Ensure initialized in case it was nil before
+	r.ensureCacheLocked()
+
+	// Check again in case another goroutine did it
+	if elem, ok := r.cache[canonicalPath]; ok {
+		entry := elem.Value.(*cacheEntry)
+		if entry.info != nil && entry.info.Size() == finalInfo.Size() && entry.info.ModTime().Equal(finalInfo.ModTime()) && os.SameFile(entry.info, finalInfo) {
+			r.lru.MoveToFront(elem)
+			return entry.md5, nil
+		}
+		r.lru.Remove(elem)
+		delete(r.cache, canonicalPath)
+	}
+
+	if r.limit > 0 && r.lru.Len() >= r.limit {
+		back := r.lru.Back()
+		if back != nil {
+			oldEntry := back.Value.(*cacheEntry)
+			delete(r.cache, oldEntry.path)
+			r.lru.Remove(back)
+		}
+	}
+
+	newEntry := &cacheEntry{
+		path: canonicalPath,
+		md5:  hash,
+		info: finalInfo,
+	}
+	elem := r.lru.PushFront(newEntry)
+	r.cache[canonicalPath] = elem
+
+	return hash, nil
 }
 
 func (r *MD5CacheInvalidLintRule) Lint(repoDir string, pkg *g2.PackageData) []lints.LintResult {
@@ -173,18 +314,16 @@ func (r *MD5CacheInvalidLintRule) LintWithQA(repoDir string, pkg *g2.PackageData
 						eclassMd5 := eclassParts[i+1]
 
 						eclassPath := filepath.Join(repoDir, "eclass", eclassName+".eclass")
-						eclassData, err := os.ReadFile(eclassPath)
-						if err == nil {
-							actualEclassMd5 := fmt.Sprintf("%x", md5.Sum(eclassData))
-							if actualEclassMd5 != eclassMd5 {
-								res := lints.LintResult{
-									RuleMetadata: ruleMD5CacheInvalid,
-									Message:      fmt.Sprintf("[%s] Incorrect eclass md5 for %s in md5-cache of %s-%s. Expected %s, got %s", sevTitle, eclassName, pkg.Name, ver.Version, actualEclassMd5, eclassMd5),
-									Package:      pkg.Category + "/" + pkg.Name,
-								}
-								res.RuleMetadata.Severity = severity
-								results = append(results, res)
+						actualEclassMd5, err := r.getEclassMD5(eclassPath)
+
+						if err == nil && actualEclassMd5 != eclassMd5 {
+							res := lints.LintResult{
+								RuleMetadata: ruleMD5CacheInvalid,
+								Message:      fmt.Sprintf("[%s] Incorrect eclass md5 for %s in md5-cache of %s-%s. Expected %s, got %s", sevTitle, eclassName, pkg.Name, ver.Version, actualEclassMd5, eclassMd5),
+								Package:      pkg.Category + "/" + pkg.Name,
 							}
+							res.RuleMetadata.Severity = severity
+							results = append(results, res)
 						}
 					}
 				}
