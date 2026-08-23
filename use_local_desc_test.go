@@ -1,11 +1,10 @@
 package g2
 
 import (
-	"fmt"
-
-	"os"
-
 	"bytes"
+	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -136,24 +135,19 @@ func TestParseUseLocalDesc_Unsupported(t *testing.T) {
 }
 
 func TestParseUseLocalDescFile(t *testing.T) {
-	// Create a temporary file
-	tmpFile, err := os.CreateTemp("", "use.local.desc.*")
-	if err != nil {
-		t.Fatalf("Failed to create temp file: %v", err)
-	}
-	defer func() { _ = os.Remove(tmpFile.Name()) }()
+	tmpDir := t.TempDir()
+	tmpFileName := filepath.Join(tmpDir, "use.local.desc")
 
 	content := `# Copyright 1999-2024 Gentoo Authors
 # Distributed under the terms of the GNU General Public License v2
 app-admin/conky:X - Enable X11 support
 `
-	if _, err := tmpFile.Write([]byte(content)); err != nil {
+	if err := os.WriteFile(tmpFileName, []byte(content), 0644); err != nil {
 		t.Fatalf("Failed to write to temp file: %v", err)
 	}
-	_ = tmpFile.Close()
 
 	// Test successful read
-	ud, err := ParseUseLocalDescFile(tmpFile.Name())
+	ud, err := ParseUseLocalDescFile(tmpFileName)
 	if err != nil {
 		t.Fatalf("ParseUseLocalDescFile() error = %v", err)
 	}
@@ -163,7 +157,8 @@ app-admin/conky:X - Enable X11 support
 	}
 
 	// Test file not found
-	udNotFound, err := ParseUseLocalDescFile("non_existent_file.desc")
+	nonExistentPath := filepath.Join(tmpDir, "non_existent_file.desc")
+	udNotFound, err := ParseUseLocalDescFile(nonExistentPath)
 	if err != nil {
 		t.Fatalf("ParseUseLocalDescFile() expected nil error for not exist, got %v", err)
 	}
@@ -173,6 +168,12 @@ app-admin/conky:X - Enable X11 support
 	}
 	if len(udNotFound.HeaderLines) != 2 {
 		t.Errorf("Expected 2 header lines for non-existent file, got %d", len(udNotFound.HeaderLines))
+	}
+	if udNotFound.HeaderLines[0] != "# Copyright 1999-2024 Gentoo Authors" {
+		t.Errorf("Expected first header line to match default, got %q", udNotFound.HeaderLines[0])
+	}
+	if udNotFound.HeaderLines[1] != "# Distributed under the terms of the GNU General Public License v2" {
+		t.Errorf("Expected second header line to match default, got %q", udNotFound.HeaderLines[1])
 	}
 }
 
@@ -232,10 +233,17 @@ func TestParseUseLocalDesc_Error(t *testing.T) {
 	}
 }
 
-type errWriterUseLocalDesc struct{}
+type errWriterUseLocalDesc struct {
+	failOnWrite int
+	writeCount  int
+}
 
-func (errWriterUseLocalDesc) Write(p []byte) (n int, err error) {
-	return 0, fmt.Errorf("mock writer error")
+func (w *errWriterUseLocalDesc) Write(p []byte) (n int, err error) {
+	w.writeCount++
+	if w.writeCount == w.failOnWrite {
+		return 0, fmt.Errorf("mock writer error on write %d", w.failOnWrite)
+	}
+	return len(p), nil
 }
 
 func TestWriteUseLocalDesc_Error(t *testing.T) {
@@ -250,8 +258,15 @@ func TestWriteUseLocalDesc_Error(t *testing.T) {
 		},
 	}
 
-	errW := &errWriterUseLocalDesc{}
-	if err := ud.Write(errW); err == nil {
-		t.Errorf("Expected Write() to return an error, got nil")
+	// Test failure on header write
+	errW1 := &errWriterUseLocalDesc{failOnWrite: 1}
+	if err := ud.Write(errW1); err == nil {
+		t.Errorf("Expected Write() to return an error on header write, got nil")
+	}
+
+	// Test failure on package/flag write
+	errW2 := &errWriterUseLocalDesc{failOnWrite: 2}
+	if err := ud.Write(errW2); err == nil {
+		t.Errorf("Expected Write() to return an error on flag write, got nil")
 	}
 }
