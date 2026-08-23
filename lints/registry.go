@@ -2,6 +2,7 @@ package lints
 
 import (
 	"encoding/json"
+	"fmt"
 	"path/filepath"
 
 	"github.com/arran4/g2"
@@ -124,6 +125,19 @@ func RegisterEclassLintRule(rule EclassLintRule) {
 }
 
 func PerformLintingResults(repoDir string, pkg *g2.PackageData) []LintResult {
+	results, err := PerformLintingResultsWithRuleSet(repoDir, pkg, "default")
+	if err != nil {
+		panic(fmt.Sprintf("failed to perform default linting: %v", err))
+	}
+	return results
+}
+
+func PerformLintingResultsWithRuleSet(repoDir string, pkg *g2.PackageData, ruleSetID string) ([]LintResult, error) {
+	rs, ok := GetRuleSet(ruleSetID)
+	if !ok || rs == nil {
+		return nil, fmt.Errorf("unknown ruleset: %s", ruleSetID)
+	}
+
 	var results []LintResult
 
 	// Try to load QA Policy
@@ -131,13 +145,35 @@ func PerformLintingResults(repoDir string, pkg *g2.PackageData) []LintResult {
 	qa, _ := g2.ParseQAPolicy(qaPolicyPath)
 
 	for _, rule := range lintRules {
-		if qaRule, ok := rule.(QAAwareLintRule); ok {
-			results = append(results, qaRule.LintWithQA(repoDir, pkg, qa)...)
+		if metaRule, ok := rule.(MetadataAwareLintRule); ok {
+			meta := metaRule.Metadata()
+			entry, found := rs.Rules[meta.ID]
+			if !found || !entry.Enabled {
+				continue
+			}
+
+			var ruleResults []LintResult
+			if qaRule, ok := rule.(QAAwareLintRule); ok {
+				ruleResults = qaRule.LintWithQA(repoDir, pkg, qa)
+			} else {
+				ruleResults = rule.Lint(repoDir, pkg)
+			}
+
+			for i := range ruleResults {
+				if entry.Severity != "" {
+					ruleResults[i].RuleMetadata.Severity = entry.Severity
+				}
+			}
+			results = append(results, ruleResults...)
 		} else {
-			results = append(results, rule.Lint(repoDir, pkg)...)
+			if qaRule, ok := rule.(QAAwareLintRule); ok {
+				results = append(results, qaRule.LintWithQA(repoDir, pkg, qa)...)
+			} else {
+				results = append(results, rule.Lint(repoDir, pkg)...)
+			}
 		}
 	}
-	return results
+	return results, nil
 }
 
 func PerformLinting(repoDir string, pkg *g2.PackageData) []string {
@@ -146,6 +182,18 @@ func PerformLinting(repoDir string, pkg *g2.PackageData) []string {
 		warnings = append(warnings, res.Message)
 	}
 	return warnings
+}
+
+func PerformLintingWithRuleSet(repoDir string, pkg *g2.PackageData, ruleSetID string) ([]string, error) {
+	results, err := PerformLintingResultsWithRuleSet(repoDir, pkg, ruleSetID)
+	if err != nil {
+		return nil, err
+	}
+	var warnings []string
+	for _, res := range results {
+		warnings = append(warnings, res.Message)
+	}
+	return warnings, nil
 }
 
 func PerformEclassLintingResults(repoDir string, eclass *g2.Ebuild) []LintResult {
