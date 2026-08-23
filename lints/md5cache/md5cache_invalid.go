@@ -71,6 +71,8 @@ func (r *MD5CacheInvalidLintRule) LintWithQA(repoDir string, pkg *g2.PackageData
 	var results []lints.LintResult
 	severity := lints.SeverityWarning
 
+	eclassMd5Cache := make(map[string]string)
+
 	if qa != nil && qa.Policies != nil {
 		if val, ok := qa.Policies["Md5CacheInvalid"]; ok {
 			if val == "ignore" {
@@ -172,19 +174,28 @@ func (r *MD5CacheInvalidLintRule) LintWithQA(repoDir string, pkg *g2.PackageData
 						eclassName := eclassParts[i]
 						eclassMd5 := eclassParts[i+1]
 
-						eclassPath := filepath.Join(repoDir, "eclass", eclassName+".eclass")
-						eclassData, err := os.ReadFile(eclassPath)
-						if err == nil {
-							actualEclassMd5 := fmt.Sprintf("%x", md5.Sum(eclassData))
-							if actualEclassMd5 != eclassMd5 {
-								res := lints.LintResult{
-									RuleMetadata: ruleMD5CacheInvalid,
-									Message:      fmt.Sprintf("[%s] Incorrect eclass md5 for %s in md5-cache of %s-%s. Expected %s, got %s", sevTitle, eclassName, pkg.Name, ver.Version, actualEclassMd5, eclassMd5),
-									Package:      pkg.Category + "/" + pkg.Name,
-								}
-								res.RuleMetadata.Severity = severity
-								results = append(results, res)
+						// Cache MD5 calculation to avoid expensive re-calculations
+						actualEclassMd5, ok := eclassMd5Cache[eclassName]
+						if !ok {
+							eclassPath := filepath.Join(repoDir, "eclass", eclassName+".eclass")
+							eclassData, err := os.ReadFile(eclassPath)
+							if err == nil {
+								actualEclassMd5 = fmt.Sprintf("%x", md5.Sum(eclassData))
+								eclassMd5Cache[eclassName] = actualEclassMd5
+							} else {
+								actualEclassMd5 = ""
+								eclassMd5Cache[eclassName] = ""
 							}
+						}
+
+						if actualEclassMd5 != "" && actualEclassMd5 != eclassMd5 {
+							res := lints.LintResult{
+								RuleMetadata: ruleMD5CacheInvalid,
+								Message:      fmt.Sprintf("[%s] Incorrect eclass md5 for %s in md5-cache of %s-%s. Expected %s, got %s", sevTitle, eclassName, pkg.Name, ver.Version, actualEclassMd5, eclassMd5),
+								Package:      pkg.Category + "/" + pkg.Name,
+							}
+							res.RuleMetadata.Severity = severity
+							results = append(results, res)
 						}
 					}
 				}
