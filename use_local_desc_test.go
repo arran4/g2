@@ -141,7 +141,7 @@ func TestParseUseLocalDescFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp file: %v", err)
 	}
-	defer os.Remove(tmpFile.Name())
+	defer func() { _ = os.Remove(tmpFile.Name()) }()
 
 	content := `# Copyright 1999-2024 Gentoo Authors
 # Distributed under the terms of the GNU General Public License v2
@@ -150,7 +150,7 @@ app-admin/conky:X - Enable X11 support
 	if _, err := tmpFile.Write([]byte(content)); err != nil {
 		t.Fatalf("Failed to write to temp file: %v", err)
 	}
-	tmpFile.Close()
+	_ = tmpFile.Close()
 
 	// Test successful read
 	ud, err := ParseUseLocalDescFile(tmpFile.Name())
