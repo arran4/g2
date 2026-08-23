@@ -1,6 +1,8 @@
 package md5cache
 
 import (
+	"time"
+
 	"bytes"
 	"crypto/md5"
 	"fmt"
@@ -10,6 +12,15 @@ import (
 
 	"github.com/arran4/g2"
 )
+
+func benchmarkLintOverlay(b *testing.B, rule *MD5CacheInvalidLintRule, repo string, packages []*g2.PackageData) {
+	b.Helper()
+	for _, pkg := range packages {
+		if results := rule.Lint(repo, pkg); len(results) != 0 {
+			b.Fatalf("unexpected lint findings: %v", results)
+		}
+	}
+}
 
 func createSyntheticOverlay(b *testing.B, tempDir string) ([]*g2.PackageData, string) {
 	b.Helper()
@@ -80,9 +91,7 @@ func BenchmarkMD5CacheInvalid_ColdWholeOverlay(b *testing.B) {
 		rule := &MD5CacheInvalidLintRule{}
 		b.StartTimer()
 
-		for _, pkg := range packages {
-			rule.Lint(tempDir, pkg)
-		}
+		benchmarkLintOverlay(b, rule, tempDir, packages)
 	}
 }
 
@@ -98,9 +107,7 @@ func BenchmarkMD5CacheInvalid_WarmWholeOverlay(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		for _, pkg := range packages {
-			rule.Lint(tempDir, pkg)
-		}
+		benchmarkLintOverlay(b, rule, tempDir, packages)
 	}
 }
 
@@ -116,6 +123,8 @@ func BenchmarkMD5CacheInvalid_InvalidatedEclass(b *testing.B) {
 	eclassFile := filepath.Join(eclassDir, "eclass0.eclass")
 	cacheDir := filepath.Join(tempDir, "metadata", "md5-cache", "app-test")
 
+	baseTime := time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC)
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		b.StopTimer()
@@ -126,6 +135,9 @@ func BenchmarkMD5CacheInvalid_InvalidatedEclass(b *testing.B) {
 		newContent := []byte(fmt.Sprintf("changed %d", i))
 		newHash := fmt.Sprintf("%x", md5.Sum(newContent))
 		_ = os.WriteFile(eclassFile, newContent, 0644)
+
+		newTime := baseTime.Add(time.Duration(i+1) * time.Hour)
+		_ = os.Chtimes(eclassFile, newTime, newTime)
 
 		for _, pkg := range packages {
 			for v := 0; v < 2; v++ {
@@ -141,8 +153,6 @@ func BenchmarkMD5CacheInvalid_InvalidatedEclass(b *testing.B) {
 		}
 
 		b.StartTimer()
-		for _, pkg := range packages {
-			rule.Lint(tempDir, pkg)
-		}
+		benchmarkLintOverlay(b, rule, tempDir, packages)
 	}
 }
