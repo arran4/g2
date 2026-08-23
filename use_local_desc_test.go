@@ -3,8 +3,8 @@ package g2
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -134,90 +134,6 @@ func TestParseUseLocalDesc_Unsupported(t *testing.T) {
 	// Placeholder for if we ever find things that break the "pkg:flag - desc" strictly one-line assumption
 }
 
-func TestParseUseLocalDescFile(t *testing.T) {
-	tmpDir := t.TempDir()
-	tmpFileName := filepath.Join(tmpDir, "use.local.desc")
-
-	content := `# Copyright 1999-2024 Gentoo Authors
-# Distributed under the terms of the GNU General Public License v2
-app-admin/conky:X - Enable X11 support
-`
-	if err := os.WriteFile(tmpFileName, []byte(content), 0644); err != nil {
-		t.Fatalf("Failed to write to temp file: %v", err)
-	}
-
-	// Test successful read
-	ud, err := ParseUseLocalDescFile(tmpFileName)
-	if err != nil {
-		t.Fatalf("ParseUseLocalDescFile() error = %v", err)
-	}
-
-	if ud.Flags["app-admin/conky"]["X"] != "Enable X11 support" {
-		t.Errorf("Mismatch in flag parsing from file")
-	}
-
-	// Test file not found
-	nonExistentPath := filepath.Join(tmpDir, "non_existent_file.desc")
-	udNotFound, err := ParseUseLocalDescFile(nonExistentPath)
-	if err != nil {
-		t.Fatalf("ParseUseLocalDescFile() expected nil error for not exist, got %v", err)
-	}
-
-	if len(udNotFound.Flags) != 0 {
-		t.Errorf("Expected 0 flags for non-existent file, got %d", len(udNotFound.Flags))
-	}
-	if len(udNotFound.HeaderLines) != 2 {
-		t.Errorf("Expected 2 header lines for non-existent file, got %d", len(udNotFound.HeaderLines))
-	}
-	if udNotFound.HeaderLines[0] != "# Copyright 1999-2024 Gentoo Authors" {
-		t.Errorf("Expected first header line to match default, got %q", udNotFound.HeaderLines[0])
-	}
-	if udNotFound.HeaderLines[1] != "# Distributed under the terms of the GNU General Public License v2" {
-		t.Errorf("Expected second header line to match default, got %q", udNotFound.HeaderLines[1])
-	}
-}
-
-func TestWriteFileUseLocalDesc(t *testing.T) {
-	tmpFile, err := os.CreateTemp("", "test_write_local_desc_*.desc")
-	if err != nil {
-		t.Fatalf("Failed to create temp file: %v", err)
-	}
-	tmpFileName := tmpFile.Name()
-	_ = tmpFile.Close()
-	defer func() { _ = os.Remove(tmpFileName) }()
-
-	ud := &UseLocalDesc{
-		Flags: map[string]map[string]string{
-			"app-misc/foo": {
-				"bar": "Enable bar",
-			},
-		},
-		HeaderLines: []string{
-			"# Header line",
-		},
-	}
-
-	if err := ud.WriteFile(tmpFileName); err != nil {
-		t.Fatalf("WriteFile() error = %v", err)
-	}
-
-	content, err := os.ReadFile(tmpFileName)
-	if err != nil {
-		t.Fatalf("Failed to read file: %v", err)
-	}
-
-	expected := "# Header line\napp-misc/foo:bar - Enable bar\n"
-	if string(content) != expected {
-		t.Errorf("File content = %q, want %q", string(content), expected)
-	}
-
-	// test write file error
-	err = ud.WriteFile("/invalid/path/that/does/not/exist/test.desc")
-	if err == nil {
-		t.Errorf("Expected WriteFile() to return an error, got nil")
-	}
-}
-
 type errReaderUseLocalDesc struct{}
 
 func (errReaderUseLocalDesc) Read(p []byte) (n int, err error) {
@@ -268,5 +184,116 @@ func TestWriteUseLocalDesc_Error(t *testing.T) {
 	errW2 := &errWriterUseLocalDesc{failOnWrite: 2}
 	if err := ud.Write(errW2); err == nil {
 		t.Errorf("Expected Write() to return an error on flag write, got nil")
+	}
+}
+
+type mockReadCloser struct {
+	io.Reader
+	closeErr error
+}
+
+func (m mockReadCloser) Close() error { return m.closeErr }
+
+func TestParseUseLocalDescFile(t *testing.T) {
+	// Test successful read
+	content := `# Copyright 1999-2024 Gentoo Authors
+# Distributed under the terms of the GNU General Public License v2
+app-admin/conky:X - Enable X11 support
+`
+	openerSuccess := func(name string) (io.ReadCloser, error) {
+		return mockReadCloser{Reader: strings.NewReader(content)}, nil
+	}
+
+	ud, err := parseUseLocalDescFileWithOpener("dummy.desc", openerSuccess)
+	if err != nil {
+		t.Fatalf("parseUseLocalDescFileWithOpener() error = %v", err)
+	}
+
+	if ud.Flags["app-admin/conky"]["X"] != "Enable X11 support" {
+		t.Errorf("Mismatch in flag parsing from file")
+	}
+
+	// Test file not found
+	openerNotFound := func(name string) (io.ReadCloser, error) {
+		return nil, os.ErrNotExist
+	}
+	udNotFound, err := parseUseLocalDescFileWithOpener("non_existent_file.desc", openerNotFound)
+	if err != nil {
+		t.Fatalf("parseUseLocalDescFileWithOpener() expected nil error for not exist, got %v", err)
+	}
+
+	if len(udNotFound.Flags) != 0 {
+		t.Errorf("Expected 0 flags for non-existent file, got %d", len(udNotFound.Flags))
+	}
+	if len(udNotFound.HeaderLines) != 2 {
+		t.Fatalf("Expected 2 header lines for non-existent file, got %d", len(udNotFound.HeaderLines))
+	}
+	if udNotFound.HeaderLines[0] != "# Copyright 1999-2024 Gentoo Authors" {
+		t.Errorf("Expected first header line to match default, got %q", udNotFound.HeaderLines[0])
+	}
+	if udNotFound.HeaderLines[1] != "# Distributed under the terms of the GNU General Public License v2" {
+		t.Errorf("Expected second header line to match default, got %q", udNotFound.HeaderLines[1])
+	}
+
+	// Test other error
+	openerError := func(name string) (io.ReadCloser, error) {
+		return nil, fmt.Errorf("mock open error")
+	}
+	_, err = parseUseLocalDescFileWithOpener("error.desc", openerError)
+	if err == nil {
+		t.Fatalf("parseUseLocalDescFileWithOpener() expected error for mock open error, got nil")
+	}
+}
+
+type mockWriteCloser struct {
+	io.Writer
+	closeErr error
+}
+
+func (m mockWriteCloser) Close() error { return m.closeErr }
+
+func TestWriteFileUseLocalDesc(t *testing.T) {
+	ud := &UseLocalDesc{
+		Flags: map[string]map[string]string{
+			"app-misc/foo": {
+				"bar": "Enable bar",
+			},
+		},
+		HeaderLines: []string{
+			"# Header line",
+		},
+	}
+
+	// Test successful write
+	var buf bytes.Buffer
+	creatorSuccess := func(name string) (io.WriteCloser, error) {
+		return mockWriteCloser{Writer: &buf}, nil
+	}
+
+	if err := ud.writeFileWithCreator("dummy.desc", creatorSuccess); err != nil {
+		t.Fatalf("writeFileWithCreator() error = %v", err)
+	}
+
+	expected := "# Header line\napp-misc/foo:bar - Enable bar\n"
+	if buf.String() != expected {
+		t.Errorf("File content = %q, want %q", buf.String(), expected)
+	}
+
+	// test write file create error
+	creatorError := func(name string) (io.WriteCloser, error) {
+		return nil, fmt.Errorf("mock create error")
+	}
+	err := ud.writeFileWithCreator("error.desc", creatorError)
+	if err == nil {
+		t.Errorf("Expected writeFileWithCreator() to return an error, got nil")
+	}
+
+	// test write file write error
+	creatorWriteError := func(name string) (io.WriteCloser, error) {
+		return mockWriteCloser{Writer: &errWriterUseLocalDesc{failOnWrite: 1}}, nil
+	}
+	err = ud.writeFileWithCreator("error.desc", creatorWriteError)
+	if err == nil {
+		t.Errorf("Expected writeFileWithCreator() to return an error, got nil")
 	}
 }

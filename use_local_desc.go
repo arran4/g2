@@ -68,8 +68,8 @@ func ParseUseLocalDesc(r io.Reader) (*UseLocalDesc, error) {
 	return ud, nil
 }
 
-func ParseUseLocalDescFile(filename string) (*UseLocalDesc, error) {
-	file, err := os.Open(filename)
+func parseUseLocalDescFileWithOpener(filename string, open func(string) (io.ReadCloser, error)) (*UseLocalDesc, error) {
+	file, err := open(filename)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return &UseLocalDesc{
@@ -85,6 +85,12 @@ func ParseUseLocalDescFile(filename string) (*UseLocalDesc, error) {
 	defer func() { _ = file.Close() }()
 
 	return ParseUseLocalDesc(file)
+}
+
+func ParseUseLocalDescFile(filename string) (*UseLocalDesc, error) {
+	return parseUseLocalDescFileWithOpener(filename, func(name string) (io.ReadCloser, error) {
+		return os.Open(name)
+	})
 }
 
 func (ud *UseLocalDesc) Write(w io.Writer) error {
@@ -118,12 +124,18 @@ func (ud *UseLocalDesc) Write(w io.Writer) error {
 	return nil
 }
 
-func (ud *UseLocalDesc) WriteFile(filename string) error {
-	file, err := os.Create(filename)
+func (ud *UseLocalDesc) writeFileWithCreator(filename string, create func(string) (io.WriteCloser, error)) error {
+	file, err := create(filename)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = file.Close() }()
 
 	return ud.Write(file)
+}
+
+func (ud *UseLocalDesc) WriteFile(filename string) error {
+	return ud.writeFileWithCreator(filename, func(name string) (io.WriteCloser, error) {
+		return os.Create(name)
+	})
 }
