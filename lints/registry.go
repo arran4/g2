@@ -124,6 +124,13 @@ func RegisterEclassLintRule(rule EclassLintRule) {
 	eclassLintRules = append(eclassLintRules, rule)
 }
 
+// RuleSetManagedLintRule is an opt-in interface for lint rules whose enablement and
+// effective severity are managed by a RuleSet.
+type RuleSetManagedLintRule interface {
+	MetadataAwareLintRule
+	RuleSetManaged()
+}
+
 func PerformLintingResults(repoDir string, pkg *g2.PackageData) []LintResult {
 	results, err := PerformLintingResultsWithRuleSet(repoDir, pkg, "default")
 	if err != nil {
@@ -145,8 +152,8 @@ func PerformLintingResultsWithRuleSet(repoDir string, pkg *g2.PackageData, ruleS
 	qa, _ := g2.ParseQAPolicy(qaPolicyPath)
 
 	for _, rule := range lintRules {
-		if metaRule, ok := rule.(MetadataAwareLintRule); ok {
-			meta := metaRule.Metadata()
+		if managedRule, ok := rule.(RuleSetManagedLintRule); ok {
+			meta := managedRule.Metadata()
 			entry, found := rs.Rules[meta.ID]
 			if !found || !entry.Enabled {
 				continue

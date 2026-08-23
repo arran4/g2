@@ -7,8 +7,6 @@ import (
 
 	"github.com/arran4/g2"
 	"github.com/arran4/g2/lints"
-	"golang.org/x/text/cases"
-	"golang.org/x/text/language"
 )
 
 var ruleCopyrightHeader = lints.RuleMetadata{
@@ -47,8 +45,11 @@ var (
 	// reLicenseTokens matches standalone license identifiers to prevent false positives like "commit" matching "mit".
 	reLicenseTokens = regexp.MustCompile(`\b(?i:gpl|lgpl|agpl|bsd|mit|apache|mpl|isc|unlicense|zlib|epl|artistic)\b`)
 
-	// reGentooCopyright matches the canonical Gentoo copyright line format.
-	reGentooCopyright = regexp.MustCompile(`^#\s*Copyright\s+\d{4}(?:[-\s,]+\d{4})*\s+(?:Gentoo Authors|Gentoo Foundation)`)
+	// reGentooCopyright matches the complete canonical Gentoo copyright line format.
+	// Note: "Gentoo Authors" is required by current Gentoo policy; "Gentoo Foundation"
+	// is retained only for backward-compatibility with historical Gentoo ebuilds (prior to 2017).
+	// The regex is anchored to disallow trailing garbage.
+	reGentooCopyright = regexp.MustCompile(`^#\s*Copyright\s+\d{4}(?:[-\s,]+\d{4})*\s+(?:Gentoo Authors|Gentoo Foundation)\s*$`)
 )
 
 // getInitialCommentBlock extracts the initial contiguous shell-comment lines from the top of an ebuild.
@@ -138,39 +139,18 @@ func (r *CopyrightHeaderLintRule) Metadata() lints.RuleMetadata {
 	return ruleCopyrightHeader
 }
 
+func (r *CopyrightHeaderLintRule) RuleSetManaged() {}
+
 func (r *CopyrightHeaderLintRule) Lint(repoDir string, pkg *g2.PackageData) []lints.LintResult {
-	return r.LintWithQA(repoDir, pkg, nil)
-}
-
-func (r *CopyrightHeaderLintRule) LintWithQA(repoDir string, pkg *g2.PackageData, qa *g2.QAPolicy) []lints.LintResult {
 	var results []lints.LintResult
-	severity := ruleCopyrightHeader.Severity
-
-	if qa != nil {
-		if val, ok := qa.Policies[ruleCopyrightHeader.ID]; ok {
-			if val == "ignore" {
-				return nil
-			}
-			switch val {
-			case "error":
-				severity = lints.SeverityError
-			case "warning":
-				severity = lints.SeverityWarning
-			case "notice":
-				severity = lints.SeverityNotice
-			}
-		}
-	}
-
 	for _, ver := range pkg.Versions {
 		if ver.Ebuild != nil && ver.Ebuild.RawText != "" {
 			if !hasGenericCopyrightHeader(ver.Ebuild.RawText) {
 				res := lints.LintResult{
 					RuleMetadata: ruleCopyrightHeader,
-					Message:      fmt.Sprintf("[%s] Ebuild %s has a missing or malformed copyright/licensing header.", cases.Title(language.Und, cases.NoLower).String(string(severity)), ver.Version),
+					Message:      fmt.Sprintf("Ebuild %s has a missing or malformed copyright/licensing header.", ver.Version),
 					Package:      pkg.Category + "/" + pkg.Name,
 				}
-				res.RuleMetadata.Severity = severity
 				results = append(results, res)
 			}
 		}
@@ -185,39 +165,18 @@ func (r *GentooCopyrightHeaderLintRule) Metadata() lints.RuleMetadata {
 	return ruleGentooCopyrightHeader
 }
 
+func (r *GentooCopyrightHeaderLintRule) RuleSetManaged() {}
+
 func (r *GentooCopyrightHeaderLintRule) Lint(repoDir string, pkg *g2.PackageData) []lints.LintResult {
-	return r.LintWithQA(repoDir, pkg, nil)
-}
-
-func (r *GentooCopyrightHeaderLintRule) LintWithQA(repoDir string, pkg *g2.PackageData, qa *g2.QAPolicy) []lints.LintResult {
 	var results []lints.LintResult
-	severity := ruleGentooCopyrightHeader.Severity
-
-	if qa != nil {
-		if val, ok := qa.Policies[ruleGentooCopyrightHeader.ID]; ok {
-			if val == "ignore" {
-				return nil
-			}
-			switch val {
-			case "error":
-				severity = lints.SeverityError
-			case "warning":
-				severity = lints.SeverityWarning
-			case "notice":
-				severity = lints.SeverityNotice
-			}
-		}
-	}
-
 	for _, ver := range pkg.Versions {
 		if ver.Ebuild != nil && ver.Ebuild.RawText != "" {
 			if !hasGentooCopyrightHeader(ver.Ebuild.RawText) {
 				res := lints.LintResult{
 					RuleMetadata: ruleGentooCopyrightHeader,
-					Message:      fmt.Sprintf("[%s] Ebuild %s has a missing or malformed Gentoo copyright notice.", cases.Title(language.Und, cases.NoLower).String(string(severity)), ver.Version),
+					Message:      fmt.Sprintf("Ebuild %s has a missing or malformed Gentoo copyright notice.", ver.Version),
 					Package:      pkg.Category + "/" + pkg.Name,
 				}
-				res.RuleMetadata.Severity = severity
 				results = append(results, res)
 			}
 		}

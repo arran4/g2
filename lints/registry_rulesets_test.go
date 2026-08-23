@@ -1,6 +1,7 @@
 package lints_test
 
 import (
+	"os"
 	"testing"
 
 	"github.com/arran4/g2"
@@ -193,5 +194,113 @@ func TestLegacyLintRulesRunUnchanged(t *testing.T) {
 	}
 	if !foundCategorySanity {
 		t.Errorf("expected legacy CategorySanity rule to execute in default ruleset")
+	}
+}
+
+func TestAbsentRuleSetManagedRuleDoesNotRun(t *testing.T) {
+	emptyRS := &lints.RuleSet{
+		ID:          "empty-test-ruleset",
+		Description: "RuleSet with no managed rules enabled.",
+		Rules:       map[string]lints.RuleSetEntry{},
+	}
+	lints.RegisterRuleSet(emptyRS)
+
+	// Missing copyright header would trigger CopyrightHeader if enabled.
+	pkg := &g2.PackageData{
+		Category: "app-misc",
+		Name:     "badpkg",
+		Versions: []g2.VersionData{
+			{
+				Version: "1.0",
+				Ebuild: &g2.Ebuild{
+					RawText: "EAPI=8\n",
+				},
+			},
+		},
+	}
+
+	results, err := lints.PerformLintingResultsWithRuleSet("", pkg, "empty-test-ruleset")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	for _, res := range results {
+		if res.RuleMetadata.ID == "CopyrightHeader" || res.RuleMetadata.ID == "GentooCopyrightHeader" {
+			t.Errorf("rule %q should not execute when absent from RuleSet", res.RuleMetadata.ID)
+		}
+	}
+}
+
+func TestMetadataAwareNonManagedRuleContinuesRunning(t *testing.T) {
+	// UseExpandRule is MetadataAware but not RuleSetManaged.
+	// It should continue running under the default RuleSet even though it is not listed in default's Rules map.
+	tmpDir := t.TempDir()
+	importDir := tmpDir + "/profiles/desc"
+	if err := os.MkdirAll(importDir, 0755); err != nil {
+		t.Fatalf("failed to create profiles/desc: %v", err)
+	}
+	descContent := "valid_flag - A valid flag\n"
+	if err := os.WriteFile(importDir+"/custom_expand.desc", []byte(descContent), 0644); err != nil {
+		t.Fatalf("failed to write desc file: %v", err)
+	}
+
+	pkg := &g2.PackageData{
+		Category: "app-misc",
+		Name:     "pkg",
+		Versions: []g2.VersionData{
+			{
+				Version: "1.0",
+				Ebuild: &g2.Ebuild{
+					RawText: "# Copyright 2026 Gentoo Authors\n# Distributed under the terms of the GNU General Public License v2\n\nEAPI=8\n",
+					Vars: map[string]string{
+						"IUSE": "custom_expand_unsupported_flag",
+					},
+				},
+			},
+		},
+	}
+
+	results, err := lints.PerformLintingResultsWithRuleSet(tmpDir, pkg, "default")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	var foundUseExpand bool
+	for _, res := range results {
+		if res.RuleMetadata.ID == "UseExpandUnsupported" {
+			foundUseExpand = true
+			break
+		}
+	}
+	if !foundUseExpand {
+		t.Errorf("expected metadata-aware non-ruleset-managed rule UseExpandUnsupported to run under default ruleset")
+	}
+}
+
+func TestPerformLintingWithRuleSet_StringWarnings(t *testing.T) {
+	pkg := &g2.PackageData{
+		Category: "app-misc",
+		Name:     "badpkg",
+		Versions: []g2.VersionData{
+			{
+				Version: "1.0",
+				Ebuild: &g2.Ebuild{
+					RawText: "EAPI=8\n",
+				},
+			},
+		},
+	}
+
+	warnings, err := lints.PerformLintingWithRuleSet("", pkg, "default")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(warnings) == 0 {
+		t.Errorf("expected warnings for missing copyright header under default ruleset")
+	}
+
+	_, err = lints.PerformLintingWithRuleSet("", pkg, "invalid-rs-id")
+	if err == nil {
+		t.Fatalf("expected error for invalid ruleset ID, got nil")
 	}
 }

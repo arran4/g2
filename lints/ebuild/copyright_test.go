@@ -161,6 +161,16 @@ func TestGentooCopyrightHeaderLintRule(t *testing.T) {
 			rawText: "EAPI=8\n",
 			want:    1,
 		},
+		{
+			name:    "Gentoo Authors with trailing garbage rejected",
+			rawText: "# Copyright 1999-2024 Gentoo Authors trailing garbage\nEAPI=8\n",
+			want:    1,
+		},
+		{
+			name:    "Gentoo Foundation historical with trailing garbage rejected",
+			rawText: "# Copyright 1999-2020 Gentoo Foundation trailing garbage\nEAPI=8\n",
+			want:    1,
+		},
 	}
 
 	for _, tt := range tests {
