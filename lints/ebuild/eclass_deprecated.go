@@ -70,6 +70,9 @@ func (r *EclassDeprecatedLintRule) LintRepo(repoDir string, site *g2.SiteData) [
 
 		// Scan file line by line, looking for @DEPRECATED
 		scanner := bufio.NewScanner(file)
+		// Create a custom buffer to handle very long lines, e.g. large arrays
+		buf := make([]byte, 0, 64*1024)
+		scanner.Buffer(buf, 1024*1024*10) // 10MB max line length
 		for scanner.Scan() {
 			line := scanner.Text()
 			if strings.HasPrefix(strings.TrimSpace(line), "# @DEPRECATED:") {
@@ -77,6 +80,9 @@ func (r *EclassDeprecatedLintRule) LintRepo(repoDir string, site *g2.SiteData) [
 				deprecatedEclasses[eclassName] = true
 				break
 			}
+		}
+		if err := scanner.Err(); err != nil {
+			// Just ignore and continue as per original behavior of ignoring read errors (except missing file)
 		}
 	}
 

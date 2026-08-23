@@ -3,6 +3,7 @@ package ebuild
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/arran4/g2"
@@ -17,7 +18,9 @@ func TestEclassDeprecatedLintRule(t *testing.T) {
 	if err := os.MkdirAll(masterEclassDir, 0755); err != nil {
 		t.Fatalf("Failed to create master eclass dir: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(masterEclassDir, "upstream-deprecated.eclass"), []byte("# @ECLASS: upstream-deprecated\n# @DEPRECATED: none\n"), 0644); err != nil {
+
+	longLine := strings.Repeat("a", 100000) + "\n"
+	if err := os.WriteFile(filepath.Join(masterEclassDir, "upstream-deprecated.eclass"), []byte("# @ECLASS: upstream-deprecated\n"+longLine+"# @DEPRECATED: none\n"), 0644); err != nil {
 		t.Fatalf("Failed to write upstream eclass: %v", err)
 	}
 
