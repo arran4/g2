@@ -82,7 +82,7 @@ func (r *EclassDeprecatedLintRule) LintRepo(repoDir string, site *g2.SiteData) [
 			}
 		}
 		if err := scanner.Err(); err != nil {
-			// Just ignore and continue as per original behavior of ignoring read errors (except missing file)
+			fmt.Fprintf(os.Stderr, "Warning: failed to scan eclass file %s: %v\n", eclassPath, err)
 		}
 	}
 
