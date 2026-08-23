@@ -66,7 +66,7 @@ func (r *EclassDeprecatedLintRule) LintRepo(repoDir string, site *g2.SiteData) [
 		if err != nil {
 			return
 		}
-		defer file.Close()
+		defer func() { _ = file.Close() }()
 
 		// Scan file line by line, looking for @DEPRECATED
 		scanner := bufio.NewScanner(file)
