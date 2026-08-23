@@ -17,8 +17,36 @@ import (
 
 /*
 Note: The format of the md5-cache file was verified using the egencache tool in a gentoo/stage3 Docker container:
-...
+```bash
+docker run --rm gentoo/stage3:latest bash -c "
+  emerge --info
+  mkdir -p /var/db/repos/testrepo/profiles
+  mkdir -p /var/db/repos/testrepo/app-test/test
+  echo 'testrepo' > /var/db/repos/testrepo/profiles/repo_name
+  echo 'app-test' > /var/db/repos/testrepo/profiles/categories
+  echo 'EAPI=8' > /var/db/repos/testrepo/app-test/test/test-1.0.ebuild
+  echo 'DESCRIPTION=\"test\"' >> /var/db/repos/testrepo/app-test/test/test-1.0.ebuild
+  echo 'SLOT=\"0\"' >> /var/db/repos/testrepo/app-test/test/test-1.0.ebuild
+
+  mkdir -p /etc/portage/repos.conf
+  cat << INN > /etc/portage/repos.conf/testrepo.conf
+[testrepo]
+location = /var/db/repos/testrepo
+masters =
+auto-sync = no
+INN
+
+  egencache --repo testrepo --update
+
+  cat /var/db/repos/testrepo/metadata/md5-cache/app-test/test-1.0
+"
+```
+The output format consists of `KEY=VALUE` pairs separated by newlines.
+The `_md5_` key contains the md5sum of the ebuild.
+The `_eclasses_` key contains pairs of `eclass_name eclass_md5` separated by whitespace (tab).
 */
+
+const defaultEclassMD5CacheLimit = 5000
 
 var ruleMD5CacheInvalid = lints.RuleMetadata{
 	ID:          "Md5CacheInvalid",
@@ -34,11 +62,7 @@ var ruleMD5CacheInvalid = lints.RuleMetadata{
 
 func init() {
 	lints.RegisterRuleMetadata(ruleMD5CacheInvalid)
-	lints.RegisterLintRule(&MD5CacheInvalidLintRule{
-		cache: make(map[string]*list.Element),
-		lru:   list.New(),
-		limit: 5000,
-	})
+	lints.RegisterLintRule(&MD5CacheInvalidLintRule{})
 }
 
 type cacheEntry struct {
@@ -55,25 +79,39 @@ type MD5CacheInvalidLintRule struct {
 	limit int
 }
 
+func canonicalEclassPath(path string) string {
+	absPath, err := filepath.Abs(path)
+	if err != nil {
+		return path
+	}
+	resolvedPath, err := filepath.EvalSymlinks(absPath)
+	if err != nil {
+		return absPath
+	}
+	return resolvedPath
+}
+
+func (r *MD5CacheInvalidLintRule) ensureCacheLocked() {
+	if r.cache == nil {
+		r.cache = make(map[string]*list.Element)
+		r.lru = list.New()
+		if r.limit == 0 {
+			r.limit = defaultEclassMD5CacheLimit
+		}
+	}
+}
+
 func (r *MD5CacheInvalidLintRule) getEclassMD5(path string) (string, error) {
-	stat, err := os.Stat(path)
+	canonicalPath := canonicalEclassPath(path)
+
+	stat, err := os.Stat(canonicalPath)
 	if err != nil {
 		return "", err
 	}
 
-	absPath, err := filepath.Abs(path)
-	if err != nil {
-		absPath = path // fallback
-	}
-
 	r.mu.Lock()
-	if r.cache == nil {
-		r.cache = make(map[string]*list.Element)
-		r.lru = list.New()
-		r.limit = 5000
-	}
-
-	if elem, ok := r.cache[absPath]; ok {
+	r.ensureCacheLocked()
+	if elem, ok := r.cache[canonicalPath]; ok {
 		entry := elem.Value.(*cacheEntry)
 		if entry.size == stat.Size() && entry.modTime.Equal(stat.ModTime()) {
 			r.lru.MoveToFront(elem)
@@ -82,12 +120,12 @@ func (r *MD5CacheInvalidLintRule) getEclassMD5(path string) (string, error) {
 		}
 		// Invalidated, remove old entry
 		r.lru.Remove(elem)
-		delete(r.cache, absPath)
+		delete(r.cache, canonicalPath)
 	}
 	r.mu.Unlock()
 
 	// Hash outside lock to allow concurrency
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(canonicalPath)
 	if err != nil {
 		return "", err
 	}
@@ -96,15 +134,18 @@ func (r *MD5CacheInvalidLintRule) getEclassMD5(path string) (string, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
+	// ensureCacheLocked is not strictly needed here since we already did it, but safe
+	r.ensureCacheLocked()
+
 	// Check again in case another goroutine did it
-	if elem, ok := r.cache[absPath]; ok {
+	if elem, ok := r.cache[canonicalPath]; ok {
 		entry := elem.Value.(*cacheEntry)
 		if entry.size == stat.Size() && entry.modTime.Equal(stat.ModTime()) {
 			r.lru.MoveToFront(elem)
 			return entry.md5, nil
 		}
 		r.lru.Remove(elem)
-		delete(r.cache, absPath)
+		delete(r.cache, canonicalPath)
 	}
 
 	if r.limit > 0 && r.lru.Len() >= r.limit {
@@ -117,13 +158,13 @@ func (r *MD5CacheInvalidLintRule) getEclassMD5(path string) (string, error) {
 	}
 
 	newEntry := &cacheEntry{
-		path:    absPath,
+		path:    canonicalPath,
 		md5:     hash,
 		size:    stat.Size(),
 		modTime: stat.ModTime(),
 	}
 	elem := r.lru.PushFront(newEntry)
-	r.cache[absPath] = elem
+	r.cache[canonicalPath] = elem
 
 	return hash, nil
 }
@@ -160,6 +201,7 @@ func (r *MD5CacheInvalidLintRule) LintWithQA(repoDir string, pkg *g2.PackageData
 
 			f, err := os.Open(cachePath)
 			if err != nil {
+				// Handled by missing md5-cache rule
 				continue
 			}
 
