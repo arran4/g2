@@ -2,8 +2,11 @@ package g2
 
 import (
 	"bytes"
+	"errors"
+	"io/fs"
 	"strings"
 	"testing"
+	"testing/fstest"
 )
 
 func TestParsePkgDescIndex(t *testing.T) {
@@ -73,5 +76,39 @@ app-admin/amazon-ec2-init 20101127-r2: Init script to setup Amazon EC2 instance 
 `
 	if buf.String() != expected {
 		t.Errorf("Serialize mismatch.\nExpected:\n%s\nGot:\n%s", expected, buf.String())
+	}
+}
+
+func TestParsePkgDescIndexFile(t *testing.T) {
+	input := "app-admin/aerospike-amc-community 4.0.19-r2 5.0.0: Web UI based monitoring tool for Aerospike Community Edition Server\n" +
+		"app-admin/amazon-ec2-init 20101127-r2: Init script to setup Amazon EC2 instance parameters\n"
+	fsys := fstest.MapFS{
+		"pkg_desc_index": &fstest.MapFile{Data: []byte(input)},
+	}
+
+	idx, err := ParsePkgDescIndexFile("pkg_desc_index", fsys)
+	if err != nil {
+		t.Fatalf("ParsePkgDescIndexFile failed: %v", err)
+	}
+
+	if len(idx.Entries) != 2 {
+		t.Fatalf("expected 2 entries, got %d", len(idx.Entries))
+	}
+
+	e1 := idx.Entries[0]
+	if e1.Category != "app-admin" || e1.Package != "aerospike-amc-community" {
+		t.Errorf("entry 1 path wrong: %s/%s", e1.Category, e1.Package)
+	}
+	if len(e1.Versions) != 2 || e1.Versions[0] != "4.0.19-r2" || e1.Versions[1] != "5.0.0" {
+		t.Errorf("entry 1 versions wrong: %v", e1.Versions)
+	}
+	if e1.Description != "Web UI based monitoring tool for Aerospike Community Edition Server" {
+		t.Errorf("entry 1 description wrong: %s", e1.Description)
+	}
+
+	// Test with non-existent file
+	_, err = ParsePkgDescIndexFile("non_existent_file", fsys)
+	if !errors.Is(err, fs.ErrNotExist) {
+		t.Errorf("ParsePkgDescIndexFile should fail with fs.ErrNotExist for non-existent file, got: %v", err)
 	}
 }
