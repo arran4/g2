@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"sort"
 	"strings"
@@ -73,9 +74,24 @@ func ParsePkgDescIndex(r io.Reader) (*PkgDescIndex, error) {
 	return &index, nil
 }
 
-// ParsePkgDescIndexFile reads and parses a pkg_desc_index file from disk.
-func ParsePkgDescIndexFile(path string) (*PkgDescIndex, error) {
-	file, err := os.Open(path)
+// ParsePkgDescIndexFile reads and parses a pkg_desc_index file.
+// It optionally accepts an fs.FS to read from via type-switched variadic args.
+// If no fs.FS is provided, it falls back to os.Open.
+func ParsePkgDescIndexFile(path string, opts ...any) (*PkgDescIndex, error) {
+	var fsys fs.FS
+	for _, opt := range opts {
+		if v, ok := opt.(fs.FS); ok {
+			fsys = v
+		}
+	}
+
+	var file io.ReadCloser
+	var err error
+	if fsys != nil {
+		file, err = fsys.Open(path)
+	} else {
+		file, err = os.Open(path)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("opening file: %w", err)
 	}
