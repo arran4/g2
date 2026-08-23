@@ -2,11 +2,14 @@ package md5cache
 
 import (
 	"bufio"
+	"container/list"
 	"crypto/md5"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/arran4/g2"
 	"github.com/arran4/g2/lints"
@@ -14,33 +17,7 @@ import (
 
 /*
 Note: The format of the md5-cache file was verified using the egencache tool in a gentoo/stage3 Docker container:
-```bash
-docker run --rm gentoo/stage3:latest bash -c "
-  emerge --info
-  mkdir -p /var/db/repos/testrepo/profiles
-  mkdir -p /var/db/repos/testrepo/app-test/test
-  echo 'testrepo' > /var/db/repos/testrepo/profiles/repo_name
-  echo 'app-test' > /var/db/repos/testrepo/profiles/categories
-  echo 'EAPI=8' > /var/db/repos/testrepo/app-test/test/test-1.0.ebuild
-  echo 'DESCRIPTION=\"test\"' >> /var/db/repos/testrepo/app-test/test/test-1.0.ebuild
-  echo 'SLOT=\"0\"' >> /var/db/repos/testrepo/app-test/test/test-1.0.ebuild
-
-  mkdir -p /etc/portage/repos.conf
-  cat << INN > /etc/portage/repos.conf/testrepo.conf
-[testrepo]
-location = /var/db/repos/testrepo
-masters =
-auto-sync = no
-INN
-
-  egencache --repo testrepo --update
-
-  cat /var/db/repos/testrepo/metadata/md5-cache/app-test/test-1.0
-"
-```
-The output format consists of `KEY=VALUE` pairs separated by newlines.
-The `_md5_` key contains the md5sum of the ebuild.
-The `_eclasses_` key contains pairs of `eclass_name eclass_md5` separated by whitespace (tab).
+...
 */
 
 var ruleMD5CacheInvalid = lints.RuleMetadata{
@@ -57,10 +34,98 @@ var ruleMD5CacheInvalid = lints.RuleMetadata{
 
 func init() {
 	lints.RegisterRuleMetadata(ruleMD5CacheInvalid)
-	lints.RegisterLintRule(&MD5CacheInvalidLintRule{})
+	lints.RegisterLintRule(&MD5CacheInvalidLintRule{
+		cache: make(map[string]*list.Element),
+		lru:   list.New(),
+		limit: 5000,
+	})
+}
+
+type cacheEntry struct {
+	path    string
+	md5     string
+	size    int64
+	modTime time.Time
 }
 
 type MD5CacheInvalidLintRule struct {
+	mu    sync.Mutex
+	cache map[string]*list.Element
+	lru   *list.List
+	limit int
+}
+
+func (r *MD5CacheInvalidLintRule) getEclassMD5(path string) (string, error) {
+	stat, err := os.Stat(path)
+	if err != nil {
+		return "", err
+	}
+
+	absPath, err := filepath.Abs(path)
+	if err != nil {
+		absPath = path // fallback
+	}
+
+	r.mu.Lock()
+	if r.cache == nil {
+		r.cache = make(map[string]*list.Element)
+		r.lru = list.New()
+		r.limit = 5000
+	}
+
+	if elem, ok := r.cache[absPath]; ok {
+		entry := elem.Value.(*cacheEntry)
+		if entry.size == stat.Size() && entry.modTime.Equal(stat.ModTime()) {
+			r.lru.MoveToFront(elem)
+			r.mu.Unlock()
+			return entry.md5, nil
+		}
+		// Invalidated, remove old entry
+		r.lru.Remove(elem)
+		delete(r.cache, absPath)
+	}
+	r.mu.Unlock()
+
+	// Hash outside lock to allow concurrency
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+	hash := fmt.Sprintf("%x", md5.Sum(data))
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	// Check again in case another goroutine did it
+	if elem, ok := r.cache[absPath]; ok {
+		entry := elem.Value.(*cacheEntry)
+		if entry.size == stat.Size() && entry.modTime.Equal(stat.ModTime()) {
+			r.lru.MoveToFront(elem)
+			return entry.md5, nil
+		}
+		r.lru.Remove(elem)
+		delete(r.cache, absPath)
+	}
+
+	if r.limit > 0 && r.lru.Len() >= r.limit {
+		back := r.lru.Back()
+		if back != nil {
+			oldEntry := back.Value.(*cacheEntry)
+			delete(r.cache, oldEntry.path)
+			r.lru.Remove(back)
+		}
+	}
+
+	newEntry := &cacheEntry{
+		path:    absPath,
+		md5:     hash,
+		size:    stat.Size(),
+		modTime: stat.ModTime(),
+	}
+	elem := r.lru.PushFront(newEntry)
+	r.cache[absPath] = elem
+
+	return hash, nil
 }
 
 func (r *MD5CacheInvalidLintRule) Lint(repoDir string, pkg *g2.PackageData) []lints.LintResult {
@@ -70,8 +135,6 @@ func (r *MD5CacheInvalidLintRule) Lint(repoDir string, pkg *g2.PackageData) []li
 func (r *MD5CacheInvalidLintRule) LintWithQA(repoDir string, pkg *g2.PackageData, qa *g2.QAPolicy) []lints.LintResult {
 	var results []lints.LintResult
 	severity := lints.SeverityWarning
-
-	eclassMd5Cache := make(map[string]string)
 
 	if qa != nil && qa.Policies != nil {
 		if val, ok := qa.Policies["Md5CacheInvalid"]; ok {
@@ -97,7 +160,6 @@ func (r *MD5CacheInvalidLintRule) LintWithQA(repoDir string, pkg *g2.PackageData
 
 			f, err := os.Open(cachePath)
 			if err != nil {
-				// Handled by missing md5-cache rule
 				continue
 			}
 
@@ -174,21 +236,10 @@ func (r *MD5CacheInvalidLintRule) LintWithQA(repoDir string, pkg *g2.PackageData
 						eclassName := eclassParts[i]
 						eclassMd5 := eclassParts[i+1]
 
-						// Cache MD5 calculation to avoid expensive re-calculations
-						actualEclassMd5, ok := eclassMd5Cache[eclassName]
-						if !ok {
-							eclassPath := filepath.Join(repoDir, "eclass", eclassName+".eclass")
-							eclassData, err := os.ReadFile(eclassPath)
-							if err == nil {
-								actualEclassMd5 = fmt.Sprintf("%x", md5.Sum(eclassData))
-								eclassMd5Cache[eclassName] = actualEclassMd5
-							} else {
-								actualEclassMd5 = ""
-								eclassMd5Cache[eclassName] = ""
-							}
-						}
+						eclassPath := filepath.Join(repoDir, "eclass", eclassName+".eclass")
+						actualEclassMd5, err := r.getEclassMD5(eclassPath)
 
-						if actualEclassMd5 != "" && actualEclassMd5 != eclassMd5 {
+						if err == nil && actualEclassMd5 != eclassMd5 {
 							res := lints.LintResult{
 								RuleMetadata: ruleMD5CacheInvalid,
 								Message:      fmt.Sprintf("[%s] Incorrect eclass md5 for %s in md5-cache of %s-%s. Expected %s, got %s", sevTitle, eclassName, pkg.Name, ver.Version, actualEclassMd5, eclassMd5),

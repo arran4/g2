@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/arran4/g2"
 )
@@ -83,6 +84,63 @@ func TestMD5CacheInvalidLintRule(t *testing.T) {
 	if len(results) != 1 {
 		t.Errorf("Expected 1 result for invalid format, got %d", len(results))
 	} else if results[0].Message != "[Warning] Invalid format in md5-cache for foo-1.0: invalidline" {
+		t.Errorf("Unexpected message: %s", results[0].Message)
+	}
+}
+
+func TestMD5CacheInvalidLintRule_CacheInvalidation(t *testing.T) {
+	rule := &MD5CacheInvalidLintRule{}
+
+	tempDir := t.TempDir()
+
+	pkg := &g2.PackageData{
+		Category: "app-misc",
+		Name:     "foo",
+		Versions: []g2.VersionData{
+			{
+				Version: "1.0",
+				Ebuild:  &g2.Ebuild{},
+			},
+		},
+	}
+
+	cacheDir := filepath.Join(tempDir, "metadata", "md5-cache", "app-misc")
+	_ = os.MkdirAll(cacheDir, 0755)
+	cacheFile := filepath.Join(cacheDir, "foo-1.0")
+
+	ebuildDir := filepath.Join(tempDir, "app-misc", "foo")
+	_ = os.MkdirAll(ebuildDir, 0755)
+	ebuildFile := filepath.Join(ebuildDir, "foo-1.0.ebuild")
+	_ = os.WriteFile(ebuildFile, []byte("EAPI=8\n"), 0644)
+	md5sum := fmt.Sprintf("%x", md5.Sum([]byte("EAPI=8\n")))
+
+	eclassDir := filepath.Join(tempDir, "eclass")
+	_ = os.MkdirAll(eclassDir, 0755)
+	eclassFile := filepath.Join(eclassDir, "test.eclass")
+
+	// First pass
+	eclassContent1 := []byte("# test\n")
+	_ = os.WriteFile(eclassFile, eclassContent1, 0644)
+	eclassMd51 := fmt.Sprintf("%x", md5.Sum(eclassContent1))
+	_ = os.WriteFile(cacheFile, []byte(fmt.Sprintf("_md5_=%s\n_eclasses_=test\t%s\n", md5sum, eclassMd51)), 0644)
+
+	results := rule.Lint(tempDir, pkg)
+	if len(results) != 0 {
+		t.Errorf("Expected 0 results for valid cache, got %d", len(results))
+	}
+
+	// Give a slight delay to ensure mtime differs
+	time.Sleep(10 * time.Millisecond)
+
+	// Second pass: File changed but md5 cache expects old hash -> should trigger error based on new hash
+	eclassContent2 := []byte("# test changed\n")
+	_ = os.WriteFile(eclassFile, eclassContent2, 0644)
+	eclassMd52 := fmt.Sprintf("%x", md5.Sum(eclassContent2))
+
+	results = rule.Lint(tempDir, pkg)
+	if len(results) != 1 {
+		t.Errorf("Expected 1 result for invalid eclass md5 after change, got %d", len(results))
+	} else if results[0].Message != fmt.Sprintf("[Warning] Incorrect eclass md5 for test in md5-cache of foo-1.0. Expected %s, got %s", eclassMd52, eclassMd51) {
 		t.Errorf("Unexpected message: %s", results[0].Message)
 	}
 }
