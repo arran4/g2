@@ -138,18 +138,18 @@ func (r *MD5CacheInvalidLintRule) getEclassMD5(path string) (string, error) {
 
 		before, err := f.Stat()
 		if err != nil {
-			f.Close()
+			_ = f.Close()
 			return "", err
 		}
 
 		data, err := io.ReadAll(f)
 		if err != nil {
-			f.Close()
+			_ = f.Close()
 			return "", err
 		}
 
 		after, err := f.Stat()
-		f.Close()
+		_ = f.Close()
 
 		if err != nil {
 			return "", err
