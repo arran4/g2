@@ -190,32 +190,52 @@ func parseNewsBodyAST(body string) []NewsNode {
 // ToHTMLTemplate converts the NewsItem body into an HTML template representation.
 func (n NewsItem) ToHTMLTemplate() template.HTML {
 	if n.NewsItemFormat == "2.0" {
-		var out []string
+		var out strings.Builder
+		first := true
 		for _, node := range n.BodyAST {
 			switch node.Type {
 			case NewsNodeText:
 				for _, line := range node.Lines {
+					if !first {
+						out.WriteByte('\n')
+					}
+					first = false
 					if strings.TrimSpace(line) == "" {
-						out = append(out, "<br><br>")
+						out.WriteString("<br><br>")
 					} else {
-						out = append(out, template.HTMLEscapeString(line))
+						out.WriteString(template.HTMLEscapeString(line))
 					}
 				}
 			case NewsNodeList:
-				out = append(out, "<ul>")
+				if !first {
+					out.WriteByte('\n')
+				}
+				first = false
+				out.WriteString("<ul>")
 				for _, item := range node.Lines {
-					out = append(out, "<li>"+template.HTMLEscapeString(item)+"</li>")
+					out.WriteString("\n<li>")
+					out.WriteString(template.HTMLEscapeString(item))
+					out.WriteString("</li>")
 				}
-				out = append(out, "</ul>")
+				out.WriteString("\n</ul>")
 			case NewsNodeCode:
-				codeLines := make([]string, 0, len(node.Lines))
-				for _, codeLine := range node.Lines {
-					codeLines = append(codeLines, template.HTMLEscapeString(codeLine))
+				if !first {
+					out.WriteByte('\n')
 				}
-				out = append(out, "<pre><code>"+strings.Join(codeLines, "\n")+"</code></pre>")
+				first = false
+				out.WriteString("<pre><code>")
+				firstCode := true
+				for _, codeLine := range node.Lines {
+					if !firstCode {
+						out.WriteByte('\n')
+					}
+					firstCode = false
+					out.WriteString(template.HTMLEscapeString(codeLine))
+				}
+				out.WriteString("</code></pre>")
 			}
 		}
-		return template.HTML(strings.Join(out, "\n"))
+		return template.HTML(out.String())
 	}
 	escaped := template.HTMLEscapeString(n.Body)
 	escaped = strings.ReplaceAll(escaped, "\n", "<br>")

@@ -224,53 +224,6 @@ func TestStripEmail(t *testing.T) {
 	}
 }
 
-func TestNewsItem_ToHTMLTemplate(t *testing.T) {
-	tests := []struct {
-		name     string
-		item     NewsItem
-		expected template.HTML
-	}{
-		{
-			name: "Format 1.0 (Plain text)",
-			item: NewsItem{
-				NewsItemFormat: "1.0",
-				Body:           "Line 1\nLine 2 <tag>\nLine 3",
-			},
-			expected: "Line 1<br>Line 2 &lt;tag&gt;<br>Line 3",
-		},
-		{
-			name: "Format 2.0 with AST",
-			item: NewsItem{
-				NewsItemFormat: "2.0",
-				BodyAST: []NewsNode{
-					{
-						Type:  NewsNodeText,
-						Lines: []string{"Text <escaped> 1", "", "Text 2"},
-					},
-					{
-						Type:  NewsNodeList,
-						Lines: []string{"List <1>", "List 2"},
-					},
-					{
-						Type:  NewsNodeCode,
-						Lines: []string{"code <var>", "another"},
-					},
-				},
-			},
-			expected: "Text &lt;escaped&gt; 1\n<br><br>\nText 2\n<ul>\n<li>List &lt;1&gt;</li>\n<li>List 2</li>\n</ul>\n<pre><code>code &lt;var&gt;\nanother</code></pre>",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := tt.item.ToHTMLTemplate()
-			if got != tt.expected {
-				t.Errorf("NewsItem.ToHTMLTemplate() = %v, want %v", got, tt.expected)
-			}
-		})
-	}
-}
-
 func TestNewsItem_ToText(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -350,6 +303,261 @@ func TestNewsItem_ToText(t *testing.T) {
 			compliant := !strings.Contains(tt.name, "Non-compliant")
 			if got := tt.item.ToText(compliant); got != tt.expected {
 				t.Errorf("NewsItem.ToText() = %v, want %v", got, tt.expected)
+			}
+		})
+	}
+}
+
+var benchmarkHTML template.HTML
+
+func BenchmarkNewsItemToHTMLTemplate(b *testing.B) {
+	item := NewsItem{
+		NewsItemFormat: "2.0",
+		BodyAST: []NewsNode{
+			{
+				Type: NewsNodeText,
+				Lines: []string{
+					"This is a test line 1 with <escaped> & symbols.",
+					"This is a test line 2.",
+					"",
+					"This is a test line 3.",
+				},
+			},
+			{
+				Type: NewsNodeList,
+				Lines: []string{
+					"List item 1 with <bold>",
+					"List item 2",
+					"List item 3",
+				},
+			},
+			{
+				Type: NewsNodeCode,
+				Lines: []string{
+					"echo 'Hello <World>'",
+					"exit 0",
+				},
+			},
+			{
+				Type: NewsNodeText,
+				Lines: []string{
+					"Ending text.",
+				},
+			},
+		},
+	}
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		benchmarkHTML = item.ToHTMLTemplate()
+	}
+}
+
+func TestNewsItem_ToHTMLTemplate(t *testing.T) {
+	tests := []struct {
+		name     string
+		item     NewsItem
+		expected template.HTML
+	}{
+		{
+			name: "Format 1.0 (Plain text)",
+			item: NewsItem{
+				NewsItemFormat: "1.0",
+				Body:           "Line 1\nLine 2 <tag>\nLine 3",
+			},
+			expected: "Line 1<br>Line 2 &lt;tag&gt;<br>Line 3",
+		},
+		{
+			name: "empty BodyAST",
+			item: NewsItem{
+				NewsItemFormat: "2.0",
+				BodyAST:        []NewsNode{},
+			},
+			expected: "",
+		},
+		{
+			name: "single text node",
+			item: NewsItem{
+				NewsItemFormat: "2.0",
+				BodyAST: []NewsNode{
+					{
+						Type:  NewsNodeText,
+						Lines: []string{"Just some text."},
+					},
+				},
+			},
+			expected: "Just some text.",
+		},
+		{
+			name: "consecutive text nodes",
+			item: NewsItem{
+				NewsItemFormat: "2.0",
+				BodyAST: []NewsNode{
+					{
+						Type:  NewsNodeText,
+						Lines: []string{"Text 1."},
+					},
+					{
+						Type:  NewsNodeText,
+						Lines: []string{"Text 2."},
+					},
+				},
+			},
+			expected: "Text 1.\nText 2.",
+		},
+		{
+			name: "list as the first node",
+			item: NewsItem{
+				NewsItemFormat: "2.0",
+				BodyAST: []NewsNode{
+					{
+						Type:  NewsNodeList,
+						Lines: []string{"Item 1", "Item 2"},
+					},
+				},
+			},
+			expected: "<ul>\n<li>Item 1</li>\n<li>Item 2</li>\n</ul>",
+		},
+		{
+			name: "code block as the first node",
+			item: NewsItem{
+				NewsItemFormat: "2.0",
+				BodyAST: []NewsNode{
+					{
+						Type:  NewsNodeCode,
+						Lines: []string{"code line 1", "code line 2"},
+					},
+				},
+			},
+			expected: "<pre><code>code line 1\ncode line 2</code></pre>",
+		},
+		{
+			name: "empty list",
+			item: NewsItem{
+				NewsItemFormat: "2.0",
+				BodyAST: []NewsNode{
+					{
+						Type:  NewsNodeList,
+						Lines: []string{},
+					},
+				},
+			},
+			expected: "<ul>\n</ul>",
+		},
+		{
+			name: "empty code block",
+			item: NewsItem{
+				NewsItemFormat: "2.0",
+				BodyAST: []NewsNode{
+					{
+						Type:  NewsNodeCode,
+						Lines: []string{},
+					},
+				},
+			},
+			expected: "<pre><code></code></pre>",
+		},
+		{
+			name: "transitions text -> list -> code -> text",
+			item: NewsItem{
+				NewsItemFormat: "2.0",
+				BodyAST: []NewsNode{
+					{
+						Type:  NewsNodeText,
+						Lines: []string{"Text before list."},
+					},
+					{
+						Type:  NewsNodeList,
+						Lines: []string{"List item."},
+					},
+					{
+						Type:  NewsNodeCode,
+						Lines: []string{"Code block."},
+					},
+					{
+						Type:  NewsNodeText,
+						Lines: []string{"Text after code."},
+					},
+				},
+			},
+			expected: "Text before list.\n<ul>\n<li>List item.</li>\n</ul>\n<pre><code>Code block.</code></pre>\nText after code.",
+		},
+		{
+			name: "multiple consecutive lists",
+			item: NewsItem{
+				NewsItemFormat: "2.0",
+				BodyAST: []NewsNode{
+					{
+						Type:  NewsNodeList,
+						Lines: []string{"List 1, Item 1"},
+					},
+					{
+						Type:  NewsNodeList,
+						Lines: []string{"List 2, Item 1"},
+					},
+				},
+			},
+			expected: "<ul>\n<li>List 1, Item 1</li>\n</ul>\n<ul>\n<li>List 2, Item 1</li>\n</ul>",
+		},
+		{
+			name: "multiple consecutive code blocks",
+			item: NewsItem{
+				NewsItemFormat: "2.0",
+				BodyAST: []NewsNode{
+					{
+						Type:  NewsNodeCode,
+						Lines: []string{"Code 1"},
+					},
+					{
+						Type:  NewsNodeCode,
+						Lines: []string{"Code 2"},
+					},
+				},
+			},
+			expected: "<pre><code>Code 1</code></pre>\n<pre><code>Code 2</code></pre>",
+		},
+		{
+			name: "blank text lines",
+			item: NewsItem{
+				NewsItemFormat: "2.0",
+				BodyAST: []NewsNode{
+					{
+						Type:  NewsNodeText,
+						Lines: []string{"Line 1", "", "Line 3", "   "},
+					},
+				},
+			},
+			expected: "Line 1\n<br><br>\nLine 3\n<br><br>",
+		},
+		{
+			name: "HTML-sensitive characters",
+			item: NewsItem{
+				NewsItemFormat: "2.0",
+				BodyAST: []NewsNode{
+					{
+						Type:  NewsNodeText,
+						Lines: []string{"Text <&>"},
+					},
+					{
+						Type:  NewsNodeList,
+						Lines: []string{"List <&>"},
+					},
+					{
+						Type:  NewsNodeCode,
+						Lines: []string{"Code <&>"},
+					},
+				},
+			},
+			expected: "Text &lt;&amp;&gt;\n<ul>\n<li>List &lt;&amp;&gt;</li>\n</ul>\n<pre><code>Code &lt;&amp;&gt;</code></pre>",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tt.item.ToHTMLTemplate()
+			if got != tt.expected {
+				t.Errorf("ToHTMLTemplate() =\n%q\nWant:\n%q", got, tt.expected)
 			}
 		})
 	}
