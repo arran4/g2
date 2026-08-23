@@ -5,6 +5,7 @@ import (
 	"container/list"
 	"crypto/md5"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -124,16 +125,46 @@ func (r *MD5CacheInvalidLintRule) getEclassMD5(path string) (string, error) {
 	r.mu.Unlock()
 
 	// Hash outside lock to allow concurrency.
-	// We read file data and then get stat again in case it changed between Stat and ReadFile.
-	data, err := os.ReadFile(canonicalPath)
-	if err != nil {
-		return "", err
-	}
-	hash := fmt.Sprintf("%x", md5.Sum(data))
+	var hash string
+	var finalInfo os.FileInfo
 
-	postStat, err := os.Stat(canonicalPath)
-	if err != nil {
-		postStat = stat // fallback if removed right after read
+	// Bounded retry if file mutates during read
+	success := false
+	for i := 0; i < 3; i++ {
+		f, err := os.Open(canonicalPath)
+		if err != nil {
+			return "", err
+		}
+
+		before, err := f.Stat()
+		if err != nil {
+			f.Close()
+			return "", err
+		}
+
+		data, err := io.ReadAll(f)
+		if err != nil {
+			f.Close()
+			return "", err
+		}
+
+		after, err := f.Stat()
+		f.Close()
+
+		if err != nil {
+			return "", err
+		}
+
+		if before.Size() == after.Size() && before.ModTime().Equal(after.ModTime()) && os.SameFile(before, after) {
+			hash = fmt.Sprintf("%x", md5.Sum(data))
+			finalInfo = after
+			success = true
+			break
+		}
+	}
+
+	if !success {
+		return "", fmt.Errorf("file mutated concurrently during read: %s", canonicalPath)
 	}
 
 	r.mu.Lock()
@@ -145,7 +176,7 @@ func (r *MD5CacheInvalidLintRule) getEclassMD5(path string) (string, error) {
 	// Check again in case another goroutine did it
 	if elem, ok := r.cache[canonicalPath]; ok {
 		entry := elem.Value.(*cacheEntry)
-		if entry.info != nil && entry.info.Size() == postStat.Size() && entry.info.ModTime().Equal(postStat.ModTime()) && os.SameFile(entry.info, postStat) {
+		if entry.info != nil && entry.info.Size() == finalInfo.Size() && entry.info.ModTime().Equal(finalInfo.ModTime()) && os.SameFile(entry.info, finalInfo) {
 			r.lru.MoveToFront(elem)
 			return entry.md5, nil
 		}
@@ -165,7 +196,7 @@ func (r *MD5CacheInvalidLintRule) getEclassMD5(path string) (string, error) {
 	newEntry := &cacheEntry{
 		path: canonicalPath,
 		md5:  hash,
-		info: postStat,
+		info: finalInfo,
 	}
 	elem := r.lru.PushFront(newEntry)
 	r.cache[canonicalPath] = elem

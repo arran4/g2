@@ -308,14 +308,21 @@ func TestMD5CacheInvalidLintRule_Replacement(t *testing.T) {
 	}
 
 	// 2. Replace file with same size, explicit same mtime, but new contents
-	// (Recreating the file gives it a new inode/identity in most systems)
-	_ = os.Remove(eclassFile)
-	// Create a dummy file to ensure the filesystem does not immediately reuse the same inode
-	_ = os.WriteFile(filepath.Join(eclassDir, "dummy.eclass"), []byte("dummy"), 0644)
-
+	// We use an atomic rename to guarantee a new inode/identity.
 	content2 := []byte("content_v2") // same length
-	_ = os.WriteFile(eclassFile, content2, 0644)
-	_ = os.Chtimes(eclassFile, baseTime, baseTime)
+	replacementFile := filepath.Join(eclassDir, "replacement.eclass")
+	_ = os.WriteFile(replacementFile, content2, 0644)
+	_ = os.Chtimes(replacementFile, baseTime, baseTime)
+
+	// Stat both files to verify SameFile is false before replacing
+	originalInfo, _ := os.Stat(eclassFile)
+	replacementInfo, _ := os.Stat(replacementFile)
+	if os.SameFile(originalInfo, replacementInfo) {
+		t.Fatalf("Original and replacement files unexpectedly have the same identity")
+	}
+
+	// Atomically rename over test.eclass
+	_ = os.Rename(replacementFile, eclassFile)
 
 	hash2, err := rule.getEclassMD5(eclassFile)
 	if err != nil || hash2 != fmt.Sprintf("%x", md5.Sum(content2)) {
