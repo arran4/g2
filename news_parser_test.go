@@ -308,6 +308,8 @@ func TestNewsItem_ToText(t *testing.T) {
 	}
 }
 
+var benchmarkHTML template.HTML
+
 func BenchmarkNewsItemToHTMLTemplate(b *testing.B) {
 	item := NewsItem{
 		NewsItemFormat: "2.0",
@@ -348,8 +350,7 @@ func BenchmarkNewsItemToHTMLTemplate(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		res := item.ToHTMLTemplate()
-		_ = res
+		benchmarkHTML = item.ToHTMLTemplate()
 	}
 }
 
@@ -359,6 +360,14 @@ func TestNewsItem_ToHTMLTemplate(t *testing.T) {
 		item     NewsItem
 		expected template.HTML
 	}{
+		{
+			name: "Format 1.0 (Plain text)",
+			item: NewsItem{
+				NewsItemFormat: "1.0",
+				Body:           "Line 1\nLine 2 <tag>\nLine 3",
+			},
+			expected: "Line 1<br>Line 2 &lt;tag&gt;<br>Line 3",
+		},
 		{
 			name: "empty BodyAST",
 			item: NewsItem{
