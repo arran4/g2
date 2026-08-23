@@ -100,6 +100,7 @@ func WriteLayoutConf(lc *LayoutConf, path string) error {
 	return nil
 }
 
+
 // HasKey returns true if a specific key exists
 func (lc *LayoutConf) HasKey(key string) bool {
 	for _, entry := range lc.Entries {
