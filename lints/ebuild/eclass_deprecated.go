@@ -1,6 +1,7 @@
 package ebuild
 
 import (
+	"bufio"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -61,19 +62,27 @@ func (r *EclassDeprecatedLintRule) LintRepo(repoDir string, site *g2.SiteData) [
 
 	// Helper to extract deprecated eclass names from an eclass file quickly
 	findDeprecatedEclasses := func(eclassPath string) {
-		content, err := os.ReadFile(eclassPath)
+		file, err := os.Open(eclassPath)
 		if err != nil {
 			return
 		}
+		defer func() { _ = file.Close() }()
 
-		// Convert content to string and split by newline, looking for @DEPRECATED
-		lines := strings.Split(string(content), "\n")
-		for _, line := range lines {
+		// Scan file line by line, looking for @DEPRECATED
+		scanner := bufio.NewScanner(file)
+		// Create a custom buffer to handle very long lines, e.g. large arrays
+		buf := make([]byte, 0, 64*1024)
+		scanner.Buffer(buf, 1024*1024*10) // 10MB max line length
+		for scanner.Scan() {
+			line := scanner.Text()
 			if strings.HasPrefix(strings.TrimSpace(line), "# @DEPRECATED:") {
 				eclassName := strings.TrimSuffix(filepath.Base(eclassPath), ".eclass")
 				deprecatedEclasses[eclassName] = true
 				break
 			}
+		}
+		if err := scanner.Err(); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to scan eclass file %s: %v\n", eclassPath, err)
 		}
 	}
 
