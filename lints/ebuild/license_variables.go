@@ -64,7 +64,7 @@ func (r *LicenseVariablesLintRule) LintWithQA(repoDir string, pkg *g2.PackageDat
 
 			syntax.Walk(f, func(node syntax.Node) bool {
 				if assign, ok := node.(*syntax.Assign); ok {
-					if assign.Name != nil && assign.Name.Value == "LICENSE" {
+					if assign.Name != nil && assign.Name.Value == "LICENSE" && assign.Value != nil {
 						syntax.Walk(assign.Value, func(inner syntax.Node) bool {
 							switch nx := inner.(type) {
 							case *syntax.ParamExp:

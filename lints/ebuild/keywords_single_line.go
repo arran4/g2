@@ -65,7 +65,7 @@ func (r *KeywordsSingleLineLintRule) LintWithQA(repoDir string, pkg *g2.PackageD
 			keywordAssignCount := 0
 			syntax.Walk(f, func(node syntax.Node) bool {
 				if assign, ok := node.(*syntax.Assign); ok {
-					if assign.Name != nil && assign.Name.Value == "KEYWORDS" {
+					if assign.Name != nil && assign.Name.Value == "KEYWORDS" && assign.Value != nil {
 						keywordAssignCount++
 
 						// Check append
