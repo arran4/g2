@@ -184,6 +184,15 @@ KEYWORDS+=" amd64"`,
 			expectError:      true,
 			expectedFindings: 2, // Append warning and multiple definitions
 		},
+		{
+			name: "KEYWORDS append nil",
+			content: `EAPI=8
+KEYWORDS=()
+KEYWORDS+=()`,
+			rule:             &KeywordsSingleLineLintRule{},
+			expectError:      true,
+			expectedFindings: 2, // Append warning and multiple definitions
+		},
 	}
 
 	for _, tt := range tests {
