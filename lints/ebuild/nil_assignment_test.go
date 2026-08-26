@@ -100,11 +100,32 @@ LICENSE="${MY_LICENSE}"`,
 			expectedFindings: 1,
 		},
 		{
+			name: "KEYWORDS nil",
+			content: `EAPI=8
+local KEYWORDS`,
+			rule:             &KeywordsSingleLineLintRule{},
+			expectError:      false,
+			expectedFindings: 0,
+		},
+		{
 			name: "KEYWORDS empty",
 			content: `EAPI=8
-local KEYWORDS
-KEYWORDS=
-KEYWORDS=()
+KEYWORDS=`,
+			rule:             &KeywordsSingleLineLintRule{},
+			expectError:      false,
+			expectedFindings: 0,
+		},
+		{
+			name: "KEYWORDS array",
+			content: `EAPI=8
+KEYWORDS=()`,
+			rule:             &KeywordsSingleLineLintRule{},
+			expectError:      false,
+			expectedFindings: 0,
+		},
+		{
+			name: "KEYWORDS empty quotes",
+			content: `EAPI=8
 KEYWORDS=""`,
 			rule:             &KeywordsSingleLineLintRule{},
 			expectError:      false,
@@ -153,6 +174,15 @@ KEYWORDS="x86"`,
 			rule:             &KeywordsSingleLineLintRule{},
 			expectError:      true,
 			expectedFindings: 1, // At most once warning
+		},
+		{
+			name: "KEYWORDS append to array",
+			content: `EAPI=8
+KEYWORDS=()
+KEYWORDS+=" amd64"`,
+			rule:             &KeywordsSingleLineLintRule{},
+			expectError:      true,
+			expectedFindings: 2, // Append warning and multiple definitions
 		},
 	}
 
