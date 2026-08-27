@@ -83,17 +83,19 @@ func (r *KeywordsSingleLineLintRule) LintWithQA(repoDir string, pkg *g2.PackageD
 						hasVarRef := false
 						hasNewlines := false
 
-						syntax.Walk(assign.Value, func(inner syntax.Node) bool {
-							switch nx := inner.(type) {
-							case *syntax.ParamExp:
-								hasVarRef = true
-							case *syntax.Lit:
-								if strings.Contains(nx.Value, "\n") {
-									hasNewlines = true
+						if assign.Value != nil {
+							syntax.Walk(assign.Value, func(inner syntax.Node) bool {
+								switch nx := inner.(type) {
+								case *syntax.ParamExp:
+									hasVarRef = true
+								case *syntax.Lit:
+									if strings.Contains(nx.Value, "\n") {
+										hasNewlines = true
+									}
 								}
-							}
-							return true
-						})
+								return true
+							})
+						}
 
 						if hasVarRef {
 							res := lints.LintResult{

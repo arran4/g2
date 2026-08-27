@@ -64,7 +64,7 @@ func (r *SrcUriHomepageLintRule) LintWithQA(repoDir string, pkg *g2.PackageData,
 
 			syntax.Walk(f, func(node syntax.Node) bool {
 				if assign, ok := node.(*syntax.Assign); ok {
-					if assign.Name != nil && assign.Name.Value == "SRC_URI" {
+					if assign.Name != nil && assign.Name.Value == "SRC_URI" && assign.Value != nil {
 						syntax.Walk(assign.Value, func(inner syntax.Node) bool {
 							switch nx := inner.(type) {
 							case *syntax.ParamExp:
