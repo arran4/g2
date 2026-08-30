@@ -1,5 +1,0 @@
-🧪 [testing] add TestParsingMode_String to ebuild_test.go
-
-🎯 **What:** The testing gap addressed was an untested String() method for ParsingMode type in ebuild.go.
-📊 **Coverage:** A new table-driven test covers all the enum cases: ParseMetadataOnly, ParseVariables, ParseFull, and an unknown fallback.
-✨ **Result:** Test coverage for ParsingMode.String() is now 100% and will prevent regressions if new parsing modes are added without updating the string method.
