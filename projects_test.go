@@ -1,6 +1,9 @@
 package g2
 
 import (
+	"fmt"
+	"io"
+	"strings"
 	"encoding/xml"
 	"os"
 	"path/filepath"
@@ -119,4 +122,103 @@ func TestParseProjects(t *testing.T) {
 			t.Error("ParseProjects() expected error for non-existent file, got nil")
 		}
 	})
+}
+
+
+type projectErrorReader struct{}
+
+func (projectErrorReader) Read(p []byte) (n int, err error) {
+	return 0, fmt.Errorf("read error")
+}
+
+func TestParseProjectsFromReader(t *testing.T) {
+	tests := []struct {
+		name    string
+		reader  io.Reader
+		want    *Projects
+		wantErr bool
+	}{
+		{
+			name: "valid XML",
+			reader: strings.NewReader(`<?xml version="1.0" encoding="UTF-8"?>
+<projects>
+	<project>
+		<email>test@example.com</email>
+		<name>Test Project</name>
+		<url>https://example.com/test</url>
+		<description>A test project description.</description>
+		<subproject inherit-members="1" ref="sub1">Subproject Text</subproject>
+		<member is-lead="1">
+			<email>lead@example.com</email>
+			<name>Lead Dev</name>
+			<role>Developer</role>
+		</member>
+	</project>
+</projects>`),
+			want: &Projects{
+				XMLName: xml.Name{Local: "projects"},
+				Projects: []Project{
+					{
+						Email:       "test@example.com",
+						Name:        "Test Project",
+						URL:         "https://example.com/test",
+						Description: "A test project description.",
+						Subprojects: []Subproject{
+							{
+								Text:           "Subproject Text",
+								InheritMembers: "1",
+								Ref:            "sub1",
+							},
+						},
+						Members: []Member{
+							{
+								IsLead: "1",
+								Email:  "lead@example.com",
+								Name:   "Lead Dev",
+								Role:   "Developer",
+							},
+						},
+					},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name:    "invalid XML",
+			reader:  strings.NewReader(`<projects><project>broken xml`),
+			want:    nil,
+			wantErr: true,
+		},
+		{
+			name:    "invalid root tag",
+			reader:  strings.NewReader(`<wrongroot></wrongroot>`),
+			want:    nil,
+			wantErr: true,
+		},
+		{
+			name:    "read error",
+			reader:  projectErrorReader{},
+			want:    nil,
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := ParseProjectsFromReader(tt.reader)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("ParseProjectsFromReader() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if got != nil {
+				got.XMLName.Space = "" // ignore space comparison
+			}
+			if tt.want != nil {
+				tt.want.XMLName.Space = ""
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("ParseProjectsFromReader() got = %v, want %v", got, tt.want)
+			}
+		})
+	}
 }
