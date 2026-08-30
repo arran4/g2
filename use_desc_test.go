@@ -134,7 +134,3 @@ zebra - Zebra description
 		t.Errorf("Write() = \n%v\nwant \n%v", buf.String(), expected)
 	}
 }
-
-
-
-
