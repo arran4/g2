@@ -6,43 +6,6 @@ import (
 	"testing"
 )
 
-var sampleGLSA = []byte(`<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE glsa SYSTEM "http://www.gentoo.org/dtd/glsa.dtd">
-<glsa id="202312-01">
-  <title>Sample GLSA</title>
-  <synopsis>This is a sample GLSA.</synopsis>
-  <product type="ebuild">Sample Product</product>
-  <announced>2023-12-01</announced>
-  <revised count="1">2023-12-01</revised>
-  <bug>123456</bug>
-  <access>remote</access>
-  <affected>
-    <package name="app-admin/sample" auto="yes" arch="*">
-      <vulnerable range="lt" slot="0">1.2.3</vulnerable>
-      <unaffected range="ge" slot="0">1.2.3</unaffected>
-    </package>
-  </affected>
-  <background>
-    Background information.
-  </background>
-  <description>
-    Description of the vulnerability.
-  </description>
-  <impact type="normal">
-    Impact description.
-  </impact>
-  <workaround>
-    Workaround instructions.
-  </workaround>
-  <resolution>
-    Resolution instructions.
-  </resolution>
-  <references>
-    <uri link="https://example.com/cve">CVE-2023-12345</uri>
-  </references>
-  <metadata tag="requester" timestamp="2023-12-01T00:00:00Z">Alice</metadata>
-</glsa>`)
-
 func TestParseGLSABytes(t *testing.T) {
 	sampleGLSA, err := os.ReadFile("testdata/glsa/sample.xml")
 	if err != nil {
