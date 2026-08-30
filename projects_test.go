@@ -2,6 +2,7 @@ package g2
 
 import (
 	"encoding/xml"
+	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -119,4 +120,24 @@ func TestParseProjects(t *testing.T) {
 			t.Error("ParseProjects() expected error for non-existent file, got nil")
 		}
 	})
+}
+
+var errTestRead = errors.New("test read error")
+
+type projectErrorReader struct {
+	err error
+}
+
+func (r projectErrorReader) Read(p []byte) (n int, err error) {
+	return 0, r.err
+}
+
+func TestParseProjectsFromReader(t *testing.T) {
+	got, err := ParseProjectsFromReader(projectErrorReader{err: errTestRead})
+	if !errors.Is(err, errTestRead) {
+		t.Errorf("ParseProjectsFromReader() error = %v, wantErr %v", err, errTestRead)
+	}
+	if got != nil {
+		t.Errorf("ParseProjectsFromReader() got = %v, want nil", got)
+	}
 }
