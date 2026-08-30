@@ -1567,3 +1567,24 @@ func TestExtractPackageNameFromDep(t *testing.T) {
 		})
 	}
 }
+
+func TestParsingMode_String(t *testing.T) {
+	tests := []struct {
+		name string
+		mode ParsingMode
+		want string
+	}{
+		{"ParseMetadataOnly", ParseMetadataOnly, "ParseMetadataOnly"},
+		{"ParseVariables", ParseVariables, "ParseVariables"},
+		{"ParseFull", ParseFull, "ParseFull"},
+		{"Unknown", ParsingMode(999), "Unknown"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.mode.String(); got != tt.want {
+				t.Errorf("ParsingMode.String() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
