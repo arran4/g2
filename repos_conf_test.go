@@ -219,3 +219,79 @@ location = /var/db/repos/foo
 		}
 	})
 }
+
+func TestParseReposConfFile(t *testing.T) {
+	t.Run("non-existent file", func(t *testing.T) {
+		_, err := ParseReposConfFile("does-not-exist.conf")
+		if err == nil {
+			t.Error("expected error for non-existent file")
+		}
+	})
+
+	t.Run("valid file", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		confPath := filepath.Join(tmpDir, "test.conf")
+
+		content := "header line 1\nheader line 2\r\n\r\n[section1]\nkey1 = value1\r\nkey2 = value2\n\n# [section2]\n# key3 = value3"
+		if err := os.WriteFile(confPath, []byte(content), 0644); err != nil {
+			t.Fatalf("writing test.conf: %v", err)
+		}
+
+		f, err := ParseReposConfFile(confPath)
+		if err != nil {
+			t.Fatalf("ParseReposConfFile failed: %v", err)
+		}
+
+		if f.Path != confPath {
+			t.Errorf("Path = %q, want %q", f.Path, confPath)
+		}
+
+		if len(f.HeaderLines) != 3 {
+			t.Errorf("expected 3 header lines, got %d", len(f.HeaderLines))
+		} else {
+			if f.HeaderLines[0] != "header line 1" {
+				t.Errorf("HeaderLines[0] = %q, want %q", f.HeaderLines[0], "header line 1")
+			}
+			if f.HeaderLines[1] != "header line 2" {
+				t.Errorf("HeaderLines[1] = %q, want %q", f.HeaderLines[1], "header line 2")
+			}
+		}
+
+		if len(f.Sections) != 2 {
+			t.Fatalf("expected 2 sections, got %d", len(f.Sections))
+		}
+
+		sec1 := f.Sections[0]
+		if sec1.Name != "section1" {
+			t.Errorf("Section 0 Name = %q, want section1", sec1.Name)
+		}
+		if sec1.Disabled {
+			t.Error("expected section1 to be enabled")
+		}
+		if len(sec1.Lines) != 3 {
+			t.Errorf("expected 3 lines in section1, got %d", len(sec1.Lines))
+		} else {
+			if sec1.Lines[0] != "key1 = value1" {
+				t.Errorf("sec1.Lines[0] = %q, want %q", sec1.Lines[0], "key1 = value1")
+			}
+			if sec1.Lines[1] != "key2 = value2" {
+				t.Errorf("sec1.Lines[1] = %q, want %q", sec1.Lines[1], "key2 = value2")
+			}
+		}
+
+		sec2 := f.Sections[1]
+		if sec2.Name != "section2" {
+			t.Errorf("Section 1 Name = %q, want section2", sec2.Name)
+		}
+		if !sec2.Disabled {
+			t.Error("expected section2 to be disabled")
+		}
+		if len(sec2.Lines) != 1 {
+			t.Errorf("expected 1 line in section2, got %d", len(sec2.Lines))
+		} else {
+			if sec2.Lines[0] != "# key3 = value3" {
+				t.Errorf("sec2.Lines[0] = %q, want %q", sec2.Lines[0], "# key3 = value3")
+			}
+		}
+	})
+}
