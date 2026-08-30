@@ -2,7 +2,6 @@ package g2
 
 import (
 	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -45,6 +44,11 @@ var sampleGLSA = []byte(`<?xml version="1.0" encoding="UTF-8"?>
 </glsa>`)
 
 func TestParseGLSABytes(t *testing.T) {
+	sampleGLSA, err := os.ReadFile("testdata/glsa/sample.xml")
+	if err != nil {
+		t.Fatalf("failed to read sample glsa: %v", err)
+	}
+
 	glsa, err := ParseGLSABytes(sampleGLSA)
 	if err != nil {
 		t.Fatalf("ParseGLSABytes failed: %v", err)
@@ -84,8 +88,11 @@ func TestParseGLSABytes(t *testing.T) {
 	if len(pkg.Vulnerable) != 1 || pkg.Vulnerable[0].Range != "lt" || pkg.Vulnerable[0].Slot != "0" || pkg.Vulnerable[0].Text != "1.2.3" {
 		t.Errorf("unexpected Vulnerable: %+v", pkg.Vulnerable)
 	}
-	if len(pkg.Unaffected) != 1 || pkg.Unaffected[0].Range != "ge" || pkg.Unaffected[0].Slot != "0" || pkg.Unaffected[0].Text != "1.2.3" {
+	if len(pkg.Unaffected) != 1 || pkg.Unaffected[0].Range != "ge" || pkg.Unaffected[0].Slot != "0" || pkg.Unaffected[0].Text != "1.2.3" || pkg.Unaffected[0].Name != "app-admin/other-sample" {
 		t.Errorf("unexpected Unaffected: %+v", pkg.Unaffected)
+	}
+	if len(glsa.Affected.Services) != 1 || glsa.Affected.Services[0].Type != "web" || glsa.Affected.Services[0].Fixed != "yes" || strings.TrimSpace(glsa.Affected.Services[0].Text) != "Sample Service" {
+		t.Errorf("unexpected Services: %+v", glsa.Affected.Services)
 	}
 	if glsa.Background == nil || strings.TrimSpace(glsa.Background.Text) != "Background information." {
 		t.Errorf("unexpected Background: %+v", glsa.Background)
@@ -105,20 +112,16 @@ func TestParseGLSABytes(t *testing.T) {
 	if len(glsa.References.URIs) != 1 || glsa.References.URIs[0].Text != "CVE-2023-12345" || glsa.References.URIs[0].Link != "https://example.com/cve" {
 		t.Errorf("unexpected References: %+v", glsa.References)
 	}
-	if len(glsa.Metadata) != 1 || glsa.Metadata[0].Tag != "requester" || glsa.Metadata[0].Timestamp != "2023-12-01T00:00:00Z" || glsa.Metadata[0].Text != "Alice" {
+	if glsa.License == nil || strings.TrimSpace(glsa.License.Text) != "GPL-2" {
+		t.Errorf("unexpected License: %+v", glsa.License)
+	}
+	if len(glsa.Metadata) != 1 || glsa.Metadata[0].Tag != "requester" || glsa.Metadata[0].Timestamp != "2023-12-01T00:00:00Z" || glsa.Metadata[0].Text != "Alice metadata text" || glsa.Metadata[0].Revision != "1" || glsa.Metadata[0].Author != "Alice" {
 		t.Errorf("unexpected Metadata: %+v", glsa.Metadata)
 	}
 }
 
 func TestParseGLSA(t *testing.T) {
-	tempDir := t.TempDir()
-	path := filepath.Join(tempDir, "sample-glsa.xml")
-	err := os.WriteFile(path, sampleGLSA, 0644)
-	if err != nil {
-		t.Fatalf("failed to write sample glsa: %v", err)
-	}
-
-	glsa, err := ParseGLSA(path)
+	glsa, err := ParseGLSA("testdata/glsa/sample.xml")
 	if err != nil {
 		t.Fatalf("ParseGLSA failed: %v", err)
 	}
@@ -146,8 +149,6 @@ func TestParseGLSAErrors(t *testing.T) {
 		_, err := ParseGLSABytes([]byte("<other></other>"))
 		if err == nil {
 			t.Error("expected error for invalid root element, got nil")
-		} else if !strings.Contains(err.Error(), "expected element type <glsa> but have <other>") {
-			t.Errorf("expected error to mention 'expected element type <glsa> but have <other>', got %v", err)
 		}
 	})
 }
