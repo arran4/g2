@@ -494,8 +494,14 @@ jobs:
   goreleaser:
     name: GoReleaser
     # In practice, include all quality gates here (for example: go-test, go-vet, go-lint, format).
-    needs: [route, discover, go-test]
-    if: ${{ needs.discover.outputs.has_go == 'true' && needs.discover.outputs.has_goreleaser == 'true' && (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')) }}
+    needs: [route, discover, go-test, prepare-release-tag]
+    if: |
+      always() &&
+      needs.discover.outputs.has_go == 'true' &&
+      needs.discover.outputs.has_goreleaser == 'true' &&
+      (needs.go-test.result == 'success' || needs.go-test.result == 'skipped') &&
+      (needs.prepare-release-tag.result == 'success' || needs.prepare-release-tag.result == 'skipped') &&
+      (((github.event_name == 'push') && startsWith(github.ref, 'refs/tags/')) || (github.event_name == 'workflow_dispatch' && startsWith(inputs.mode, 'release-')))
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -510,15 +516,20 @@ jobs:
           distribution: goreleaser
           version: '~> v2'
           args: >-
-            release --clean
-            ${{ contains(github.ref, '-test') && '--snapshot' || '' }}
+            release --clean ${{ (github.event_name == 'workflow_dispatch' && (inputs.mode == 'release-test' || inputs.mode == 'release-rc' || inputs.mode == 'release-alpha')) && '--snapshot' || '' }} ${{ (github.event_name == 'push' && (contains(github.ref, '-test') || contains(github.ref, '-rc') || contains(github.ref, '-alpha'))) && '--snapshot' || '' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAP_GITHUB_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }} # inject secrets.TAP_GITHUB_TOKEN
+          GORELEASER_CURRENT_TAG: ${{ needs.prepare-release-tag.outputs.release_tag || '' }}
   prepare-next-version-pr:
     name: Prepare next development iteration PR
-    needs: [prepare-release-tag]
-    if: ${{ github.event_name == 'workflow_dispatch' && (startsWith(inputs.mode, 'release-') || inputs.mode == 'release-test') }}
+    needs: [prepare-release-tag, goreleaser]
+    if: |
+      always() &&
+      (needs.prepare-release-tag.result == 'success' || needs.prepare-release-tag.result == 'skipped') &&
+      (needs.goreleaser.result == 'success') &&
+      github.event_name == 'workflow_dispatch' &&
+      (startsWith(inputs.mode, 'release-') || inputs.mode == 'release-test')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
