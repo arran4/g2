@@ -496,7 +496,7 @@ jobs:
       always() &&
       needs.discover.outputs.has_go == 'true' &&
       needs.discover.outputs.has_goreleaser == 'true' &&
-      (needs.go-test.result == 'success' || needs.go-test.result == 'skipped') &&
+      (needs.go-test.result == 'success') &&
       (needs.prepare-release-tag.result == 'success' || needs.prepare-release-tag.result == 'skipped') &&
       (((github.event_name == 'push') && (startsWith(github.ref, 'refs/tags/v') || startsWith(github.ref, 'refs/tags/test-'))) || (github.event_name == 'workflow_dispatch' && startsWith(inputs.mode, 'release-')))
     runs-on: ubuntu-latest
@@ -510,8 +510,21 @@ jobs:
       - name: Tag commit locally and push (manual runs)
         if: ${{ github.event_name == 'workflow_dispatch' && startsWith(inputs.mode, 'release-') && inputs.mode != 'release-test' }}
         run: |
-          git tag ${{ needs.prepare-release-tag.outputs.release_tag }}
-          git push origin ${{ needs.prepare-release-tag.outputs.release_tag }}
+          set -euo pipefail
+          TAG="${{ needs.prepare-release-tag.outputs.release_tag }}"
+
+          git fetch --tags --force
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+             TAG_SHA=$(git rev-list -n 1 "$TAG")
+             if [[ "$TAG_SHA" != "${{ github.sha }}" ]]; then
+               echo "Error: Tag $TAG exists but points to $TAG_SHA instead of ${{ github.sha }}."
+               exit 1
+             fi
+             echo "Tag $TAG already exists and points to correct SHA."
+          else
+             git tag "$TAG"
+             git push origin "$TAG"
+          fi
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v6
         with:
