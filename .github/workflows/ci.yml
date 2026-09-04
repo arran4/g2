@@ -234,9 +234,6 @@ jobs:
           IFS='.' read -r maj min pat <<< "$clean_tag"
           echo "next_version=${maj:-0}.${min:-0}.$(( ${pat:-0} + 1 ))-SNAPSHOT" >> "$GITHUB_OUTPUT"
 
-          # Create and push the tag to trigger the actual release pipeline
-          git tag "$next_tag"
-          git push origin "$next_tag"
   gitleaks:
     name: Secret scan
     needs: [route, discover]
@@ -501,7 +498,7 @@ jobs:
       needs.discover.outputs.has_goreleaser == 'true' &&
       (needs.go-test.result == 'success' || needs.go-test.result == 'skipped') &&
       (needs.prepare-release-tag.result == 'success' || needs.prepare-release-tag.result == 'skipped') &&
-      (((github.event_name == 'push') && startsWith(github.ref, 'refs/tags/')) || (github.event_name == 'workflow_dispatch' && startsWith(inputs.mode, 'release-')))
+      (((github.event_name == 'push') && (startsWith(github.ref, 'refs/tags/v') || startsWith(github.ref, 'refs/tags/test-'))) || (github.event_name == 'workflow_dispatch' && startsWith(inputs.mode, 'release-')))
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -510,46 +507,19 @@ jobs:
       - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
+      - name: Tag commit locally and push (manual runs)
+        if: ${{ github.event_name == 'workflow_dispatch' && startsWith(inputs.mode, 'release-') && inputs.mode != 'release-test' }}
+        run: |
+          git tag ${{ needs.prepare-release-tag.outputs.release_tag }}
+          git push origin ${{ needs.prepare-release-tag.outputs.release_tag }}
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v6
         with:
           distribution: goreleaser
           version: '~> v2'
           args: >-
-            release --clean ${{ (github.event_name == 'workflow_dispatch' && (inputs.mode == 'release-test' || inputs.mode == 'release-rc' || inputs.mode == 'release-alpha')) && '--snapshot' || '' }} ${{ (github.event_name == 'push' && (contains(github.ref, '-test') || contains(github.ref, '-rc') || contains(github.ref, '-alpha'))) && '--snapshot' || '' }}
+            release --clean ${{ (github.event_name == 'workflow_dispatch' && inputs.mode == 'release-test') && '--snapshot' || '' }} ${{ (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/test-')) && '--snapshot' || '' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAP_GITHUB_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }} # inject secrets.TAP_GITHUB_TOKEN
           GORELEASER_CURRENT_TAG: ${{ needs.prepare-release-tag.outputs.release_tag || '' }}
-  prepare-next-version-pr:
-    name: Prepare next development iteration PR
-    needs: [prepare-release-tag, goreleaser]
-    if: |
-      always() &&
-      (needs.prepare-release-tag.result == 'success' || needs.prepare-release-tag.result == 'skipped') &&
-      (needs.goreleaser.result == 'success') &&
-      github.event_name == 'workflow_dispatch' &&
-      (startsWith(inputs.mode, 'release-') || inputs.mode == 'release-test')
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Bump to next version and open PR
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -euo pipefail
-          NEXT_VERSION="${{ needs.prepare-release-tag.outputs.next_version || '' }}"
-          [[ -z "$NEXT_VERSION" ]] && { echo "No next version calculated; skipping."; exit 0; }
-
-          BRANCH="bump-version-$NEXT_VERSION"
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git checkout -b "$BRANCH"
-
-          # Replace with repo-specific version bump command(s)
-          # mvn versions:set -DnewVersion="$NEXT_VERSION" -DgenerateBackupPoms=false
-
-          git add -A
-          git commit -m "Prepare next development iteration $NEXT_VERSION"
-          git push -u origin "$BRANCH"
-          gh pr create --title "Prepare next development iteration $NEXT_VERSION" --body "Automated PR for next iteration." --base main --head "$BRANCH"
