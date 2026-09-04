@@ -536,3 +536,18 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAP_GITHUB_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }} # inject secrets.TAP_GITHUB_TOKEN
           GORELEASER_CURRENT_TAG: ${{ needs.prepare-release-tag.outputs.release_tag || '' }}
+
+  release-graph-validation:
+    name: Validate Release Graph Policy
+    needs: [route]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - name: Install PyYAML
+        run: pip install pyyaml
+      - name: Run release graph validation
+        run: python3 .github/workflows/validate_release_graph.py
