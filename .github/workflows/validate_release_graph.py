@@ -7,6 +7,12 @@ def run_tests():
 
     jobs = ci.get('jobs', {})
 
+    # Check 0: prepare-release-tag must be restricted to workflow_dispatch release-*
+    prepare = jobs.get('prepare-release-tag')
+    assert prepare, "prepare-release-tag missing"
+    assert "github.event_name == 'workflow_dispatch'" in prepare.get('if', ''), "prepare-release-tag must require workflow_dispatch"
+    assert "startsWith(inputs.mode, 'release-')" in prepare.get('if', ''), "prepare-release-tag must require release- mode"
+
     # Check 7: Only GoReleaser owns GitHub Release publication
     assert "publish-draft" not in jobs, "competing draft publish job remains"
     assert "promote-release" not in jobs, "competing promote job remains"
@@ -17,6 +23,8 @@ def run_tests():
 
     # Check 1: manual workflow_dispatch release-* enters goreleaser only with go-test == success
     # Check 6: failed/skipped test gates cannot publish
+    assert "github.event_name == 'workflow_dispatch'" in g_if, "goreleaser must support workflow_dispatch trigger"
+    assert "startsWith(inputs.mode, 'release-')" in g_if, "goreleaser must support release-* modes on dispatch"
     assert "needs.go-test.result == 'success'" in g_if, "failed test gate must prevent publish"
     assert "needs.go-test.result == 'skipped'" not in g_if, "skipped test gate must prevent publish"
 
