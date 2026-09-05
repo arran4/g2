@@ -90,13 +90,14 @@ SRC_URI="
 		t.Errorf("expected message '%s', got '%s'", expectedMsg, results[0].Message)
 	}
 }
+
 func TestMissingManifestLintRule_WhichBrowser_Complex(t *testing.T) {
 	mockFS := fstest.MapFS{
-		filepath.Join("www-client", "which_browser", "which_browser-0.2.6_p44-r1.ebuild"): &fstest.MapFile{
+		filepath.Join("www-client", "which_browser", "which_browser-0.2.6.44-r1.ebuild"): &fstest.MapFile{
 			Data: []byte(`
 MY_PV_NO_REV="${PV%%-r*}"
-MY_BASE_PV="${MY_PV_NO_REV%_p*}"
-MY_BUILD_SUFFIX="${MY_PV_NO_REV##*_p}"
+MY_BASE_PV="${MY_PV_NO_REV%.*}"
+MY_BUILD_SUFFIX="${MY_PV_NO_REV##*.}"
 MY_DEB_ARCHIVE="which_browser-${MY_BASE_PV}+${MY_BUILD_SUFFIX}-linux.deb"
 SRC_URI="https://which-browser-site.pages.dev/downloads/v${MY_BASE_PV}/${MY_DEB_ARCHIVE}"
 `),
@@ -109,30 +110,11 @@ SRC_URI="https://which-browser-site.pages.dev/downloads/v${MY_BASE_PV}/${MY_DEB_
 	pkgData := &g2.PackageData{
 		Category: category,
 		Name:     name,
-		Versions: []g2.VersionData{
-			{
-				Version: "0.2.6_p44-r1",
-				Ebuild: &g2.Ebuild{
-					Vars: map[string]string{
-						"SRC_URI": "https://which-browser-site.pages.dev/downloads/v0.2.6/which_browser-0.2.6_p44+0.2.6_p44-linux.deb",
-						"PVR":     "0.2.6_p44-r1",
-						"PF":      "which_browser-0.2.6_p44-r1",
-						"PN":      "which_browser",
-						"PV":      "0.2.6_p44",
-						"PR":      "r1",
-						"P":       "which_browser-0.2.6_p44",
-					},
-					SrcUri: []g2.URIEntry{
-						{Filename: "which_browser-0.2.6_p44+0.2.6_p44-linux.deb"},
-					},
-				},
-			},
-		},
 		Manifest: &g2.Manifest{
 			Entries: []*g2.ManifestEntry{
 				{
 					Type:     "DIST",
-					Filename: "which_browser-0.2.6_p44+0.2.6_p44-linux.deb",
+					Filename: "which_browser-0.2.6+44-linux.deb",
 				},
 			},
 		},

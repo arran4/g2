@@ -170,7 +170,8 @@ func resolveBash(ctx context.Context, text string, variables map[string]string, 
 	// 1) Evaluate it as a string literal assignment using expand.Literal FIRST.
 	// This naturally supports bash parameter expansions (%, %%, #, ##)
 	// and pure string interpolation deterministically.
-	if !strings.Contains(text, "$(") && !strings.Contains(text, "`") && !strings.Contains(text, "if ") && !strings.Contains(text, "case ") && !strings.Contains(text, "&&") && !strings.Contains(text, "||") && !strings.Contains(text, "echo ") {
+	// We only use this fast-path if there's no indication of dynamic execution logic.
+	if !strings.Contains(text, "$(") && !strings.Contains(text, "`") && !strings.Contains(text, "if ") && !strings.Contains(text, "case ") && !strings.Contains(text, "&&") && !strings.Contains(text, "||") && !strings.Contains(text, "echo ") && !strings.Contains(text, "for ") && !strings.Contains(text, "while ") && !strings.Contains(text, "elif ") && !strings.Contains(text, "printf ") {
 		safeText := strings.ReplaceAll(text, "\"", "\\\"")
 		file2, err2 := parser.Parse(strings.NewReader("dummy=\""+safeText+"\""), "")
 		if err2 == nil && len(file2.Stmts) > 0 {

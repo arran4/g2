@@ -5,7 +5,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"testing"
-
 )
 
 func TestGetGitModifiedPackagesChanged(t *testing.T) {
@@ -36,9 +35,13 @@ func TestGetGitModifiedPackagesChanged(t *testing.T) {
 
 	// 2. Initial state
 	err = os.MkdirAll(filepath.Join(tmpDir, "app-misc", "foo"), 0755)
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	err = os.WriteFile(filepath.Join(tmpDir, "app-misc", "foo", "foo-1.ebuild"), []byte(""), 0644)
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	runCmd("git", "add", ".")
 	runCmd("git", "commit", "-m", "Initial commit")
@@ -53,44 +56,70 @@ func TestGetGitModifiedPackagesChanged(t *testing.T) {
 
 	// 4. Create an unstaged modification
 	err = os.WriteFile(filepath.Join(tmpDir, "app-misc", "foo", "foo-1.ebuild"), []byte("modified"), 0644)
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// 5. Create a staged modification (rename/add)
 	err = os.MkdirAll(filepath.Join(tmpDir, "dev-util", "bar"), 0755)
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	err = os.WriteFile(filepath.Join(tmpDir, "dev-util", "bar", "bar-2.ebuild"), []byte("staged"), 0644)
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	runCmd("git", "add", "dev-util/bar/bar-2.ebuild")
 
 	// 6. Create an untracked file
 	err = os.MkdirAll(filepath.Join(tmpDir, "sys-apps", "baz"), 0755)
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	err = os.WriteFile(filepath.Join(tmpDir, "sys-apps", "baz", "baz-3.ebuild"), []byte("untracked"), 0644)
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// 7. Whitespace filename
 	err = os.MkdirAll(filepath.Join(tmpDir, "sys-apps", "white space"), 0755)
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	err = os.WriteFile(filepath.Join(tmpDir, "sys-apps", "white space", "white space-3.ebuild"), []byte("untracked whitespace"), 0644)
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// 8. Repository metadata change (should be ignored)
 	err = os.MkdirAll(filepath.Join(tmpDir, "metadata"), 0755)
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	err = os.WriteFile(filepath.Join(tmpDir, "metadata", "layout.conf"), []byte(""), 0644)
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Also some random infra file
 	err = os.MkdirAll(filepath.Join(tmpDir, ".github", "workflows"), 0755)
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	err = os.WriteFile(filepath.Join(tmpDir, ".github", "workflows", "ci.yml"), []byte(""), 0644)
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// And a script path that isn't a category
 	err = os.MkdirAll(filepath.Join(tmpDir, "scripts", "foo"), 0755)
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	err = os.WriteFile(filepath.Join(tmpDir, "scripts", "foo", "bar"), []byte(""), 0644)
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// Run without explicit base (no upstream configured)
 	pkgs, err := getGitModifiedPackagesChanged(tmpDir, "")
@@ -103,10 +132,18 @@ func TestGetGitModifiedPackagesChanged(t *testing.T) {
 		foundMap[p] = true
 	}
 
-	if !foundMap["app-misc/foo"] { t.Errorf("Missing unstaged app-misc/foo") }
-	if !foundMap["dev-util/bar"] { t.Errorf("Missing staged dev-util/bar") }
-	if !foundMap["sys-apps/baz"] { t.Errorf("Missing untracked sys-apps/baz") }
-	if !foundMap["sys-apps/white space"] { t.Errorf("Missing whitespace sys-apps/white space") }
+	if !foundMap["app-misc/foo"] {
+		t.Errorf("Missing unstaged app-misc/foo")
+	}
+	if !foundMap["dev-util/bar"] {
+		t.Errorf("Missing staged dev-util/bar")
+	}
+	if !foundMap["sys-apps/baz"] {
+		t.Errorf("Missing untracked sys-apps/baz")
+	}
+	if !foundMap["sys-apps/white space"] {
+		t.Errorf("Missing whitespace sys-apps/white space")
+	}
 	if foundMap["metadata/layout.conf"] || foundMap["metadata"] || foundMap[".github/workflows"] || foundMap["scripts/foo"] {
 		t.Errorf("Should not include non-package infrastructure files as packages")
 	}
@@ -114,14 +151,18 @@ func TestGetGitModifiedPackagesChanged(t *testing.T) {
 	// 9. Committed branch change with upstream
 	runCmd("git", "checkout", "-b", "feature")
 	err = os.WriteFile(filepath.Join(tmpDir, "sys-apps", "baz", "baz-3.ebuild"), []byte("committed"), 0644)
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	runCmd("git", "add", "sys-apps/baz/baz-3.ebuild")
 	runCmd("git", "commit", "-m", "Add baz")
 	runCmd("git", "branch", "--set-upstream-to=main", "feature")
 
 	// 10. Genuine git rename
 	err = os.MkdirAll(filepath.Join(tmpDir, "app-misc", "foo2"), 0755)
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	runCmd("git", "mv", "app-misc/foo/foo-1.ebuild", "app-misc/foo2/foo-1.ebuild")
 
 	// 11. Explicit base
@@ -133,18 +174,30 @@ func TestGetGitModifiedPackagesChanged(t *testing.T) {
 	for _, p := range pkgs {
 		foundMap[p] = true
 	}
-	if !foundMap["sys-apps/baz"] { t.Errorf("Missing committed sys-apps/baz against explicit base main") }
+	if !foundMap["sys-apps/baz"] {
+		t.Errorf("Missing committed sys-apps/baz against explicit base main")
+	}
 
-	if foundMap["app-misc/foo"] { t.Errorf("Vanished rename source app-misc/foo should not be returned") }
-	if !foundMap["app-misc/foo2"] { t.Errorf("Missing rename destination app-misc/foo2") }
+	if foundMap["app-misc/foo"] {
+		t.Errorf("Vanished rename source app-misc/foo should not be returned")
+	}
+	if !foundMap["app-misc/foo2"] {
+		t.Errorf("Missing rename destination app-misc/foo2")
+	}
 
 	// 12. Deleting final ebuild leaves stale metadata.xml
 	err = os.MkdirAll(filepath.Join(tmpDir, "dev-util", "stale"), 0755)
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	err = os.WriteFile(filepath.Join(tmpDir, "dev-util", "stale", "metadata.xml"), []byte(""), 0644)
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	err = os.WriteFile(filepath.Join(tmpDir, "dev-util", "stale", "stale-1.ebuild"), []byte(""), 0644)
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	runCmd("git", "add", "dev-util/stale")
 	runCmd("git", "commit", "-m", "Add stale package")
@@ -159,11 +212,15 @@ func TestGetGitModifiedPackagesChanged(t *testing.T) {
 	for _, p := range pkgs {
 		foundMap[p] = true
 	}
-	if foundMap["dev-util/stale"] { t.Errorf("Package with deleted final ebuild should not be selected") }
+	if foundMap["dev-util/stale"] {
+		t.Errorf("Package with deleted final ebuild should not be selected")
+	}
 
 	// 13. Deleting one file but another ebuild remains
 	err = os.WriteFile(filepath.Join(tmpDir, "dev-util", "bar", "bar-3.ebuild"), []byte("new file"), 0644)
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	runCmd("git", "add", "dev-util/bar/bar-3.ebuild")
 	runCmd("git", "commit", "-m", "Add another ebuild to bar")
@@ -177,7 +234,9 @@ func TestGetGitModifiedPackagesChanged(t *testing.T) {
 	for _, p := range pkgs {
 		foundMap[p] = true
 	}
-	if !foundMap["dev-util/bar"] { t.Errorf("Package with deleted ebuild but remaining ebuilds should be selected") }
+	if !foundMap["dev-util/bar"] {
+		t.Errorf("Package with deleted ebuild but remaining ebuilds should be selected")
+	}
 
 	// Test deterministic order
 	isSorted := true

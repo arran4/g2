@@ -34,7 +34,7 @@ func TestOrphanedManifestLintRule(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Create a used AUX file
+	// Create an ESP-IDF ebuild that uses PV which should evaluate to exactly PV not PV-PR
 	if err := os.WriteFile(filepath.Join(pkgDir, "files", "used.patch"), []byte("patch content"), 0644); err != nil {
 		t.Fatal(err)
 	}
@@ -66,11 +66,24 @@ func TestOrphanedManifestLintRule(t *testing.T) {
 					},
 				},
 			},
+			{
+				Version: "2.0-r2",
+				Ebuild: &g2.Ebuild{
+					Vars: map[string]string{
+						"SRC_URI": "https://example.com/esp-v${PV}.tar.gz",
+					},
+					SrcUri: []g2.URIEntry{
+						{Filename: "esp-v2.0.tar.gz"}, // Evaluates exactly to PV
+					},
+				},
+			},
 		},
 		Manifest: &g2.Manifest{
 			Entries: []*g2.ManifestEntry{
 				// Used DIST file (should not error)
 				{Type: "DIST", Filename: "file1-v1.0.tar.gz"},
+				// Used ESP-IDF DIST file testing PV
+				{Type: "DIST", Filename: "esp-v2.0.tar.gz"},
 				// Used ESP-IDF DIST file testing PV
 				{Type: "DIST", Filename: "esp-v2.0.tar.gz"},
 				// Unused DIST file (should error)
@@ -110,43 +123,24 @@ func TestOrphanedManifestLintRule_WhichBrowser_Complex(t *testing.T) {
 
 	ebuildContent := `
 MY_PV_NO_REV="${PV%%-r*}"
-MY_BASE_PV="${MY_PV_NO_REV%_p*}"
-MY_BUILD_SUFFIX="${MY_PV_NO_REV##*_p}"
+MY_BASE_PV="${MY_PV_NO_REV%.*}"
+MY_BUILD_SUFFIX="${MY_PV_NO_REV##*.}"
 MY_DEB_ARCHIVE="which_browser-${MY_BASE_PV}+${MY_BUILD_SUFFIX}-linux.deb"
 SRC_URI="https://which-browser-site.pages.dev/downloads/v${MY_BASE_PV}/${MY_DEB_ARCHIVE}"
 `
 	if err := os.MkdirAll(filepath.Join(pkgDir, "www-client", "which_browser"), 0755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(pkgDir, "www-client", "which_browser", "which_browser-0.2.6_p44-r1.ebuild"), []byte(ebuildContent), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(pkgDir, "www-client", "which_browser", "which_browser-0.2.6.44-r1.ebuild"), []byte(ebuildContent), 0644); err != nil {
 		t.Fatal(err)
 	}
 
 	pkgData := &g2.PackageData{
 		Category: "www-client",
 		Name:     "which_browser",
-		Versions: []g2.VersionData{
-			{
-				Version: "0.2.6_p44-r1",
-				Ebuild: &g2.Ebuild{
-					Vars: map[string]string{
-						"SRC_URI": "https://which-browser-site.pages.dev/downloads/v0.2.6/which_browser-0.2.6_p44+0.2.6_p44-linux.deb",
-						"PVR":     "0.2.6_p44-r1",
-						"PF":      "which_browser-0.2.6_p44-r1",
-						"PN":      "which_browser",
-						"PV":      "0.2.6_p44",
-						"PR":      "r1",
-						"P":       "which_browser-0.2.6_p44",
-					},
-					SrcUri: []g2.URIEntry{
-						{Filename: "which_browser-0.2.6_p44+0.2.6_p44-linux.deb"},
-					},
-				},
-			},
-		},
 		Manifest: &g2.Manifest{
 			Entries: []*g2.ManifestEntry{
-				{Type: "DIST", Filename: "which_browser-0.2.6_p44+0.2.6_p44-linux.deb"},
+				{Type: "DIST", Filename: "which_browser-0.2.6+44-linux.deb"},
 			},
 		},
 	}

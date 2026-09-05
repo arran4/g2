@@ -87,3 +87,65 @@ func TestResolveBash(t *testing.T) {
 		})
 	}
 }
+
+func TestResolveBash_ParameterExpansions(t *testing.T) {
+	ctx := context.Background()
+	tests := []struct {
+		name      string
+		text      string
+		variables map[string]string
+		want      string
+	}{
+		{
+			name:      "remove shortest trailing pattern (%)",
+			text:      "${VAR%.*}",
+			variables: map[string]string{"VAR": "0.2.6.44"},
+			want:      "0.2.6",
+		},
+		{
+			name:      "remove longest trailing pattern (%%)",
+			text:      "${VAR%%-r*}",
+			variables: map[string]string{"VAR": "0.2.6.44-r1"},
+			want:      "0.2.6.44",
+		},
+		{
+			name:      "remove shortest leading pattern (#)",
+			text:      "${VAR#v}",
+			variables: map[string]string{"VAR": "v0.2.6"},
+			want:      "0.2.6",
+		},
+		{
+			name:      "remove longest leading pattern (##)",
+			text:      "${VAR##*.}",
+			variables: map[string]string{"VAR": "0.2.6.44"},
+			want:      "44",
+		},
+		{
+			name:      "chained with literal plus and suffix",
+			text:      "which_browser-${MY_BASE_PV}+${MY_BUILD_SUFFIX}-linux.deb",
+			variables: map[string]string{"MY_BASE_PV": "0.2.6", "MY_BUILD_SUFFIX": "44"},
+			want:      "which_browser-0.2.6+44-linux.deb",
+		},
+		{
+			name:      "conservative dynamic shell unsupported logic",
+			text:      "$(wget http://example.com/foo.tar.gz)",
+			variables: map[string]string{},
+			want:      "$(wget http://example.com/foo.tar.gz)",
+		},
+		{
+			name:      "conservative complex logic fall back",
+			text:      "`curl http://example.com`",
+			variables: map[string]string{},
+			want:      "`curl http://example.com`",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := resolveBash(ctx, tt.text, tt.variables)
+			if got != tt.want {
+				t.Errorf("resolveBash() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
