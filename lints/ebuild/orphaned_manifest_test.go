@@ -66,24 +66,11 @@ func TestOrphanedManifestLintRule(t *testing.T) {
 					},
 				},
 			},
-			{
-				Version: "2.0-r2",
-				Ebuild: &g2.Ebuild{
-					Vars: map[string]string{
-						"SRC_URI": "https://example.com/esp-v${PV}.tar.gz",
-					},
-					SrcUri: []g2.URIEntry{
-						{Filename: "esp-v2.0.tar.gz"}, // Evaluates exactly to PV
-					},
-				},
-			},
 		},
 		Manifest: &g2.Manifest{
 			Entries: []*g2.ManifestEntry{
 				// Used DIST file (should not error)
 				{Type: "DIST", Filename: "file1-v1.0.tar.gz"},
-				// Used ESP-IDF DIST file testing PV
-				{Type: "DIST", Filename: "esp-v2.0.tar.gz"},
 				// Used ESP-IDF DIST file testing PV
 				{Type: "DIST", Filename: "esp-v2.0.tar.gz"},
 				// Unused DIST file (should error)

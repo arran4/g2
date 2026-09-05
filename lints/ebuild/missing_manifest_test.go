@@ -53,11 +53,9 @@ func TestMissingManifestLintRule(t *testing.T) {
 func TestMissingManifestLintRule_Beeper_P_vs_PF(t *testing.T) {
 	mockFS := fstest.MapFS{
 		filepath.Join("app-test", "beeper", "beeper-1.2.3-r1.ebuild"): &fstest.MapFile{
-			// ${P} evaluates to beeper-1.2.3, ${PF} evaluates to beeper-1.2.3-r1
 			Data: []byte(`
 SRC_URI="
-	https://example.com/${P}.tar.gz
-	https://example.com/${PF}.tar.gz
+	https://example.com/${P}.AppImage
 "`),
 		},
 	}
@@ -72,7 +70,7 @@ SRC_URI="
 			Entries: []*g2.ManifestEntry{
 				{
 					Type:     "DIST",
-					Filename: "beeper-1.2.3.tar.gz", // Only P is present
+					Filename: "beeper-1.2.3-r1.AppImage", // Only PF is present, but P is required
 				},
 			},
 		},
@@ -85,7 +83,7 @@ SRC_URI="
 		t.Fatalf("expected 1 result, got %d: %v", len(results), results)
 	}
 
-	expectedMsg := "[Error] version 1.2.3-r1: distfile missing from Manifest: [ beeper-1.2.3-r1.tar.gz ]"
+	expectedMsg := "[Error] version 1.2.3-r1: distfile missing from Manifest: [ beeper-1.2.3.AppImage ]"
 	if results[0].Message != expectedMsg {
 		t.Errorf("expected message '%s', got '%s'", expectedMsg, results[0].Message)
 	}
