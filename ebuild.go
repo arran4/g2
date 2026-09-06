@@ -494,13 +494,20 @@ func ParseEbuildVariables(filename string) map[string]string {
 			pvBase := gv.String()
 			gv.Revision = origRev
 
+			pvr := pvBase
+			pf := pn + "-" + pvBase
+			if origRev > 0 {
+				pvr = pvCandidate
+				pf = pn + "-" + pvCandidate
+			}
+
 			return map[string]string{
 				"PN":  pn,
 				"PV":  pvBase,
 				"P":   pn + "-" + pvBase,
 				"PR":  fmt.Sprintf("r%d", origRev),
-				"PVR": pvCandidate,
-				"PF":  pn + "-" + pvCandidate,
+				"PVR": pvr,
+				"PF":  pf,
 			}
 		}
 	}

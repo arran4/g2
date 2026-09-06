@@ -1588,3 +1588,53 @@ func TestParsingMode_String(t *testing.T) {
 		})
 	}
 }
+
+func TestParseEbuildVariables_Unrevisioned(t *testing.T) {
+	vars := ParseEbuildVariables("foo-bar-1.2.3.ebuild")
+	if vars == nil {
+		t.Fatal("expected vars, got nil")
+	}
+	if vars["PN"] != "foo-bar" {
+		t.Errorf("expected PN=foo-bar, got %s", vars["PN"])
+	}
+	if vars["PV"] != "1.2.3" {
+		t.Errorf("expected PV=1.2.3, got %s", vars["PV"])
+	}
+	if vars["P"] != "foo-bar-1.2.3" {
+		t.Errorf("expected P=foo-bar-1.2.3, got %s", vars["P"])
+	}
+	if vars["PR"] != "r0" {
+		t.Errorf("expected PR=r0, got %s", vars["PR"])
+	}
+	if vars["PVR"] != "1.2.3" {
+		t.Errorf("expected PVR=1.2.3, got %s", vars["PVR"])
+	}
+	if vars["PF"] != "foo-bar-1.2.3" {
+		t.Errorf("expected PF=foo-bar-1.2.3, got %s", vars["PF"])
+	}
+}
+
+func TestParseEbuildVariables_Revisioned(t *testing.T) {
+	vars := ParseEbuildVariables("foo-bar-1.2.3-r1.ebuild")
+	if vars == nil {
+		t.Fatal("expected vars, got nil")
+	}
+	if vars["PN"] != "foo-bar" {
+		t.Errorf("expected PN=foo-bar, got %s", vars["PN"])
+	}
+	if vars["PV"] != "1.2.3" {
+		t.Errorf("expected PV=1.2.3, got %s", vars["PV"])
+	}
+	if vars["P"] != "foo-bar-1.2.3" {
+		t.Errorf("expected P=foo-bar-1.2.3, got %s", vars["P"])
+	}
+	if vars["PR"] != "r1" {
+		t.Errorf("expected PR=r1, got %s", vars["PR"])
+	}
+	if vars["PVR"] != "1.2.3-r1" {
+		t.Errorf("expected PVR=1.2.3-r1, got %s", vars["PVR"])
+	}
+	if vars["PF"] != "foo-bar-1.2.3-r1" {
+		t.Errorf("expected PF=foo-bar-1.2.3-r1, got %s", vars["PF"])
+	}
+}

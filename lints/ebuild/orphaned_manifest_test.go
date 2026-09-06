@@ -125,9 +125,22 @@ SRC_URI="https://which-browser-site.pages.dev/downloads/v${MY_BASE_PV}/${MY_DEB_
 	pkgData := &g2.PackageData{
 		Category: "www-client",
 		Name:     "which_browser",
+		Versions: []g2.VersionData{
+			{
+				Version: "0.2.6.44-r1",
+				Ebuild: &g2.Ebuild{
+					Vars: map[string]string{
+						"SRC_URI": "https://which-browser-site.pages.dev/downloads/v0.2.6/which_browser-0.2.6.44+0.2.6.44-linux.deb",
+					},
+					SrcUri: []g2.URIEntry{
+						{Filename: "which_browser-0.2.6.44+0.2.6.44-linux.deb"},
+					},
+				},
+			},
+		},
 		Manifest: &g2.Manifest{
 			Entries: []*g2.ManifestEntry{
-				{Type: "DIST", Filename: "which_browser-0.2.6+44-linux.deb"},
+				{Type: "DIST", Filename: "which_browser-0.2.6.44+0.2.6.44-linux.deb"},
 			},
 		},
 	}
