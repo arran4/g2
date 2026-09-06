@@ -112,7 +112,7 @@ SRC_URI="https://which-browser-site.pages.dev/downloads/v${MY_BASE_PV}/${MY_DEB_
 			Entries: []*g2.ManifestEntry{
 				{
 					Type:     "DIST",
-					Filename: "which_browser-0.2.6.44+0.2.6.44-linux.deb",
+					Filename: "which_browser-0.2.6+44-linux.deb",
 				},
 			},
 		},

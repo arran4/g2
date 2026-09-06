@@ -196,11 +196,19 @@ func (p *EbuildParser) consumeHeaderAndWhitespace() (string, error) {
 	}
 }
 
+// VariableAssignment represents an ordered variable assignment
+type VariableAssignment struct {
+	Name   string
+	Value  string
+	Append bool
+}
+
 // ParsedEbuild contains the results of parsing an ebuild
 type ParsedEbuild struct {
 	Variables    map[string]string
 	Functions    map[string]AST
 	Order        []string
+	Assignments  []VariableAssignment
 	EbuildHeader string
 	Warnings     []string
 }
@@ -212,6 +220,7 @@ func (p *EbuildParser) Parse() (ParsedEbuild, error) {
 		Variables: make(map[string]string),
 		Functions: make(map[string]AST),
 		Order:     make([]string, 0),
+		Assignments: make([]VariableAssignment, 0),
 	}
 
 	header, err := p.consumeHeaderAndWhitespace()
@@ -264,6 +273,7 @@ func (p *EbuildParser) Parse() (ParsedEbuild, error) {
 				}
 				if strings.HasSuffix(ident, "+") {
 					ident = strings.TrimSuffix(ident, "+")
+					result.Assignments = append(result.Assignments, VariableAssignment{Name: ident, Value: val, Append: true})
 					if result.Variables[ident] != "" {
 						result.Variables[ident] += " " + val
 					} else {
@@ -271,6 +281,7 @@ func (p *EbuildParser) Parse() (ParsedEbuild, error) {
 						result.Order = append(result.Order, ident)
 					}
 				} else {
+				    result.Assignments = append(result.Assignments, VariableAssignment{Name: ident, Value: val, Append: false})
 					if _, exists := result.Variables[ident]; !exists {
 						result.Order = append(result.Order, ident)
 					}
