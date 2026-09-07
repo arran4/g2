@@ -41,13 +41,14 @@ func (m ParsingMode) String() string {
 }
 
 type Ebuild struct {
-	Path          string
-	Vars          map[string]string
-	Functions     map[string]AST
-	SrcUri        []URIEntry
-	Mode          ParsingMode
-	RawText       string
-	ParseWarnings []string
+	Path            string
+	Vars            map[string]string
+	Functions       map[string]AST
+	SrcUri          []URIEntry
+	Mode            ParsingMode
+	RawText         string
+	ParseWarnings   []string
+	SrcUriUncertain bool
 
 	orderOverride []string
 	EbuildHeader  string
@@ -223,24 +224,37 @@ func ParseEbuild(fsys fs.FS, path string, mode ParsingMode) (*Ebuild, error) {
 
 		e.ParseWarnings = append(parser.Warnings, parsedEbuild.Warnings...)
 
+		uncertainVars := make(map[string]bool)
+		reVar := regexp.MustCompile(`\$+\{?([a-zA-Z0-9_]+)\}?`)
+
 		// Evaluate assignments sequentially in source order
 		for _, assignment := range parsedEbuild.Assignments {
-			if assignment.Name == "SRC_URI" {
-				// Detect unresolvable variables
-				reVar := regexp.MustCompile(`\$\{?([a-zA-Z0-9_]+)\}?`)
+			isUncertain := false
+
+			if strings.Contains(assignment.Value, "`") || strings.Contains(assignment.Value, "$(") {
+				isUncertain = true
+			} else {
 				matches := reVar.FindAllStringSubmatch(assignment.Value, -1)
 				for _, m := range matches {
 					varName := m[1]
 					if _, exists := e.Vars[varName]; !exists {
-						e.Vars["_SRC_URI_RAW_UNCERTAIN"] = "true"
+						isUncertain = true
+						break
+					}
+					if uncertainVars[varName] {
+						isUncertain = true
+						break
 					}
 				}
-				if strings.Contains(assignment.Value, "`") || strings.Contains(assignment.Value, "$(") {
-					e.Vars["_SRC_URI_RAW_UNCERTAIN"] = "true"
-				}
 			}
-			val := ResolveVariables(assignment.Value, e.Vars)
 
+			if isUncertain {
+				uncertainVars[assignment.Name] = true
+			} else if !assignment.Append {
+				delete(uncertainVars, assignment.Name)
+			}
+
+			val := ResolveVariables(assignment.Value, e.Vars)
 			if assignment.Append {
 				if e.Vars[assignment.Name] != "" {
 					e.Vars[assignment.Name] += " " + val
@@ -252,6 +266,10 @@ func ParseEbuild(fsys fs.FS, path string, mode ParsingMode) (*Ebuild, error) {
 			}
 		}
 
+		if uncertainVars["SRC_URI"] {
+			e.SrcUriUncertain = true
+		}
+
 		e.Functions = make(map[string]AST)
 		for k, v := range parsedEbuild.Functions {
 			e.Functions[k] = v
@@ -260,12 +278,12 @@ func ParseEbuild(fsys fs.FS, path string, mode ParsingMode) (*Ebuild, error) {
 		e.EbuildHeader = parsedEbuild.EbuildHeader
 	}
 
-		if mode >= ParseFull {
+	if mode >= ParseFull {
 		if srcUriStr, ok := e.Vars["SRC_URI"]; ok {
 			uris, uncertain := ParseSrcURI(srcUriStr)
 			e.SrcUri = uris
 			if uncertain {
-				e.Vars["_SRC_URI_UNCERTAIN"] = "true"
+				e.SrcUriUncertain = true
 			}
 		}
 	}
@@ -1467,16 +1485,7 @@ func (e *Ebuild) IsSrcUriAuthoritative() bool {
 	if len(e.ParseWarnings) > 0 {
 		return false
 	}
-	// Check if any source URIs were marked as uncertain during extraction
-	if e.Vars["_SRC_URI_UNCERTAIN"] == "true" {
-		return false
-	}
-	if e.Vars["_SRC_URI_RAW_UNCERTAIN"] == "true" {
-		return false
-	}
-
-	srcUriStr := e.Vars["SRC_URI"]
-	if strings.Contains(srcUriStr, "$") || strings.Contains(srcUriStr, "`") {
+	if e.SrcUriUncertain {
 		return false
 	}
 	return true
@@ -1489,11 +1498,21 @@ func ParseSrcURI(srcUriStr string) ([]URIEntry, bool) {
 	tokens := strings.Fields(srcUriStr)
 	i := 0
 	uncertain := false
+	balance := 0
+
 	for i < len(tokens) {
 		token := tokens[i]
 
 		// Control tokens or syntactical groupings
-		if token == "(" || token == ")" {
+		if token == "(" {
+			balance++
+			i++
+			continue
+		} else if token == ")" {
+			balance--
+			if balance < 0 {
+				uncertain = true
+			}
 			i++
 			continue
 		}
@@ -1514,6 +1533,9 @@ func ParseSrcURI(srcUriStr string) ([]URIEntry, bool) {
 
 		if i+2 < len(tokens) && tokens[i+1] == "->" {
 			filename = tokens[i+2]
+			if filename == ")" || filename == "(" || filename == "->" || strings.HasSuffix(filename, "?") {
+				uncertain = true
+			}
 			i += 3
 		} else {
 			i += 1
@@ -1526,5 +1548,10 @@ func ParseSrcURI(srcUriStr string) ([]URIEntry, bool) {
 			uncertain = true
 		}
 	}
+
+	if balance != 0 {
+		uncertain = true
+	}
+
 	return uris, uncertain
 }

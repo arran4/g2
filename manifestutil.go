@@ -28,10 +28,14 @@ func AtomicWriteManifest(manifestPath string, m *Manifest) error {
 	}
 	tmpPath := tmpFile.Name()
 
-	// Ensure we clean up temp file on failure
+	// Track if successfully closed/renamed
+	success := false
+
 	defer func() {
-		_ = tmpFile.Close()
-		_ = os.Remove(tmpPath)
+		if !success {
+			_ = tmpFile.Close()
+			_ = os.Remove(tmpPath)
+		}
 	}()
 
 	if err := tmpFile.Chmod(0644); err != nil {
@@ -48,9 +52,11 @@ func AtomicWriteManifest(manifestPath string, m *Manifest) error {
 
 	// Rename over the old file
 	if err := os.Rename(tmpPath, manifestPath); err != nil {
+		// Even if Rename fails, we already Closed above, so the defer will just run Remove.
+		// tmpFile.Close() twice is harmless.
 		return err
 	}
 
-	// Success, avoid defer remove since it's renamed
+	success = true
 	return nil
 }
