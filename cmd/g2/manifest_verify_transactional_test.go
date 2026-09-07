@@ -56,6 +56,89 @@ func TestCmdVerifyTransactional(t *testing.T) {
 
 	hashes := []string{g2.HashSha512}
 
+	t.Run("Missing + Obsolete DIST: Fix + Clean writes exact set once", func(t *testing.T) {
+		dir := t.TempDir()
+		writeTestEbuild(t, dir, "foo-1.0.ebuild", fmt.Sprintf(`EAPI=8
+DESCRIPTION="foo"
+SLOT="0"
+SRC_URI="%s/good.tar.gz -> good.tar.gz"
+`, ts.URL))
+
+		manifestContent := "DIST obsolete.tar.gz 123 SHA512 abc\n"
+		writeTestManifest(t, dir, manifestContent)
+
+		cfg := &CmdManifestArgConfig{
+			MainArgConfig: &MainArgConfig{},
+		}
+		err := cfg.cmdVerify([]string{"--fix", "--clean", dir}, hashes)
+		if err != nil {
+			t.Fatalf("cmdVerify failed: %v", err)
+		}
+
+		b, err := os.ReadFile(filepath.Join(dir, "Manifest"))
+		if err != nil {
+			t.Fatalf("reading manifest: %v", err)
+		}
+		result := string(b)
+		if !strings.Contains(result, "DIST good.tar.gz") {
+			t.Errorf("Expected good.tar.gz in manifest, got: %s", result)
+		}
+		if strings.Contains(result, "obsolete.tar.gz") {
+			t.Errorf("Expected obsolete.tar.gz to be removed, got: %s", result)
+		}
+	})
+
+	t.Run("Failed download aborts transaction", func(t *testing.T) {
+		dir := t.TempDir()
+		writeTestEbuild(t, dir, "foo-1.0.ebuild", fmt.Sprintf(`EAPI=8
+DESCRIPTION="foo"
+SLOT="0"
+SRC_URI="%s/fail.tar.gz -> fail.tar.gz"
+`, ts.URL))
+
+		originalManifest := "DIST other.tar.gz 123 SHA512 abc\n"
+		writeTestManifest(t, dir, originalManifest)
+
+		cfg := &CmdManifestArgConfig{}
+		err := cfg.cmdVerify([]string{"--fix", "--clean", dir}, hashes)
+		if err == nil {
+			t.Fatalf("Expected cmdVerify to fail")
+		}
+
+		b, err := os.ReadFile(filepath.Join(dir, "Manifest"))
+		if err != nil {
+			t.Fatalf("reading manifest: %v", err)
+		}
+		if string(b) != originalManifest {
+			t.Errorf("Manifest was modified on failure! Got: %s", string(b))
+		}
+	})
+
+	t.Run("Uncertain ebuild aborts clean and fix", func(t *testing.T) {
+		dir := t.TempDir()
+		writeTestEbuild(t, dir, "foo-1.0.ebuild", `EAPI=8
+inherit someclass
+DESCRIPTION="foo"
+SLOT="0"
+`)
+		originalManifest := "DIST obsolete.tar.gz 123 SHA512 abc\n"
+		writeTestManifest(t, dir, originalManifest)
+
+		cfg := &CmdManifestArgConfig{}
+		err := cfg.cmdVerify([]string{"--fix", "--clean", dir}, hashes)
+		if err == nil {
+			t.Fatalf("Expected error about uncertainty")
+		}
+
+		b, err := os.ReadFile(filepath.Join(dir, "Manifest"))
+		if err != nil {
+			t.Fatalf("reading manifest: %v", err)
+		}
+		if string(b) != originalManifest {
+			t.Errorf("Manifest was modified despite uncertainty! Got: %s", string(b))
+		}
+	})
+
 	t.Run("Successful first fetch, failing later fetch preserves exact Manifest bytes", func(t *testing.T) {
 		dir := t.TempDir()
 		writeTestEbuild(t, dir, "foo-1.0.ebuild", fmt.Sprintf(`EAPI=8
@@ -71,7 +154,7 @@ SRC_URI="%s/firstgood.tar.gz -> firstgood.tar.gz
 		cfg := &CmdManifestArgConfig{
 			MainArgConfig: &MainArgConfig{},
 		}
-		err := cfg.cmdVerify([]string{"--fix", "--clean", dir}, hashes)
+		err := cfg.cmdVerify([]string{"--fix", dir}, hashes)
 		if err == nil {
 			t.Fatalf("cmdVerify expected to fail due to laterfail.tar.gz")
 		}
@@ -105,6 +188,25 @@ SRC_URI="${MY_SOURCE}"
 		}
 	})
 
+	t.Run("Unsupported shell control-flow syntax silently treated as authoritative aborted", func(t *testing.T) {
+		dir := t.TempDir()
+		writeTestEbuild(t, dir, "foo-1.0.ebuild", `EAPI=8
+SRC_URI="" && SRC_URI="https://example.invalid/a.tar.gz"
+`)
+		originalManifest := "DIST obsolete.tar.gz 123 SHA512 abc\n"
+		writeTestManifest(t, dir, originalManifest)
+
+		cfg := &CmdManifestArgConfig{}
+		err := cfg.cmdVerify([]string{"--fix", "--clean", dir}, hashes)
+		if err == nil {
+			t.Fatalf("cmdVerify expected to abort due to control flow `&&`")
+		}
+		b, _ := os.ReadFile(filepath.Join(dir, "Manifest"))
+		if string(b) != originalManifest {
+			t.Errorf("Manifest modified despite uncertainty! Got:\n%s", string(b))
+		}
+	})
+
 	t.Run("Unsupported source control flow aborted", func(t *testing.T) {
 		dir := t.TempDir()
 		writeTestEbuild(t, dir, "foo-1.0.ebuild", `EAPI=8
@@ -130,22 +232,19 @@ fi
 		}
 	})
 
-	t.Run("Unsupported shell control-flow syntax silently treated as authoritative aborted", func(t *testing.T) {
+	t.Run("Valid conditional source lists plus malformed groups/rename targets", func(t *testing.T) {
 		dir := t.TempDir()
 		writeTestEbuild(t, dir, "foo-1.0.ebuild", `EAPI=8
-SRC_URI="" && SRC_URI="https://example.invalid/a.tar.gz"
+DESCRIPTION="foo"
+SLOT="0"
+SRC_URI="foo? ( https://example.invalid/a.tar.gz -> )"
 `)
-		originalManifest := "DIST obsolete.tar.gz 123 SHA512 abc\n"
-		writeTestManifest(t, dir, originalManifest)
+		writeTestManifest(t, dir, "")
 
 		cfg := &CmdManifestArgConfig{}
-		err := cfg.cmdVerify([]string{"--fix", "--clean", dir}, hashes)
+		err := cfg.cmdVerify([]string{"--fix", dir}, hashes)
 		if err == nil {
-			t.Fatalf("cmdVerify expected to abort due to control flow `&&`")
-		}
-		b, _ := os.ReadFile(filepath.Join(dir, "Manifest"))
-		if string(b) != originalManifest {
-			t.Errorf("Manifest modified despite uncertainty! Got:\n%s", string(b))
+			t.Fatalf("cmdVerify expected to fail due to malformed -> target")
 		}
 	})
 
@@ -193,22 +292,6 @@ SRC_URI="%s/good.tar.gz -> good.tar.gz"
 		}
 	})
 
-	t.Run("Valid conditional source lists plus malformed groups/rename targets", func(t *testing.T) {
-		dir := t.TempDir()
-		writeTestEbuild(t, dir, "foo-1.0.ebuild", `EAPI=8
-DESCRIPTION="foo"
-SLOT="0"
-SRC_URI="foo? ( https://example.invalid/a.tar.gz -> )"
-`)
-		writeTestManifest(t, dir, "")
-
-		cfg := &CmdManifestArgConfig{}
-		err := cfg.cmdVerify([]string{"--fix", dir}, hashes)
-		if err == nil {
-			t.Fatalf("cmdVerify expected to fail due to malformed -> target")
-		}
-	})
-
 	t.Run("Exact final DIST set", func(t *testing.T) {
 		dir := t.TempDir()
 		writeTestEbuild(t, dir, "foo-1.0.ebuild", fmt.Sprintf(`EAPI=8
@@ -239,11 +322,7 @@ SRC_URI="%s/good.tar.gz -> good.tar.gz"
 
 	t.Run("Idempotency", func(t *testing.T) {
 		dir := t.TempDir()
-		writeTestEbuild(t, dir, "foo-1.0.ebuild", fmt.Sprintf(`EAPI=8
-DESCRIPTION="foo"
-SLOT="0"
-SRC_URI="%s/good.tar.gz -> good.tar.gz"
-`, ts.URL))
+		writeTestEbuild(t, dir, "foo-1.0.ebuild", "EAPI=8\nDESCRIPTION=\"foo\"\nSLOT=\"0\"\nSRC_URI=\""+ts.URL+"/good.tar.gz -> good.tar.gz\"\n")
 		writeTestManifest(t, dir, "")
 		cfg := &CmdManifestArgConfig{
 			MainArgConfig: &MainArgConfig{},
@@ -259,7 +338,39 @@ SRC_URI="%s/good.tar.gz -> good.tar.gz"
 		}
 		b2, _ := os.ReadFile(filepath.Join(dir, "Manifest"))
 		if string(b1) != string(b2) {
-			t.Errorf("Idempotency failed")
+			t.Errorf("Idempotency failed: b1: %s b2: %s", string(b1), string(b2))
+		}
+	})
+}
+
+func TestCmdUpsertFromUrl(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("good data"))
+	}))
+	defer ts.Close()
+
+	hashes := []string{g2.HashSha512}
+
+	t.Run("Preserves revision text", func(t *testing.T) {
+		dir := t.TempDir()
+		writeTestManifest(t, dir, "")
+
+		cfg := &CmdManifestArgConfig{
+			MainArgConfig: &MainArgConfig{},
+		}
+		// Notice filename is "foo-1.0-r1.tar.gz"
+		err := cfg.cmdUpsertFromUrl([]string{ts.URL + "/good.tar.gz", "foo-1.0-r1.tar.gz", dir}, hashes)
+		if err != nil {
+			t.Fatalf("cmdUpsertFromUrl failed: %v", err)
+		}
+
+		b, err := os.ReadFile(filepath.Join(dir, "Manifest"))
+		if err != nil {
+			t.Fatalf("reading manifest: %v", err)
+		}
+		result := string(b)
+		if !strings.Contains(result, "DIST foo-1.0-r1.tar.gz") {
+			t.Errorf("Expected exact filename to be preserved, got: %s", result)
 		}
 	})
 }
