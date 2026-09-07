@@ -217,9 +217,9 @@ type ParsedEbuild struct {
 // tailored specifically for ebuilds, bypassing full bash posix rules.
 func (p *EbuildParser) Parse() (ParsedEbuild, error) {
 	result := ParsedEbuild{
-		Variables: make(map[string]string),
-		Functions: make(map[string]AST),
-		Order:     make([]string, 0),
+		Variables:   make(map[string]string),
+		Functions:   make(map[string]AST),
+		Order:       make([]string, 0),
 		Assignments: make([]VariableAssignment, 0),
 	}
 
@@ -281,7 +281,7 @@ func (p *EbuildParser) Parse() (ParsedEbuild, error) {
 						result.Order = append(result.Order, ident)
 					}
 				} else {
-				    result.Assignments = append(result.Assignments, VariableAssignment{Name: ident, Value: val, Append: false})
+					result.Assignments = append(result.Assignments, VariableAssignment{Name: ident, Value: val, Append: false})
 					if _, exists := result.Variables[ident]; !exists {
 						result.Order = append(result.Order, ident)
 					}

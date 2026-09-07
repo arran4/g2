@@ -1638,3 +1638,34 @@ func TestParseEbuildVariables_Revisioned(t *testing.T) {
 		t.Errorf("expected PF=foo-bar-1.2.3-r1, got %s", vars["PF"])
 	}
 }
+
+func TestParseEbuildVariables_OrderingNonDeterminism(t *testing.T) {
+	mockFS := fstest.MapFS{
+		"testpkg-1.0.ebuild": &fstest.MapFile{
+			Data: []byte(`
+A="abc.def.ghi"
+B="${A%.*}"
+C="${A##*.}"
+D="${B}-${C}"
+`),
+		},
+	}
+
+	parsed, err := ParseEbuild(mockFS, "testpkg-1.0.ebuild", ParseFull)
+	if err != nil {
+		t.Fatalf("Failed to parse ebuild: %v", err)
+	}
+
+	if parsed.Vars["A"] != "abc.def.ghi" {
+		t.Errorf("A = %q, want abc.def.ghi", parsed.Vars["A"])
+	}
+	if parsed.Vars["B"] != "abc.def" {
+		t.Errorf("B = %q, want abc.def", parsed.Vars["B"])
+	}
+	if parsed.Vars["C"] != "ghi" {
+		t.Errorf("C = %q, want ghi", parsed.Vars["C"])
+	}
+	if parsed.Vars["D"] != "abc.def-ghi" {
+		t.Errorf("D = %q, want abc.def-ghi", parsed.Vars["D"])
+	}
+}
