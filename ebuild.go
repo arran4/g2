@@ -276,6 +276,9 @@ func ParseEbuild(fsys fs.FS, path string, mode ParsingMode) (*Ebuild, error) {
 		}
 		e.orderOverride = parsedEbuild.Order
 		e.EbuildHeader = parsedEbuild.EbuildHeader
+		if parsedEbuild.HasControlFlow {
+			e.Vars["_SRC_URI_UNCERTAIN"] = "true"
+		}
 	}
 
 	if mode >= ParseFull {
@@ -1485,7 +1488,7 @@ func (e *Ebuild) IsSrcUriAuthoritative() bool {
 	if len(e.ParseWarnings) > 0 {
 		return false
 	}
-	if e.SrcUriUncertain {
+	if e.SrcUriUncertain || e.Vars["_SRC_URI_UNCERTAIN"] == "true" {
 		return false
 	}
 	return true
