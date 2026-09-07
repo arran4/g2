@@ -1588,3 +1588,121 @@ func TestParsingMode_String(t *testing.T) {
 		})
 	}
 }
+
+func TestParseEbuildVariables_Unrevisioned(t *testing.T) {
+	vars := ParseEbuildVariables("foo-bar-1.2.3.ebuild")
+	if vars == nil {
+		t.Fatal("expected vars, got nil")
+	}
+	if vars["PN"] != "foo-bar" {
+		t.Errorf("expected PN=foo-bar, got %s", vars["PN"])
+	}
+	if vars["PV"] != "1.2.3" {
+		t.Errorf("expected PV=1.2.3, got %s", vars["PV"])
+	}
+	if vars["P"] != "foo-bar-1.2.3" {
+		t.Errorf("expected P=foo-bar-1.2.3, got %s", vars["P"])
+	}
+	if vars["PR"] != "r0" {
+		t.Errorf("expected PR=r0, got %s", vars["PR"])
+	}
+	if vars["PVR"] != "1.2.3" {
+		t.Errorf("expected PVR=1.2.3, got %s", vars["PVR"])
+	}
+	if vars["PF"] != "foo-bar-1.2.3" {
+		t.Errorf("expected PF=foo-bar-1.2.3, got %s", vars["PF"])
+	}
+}
+
+func TestParseEbuildVariables_Revisioned(t *testing.T) {
+	vars := ParseEbuildVariables("foo-bar-1.2.3-r1.ebuild")
+	if vars == nil {
+		t.Fatal("expected vars, got nil")
+	}
+	if vars["PN"] != "foo-bar" {
+		t.Errorf("expected PN=foo-bar, got %s", vars["PN"])
+	}
+	if vars["PV"] != "1.2.3" {
+		t.Errorf("expected PV=1.2.3, got %s", vars["PV"])
+	}
+	if vars["P"] != "foo-bar-1.2.3" {
+		t.Errorf("expected P=foo-bar-1.2.3, got %s", vars["P"])
+	}
+	if vars["PR"] != "r1" {
+		t.Errorf("expected PR=r1, got %s", vars["PR"])
+	}
+	if vars["PVR"] != "1.2.3-r1" {
+		t.Errorf("expected PVR=1.2.3-r1, got %s", vars["PVR"])
+	}
+	if vars["PF"] != "foo-bar-1.2.3-r1" {
+		t.Errorf("expected PF=foo-bar-1.2.3-r1, got %s", vars["PF"])
+	}
+}
+
+func TestParseEbuildVariables_OrderingNonDeterminism(t *testing.T) {
+	mockFS := fstest.MapFS{
+		"testpkg-1.0.ebuild": &fstest.MapFile{
+			Data: []byte(`
+A="abc.def.ghi"
+B="${A%.*}"
+C="${A##*.}"
+D="${B}-${C}"
+`),
+		},
+	}
+
+	parsed, err := ParseEbuild(mockFS, "testpkg-1.0.ebuild", ParseFull)
+	if err != nil {
+		t.Fatalf("Failed to parse ebuild: %v", err)
+	}
+
+	if parsed.Vars["A"] != "abc.def.ghi" {
+		t.Errorf("A = %q, want abc.def.ghi", parsed.Vars["A"])
+	}
+	if parsed.Vars["B"] != "abc.def" {
+		t.Errorf("B = %q, want abc.def", parsed.Vars["B"])
+	}
+	if parsed.Vars["C"] != "ghi" {
+		t.Errorf("C = %q, want ghi", parsed.Vars["C"])
+	}
+	if parsed.Vars["D"] != "abc.def-ghi" {
+		t.Errorf("D = %q, want abc.def-ghi", parsed.Vars["D"])
+	}
+}
+
+func TestParseEbuildVariables_WhichBrowser_Integration(t *testing.T) {
+	mockFS := fstest.MapFS{
+		"which_browser-0.2.6.44-r1.ebuild": &fstest.MapFile{
+			Data: []byte(`
+MY_PV_NO_REV="${PV%%-r*}"
+MY_BASE_PV="${MY_PV_NO_REV%.*}"
+MY_BUILD_SUFFIX="${MY_PV_NO_REV##*.}"
+MY_DEB_ARCHIVE="${PN}-${MY_BASE_PV}+${MY_BUILD_SUFFIX}-linux.deb"
+SRC_URI="https://which-browser-site.pages.dev/downloads/v${MY_BASE_PV}/${MY_DEB_ARCHIVE}"
+`),
+		},
+	}
+
+	parsed, err := ParseEbuild(mockFS, "which_browser-0.2.6.44-r1.ebuild", ParseFull)
+	if err != nil {
+		t.Fatalf("ParseEbuild failed: %v", err)
+	}
+
+	if parsed.Vars["MY_BASE_PV"] != "0.2.6" {
+		t.Errorf("MY_BASE_PV = %q, want 0.2.6", parsed.Vars["MY_BASE_PV"])
+	}
+	if parsed.Vars["MY_BUILD_SUFFIX"] != "44" {
+		t.Errorf("MY_BUILD_SUFFIX = %q, want 44", parsed.Vars["MY_BUILD_SUFFIX"])
+	}
+	if parsed.Vars["MY_DEB_ARCHIVE"] != "which_browser-0.2.6+44-linux.deb" {
+		t.Errorf("MY_DEB_ARCHIVE = %q, want which_browser-0.2.6+44-linux.deb", parsed.Vars["MY_DEB_ARCHIVE"])
+	}
+
+	if len(parsed.SrcUri) == 0 {
+		t.Fatalf("SrcUri is empty")
+	}
+
+	if parsed.SrcUri[0].Filename != "which_browser-0.2.6+44-linux.deb" {
+		t.Errorf("SrcUri[0].Filename = %q, want which_browser-0.2.6+44-linux.deb", parsed.SrcUri[0].Filename)
+	}
+}

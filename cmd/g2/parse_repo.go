@@ -366,7 +366,7 @@ func parseRepoCategoriesAndPackages(sysFS fs.FS, repoDir string, repoName string
 				if version == "" {
 					vars := g2.ParseEbuildVariables(file.Name())
 					if vars != nil {
-						version = vars["PV"]
+						version = vars["PVR"]
 					}
 				}
 

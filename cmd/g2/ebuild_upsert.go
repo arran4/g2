@@ -144,11 +144,11 @@ func (cfg *CmdEbuildArgConfig) cmdEbuildUpsert(args []string) error {
 		}
 
 		vars := g2.ParseEbuildVariables(name)
-		if vars == nil || vars["PV"] == "" || vars["PN"] != *pkgFlag {
+		if vars == nil || vars["PVR"] == "" || vars["PN"] != *pkgFlag {
 			continue
 		}
 
-		gv := g2.ParseGentooVersion(vars["PV"])
+		gv := g2.ParseGentooVersion(vars["PVR"])
 		origRev := gv.Revision
 		gv.Revision = 0
 		base := gv.String()

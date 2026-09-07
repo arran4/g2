@@ -72,7 +72,7 @@ func (cfg *CmdEbuildArgConfig) DeleteEbuilds(wfs WritableFS, targets []string, r
 				if vars == nil {
 					continue
 				}
-				ebuildVer := vars["PV"]
+				ebuildVer := vars["PVR"]
 				if atom.Version != "" {
 					if atom.Version != ebuildVer {
 						continue // Skip if versions don't match

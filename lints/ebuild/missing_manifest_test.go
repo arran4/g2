@@ -49,3 +49,79 @@ func TestMissingManifestLintRule(t *testing.T) {
 		t.Errorf("expected file 'testpkg-2.0.ebuild', got '%s'", results[0].File)
 	}
 }
+
+func TestMissingManifestLintRule_Beeper_P_vs_PF(t *testing.T) {
+	mockFS := fstest.MapFS{
+		filepath.Join("app-test", "beeper", "beeper-1.2.3-r1.ebuild"): &fstest.MapFile{
+			Data: []byte(`
+SRC_URI="
+	https://example.com/${P}.AppImage
+"`),
+		},
+	}
+
+	category := "app-test"
+	name := "beeper"
+
+	pkgData := &g2.PackageData{
+		Category: category,
+		Name:     name,
+		Manifest: &g2.Manifest{
+			Entries: []*g2.ManifestEntry{
+				{
+					Type:     "DIST",
+					Filename: "beeper-1.2.3-r1.AppImage", // Only PF is present, but P is required
+				},
+			},
+		},
+	}
+
+	rule := &MissingManifestLintRule{}
+	results := rule.lintWithFS(mockFS, filepath.Join(category, name), pkgData, nil)
+
+	if len(results) != 1 {
+		t.Fatalf("expected 1 result, got %d: %v", len(results), results)
+	}
+
+	expectedMsg := "[Error] version 1.2.3-r1: distfile missing from Manifest: [ beeper-1.2.3.AppImage ]"
+	if results[0].Message != expectedMsg {
+		t.Errorf("expected message '%s', got '%s'", expectedMsg, results[0].Message)
+	}
+}
+
+func TestMissingManifestLintRule_WhichBrowser_Complex(t *testing.T) {
+	mockFS := fstest.MapFS{
+		filepath.Join("www-client", "which_browser", "which_browser-0.2.6.44-r1.ebuild"): &fstest.MapFile{
+			Data: []byte(`
+MY_PV_NO_REV="${PV%%-r*}"
+MY_BASE_PV="${MY_PV_NO_REV%.*}"
+MY_BUILD_SUFFIX="${MY_PV_NO_REV##*.}"
+MY_DEB_ARCHIVE="which_browser-${MY_BASE_PV}+${MY_BUILD_SUFFIX}-linux.deb"
+SRC_URI="https://which-browser-site.pages.dev/downloads/v${MY_BASE_PV}/${MY_DEB_ARCHIVE}"
+`),
+		},
+	}
+
+	category := "www-client"
+	name := "which_browser"
+
+	pkgData := &g2.PackageData{
+		Category: category,
+		Name:     name,
+		Manifest: &g2.Manifest{
+			Entries: []*g2.ManifestEntry{
+				{
+					Type:     "DIST",
+					Filename: "which_browser-0.2.6+44-linux.deb",
+				},
+			},
+		},
+	}
+
+	rule := &MissingManifestLintRule{}
+	results := rule.lintWithFS(mockFS, filepath.Join(category, name), pkgData, nil)
+
+	if len(results) > 0 {
+		t.Fatalf("expected 0 results, got %d: %v", len(results), results)
+	}
+}

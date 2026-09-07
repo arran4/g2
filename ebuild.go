@@ -223,11 +223,18 @@ func ParseEbuild(fsys fs.FS, path string, mode ParsingMode) (*Ebuild, error) {
 
 		e.ParseWarnings = append(parser.Warnings, parsedEbuild.Warnings...)
 
-		// Since variables might depend on each other, we need to iterate
-		// or at least resolve using the whole parsedVars map.
-		// Add parsed vars to e.Vars
-		for k, v := range parsedEbuild.Variables {
-			e.Vars[k] = v
+		// Evaluate assignments sequentially in source order
+		for _, assignment := range parsedEbuild.Assignments {
+			val := ResolveVariables(assignment.Value, e.Vars)
+			if assignment.Append {
+				if e.Vars[assignment.Name] != "" {
+					e.Vars[assignment.Name] += " " + val
+				} else {
+					e.Vars[assignment.Name] = val
+				}
+			} else {
+				e.Vars[assignment.Name] = val
+			}
 		}
 
 		e.Functions = make(map[string]AST)
@@ -236,21 +243,6 @@ func ParseEbuild(fsys fs.FS, path string, mode ParsingMode) (*Ebuild, error) {
 		}
 		e.orderOverride = parsedEbuild.Order
 		e.EbuildHeader = parsedEbuild.EbuildHeader
-		// Resolve all values now that all vars are added
-		// Using a multi-pass approach to resolve nested variables
-		for pass := 0; pass < 5; pass++ {
-			changed := false
-			for k, v := range e.Vars {
-				resolved := ResolveVariables(v, e.Vars)
-				if resolved != v {
-					e.Vars[k] = resolved
-					changed = true
-				}
-			}
-			if !changed {
-				break
-			}
-		}
 	}
 
 	if mode >= ParseFull {
@@ -494,13 +486,20 @@ func ParseEbuildVariables(filename string) map[string]string {
 			pvBase := gv.String()
 			gv.Revision = origRev
 
+			pvr := pvBase
+			pf := pn + "-" + pvBase
+			if origRev > 0 {
+				pvr = pvCandidate
+				pf = pn + "-" + pvCandidate
+			}
+
 			return map[string]string{
 				"PN":  pn,
 				"PV":  pvBase,
 				"P":   pn + "-" + pvBase,
 				"PR":  fmt.Sprintf("r%d", origRev),
-				"PVR": pvCandidate,
-				"PF":  pn + "-" + pvCandidate,
+				"PVR": pvr,
+				"PF":  pf,
 			}
 		}
 	}

@@ -167,6 +167,26 @@ func resolveBash(ctx context.Context, text string, variables map[string]string, 
 
 	parser := syntax.NewParser()
 
+	// 1) Evaluate it as a string literal assignment using expand.Literal FIRST.
+	// This naturally supports bash parameter expansions (%, %%, #, ##)
+	// and pure string interpolation deterministically.
+	// We only use this fast-path if there's no indication of dynamic execution logic.
+	if !strings.Contains(text, "$(") && !strings.Contains(text, "`") && !strings.Contains(text, "if ") && !strings.Contains(text, "case ") && !strings.Contains(text, "&&") && !strings.Contains(text, "||") && !strings.Contains(text, "echo ") && !strings.Contains(text, "for ") && !strings.Contains(text, "while ") && !strings.Contains(text, "elif ") && !strings.Contains(text, "printf ") {
+		safeText := strings.ReplaceAll(text, "\"", "\\\"")
+		file2, err2 := parser.Parse(strings.NewReader("dummy=\""+safeText+"\""), "")
+		if err2 == nil && len(file2.Stmts) > 0 {
+			if call, ok := file2.Stmts[0].Cmd.(*syntax.CallExpr); ok && len(call.Assigns) > 0 {
+				cfg := &expand.Config{
+					Env: environ,
+				}
+				val, err := expand.Literal(cfg, call.Assigns[0].Value)
+				if err == nil {
+					return val
+				}
+			}
+		}
+	}
+
 	// Parse as a full file and evaluate
 	file, err := parser.Parse(strings.NewReader(text), "")
 	if err == nil && len(file.Stmts) > 0 {
@@ -195,20 +215,6 @@ func resolveBash(ctx context.Context, text string, variables map[string]string, 
 				if len(out) > 0 {
 					return strings.TrimSuffix(out, "\n")
 				}
-			}
-		}
-	}
-
-	// For standard variable substitution (preserving quotes), evaluate it as a string inside a dummy assignment
-	file2, err2 := parser.Parse(strings.NewReader("dummy=\""+strings.ReplaceAll(text, "\"", "\\\"")+"\""), "")
-	if err2 == nil && len(file2.Stmts) > 0 {
-		if call, ok := file2.Stmts[0].Cmd.(*syntax.CallExpr); ok && len(call.Assigns) > 0 {
-			cfg := &expand.Config{
-				Env: environ,
-			}
-			val, err := expand.Literal(cfg, call.Assigns[0].Value)
-			if err == nil {
-				return val
 			}
 		}
 	}

@@ -166,12 +166,9 @@ func GenerateCacheFS(cfs CacheFS, repoDir string, targetPkgs []string, genEclass
 
 					// Extract PV
 					vars := ParseEbuildVariables(ebuildName)
-					pv, ok := vars["PV"]
+					pv, ok := vars["PVR"]
 					if !ok || pv == "" {
 						continue
-					}
-					if pr, ok := vars["PR"]; ok && pr != "" && pr != "r0" {
-						pv = pv + "-" + pr
 					}
 
 					cacheDir := filepath.ToSlash(filepath.Join(repoDir, "metadata", format, cat))

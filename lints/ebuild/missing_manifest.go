@@ -70,18 +70,12 @@ func (r *MissingManifestLintRule) lintWithFS(repoFS fs.FS, pkgDir string, pkg *g
 				continue
 			}
 
-			srcUriVar := parsedEbuild.Vars["SRC_URI"]
-			if srcUriVar == "" {
-				continue
-			}
-			dummyContent := fmt.Sprintf("SRC_URI=\"%s\"", srcUriVar)
-			uris, err := g2.ExtractURIs(dummyContent, parsedEbuild.Vars)
-			if err != nil {
+			if len(parsedEbuild.SrcUri) == 0 {
 				continue
 			}
 
 			var missingFiles []string
-			for _, uri := range uris {
+			for _, uri := range parsedEbuild.SrcUri {
 				if !manifestFiles[uri.Filename] {
 					missingFiles = append(missingFiles, uri.Filename)
 				}
