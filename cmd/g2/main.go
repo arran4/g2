@@ -351,7 +351,6 @@ func DownloadAndCreateManifestEntry(url, filename string, hashes []string) (*g2.
 	}
 	return entry, nil
 }
-
 func (cfg *CmdManifestArgConfig) cmdVerify(args []string, hashes []string) error {
 	fs := flag.NewFlagSet("verify", flag.ExitOnError)
 	fix := fs.Bool("fix", false, "Force fix missing manifest entries")
@@ -524,21 +523,4 @@ func (cfg *CmdManifestArgConfig) cmdClean(args []string) error {
 	}
 
 	return os.WriteFile(manifestPath, []byte(manifest.String()), 0644)
-}
-
-
-	entry := g2.NewManifestEntry("DIST", filename, checksums.Size)
-
-	// Helper to append hash if it's computed
-	appendHash := func(name, value string) {
-		if value != "" {
-			entry.AddHash(name, value)
-		}
-	}
-
-	for _, h := range g2.AllHashes {
-		appendHash(h, checksums.Hashes[h])
-	}
-
-	return g2.UpsertManifest(manifestPath, entry)
 }

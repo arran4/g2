@@ -245,7 +245,7 @@ func ParseEbuild(fsys fs.FS, path string, mode ParsingMode) (*Ebuild, error) {
 		e.EbuildHeader = parsedEbuild.EbuildHeader
 	}
 
-		if mode >= ParseFull {
+	if mode >= ParseFull {
 		if srcUriStr, ok := e.Vars["SRC_URI"]; ok {
 			e.SrcUri = ParseSrcURI(srcUriStr)
 		}
@@ -1439,11 +1439,9 @@ func ParseEbuildVariablesFromReader(r io.Reader) map[string]string {
 	return vars
 }
 
-var reInherit = regexp.MustCompile(`(?m)^[ 	]*(?:[A-Za-z0-9_]+=[^ 	;]*[ 	;]+)*inherit`)
-
 // IsSrcUriAuthoritative checks if the ebuild's SRC_URI resolution is complete and authoritative.
 func (e *Ebuild) IsSrcUriAuthoritative() bool {
-	if reInherit.MatchString(e.RawText) {
+	if strings.Contains(e.RawText, "inherit ") || strings.Contains(e.RawText, "\ninherit") || strings.HasPrefix(e.RawText, "inherit") {
 		return false
 	}
 	if len(e.ParseWarnings) > 0 {
