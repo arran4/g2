@@ -295,6 +295,7 @@ func (p *EbuildParser) Parse() (ParsedEbuild, error) {
 				if r != ')' {
 					// It's not a function declaration, probably part of a bash command like `if (( PLEVEL < 0 ))`
 					// We'll just skip the line.
+					result.HasControlFlow = true
 					p.skipLine()
 					continue
 				}
@@ -350,6 +351,8 @@ func (p *EbuildParser) Parse() (ParsedEbuild, error) {
 			}
 		} else {
 			// Not an assignment or function we care about right now at top level.
+			// Could be operator-led cases `[[ ... ]] && SRC_URI=...`
+			result.HasControlFlow = true
 			p.skipLine()
 		}
 	}

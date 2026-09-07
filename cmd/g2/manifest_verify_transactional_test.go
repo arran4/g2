@@ -130,6 +130,69 @@ fi
 		}
 	})
 
+	t.Run("Unsupported shell control-flow syntax silently treated as authoritative aborted", func(t *testing.T) {
+		dir := t.TempDir()
+		writeTestEbuild(t, dir, "foo-1.0.ebuild", `EAPI=8
+SRC_URI="" && SRC_URI="https://example.invalid/a.tar.gz"
+`)
+		originalManifest := "DIST obsolete.tar.gz 123 SHA512 abc\n"
+		writeTestManifest(t, dir, originalManifest)
+
+		cfg := &CmdManifestArgConfig{}
+		err := cfg.cmdVerify([]string{"--fix", "--clean", dir}, hashes)
+		if err == nil {
+			t.Fatalf("cmdVerify expected to abort due to control flow `&&`")
+		}
+		b, _ := os.ReadFile(filepath.Join(dir, "Manifest"))
+		if string(b) != originalManifest {
+			t.Errorf("Manifest modified despite uncertainty! Got:\n%s", string(b))
+		}
+	})
+
+	t.Run("Revisioned P vs PF filenames reconciliation coverage", func(t *testing.T) {
+		dir := t.TempDir()
+		writeTestEbuild(t, dir, "foo-1.0-r1.ebuild", fmt.Sprintf(`EAPI=8
+DESCRIPTION="foo"
+SLOT="0"
+SRC_URI="%s/good.tar.gz -> ${PF}.tar.gz
+%s/missing.tar.gz -> ${P}.tar.gz"
+`, ts.URL, ts.URL))
+		writeTestManifest(t, dir, "")
+		cfg := &CmdManifestArgConfig{}
+		err := cfg.cmdVerify([]string{"--fix", dir}, hashes)
+		if err != nil {
+			t.Fatalf("cmdVerify failed: %v", err)
+		}
+		b, _ := os.ReadFile(filepath.Join(dir, "Manifest"))
+		result := string(b)
+		if !strings.Contains(result, "foo-1.0-r1.tar.gz") {
+			t.Errorf("Expected PF resolution (foo-1.0-r1.tar.gz): %s", result)
+		}
+		if !strings.Contains(result, "foo-1.0.tar.gz") {
+			t.Errorf("Expected P resolution (foo-1.0.tar.gz): %s", result)
+		}
+	})
+
+	t.Run("AtomicWriteManifest failure test", func(t *testing.T) {
+		dir := t.TempDir()
+		writeTestEbuild(t, dir, "foo-1.0.ebuild", fmt.Sprintf(`EAPI=8
+DESCRIPTION="foo"
+SLOT="0"
+SRC_URI="%s/good.tar.gz -> good.tar.gz"
+`, ts.URL))
+		writeTestManifest(t, dir, "")
+
+		// Create a directory at Manifest so write fails
+		os.Remove(filepath.Join(dir, "Manifest"))
+		os.Mkdir(filepath.Join(dir, "Manifest"), 0755)
+
+		cfg := &CmdManifestArgConfig{}
+		err := cfg.cmdVerify([]string{"--fix", "--clean", dir}, hashes)
+		if err == nil {
+			t.Fatalf("cmdVerify expected to fail on writing manifest")
+		}
+	})
+
 	t.Run("Valid conditional source lists plus malformed groups/rename targets", func(t *testing.T) {
 		dir := t.TempDir()
 		writeTestEbuild(t, dir, "foo-1.0.ebuild", `EAPI=8

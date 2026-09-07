@@ -47,3 +47,34 @@ func TestDeduplicateEbuildsRegression(t *testing.T) {
 		t.Errorf("Expected good.tar.gz to be preserved in manifest, got: %s", result)
 	}
 }
+
+func TestDeduplicateEbuildsWriteErrorRegression(t *testing.T) {
+	dir := t.TempDir()
+
+	writeTestEbuild(t, dir, "foo-1.0.ebuild", `EAPI=8
+DESCRIPTION="foo"
+SLOT="0"
+SRC_URI="https://example.com/good.tar.gz"
+`)
+
+	writeTestEbuild(t, dir, "foo-2.0.ebuild", `EAPI=8
+DESCRIPTION="foo"
+SLOT="0"
+SRC_URI="https://example.com/good.tar.gz"
+`)
+
+	writeTestManifest(t, dir, "DIST good.tar.gz 123 SHA512 abc\n")
+
+	// Make writing fail
+	os.Remove(filepath.Join(dir, "Manifest"))
+	os.Mkdir(filepath.Join(dir, "Manifest"), 0755)
+
+	removed, err := DeduplicateEbuilds([]string{dir})
+	if err == nil {
+		t.Fatalf("DeduplicateEbuilds expected to fail due to error")
+	}
+
+	if len(removed) != 1 || filepath.Base(removed[0]) != "foo-1.0.ebuild" {
+		t.Fatalf("Expected foo-1.0.ebuild to be removed before failure, got: %v", removed)
+	}
+}
