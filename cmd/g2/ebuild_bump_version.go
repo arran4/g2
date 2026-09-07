@@ -48,9 +48,9 @@ func (cfg *CmdEbuildArgConfig) cmdEbuildBumpVersion(args []string) error {
 		if fs.NArg() > 1 {
 			return fmt.Errorf("cannot specify both bump flags and a manual new-version")
 		}
-		gv := g2.ParseGentooVersion(vars["PV"])
+		gv := g2.ParseGentooVersion(vars["PVR"])
 		if !gv.IsValid {
-			return fmt.Errorf("could not parse version %s for incrementing", vars["PV"])
+			return fmt.Errorf("could not parse version %s for incrementing", vars["PVR"])
 		}
 
 		if *bumpRevision {

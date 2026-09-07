@@ -27,12 +27,12 @@ func checkEbuildExists(dir, version string) (bool, error) {
 
 		// Use ParseEbuildVariables to safely extract PV based on Gentoo package naming rules
 		vars := g2.ParseEbuildVariables(name)
-		if vars == nil || vars["PV"] == "" {
+		if vars == nil || vars["PVR"] == "" {
 			continue
 		}
 
 		// Compare base versions. We need to parse PV to remove revision.
-		gv := g2.ParseGentooVersion(vars["PV"])
+		gv := g2.ParseGentooVersion(vars["PVR"])
 		origRev := gv.Revision
 		gv.Revision = 0
 		base := gv.String()

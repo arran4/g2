@@ -320,22 +320,16 @@ func compareVersions(args []string) error {
 	if strings.HasSuffix(v1Str, ".ebuild") {
 		vars := g2.ParseEbuildVariables(v1Str)
 		if vars != nil {
-			if pv, ok := vars["PV"]; ok {
-				v1Str = pv
-				if pr, ok := vars["PR"]; ok && pr != "r0" {
-					v1Str += "-" + pr
-				}
+			if pvr, ok := vars["PVR"]; ok {
+				v1Str = pvr
 			}
 		}
 	}
 	if strings.HasSuffix(v2Str, ".ebuild") {
 		vars := g2.ParseEbuildVariables(v2Str)
 		if vars != nil {
-			if pv, ok := vars["PV"]; ok {
-				v2Str = pv
-				if pr, ok := vars["PR"]; ok && pr != "r0" {
-					v2Str += "-" + pr
-				}
+			if pvr, ok := vars["PVR"]; ok {
+				v2Str = pvr
 			}
 		}
 	}
@@ -381,23 +375,15 @@ func parseBumpTarget(target string) string {
 			entries, err := os.ReadDir(target)
 			if err == nil {
 				var highestVersion string
-				var builder strings.Builder
 				for _, entry := range entries {
 					if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".ebuild") {
 						continue
 					}
 					vars := g2.ParseEbuildVariables(entry.Name())
 					if vars != nil {
-						if pv, ok := vars["PV"]; ok {
-							builder.Reset()
-							builder.WriteString(pv)
-							if pr, ok := vars["PR"]; ok && pr != "r0" {
-								builder.WriteString("-")
-								builder.WriteString(pr)
-							}
-							vStr := builder.String()
-							if highestVersion == "" || g2.CompareVersions(vStr, highestVersion) > 0 {
-								highestVersion = vStr
+						if pvr, ok := vars["PVR"]; ok {
+							if highestVersion == "" || g2.CompareVersions(pvr, highestVersion) > 0 {
+								highestVersion = pvr
 							}
 						}
 					}
@@ -409,12 +395,8 @@ func parseBumpTarget(target string) string {
 		} else if strings.HasSuffix(target, ".ebuild") {
 			vars := g2.ParseEbuildVariables(target)
 			if vars != nil {
-				if pv, ok := vars["PV"]; ok {
-					res := pv
-					if pr, ok := vars["PR"]; ok && pr != "r0" {
-						res += "-" + pr
-					}
-					return res
+				if pvr, ok := vars["PVR"]; ok {
+					return pvr
 				}
 			}
 		}

@@ -125,7 +125,7 @@ func getNextRevision(dir, version string, inspectFile string) (string, int, erro
 		}
 
 		vars := g2.ParseEbuildVariables(name)
-		if vars == nil || vars["PV"] == "" {
+		if vars == nil || vars["PVR"] == "" {
 			continue
 		}
 

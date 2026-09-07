@@ -317,6 +317,7 @@ func (p *EbuildParser) Parse() (ParsedEbuild, error) {
 					} else {
 						result.Variables["INHERITED"] = val
 					}
+					result.Assignments = append(result.Assignments, VariableAssignment{Name: "INHERITED", Value: val, Append: true})
 				} else if ident == "if" || ident == "elif" || ident == "while" || ident == "until" || ident == "for" || ident == "case" {
 					// These reserved words open bash blocks, we shouldn't skip the whole line blindly
 					// and just ignore the keyword itself so the parser continues into the block

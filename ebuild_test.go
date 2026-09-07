@@ -1669,3 +1669,40 @@ D="${B}-${C}"
 		t.Errorf("D = %q, want abc.def-ghi", parsed.Vars["D"])
 	}
 }
+
+func TestParseEbuildVariables_WhichBrowser_Integration(t *testing.T) {
+	mockFS := fstest.MapFS{
+		"which_browser-0.2.6.44-r1.ebuild": &fstest.MapFile{
+			Data: []byte(`
+MY_PV_NO_REV="${PV%%-r*}"
+MY_BASE_PV="${MY_PV_NO_REV%.*}"
+MY_BUILD_SUFFIX="${MY_PV_NO_REV##*.}"
+MY_DEB_ARCHIVE="${PN}-${MY_BASE_PV}+${MY_BUILD_SUFFIX}-linux.deb"
+SRC_URI="https://which-browser-site.pages.dev/downloads/v${MY_BASE_PV}/${MY_DEB_ARCHIVE}"
+`),
+		},
+	}
+
+	parsed, err := ParseEbuild(mockFS, "which_browser-0.2.6.44-r1.ebuild", ParseFull)
+	if err != nil {
+		t.Fatalf("ParseEbuild failed: %v", err)
+	}
+
+	if parsed.Vars["MY_BASE_PV"] != "0.2.6" {
+		t.Errorf("MY_BASE_PV = %q, want 0.2.6", parsed.Vars["MY_BASE_PV"])
+	}
+	if parsed.Vars["MY_BUILD_SUFFIX"] != "44" {
+		t.Errorf("MY_BUILD_SUFFIX = %q, want 44", parsed.Vars["MY_BUILD_SUFFIX"])
+	}
+	if parsed.Vars["MY_DEB_ARCHIVE"] != "which_browser-0.2.6+44-linux.deb" {
+		t.Errorf("MY_DEB_ARCHIVE = %q, want which_browser-0.2.6+44-linux.deb", parsed.Vars["MY_DEB_ARCHIVE"])
+	}
+
+	if len(parsed.SrcUri) == 0 {
+		t.Fatalf("SrcUri is empty")
+	}
+
+	if parsed.SrcUri[0].Filename != "which_browser-0.2.6+44-linux.deb" {
+		t.Errorf("SrcUri[0].Filename = %q, want which_browser-0.2.6+44-linux.deb", parsed.SrcUri[0].Filename)
+	}
+}
