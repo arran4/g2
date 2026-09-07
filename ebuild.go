@@ -245,11 +245,10 @@ func ParseEbuild(fsys fs.FS, path string, mode ParsingMode) (*Ebuild, error) {
 		e.EbuildHeader = parsedEbuild.EbuildHeader
 	}
 
-	if mode >= ParseFull {
-		uris, _ := ExtractURIs(content, e.Vars)
-		// Don't fail hard on URI extraction?
-		// The user said "partial implementation".
-		e.SrcUri = uris
+		if mode >= ParseFull {
+		if srcUriStr, ok := e.Vars["SRC_URI"]; ok {
+			e.SrcUri = ParseSrcURI(srcUriStr)
+		}
 	}
 
 	return e, nil
@@ -1440,16 +1439,48 @@ func ParseEbuildVariablesFromReader(r io.Reader) map[string]string {
 	return vars
 }
 
-var reInherit = regexp.MustCompile(`(?m)^[ \t]*inherit\b`)
+var reInherit = regexp.MustCompile(`(?m)^[ 	]*(?:[A-Za-z0-9_]+=[^ 	;]*[ 	;]+)*inherit`)
 
 // IsSrcUriAuthoritative checks if the ebuild's SRC_URI resolution is complete and authoritative.
 func (e *Ebuild) IsSrcUriAuthoritative() bool {
 	if reInherit.MatchString(e.RawText) {
 		return false
 	}
+	if len(e.ParseWarnings) > 0 {
+		return false
+	}
 	srcUriStr := e.Vars["SRC_URI"]
-	if strings.Contains(srcUriStr, "$(") || strings.Contains(srcUriStr, "`") {
+	if strings.Contains(srcUriStr, "$") || strings.Contains(srcUriStr, "`") {
 		return false
 	}
 	return true
+}
+
+// ParseSrcURI parses the evaluated SRC_URI string into structured URI entries.
+func ParseSrcURI(srcUriStr string) []URIEntry {
+	var uris []URIEntry
+	tokens := strings.Fields(srcUriStr)
+	i := 0
+	for i < len(tokens) {
+		token := tokens[i]
+
+		// If the token is '->' it's a syntax error in the string structure without a preceding URL
+		if token == "->" {
+			i++
+			continue
+		}
+
+		url := token
+		filename := filepath.Base(url)
+
+		if i+2 < len(tokens) && tokens[i+1] == "->" {
+			filename = tokens[i+2]
+			i += 3
+		} else {
+			i += 1
+		}
+
+		uris = append(uris, URIEntry{URL: url, Filename: filename})
+	}
+	return uris
 }

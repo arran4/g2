@@ -2,6 +2,7 @@ package g2
 
 import (
 	"os"
+	"path/filepath"
 )
 
 // UpsertManifest updates or inserts a manifest entry.
@@ -20,9 +21,36 @@ func UpsertManifest(manifestPath string, newEntry *ManifestEntry) error {
 
 // AtomicWriteManifest atomically writes the given manifest to the specified path.
 func AtomicWriteManifest(manifestPath string, m *Manifest) error {
-	tmpPath := manifestPath + ".tmp"
-	if err := os.WriteFile(tmpPath, []byte(m.String()), 0644); err != nil {
+	dir := filepath.Dir(manifestPath)
+	tmpFile, err := os.CreateTemp(dir, "Manifest.*.tmp")
+	if err != nil {
 		return err
 	}
-	return os.Rename(tmpPath, manifestPath)
+	tmpPath := tmpFile.Name()
+
+	// Ensure we clean up temp file on failure
+	defer func() {
+		tmpFile.Close()
+		os.Remove(tmpPath)
+	}()
+
+	if err := tmpFile.Chmod(0644); err != nil {
+		return err
+	}
+
+	if _, err := tmpFile.Write([]byte(m.String())); err != nil {
+		return err
+	}
+
+	if err := tmpFile.Close(); err != nil {
+		return err
+	}
+
+	// Rename over the old file
+	if err := os.Rename(tmpPath, manifestPath); err != nil {
+		return err
+	}
+
+	// Success, avoid defer remove since it's renamed
+	return nil
 }

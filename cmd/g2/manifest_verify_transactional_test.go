@@ -34,11 +34,11 @@ func TestCmdVerifyTransactional(t *testing.T) {
 			return
 		}
 		if r.URL.Path == "/good.tar.gz" {
-			w.Write([]byte("good data"))
+			_, _ = w.Write([]byte("good data"))
 			return
 		}
 		if r.URL.Path == "/missing.tar.gz" {
-			w.Write([]byte("missing data"))
+			_, _ = w.Write([]byte("missing data"))
 			return
 		}
 		w.WriteHeader(http.StatusNotFound)
@@ -194,7 +194,7 @@ SRC_URI="%s/good.tar.gz -> good.tar.gz"
 
 func TestCmdUpsertFromUrl(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("good data"))
+		_, _ = w.Write([]byte("good data"))
 	}))
 	defer ts.Close()
 

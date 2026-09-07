@@ -203,8 +203,12 @@ func DeduplicateEbuilds(targets []string) ([]string, error) {
 					err := CleanManifest(os.DirFS(pkgDir), ".", manifest)
 					if err != nil {
 						log.Printf("DeduplicateEbuilds: %v", err)
+					} else {
+						err = AtomicWriteManifest(manifestPath, manifest)
+						if err != nil {
+							log.Printf("DeduplicateEbuilds manifest write error: %v", err)
+						}
 					}
-					_ = AtomicWriteManifest(manifestPath, manifest)
 				}
 			} else {
 				_ = os.Remove(manifestPath)

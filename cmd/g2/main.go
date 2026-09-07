@@ -526,11 +526,6 @@ func (cfg *CmdManifestArgConfig) cmdClean(args []string) error {
 	return os.WriteFile(manifestPath, []byte(manifest.String()), 0644)
 }
 
-func (cfg *CmdManifestArgConfig) upsertFromUrlLogic(url, filename, manifestPath string, hashes []string) error {
-	checksums, err := g2.DownloadAndChecksum(url, hashes)
-	if err != nil {
-		return fmt.Errorf("downloading and calculating checksums for %s: %w", url, err)
-	}
 
 	entry := g2.NewManifestEntry("DIST", filename, checksums.Size)
 
