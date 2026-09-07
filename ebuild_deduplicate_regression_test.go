@@ -66,8 +66,8 @@ SRC_URI="https://example.com/good.tar.gz"
 	writeTestManifest(t, dir, "DIST good.tar.gz 123 SHA512 abc\n")
 
 	// Make writing fail
-	os.Remove(filepath.Join(dir, "Manifest"))
-	os.Mkdir(filepath.Join(dir, "Manifest"), 0755)
+	_ = os.Remove(filepath.Join(dir, "Manifest"))
+	_ = os.Mkdir(filepath.Join(dir, "Manifest"), 0755)
 
 	removed, err := DeduplicateEbuilds([]string{dir})
 	if err == nil {

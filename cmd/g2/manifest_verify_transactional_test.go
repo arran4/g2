@@ -183,8 +183,8 @@ SRC_URI="%s/good.tar.gz -> good.tar.gz"
 		writeTestManifest(t, dir, "")
 
 		// Create a directory at Manifest so write fails
-		os.Remove(filepath.Join(dir, "Manifest"))
-		os.Mkdir(filepath.Join(dir, "Manifest"), 0755)
+		_ = os.Remove(filepath.Join(dir, "Manifest"))
+		_ = os.Mkdir(filepath.Join(dir, "Manifest"), 0755)
 
 		cfg := &CmdManifestArgConfig{}
 		err := cfg.cmdVerify([]string{"--fix", "--clean", dir}, hashes)
