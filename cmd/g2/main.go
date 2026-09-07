@@ -318,44 +318,14 @@ func (cfg *CmdManifestArgConfig) cmdUpsertFromUrl(args []string, hashes []string
 	filename := args[1]
 	ebuildDirOrFile := args[2]
 
-	// Logic to be moved to a reusable function if we want to reuse it in verify --fix
-	// For now I'll just keep it here and maybe call this function or copy logic.
-
-	checksums, err := g2.DownloadAndChecksum(url, hashes)
+	entry, err := DownloadAndCreateManifestEntry(url, filename, hashes)
 	if err != nil {
-		return fmt.Errorf("downloading and calculating checksums for %s: %w", url, err)
-	}
-
-	var sb strings.Builder
-	fmt.Fprintf(&sb, "DIST %s %d", filename, checksums.Size)
-
-	// Helper to append hash if it's computed
-	appendHash := func(name, value string) {
-		if value != "" {
-			fmt.Fprintf(&sb, " %s %s", name, value)
-		}
-	}
-
-	for _, h := range g2.AllHashes {
-		appendHash(h, checksums.Hashes[h])
+		return err
 	}
 
 	manifestPath := ebuildDirOrFile
 	if _, file := filepath.Split(manifestPath); file != "Manifest" {
 		manifestPath = filepath.Join(ebuildDirOrFile, "Manifest")
-	}
-
-	entry := g2.NewManifestEntry("DIST", filename, checksums.Size)
-
-	// Helper to append hash if it's computed
-	appendHashToEntry := func(name, value string) {
-		if value != "" {
-			entry.AddHash(name, value)
-		}
-	}
-
-	for _, h := range g2.AllHashes {
-		appendHashToEntry(h, checksums.Hashes[h])
 	}
 
 	err = g2.UpsertManifest(manifestPath, entry)
@@ -365,6 +335,21 @@ func (cfg *CmdManifestArgConfig) cmdUpsertFromUrl(args []string, hashes []string
 
 	log.Printf("Done")
 	return nil
+}
+
+func DownloadAndCreateManifestEntry(url, filename string, hashes []string) (*g2.ManifestEntry, error) {
+	checksums, err := g2.DownloadAndChecksum(url, hashes)
+	if err != nil {
+		return nil, fmt.Errorf("downloading and calculating checksums for %s: %w", url, err)
+	}
+
+	entry := g2.NewManifestEntry("DIST", filename, checksums.Size)
+	for _, h := range g2.AllHashes {
+		if val, ok := checksums.Hashes[h]; ok && val != "" {
+			entry.AddHash(h, val)
+		}
+	}
+	return entry, nil
 }
 
 func (cfg *CmdManifestArgConfig) cmdVerify(args []string, hashes []string) error {
@@ -381,8 +366,6 @@ func (cfg *CmdManifestArgConfig) cmdVerify(args []string, hashes []string) error
 	}
 
 	target := fs.Arg(0)
-
-	// Determine manifest path and directory
 	var manifestPath, directory string
 	info, err := os.Stat(target)
 	if err != nil {
@@ -399,19 +382,25 @@ func (cfg *CmdManifestArgConfig) cmdVerify(args []string, hashes []string) error
 
 	log.Printf("Processing directory: %s", directory)
 
-	// Load Manifest
 	manifest, err := g2.ParseManifest(manifestPath)
 	if err != nil {
 		return fmt.Errorf("reading manifest: %w", err)
 	}
 
-	// Find all ebuilds
 	entries, err := os.ReadDir(directory)
 	if err != nil {
 		return fmt.Errorf("reading directory: %w", err)
 	}
 
 	foundFiles := make(map[string]bool)
+	sysFS := os.DirFS(directory)
+
+	type MissingEntry struct {
+		URL      string
+		Filename string
+	}
+	var missing []MissingEntry
+	uncertain := false
 
 	for _, entry := range entries {
 		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".ebuild") {
@@ -420,55 +409,52 @@ func (cfg *CmdManifestArgConfig) cmdVerify(args []string, hashes []string) error
 
 		ebuildName := entry.Name()
 		foundFiles[ebuildName] = true
-		log.Printf("  Parsing %s...", ebuildName)
 
 		if manifestEntry := manifest.GetEntry(ebuildName); manifestEntry == nil {
 			log.Printf("    MISSING in manifest: %s", ebuildName)
 		}
 
-		variables := g2.ParseEbuildVariables(ebuildName)
-		if variables == nil {
-			log.Printf("  Skipping %s: Could not parse version/name.", ebuildName)
+		e, err := g2.ParseEbuild(sysFS, ebuildName, g2.ParseFull)
+		if err != nil {
+			log.Printf("  Uncertain %s: Could not parse ebuild: %v", ebuildName, err)
+			uncertain = true
 			continue
 		}
 
-		content, err := os.ReadFile(filepath.Join(directory, ebuildName))
-		if err != nil {
-			return fmt.Errorf("reading ebuild %s: %w", ebuildName, err)
+		if !e.IsSrcUriAuthoritative() {
+			log.Printf("  Uncertain %s: sources incomplete or not authoritative", ebuildName)
+			uncertain = true
 		}
 
-		uris, err := g2.ExtractURIs(string(content), variables)
-		if err != nil {
-			// Log error but maybe continue?
-			log.Printf("    Error extracting URIs from %s: %v", ebuildName, err)
-			continue
-		}
-
-		for _, uri := range uris {
+		for _, uri := range e.SrcUri {
 			foundFiles[uri.Filename] = true
 
 			if entry := manifest.GetEntry(uri.Filename); entry != nil {
-				// Entry exists.
-				// In a full verify we might want to check checksums if file exists locally,
-				// but the prompt implies verifying the manifest *entries* exist for the ebuilds.
-				// The prompt says "with a force fix", which implies if it's missing, we fix it.
-				// The python script calls upsert-from-url.
-				log.Printf("    Found in manifest: %s", uri.Filename)
+				// exists
 			} else {
 				log.Printf("    MISSING in manifest: %s (URL: %s)", uri.Filename, uri.URL)
-				if *fix {
-					log.Printf("    Upserting: %s -> %s", uri.URL, uri.Filename)
-					// Reuse logic from upsert-from-url
-					// We need to call internal logic, not the CLI command ideally, but I can call cmdUpsertFromUrl
-					// or refactor the logic.
-					// I'll call a helper function.
-
-					err := cfg.upsertFromUrlLogic(uri.URL, uri.Filename, manifestPath, hashes)
-					if err != nil {
-						log.Printf("    Error updating manifest for %s: %v", uri.URL, err)
-					}
-				}
+				missing = append(missing, MissingEntry{URL: uri.URL, Filename: uri.Filename})
 			}
+		}
+	}
+
+	if uncertain {
+		if *fix || *clean {
+			return fmt.Errorf("aborting: source resolution is incomplete or uncertain")
+		}
+	}
+
+	manifestModified := false
+
+	if *fix {
+		for _, m := range missing {
+			log.Printf("    Upserting: %s -> %s", m.URL, m.Filename)
+			newEntry, err := DownloadAndCreateManifestEntry(m.URL, m.Filename, hashes)
+			if err != nil {
+				return fmt.Errorf("aborting: error updating manifest for %s: %w", m.URL, err)
+			}
+			manifest.AddOrReplace(newEntry)
+			manifestModified = true
 		}
 	}
 
@@ -481,15 +467,23 @@ func (cfg *CmdManifestArgConfig) cmdVerify(args []string, hashes []string) error
 	}
 
 	if *clean {
-		// Run clean logic
-		err = g2.CleanManifest(os.DirFS(directory), ".", manifest)
-		if err != nil {
-			return fmt.Errorf("cleaning manifest: %w", err)
+		var filesToRemove []string
+		for _, entry := range manifest.Entries {
+			if (entry.Type == "DIST" || entry.Type == "EBUILD") && !foundFiles[entry.Filename] {
+				filesToRemove = append(filesToRemove, entry.Filename)
+			}
 		}
+		for _, filename := range filesToRemove {
+			manifest.Remove(filename)
+			manifestModified = true
+		}
+	}
 
-		err = os.WriteFile(manifestPath, []byte(manifest.String()), 0644)
+	if manifestModified {
+		manifest.Sort()
+		err = g2.AtomicWriteManifest(manifestPath, manifest)
 		if err != nil {
-			return fmt.Errorf("writing clean manifest: %w", err)
+			return fmt.Errorf("writing manifest: %w", err)
 		}
 	}
 

@@ -1439,3 +1439,17 @@ func ParseEbuildVariablesFromReader(r io.Reader) map[string]string {
 	}
 	return vars
 }
+
+var reInherit = regexp.MustCompile(`(?m)^[ \t]*inherit\b`)
+
+// IsSrcUriAuthoritative checks if the ebuild's SRC_URI resolution is complete and authoritative.
+func (e *Ebuild) IsSrcUriAuthoritative() bool {
+	if reInherit.MatchString(e.RawText) {
+		return false
+	}
+	srcUriStr := e.Vars["SRC_URI"]
+	if strings.Contains(srcUriStr, "$(") || strings.Contains(srcUriStr, "`") {
+		return false
+	}
+	return true
+}

@@ -16,6 +16,7 @@ func CleanManifest(sysFS fs.FS, directory string, manifest *Manifest) error {
 	}
 
 	foundFiles := make(map[string]bool)
+	var uncertainEbuilds []string
 
 	for _, entry := range entries {
 		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".ebuild") {
@@ -23,26 +24,26 @@ func CleanManifest(sysFS fs.FS, directory string, manifest *Manifest) error {
 		}
 
 		ebuildName := entry.Name()
+
+		e, err := ParseEbuild(sysFS, path.Join(directory, ebuildName), ParseFull)
+		if err != nil {
+			uncertainEbuilds = append(uncertainEbuilds, ebuildName)
+			continue
+		}
+
+		if !e.IsSrcUriAuthoritative() {
+			uncertainEbuilds = append(uncertainEbuilds, ebuildName)
+			continue
+		}
+
 		foundFiles[ebuildName] = true
-
-		variables := ParseEbuildVariables(ebuildName)
-		if variables == nil {
-			continue
-		}
-
-		content, err := fs.ReadFile(sysFS, path.Join(directory, ebuildName))
-		if err != nil {
-			return fmt.Errorf("reading ebuild %s: %w", ebuildName, err)
-		}
-
-		uris, err := ExtractURIs(string(content), variables)
-		if err != nil {
-			continue
-		}
-
-		for _, uri := range uris {
+		for _, uri := range e.SrcUri {
 			foundFiles[uri.Filename] = true
 		}
+	}
+
+	if len(uncertainEbuilds) > 0 {
+		return fmt.Errorf("skipped cleanup: directory contains uncertain ebuilds: %v", uncertainEbuilds)
 	}
 
 	var filesToRemove []string
