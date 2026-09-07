@@ -19,6 +19,8 @@ func UpsertManifest(manifestPath string, newEntry *ManifestEntry) error {
 	return AtomicWriteManifest(manifestPath, m)
 }
 
+var AtomicWriteManifestFunc = AtomicWriteManifest
+
 // AtomicWriteManifest atomically writes the given manifest to the specified path.
 func AtomicWriteManifest(manifestPath string, m *Manifest) error {
 	dir := filepath.Dir(manifestPath)

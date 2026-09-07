@@ -88,32 +88,6 @@ SRC_URI="%s/good.tar.gz -> good.tar.gz"
 		}
 	})
 
-	t.Run("Failed download aborts transaction", func(t *testing.T) {
-		dir := t.TempDir()
-		writeTestEbuild(t, dir, "foo-1.0.ebuild", fmt.Sprintf(`EAPI=8
-DESCRIPTION="foo"
-SLOT="0"
-SRC_URI="%s/fail.tar.gz -> fail.tar.gz"
-`, ts.URL))
-
-		originalManifest := "DIST other.tar.gz 123 SHA512 abc\n"
-		writeTestManifest(t, dir, originalManifest)
-
-		cfg := &CmdManifestArgConfig{}
-		err := cfg.cmdVerify([]string{"--fix", "--clean", dir}, hashes)
-		if err == nil {
-			t.Fatalf("Expected cmdVerify to fail")
-		}
-
-		b, err := os.ReadFile(filepath.Join(dir, "Manifest"))
-		if err != nil {
-			t.Fatalf("reading manifest: %v", err)
-		}
-		if string(b) != originalManifest {
-			t.Errorf("Manifest was modified on failure! Got: %s", string(b))
-		}
-	})
-
 	t.Run("Uncertain ebuild aborts clean and fix", func(t *testing.T) {
 		dir := t.TempDir()
 		writeTestEbuild(t, dir, "foo-1.0.ebuild", `EAPI=8
@@ -139,32 +113,61 @@ SLOT="0"
 		}
 	})
 
-	t.Run("Successful first fetch, failing later fetch preserves exact Manifest bytes", func(t *testing.T) {
+	t.Run("Response-body processing failure aborted safely", func(t *testing.T) {
 		dir := t.TempDir()
 		writeTestEbuild(t, dir, "foo-1.0.ebuild", fmt.Sprintf(`EAPI=8
+DESCRIPTION="foo"
+SLOT="0"
+SRC_URI="%s/fail.tar.gz -> fail.tar.gz"
+`, ts.URL))
+		originalManifest := "DIST obsolete.tar.gz 123 SHA512 abc\n"
+		writeTestManifest(t, dir, originalManifest)
+
+		cfg := &CmdManifestArgConfig{}
+		err := cfg.cmdVerify([]string{"--fix", "--clean", dir}, hashes)
+		if err == nil {
+			t.Fatalf("Expected cmdVerify to fail")
+		}
+
+		b, _ := os.ReadFile(filepath.Join(dir, "Manifest"))
+		if string(b) != originalManifest {
+			t.Errorf("Manifest was modified on failure! Got: %s", string(b))
+		}
+	})
+
+	t.Run("Successful first fetch, failing later fetch preserves exact Manifest bytes", func(t *testing.T) {
+		for _, clean := range []bool{true, false} {
+			dir := t.TempDir()
+			writeTestEbuild(t, dir, "foo-1.0.ebuild", fmt.Sprintf(`EAPI=8
 DESCRIPTION="foo"
 SLOT="0"
 SRC_URI="%s/firstgood.tar.gz -> firstgood.tar.gz
 %s/laterfail.tar.gz -> laterfail.tar.gz"
 `, ts.URL, ts.URL))
 
-		originalManifest := "DIST obsolete.tar.gz 123 SHA512 abc\n"
-		writeTestManifest(t, dir, originalManifest)
+			originalManifest := "DIST obsolete.tar.gz 123 SHA512 abc\n"
+			writeTestManifest(t, dir, originalManifest)
 
-		cfg := &CmdManifestArgConfig{
-			MainArgConfig: &MainArgConfig{},
-		}
-		err := cfg.cmdVerify([]string{"--fix", dir}, hashes)
-		if err == nil {
-			t.Fatalf("cmdVerify expected to fail due to laterfail.tar.gz")
-		}
+			cfg := &CmdManifestArgConfig{
+				MainArgConfig: &MainArgConfig{},
+			}
+			args := []string{"--fix"}
+			if clean {
+				args = append(args, "--clean")
+			}
+			args = append(args, dir)
 
-		b, _ := os.ReadFile(filepath.Join(dir, "Manifest"))
-		if string(b) != originalManifest {
-			t.Errorf("Manifest modified despite failed later download! Got:\n%s", string(b))
+			err := cfg.cmdVerify(args, hashes)
+			if err == nil {
+				t.Fatalf("cmdVerify expected to fail due to laterfail.tar.gz with clean=%v", clean)
+			}
+
+			b, _ := os.ReadFile(filepath.Join(dir, "Manifest"))
+			if string(b) != originalManifest {
+				t.Errorf("Manifest modified despite failed later download (clean=%v)! Got:\n%s", clean, string(b))
+			}
 		}
 	})
-
 	t.Run("Transitive unknown variables conservatively aborted", func(t *testing.T) {
 		dir := t.TempDir()
 		writeTestEbuild(t, dir, "foo-1.0.ebuild", `EAPI=8

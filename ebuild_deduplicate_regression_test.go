@@ -3,7 +3,6 @@ package g2
 import (
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 )
 
@@ -27,7 +26,8 @@ func TestDeduplicateEbuildsRegression(t *testing.T) {
 	writeTestEbuild(t, dir, "foo-1.0.ebuild", "EAPI=8\nDESCRIPTION=\"foo\"\nSLOT=\"0\"\nSRC_URI=\"https://example.com/good.tar.gz\"\n")
 	writeTestEbuild(t, dir, "foo-1.0-r1.ebuild", "EAPI=8\nif true; then inherit pypi; fi\nDESCRIPTION=\"foo\"\nSLOT=\"0\"\n")
 
-	writeTestManifest(t, dir, "DIST good.tar.gz 123 SHA512 abc\n")
+	originalManifest := "# Comments\n\nDIST good.tar.gz 123 SHA512 abc  \n"
+	writeTestManifest(t, dir, originalManifest)
 
 	removed, err := DeduplicateEbuilds([]string{dir})
 	if err != nil {
@@ -38,15 +38,21 @@ func TestDeduplicateEbuildsRegression(t *testing.T) {
 		t.Fatalf("Expected foo-1.0.ebuild to be removed, removed: %v", removed)
 	}
 
+	if _, err := os.Stat(filepath.Join(dir, "foo-1.0-r1.ebuild")); err != nil {
+		t.Fatalf("Expected foo-1.0-r1.ebuild to be retained")
+	}
+
 	b, err := os.ReadFile(filepath.Join(dir, "Manifest"))
 	if err != nil {
 		t.Fatalf("reading manifest: %v", err)
 	}
 	result := string(b)
-	if !strings.Contains(result, "DIST good.tar.gz") {
-		t.Errorf("Expected good.tar.gz to be preserved in manifest, got: %s", result)
+	if result != originalManifest {
+		t.Errorf("Expected exactly preserved manifest bytes, got:\n%q\nwant:\n%q", result, originalManifest)
 	}
 }
+
+var originalAtomicWriteManifest = AtomicWriteManifestFunc
 
 func TestDeduplicateEbuildsWriteErrorRegression(t *testing.T) {
 	dir := t.TempDir()
@@ -55,14 +61,20 @@ func TestDeduplicateEbuildsWriteErrorRegression(t *testing.T) {
 	writeTestEbuild(t, dir, "foo-2.0.ebuild", "EAPI=8\nDESCRIPTION=\"foo\"\nSLOT=\"0\"\nSRC_URI=\"https://example.com/good.tar.gz\"\n")
 	writeTestManifest(t, dir, "DIST good.tar.gz 123 SHA512 abc\n")
 
-	// Set dir read-only so write fails AFTER parse? No, ParseManifest reads successfully.
-	// AtomicWriteManifest calls CreateTemp which fails if dir is read-only.
-	// We need to wait for DeduplicateEbuilds to read the manifest, then make it read-only. That's racy.
-	// Instead, let's create a directory named Manifest, which will cause ParseManifest to FAIL, returning read error.
-	// But the user requested testing the WRITE error, and returning the removed paths on write failure.
+	// Inject a write failure
+	AtomicWriteManifestFunc = func(path string, m *Manifest) error {
+		return os.ErrPermission
+	}
+	defer func() { AtomicWriteManifestFunc = originalAtomicWriteManifest }()
 
-	// Actually, DeduplicateEbuilds parses the manifest, then cleans it, then atomic writes it.
-	// We can replace the AtomicWriteManifest logic test with a standalone test.
+	removed, err := DeduplicateEbuilds([]string{dir})
+	if err == nil {
+		t.Fatalf("DeduplicateEbuilds expected to fail due to write error")
+	}
+
+	if len(removed) != 1 || filepath.Base(removed[0]) != "foo-1.0.ebuild" {
+		t.Fatalf("Expected foo-1.0.ebuild to be removed before failure, got: %v", removed)
+	}
 }
 
 func TestAtomicWriteManifestFailure(t *testing.T) {

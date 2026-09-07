@@ -204,7 +204,7 @@ func DeduplicateEbuilds(targets []string) ([]string, error) {
 					if err != nil {
 						log.Printf("DeduplicateEbuilds: %v", err)
 					} else {
-						if err = AtomicWriteManifest(manifestPath, manifest); err != nil {
+						if err = AtomicWriteManifestFunc(manifestPath, manifest); err != nil {
 							return removedFiles, fmt.Errorf("deduplicate manifest write error: %w", err)
 						}
 					}
