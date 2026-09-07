@@ -30,8 +30,8 @@ func AtomicWriteManifest(manifestPath string, m *Manifest) error {
 
 	// Ensure we clean up temp file on failure
 	defer func() {
-		tmpFile.Close()
-		os.Remove(tmpPath)
+		_ = tmpFile.Close()
+		_ = os.Remove(tmpPath)
 	}()
 
 	if err := tmpFile.Chmod(0644); err != nil {

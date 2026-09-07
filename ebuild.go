@@ -225,7 +225,22 @@ func ParseEbuild(fsys fs.FS, path string, mode ParsingMode) (*Ebuild, error) {
 
 		// Evaluate assignments sequentially in source order
 		for _, assignment := range parsedEbuild.Assignments {
+			if assignment.Name == "SRC_URI" {
+				// Detect unresolvable variables
+				reVar := regexp.MustCompile(`\$\{?([a-zA-Z0-9_]+)\}?`)
+				matches := reVar.FindAllStringSubmatch(assignment.Value, -1)
+				for _, m := range matches {
+					varName := m[1]
+					if _, exists := e.Vars[varName]; !exists {
+						e.Vars["_SRC_URI_RAW_UNCERTAIN"] = "true"
+					}
+				}
+				if strings.Contains(assignment.Value, "`") || strings.Contains(assignment.Value, "$(") {
+					e.Vars["_SRC_URI_RAW_UNCERTAIN"] = "true"
+				}
+			}
 			val := ResolveVariables(assignment.Value, e.Vars)
+
 			if assignment.Append {
 				if e.Vars[assignment.Name] != "" {
 					e.Vars[assignment.Name] += " " + val
@@ -245,9 +260,13 @@ func ParseEbuild(fsys fs.FS, path string, mode ParsingMode) (*Ebuild, error) {
 		e.EbuildHeader = parsedEbuild.EbuildHeader
 	}
 
-	if mode >= ParseFull {
+		if mode >= ParseFull {
 		if srcUriStr, ok := e.Vars["SRC_URI"]; ok {
-			e.SrcUri = ParseSrcURI(srcUriStr)
+			uris, uncertain := ParseSrcURI(srcUriStr)
+			e.SrcUri = uris
+			if uncertain {
+				e.Vars["_SRC_URI_UNCERTAIN"] = "true"
+			}
 		}
 	}
 
@@ -1441,12 +1460,21 @@ func ParseEbuildVariablesFromReader(r io.Reader) map[string]string {
 
 // IsSrcUriAuthoritative checks if the ebuild's SRC_URI resolution is complete and authoritative.
 func (e *Ebuild) IsSrcUriAuthoritative() bool {
-	if strings.Contains(e.RawText, "inherit ") || strings.Contains(e.RawText, "\ninherit") || strings.HasPrefix(e.RawText, "inherit") {
+	// If INHERITED is set by the parser, eclasses are involved.
+	if e.Vars["INHERITED"] != "" {
 		return false
 	}
 	if len(e.ParseWarnings) > 0 {
 		return false
 	}
+	// Check if any source URIs were marked as uncertain during extraction
+	if e.Vars["_SRC_URI_UNCERTAIN"] == "true" {
+		return false
+	}
+	if e.Vars["_SRC_URI_RAW_UNCERTAIN"] == "true" {
+		return false
+	}
+
 	srcUriStr := e.Vars["SRC_URI"]
 	if strings.Contains(srcUriStr, "$") || strings.Contains(srcUriStr, "`") {
 		return false
@@ -1455,15 +1483,28 @@ func (e *Ebuild) IsSrcUriAuthoritative() bool {
 }
 
 // ParseSrcURI parses the evaluated SRC_URI string into structured URI entries.
-func ParseSrcURI(srcUriStr string) []URIEntry {
+// It recognizes Gentoo source-list syntax and flags unsupported lists.
+func ParseSrcURI(srcUriStr string) ([]URIEntry, bool) {
 	var uris []URIEntry
 	tokens := strings.Fields(srcUriStr)
 	i := 0
+	uncertain := false
 	for i < len(tokens) {
 		token := tokens[i]
 
-		// If the token is '->' it's a syntax error in the string structure without a preceding URL
+		// Control tokens or syntactical groupings
+		if token == "(" || token == ")" {
+			i++
+			continue
+		}
+		if strings.HasSuffix(token, "?") { // USE flag conditional
+			i++
+			continue
+		}
+
 		if token == "->" {
+			// Dangling rename arrow
+			uncertain = true
 			i++
 			continue
 		}
@@ -1478,7 +1519,12 @@ func ParseSrcURI(srcUriStr string) []URIEntry {
 			i += 1
 		}
 
-		uris = append(uris, URIEntry{URL: url, Filename: filename})
+		// Only add actual URIs
+		if strings.Contains(url, "://") {
+			uris = append(uris, URIEntry{URL: url, Filename: filename})
+		} else {
+			uncertain = true
+		}
 	}
-	return uris
+	return uris, uncertain
 }
