@@ -191,13 +191,13 @@ func TestSeverityLevel(t *testing.T) {
 		t.Errorf("expected 0")
 	}
 
-	if !(severityLevel("error") > severityLevel("warning")) {
+	if severityLevel("error") <= severityLevel("warning") {
 		t.Errorf("error should be > warning")
 	}
-	if !(severityLevel("warning") > severityLevel("notice")) {
+	if severityLevel("warning") <= severityLevel("notice") {
 		t.Errorf("warning should be > notice")
 	}
-	if !(severityLevel("notice") > severityLevel("info")) {
+	if severityLevel("notice") <= severityLevel("info") {
 		t.Errorf("notice should be > info")
 	}
 }
@@ -216,7 +216,7 @@ func TestCmdLintFailSeverity(t *testing.T) {
 	if err := os.MkdirAll(overlayPath+"/profiles", 0755); err != nil {
 		t.Fatalf("failed to create profiles dir: %v", err)
 	}
-	os.WriteFile(overlayPath+"/profiles/repo_name", []byte("dummy-repo\n"), 0644)
+	_ = os.WriteFile(overlayPath+"/profiles/repo_name", []byte("dummy-repo\n"), 0644)
 
 	warningEbuild := []byte(`
 # Copyright 2026 Gentoo Authors
@@ -229,8 +229,8 @@ LICENSE="MIT"
 SLOT="0"
 KEYWORDS="amd64"
 `)
-	os.WriteFile(overlayPath+"/app-misc/warning-pkg/warning-pkg-1.0.ebuild", warningEbuild, 0644)
-	os.WriteFile(overlayPath+"/app-misc/warning-pkg/Manifest", []byte(""), 0644)
+	_ = os.WriteFile(overlayPath+"/app-misc/warning-pkg/warning-pkg-1.0.ebuild", warningEbuild, 0644)
+	_ = os.WriteFile(overlayPath+"/app-misc/warning-pkg/Manifest", []byte(""), 0644)
 
 	noticeEbuild := []byte(`
 # Copyright 2026 Gentoo Authors
@@ -243,8 +243,8 @@ LICENSE="MIT"
 SLOT="0"
 KEYWORDS="~amd64"
 `)
-	os.WriteFile(overlayPath+"/app-misc/notice-pkg/notice-pkg-1.0.ebuild", noticeEbuild, 0644)
-	os.WriteFile(overlayPath+"/app-misc/notice-pkg/Manifest", []byte(""), 0644)
+	_ = os.WriteFile(overlayPath+"/app-misc/notice-pkg/notice-pkg-1.0.ebuild", noticeEbuild, 0644)
+	_ = os.WriteFile(overlayPath+"/app-misc/notice-pkg/Manifest", []byte(""), 0644)
 
 	metadataContent := []byte(`<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE pkgmetadata SYSTEM "https://www.gentoo.org/dtd/metadata.dtd">
@@ -253,8 +253,8 @@ KEYWORDS="~amd64"
 		<email>test@example.com</email>
 	</maintainer>
 </pkgmetadata>`)
-	os.WriteFile(overlayPath+"/app-misc/warning-pkg/metadata.xml", metadataContent, 0644)
-	os.WriteFile(overlayPath+"/app-misc/notice-pkg/metadata.xml", metadataContent, 0644)
+	_ = os.WriteFile(overlayPath+"/app-misc/warning-pkg/metadata.xml", metadataContent, 0644)
+	_ = os.WriteFile(overlayPath+"/app-misc/notice-pkg/metadata.xml", metadataContent, 0644)
 
 	// Pre-test validations
 	outWarning, _ := captureStdout(t, func() error {
@@ -315,7 +315,7 @@ func TestCmdLintFailSeverityOutputFormats(t *testing.T) {
 	if err := os.MkdirAll(overlayPath+"/profiles", 0755); err != nil {
 		t.Fatalf("failed to create profiles dir: %v", err)
 	}
-	os.WriteFile(overlayPath+"/profiles/repo_name", []byte("dummy-repo\n"), 0644)
+	_ = os.WriteFile(overlayPath+"/profiles/repo_name", []byte("dummy-repo\n"), 0644)
 
 	noticeEbuild := []byte(`
 # Copyright 2026 Gentoo Authors
@@ -328,8 +328,8 @@ LICENSE="MIT"
 SLOT="0"
 KEYWORDS="~amd64"
 `)
-	os.WriteFile(overlayPath+"/app-misc/notice-pkg/notice-pkg-1.0.ebuild", noticeEbuild, 0644)
-	os.WriteFile(overlayPath+"/app-misc/notice-pkg/Manifest", []byte(""), 0644)
+	_ = os.WriteFile(overlayPath+"/app-misc/notice-pkg/notice-pkg-1.0.ebuild", noticeEbuild, 0644)
+	_ = os.WriteFile(overlayPath+"/app-misc/notice-pkg/Manifest", []byte(""), 0644)
 
 	metadataContent := []byte(`<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE pkgmetadata SYSTEM "https://www.gentoo.org/dtd/metadata.dtd">
@@ -338,7 +338,7 @@ KEYWORDS="~amd64"
 		<email>test@example.com</email>
 	</maintainer>
 </pkgmetadata>`)
-	os.WriteFile(overlayPath+"/app-misc/notice-pkg/metadata.xml", metadataContent, 0644)
+	_ = os.WriteFile(overlayPath+"/app-misc/notice-pkg/metadata.xml", metadataContent, 0644)
 
 	// Test github-actions format returns 0 with default failSeverity, but still outputs a notice
 	outNotice, err := captureStdout(t, func() error {
