@@ -422,6 +422,33 @@ KEYWORDS="~amd64"
 	if !strings.Contains(outJson, `"severity": "Notice"`) {
 		t.Errorf("expected json format to still output a notice, got: %s", outJson)
 	}
+
+	// Error JSON assertion
+	if err := os.MkdirAll(overlayPath+"/app-misc/error-pkg", 0755); err != nil {
+		t.Fatalf("failed to create error pkg dir: %v", err)
+	}
+	errorEbuild := []byte(`# Copyright 1999-2026 Gentoo Authors
+# Distributed under the terms of the GNU General Public License v2
+
+EAPI=8
+DESCRIPTION="A sufficiently descriptive test package"
+HOMEPAGE="https://example.com"
+LICENSE="MIT"
+SLOT="0"
+KEYWORDS="amd64"
+`)
+	_ = os.WriteFile(overlayPath+"/app-misc/error-pkg/error-pkg-1.0.ebuild", errorEbuild, 0644)
+	_ = os.WriteFile(overlayPath+"/app-misc/error-pkg/Manifest", []byte(""), 0644)
+
+	outJsonErr, errJsonErr := captureStdout(t, func() error {
+		return cfg.cmdLintPackage([]string{"--format", "json", overlayPath, "app-misc/error-pkg"})
+	})
+	if errJsonErr == nil {
+		t.Fatalf("expected json format to exit non-0 with error")
+	}
+	if !strings.Contains(outJsonErr, `"severity": "Error"`) {
+		t.Errorf("expected json format to still output an error, got: %s", outJsonErr)
+	}
 }
 
 func TestCmdLintTargetedAccessLimit(t *testing.T) {
