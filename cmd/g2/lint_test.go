@@ -218,8 +218,7 @@ func TestCmdLintFailSeverity(t *testing.T) {
 	}
 	_ = os.WriteFile(overlayPath+"/profiles/repo_name", []byte("dummy-repo\n"), 0644)
 
-	warningEbuild := []byte(`
-# Copyright 2026 Gentoo Authors
+	warningEbuild := []byte(`# Copyright 1999-2026 Test Authors
 # Distributed under the terms of the GNU General Public License v2
 
 EAPI=8
@@ -232,8 +231,7 @@ KEYWORDS="amd64"
 	_ = os.WriteFile(overlayPath+"/app-misc/warning-pkg/warning-pkg-1.0.ebuild", warningEbuild, 0644)
 	_ = os.WriteFile(overlayPath+"/app-misc/warning-pkg/Manifest", []byte(""), 0644)
 
-	noticeEbuild := []byte(`
-# Copyright 2026 Gentoo Authors
+	noticeEbuild := []byte(`# Copyright 1999-2026 Gentoo Authors
 # Distributed under the terms of the GNU General Public License v2
 
 EAPI=8
@@ -255,6 +253,62 @@ KEYWORDS="~amd64"
 </pkgmetadata>`)
 	_ = os.WriteFile(overlayPath+"/app-misc/warning-pkg/metadata.xml", metadataContent, 0644)
 	_ = os.WriteFile(overlayPath+"/app-misc/notice-pkg/metadata.xml", metadataContent, 0644)
+	if err := os.MkdirAll(overlayPath+"/app-misc/info-pkg", 0755); err != nil {
+		t.Fatalf("failed to create info pkg dir: %v", err)
+	}
+	infoEbuild := []byte(`# Copyright 1999-2026 Gentoo Authors
+# Distributed under the terms of the GNU General Public License v2
+
+EAPI=8
+DESCRIPTION="A sufficiently descriptive test package"
+HOMEPAGE="https://example.com"
+LICENSE="MIT"
+SLOT="0"
+KEYWORDS="amd64"
+
+pkg_postinst() {
+	if [ -e /usr ]; then
+		einfo "Wait"
+	fi
+}
+`)
+	_ = os.WriteFile(overlayPath+"/app-misc/info-pkg/info-pkg-1.0.ebuild", infoEbuild, 0644)
+	_ = os.WriteFile(overlayPath+"/app-misc/info-pkg/Manifest", []byte(""), 0644)
+	_ = os.WriteFile(overlayPath+"/app-misc/info-pkg/metadata.xml", metadataContent, 0644)
+
+	// Error only package (no maintainer)
+	if err := os.MkdirAll(overlayPath+"/app-misc/error-pkg", 0755); err != nil {
+		t.Fatalf("failed to create error pkg dir: %v", err)
+	}
+	errorEbuild := []byte(`# Copyright 1999-2026 Gentoo Authors
+# Distributed under the terms of the GNU General Public License v2
+
+EAPI=8
+DESCRIPTION="A sufficiently descriptive test package"
+HOMEPAGE="https://example.com"
+LICENSE="MIT"
+SLOT="0"
+KEYWORDS="amd64"
+`)
+	_ = os.WriteFile(overlayPath+"/app-misc/error-pkg/error-pkg-1.0.ebuild", errorEbuild, 0644)
+	_ = os.WriteFile(overlayPath+"/app-misc/error-pkg/Manifest", []byte(""), 0644)
+
+	// Mixed Notice + Error
+	if err := os.MkdirAll(overlayPath+"/app-misc/mixed-pkg", 0755); err != nil {
+		t.Fatalf("failed to create mixed pkg dir: %v", err)
+	}
+	mixedEbuild := []byte(`# Copyright 1999-2026 Gentoo Authors
+# Distributed under the terms of the GNU General Public License v2
+
+EAPI=8
+DESCRIPTION="A sufficiently descriptive test package"
+HOMEPAGE="https://example.com"
+LICENSE="MIT"
+SLOT="0"
+KEYWORDS="~amd64"
+`)
+	_ = os.WriteFile(overlayPath+"/app-misc/mixed-pkg/mixed-pkg-1.0.ebuild", mixedEbuild, 0644)
+	_ = os.WriteFile(overlayPath+"/app-misc/mixed-pkg/Manifest", []byte(""), 0644)
 
 	// Pre-test validations
 	outWarning, _ := captureStdout(t, func() error {
@@ -282,17 +336,23 @@ KEYWORDS="~amd64"
 		pkgTarget    string
 		failSeverity string
 		expectFail   bool
+		extraArgs    []string
 	}{
-		{"warning pkg, default warning", "app-misc/warning-pkg", "warning", true},
-		{"warning pkg, --fail-severity=error", "app-misc/warning-pkg", "error", false},
-		{"notice pkg, default warning", "app-misc/notice-pkg", "warning", false},
-		{"notice pkg, --fail-severity=notice", "app-misc/notice-pkg", "notice", true},
+		{"warning pkg, default warning", "app-misc/warning-pkg", "warning", true, nil},
+		{"warning pkg, --fail-severity=error", "app-misc/warning-pkg", "error", false, nil},
+		{"notice pkg, default warning", "app-misc/notice-pkg", "warning", false, nil},
+		{"notice pkg, --fail-severity=notice", "app-misc/notice-pkg", "notice", true, nil},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			out, err := captureStdout(t, func() error {
-				args := []string{"--format", "text", "--fail-severity", tt.failSeverity, overlayPath, tt.pkgTarget}
+				args := []string{"--format", "text"}
+				if tt.extraArgs != nil {
+					args = args[:0]
+					args = append(args, tt.extraArgs...)
+				}
+				args = append(args, "--fail-severity", tt.failSeverity, overlayPath, tt.pkgTarget)
 				return cfg.cmdLintPackage(args)
 			})
 
@@ -317,8 +377,7 @@ func TestCmdLintFailSeverityOutputFormats(t *testing.T) {
 	}
 	_ = os.WriteFile(overlayPath+"/profiles/repo_name", []byte("dummy-repo\n"), 0644)
 
-	noticeEbuild := []byte(`
-# Copyright 2026 Gentoo Authors
+	noticeEbuild := []byte(`# Copyright 1999-2026 Gentoo Authors
 # Distributed under the terms of the GNU General Public License v2
 
 EAPI=8
@@ -339,6 +398,62 @@ KEYWORDS="~amd64"
 	</maintainer>
 </pkgmetadata>`)
 	_ = os.WriteFile(overlayPath+"/app-misc/notice-pkg/metadata.xml", metadataContent, 0644)
+	if err := os.MkdirAll(overlayPath+"/app-misc/info-pkg", 0755); err != nil {
+		t.Fatalf("failed to create info pkg dir: %v", err)
+	}
+	infoEbuild := []byte(`# Copyright 1999-2026 Gentoo Authors
+# Distributed under the terms of the GNU General Public License v2
+
+EAPI=8
+DESCRIPTION="A sufficiently descriptive test package"
+HOMEPAGE="https://example.com"
+LICENSE="MIT"
+SLOT="0"
+KEYWORDS="amd64"
+
+pkg_postinst() {
+	if [ -e /usr ]; then
+		einfo "Wait"
+	fi
+}
+`)
+	_ = os.WriteFile(overlayPath+"/app-misc/info-pkg/info-pkg-1.0.ebuild", infoEbuild, 0644)
+	_ = os.WriteFile(overlayPath+"/app-misc/info-pkg/Manifest", []byte(""), 0644)
+	_ = os.WriteFile(overlayPath+"/app-misc/info-pkg/metadata.xml", metadataContent, 0644)
+
+	// Error only package (no maintainer)
+	if err := os.MkdirAll(overlayPath+"/app-misc/error-pkg", 0755); err != nil {
+		t.Fatalf("failed to create error pkg dir: %v", err)
+	}
+	errorEbuild := []byte(`# Copyright 1999-2026 Gentoo Authors
+# Distributed under the terms of the GNU General Public License v2
+
+EAPI=8
+DESCRIPTION="A sufficiently descriptive test package"
+HOMEPAGE="https://example.com"
+LICENSE="MIT"
+SLOT="0"
+KEYWORDS="amd64"
+`)
+	_ = os.WriteFile(overlayPath+"/app-misc/error-pkg/error-pkg-1.0.ebuild", errorEbuild, 0644)
+	_ = os.WriteFile(overlayPath+"/app-misc/error-pkg/Manifest", []byte(""), 0644)
+
+	// Mixed Notice + Error
+	if err := os.MkdirAll(overlayPath+"/app-misc/mixed-pkg", 0755); err != nil {
+		t.Fatalf("failed to create mixed pkg dir: %v", err)
+	}
+	mixedEbuild := []byte(`# Copyright 1999-2026 Gentoo Authors
+# Distributed under the terms of the GNU General Public License v2
+
+EAPI=8
+DESCRIPTION="A sufficiently descriptive test package"
+HOMEPAGE="https://example.com"
+LICENSE="MIT"
+SLOT="0"
+KEYWORDS="~amd64"
+`)
+	_ = os.WriteFile(overlayPath+"/app-misc/mixed-pkg/mixed-pkg-1.0.ebuild", mixedEbuild, 0644)
+	_ = os.WriteFile(overlayPath+"/app-misc/mixed-pkg/Manifest", []byte(""), 0644)
 
 	// Test github-actions format returns 0 with default failSeverity, but still outputs a notice
 	outNotice, err := captureStdout(t, func() error {
@@ -439,4 +554,81 @@ func min(a, b int) int {
 		return a
 	}
 	return b
+}
+
+func TestCmdLintEffectiveSeverityOverride(t *testing.T) {
+	cfg := &MainArgConfig{}
+	overlayPath := t.TempDir()
+
+	_ = os.MkdirAll(overlayPath+"/app-misc/warning-pkg", 0755)
+	_ = os.MkdirAll(overlayPath+"/profiles", 0755)
+	_ = os.MkdirAll(overlayPath+"/metadata", 0755)
+	_ = os.WriteFile(overlayPath+"/profiles/repo_name", []byte("dummy-repo\n"), 0644)
+
+	// Provide a qa-policy.conf overriding PG0002 from Warning to Notice
+	qaPolicy := []byte(`
+[policy]
+PG0002 = notice
+`)
+	_ = os.WriteFile(overlayPath+"/metadata/qa-policy.conf", qaPolicy, 0644)
+
+	// Trigger PG0002: =-dependency with no revision
+	warningEbuild := []byte(`# Copyright 1999-2026 Gentoo Authors
+# Distributed under the terms of the GNU General Public License v2
+
+EAPI=8
+DESCRIPTION="A proper description"
+HOMEPAGE="https://example.com"
+LICENSE="MIT"
+SLOT="0"
+KEYWORDS="amd64"
+DEPEND="=app-misc/some-dep-1.0"
+`)
+	_ = os.WriteFile(overlayPath+"/app-misc/warning-pkg/warning-pkg-1.0.ebuild", warningEbuild, 0644)
+	_ = os.WriteFile(overlayPath+"/app-misc/warning-pkg/Manifest", []byte(""), 0644)
+	metadataContent := []byte(`<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE pkgmetadata SYSTEM "https://www.gentoo.org/dtd/metadata.dtd">
+<pkgmetadata>
+	<maintainer type="person">
+		<email>test@example.com</email>
+	</maintainer>
+</pkgmetadata>`)
+	_ = os.WriteFile(overlayPath+"/app-misc/warning-pkg/metadata.xml", metadataContent, 0644)
+
+	// Since we overrode PG0002 to Notice, it should NOT fail default (Warning) threshold
+	out, err := captureStdout(t, func() error {
+		return cfg.cmdLintPackage([]string{"--format", "text", overlayPath, "app-misc/warning-pkg"})
+	})
+
+	if err != nil {
+		t.Errorf("expected to PASS because effective severity of PG0002 is Notice. err: %v\nOut: %s", err, out)
+	}
+
+	// But it should fail if fail-severity is Notice
+	out, err = captureStdout(t, func() error {
+		return cfg.cmdLintPackage([]string{"--format", "text", "--fail-severity", "notice", overlayPath, "app-misc/warning-pkg"})
+	})
+	if err == nil {
+		t.Errorf("expected to FAIL when fail-severity is Notice. Out: %s", out)
+	}
+}
+
+func TestCmdLintInvalidFailSeverity(t *testing.T) {
+	cfg := &MainArgConfig{}
+
+	// Newer path
+	_, err := captureStdout(t, func() error {
+		return cfg.cmdLintPackage([]string{"--fail-severity", "invalid_sev", ".", "app-misc/foo"})
+	})
+	if err == nil || !strings.Contains(err.Error(), "invalid fail-severity") {
+		t.Errorf("expected invalid fail-severity error from package cmd, got: %v", err)
+	}
+
+	// Legacy path
+	_, err = captureStdout(t, func() error {
+		return cfg.runOldLint([]string{"--fail-severity", "invalid_sev", ".", "app-misc/foo"})
+	})
+	if err == nil || !strings.Contains(err.Error(), "invalid fail-severity") {
+		t.Errorf("expected invalid fail-severity error from legacy cmd, got: %v", err)
+	}
 }
