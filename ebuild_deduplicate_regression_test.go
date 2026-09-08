@@ -52,7 +52,6 @@ func TestDeduplicateEbuildsRegression(t *testing.T) {
 	}
 }
 
-var originalAtomicWriteManifest = AtomicWriteManifestFunc
 
 func TestDeduplicateEbuildsWriteErrorRegression(t *testing.T) {
 	dir := t.TempDir()
@@ -61,11 +60,10 @@ func TestDeduplicateEbuildsWriteErrorRegression(t *testing.T) {
 	writeTestEbuild(t, dir, "foo-2.0.ebuild", "EAPI=8\nDESCRIPTION=\"foo\"\nSLOT=\"0\"\nSRC_URI=\"https://example.com/good.tar.gz\"\n")
 	writeTestManifest(t, dir, "DIST good.tar.gz 123 SHA512 abc\n")
 
-	// Inject a write failure
-	AtomicWriteManifestFunc = func(path string, m *Manifest) error {
+	atomicWriteManifestTestHook = func(path string, m *Manifest) error {
 		return os.ErrPermission
 	}
-	defer func() { AtomicWriteManifestFunc = originalAtomicWriteManifest }()
+	t.Cleanup(func() { atomicWriteManifestTestHook = nil })
 
 	removed, err := DeduplicateEbuilds([]string{dir})
 	if err == nil {
@@ -91,19 +89,22 @@ func TestAtomicWriteManifestFailure(t *testing.T) {
 }
 
 func TestAtomicWriteManifestTempFile(t *testing.T) {
-	dir := t.TempDir()
-	manifestPath := filepath.Join(dir, "Manifest")
-	m := &Manifest{}
+	t.Run("Direct temp-path regression for AtomicWriteManifest", func(t *testing.T) {
+		dir := t.TempDir()
+		manifestPath := filepath.Join(dir, "Manifest")
+		m := &Manifest{}
 
-	tmpPath := manifestPath + ".tmp"
-	_ = os.WriteFile(tmpPath, []byte("garbage"), 0644)
+		tmpPath := filepath.Join(dir, "Manifest.preexisting.tmp")
+		_ = os.WriteFile(tmpPath, []byte("garbage data"), 0644)
 
-	err := AtomicWriteManifest(manifestPath, m)
-	if err != nil {
-		t.Fatalf("Expected AtomicWriteManifest to succeed, got %v", err)
-	}
+		err := AtomicWriteManifest(manifestPath, m)
+		if err != nil {
+			t.Fatalf("Expected AtomicWriteManifest to succeed, got %v", err)
+		}
 
-	if _, err := os.Stat(tmpPath); err != nil {
-		t.Errorf("Our pre-existing garbage was deleted unexpectedly")
-	}
+		b, err := os.ReadFile(tmpPath)
+		if err != nil || string(b) != "garbage data" {
+			t.Errorf("Pre-existing similar temp file clobbered or removed! Bytes: %q, err: %v", string(b), err)
+		}
+	})
 }

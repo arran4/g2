@@ -351,6 +351,9 @@ func DownloadAndCreateManifestEntry(url, filename string, hashes []string) (*g2.
 	}
 	return entry, nil
 }
+
+var atomicWriteManifest = g2.AtomicWriteManifest
+
 func (cfg *CmdManifestArgConfig) cmdVerify(args []string, hashes []string) error {
 	fs := flag.NewFlagSet("verify", flag.ExitOnError)
 	fix := fs.Bool("fix", false, "Force fix missing manifest entries")
@@ -480,7 +483,7 @@ func (cfg *CmdManifestArgConfig) cmdVerify(args []string, hashes []string) error
 
 	if manifestModified {
 		manifest.Sort()
-		err = g2.AtomicWriteManifest(manifestPath, manifest)
+		err = atomicWriteManifest(manifestPath, manifest)
 		if err != nil {
 			return fmt.Errorf("writing manifest: %w", err)
 		}

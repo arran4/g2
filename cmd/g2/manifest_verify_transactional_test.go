@@ -275,23 +275,34 @@ SRC_URI="%s/good.tar.gz -> ${PF}.tar.gz
 		}
 	})
 
-	t.Run("AtomicWriteManifest failure test", func(t *testing.T) {
+	t.Run("AtomicWriteManifest failure test deterministically reaching final commit", func(t *testing.T) {
 		dir := t.TempDir()
 		writeTestEbuild(t, dir, "foo-1.0.ebuild", fmt.Sprintf(`EAPI=8
 DESCRIPTION="foo"
 SLOT="0"
 SRC_URI="%s/good.tar.gz -> good.tar.gz"
 `, ts.URL))
-		writeTestManifest(t, dir, "")
+		originalManifest := "DIST obsolete.tar.gz 123 SHA512 abc\n"
+		writeTestManifest(t, dir, originalManifest)
 
-		// Create a directory at Manifest so write fails
-		_ = os.Remove(filepath.Join(dir, "Manifest"))
-		_ = os.Mkdir(filepath.Join(dir, "Manifest"), 0755)
+		// Hook the atomic write function inside main package
+		atomicWriteManifest = func(path string, m *g2.Manifest) error {
+			return os.ErrPermission
+		}
+		t.Cleanup(func() { atomicWriteManifest = g2.AtomicWriteManifest })
 
 		cfg := &CmdManifestArgConfig{}
 		err := cfg.cmdVerify([]string{"--fix", "--clean", dir}, hashes)
 		if err == nil {
 			t.Fatalf("cmdVerify expected to fail on writing manifest")
+		}
+		if !strings.Contains(err.Error(), "permission denied") {
+			t.Errorf("Expected permission denied error from write path, got: %v", err)
+		}
+
+		b, _ := os.ReadFile(filepath.Join(dir, "Manifest"))
+		if string(b) != originalManifest {
+			t.Errorf("Manifest was modified on failure! Got: %s", string(b))
 		}
 	})
 

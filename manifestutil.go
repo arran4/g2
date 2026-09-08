@@ -19,10 +19,13 @@ func UpsertManifest(manifestPath string, newEntry *ManifestEntry) error {
 	return AtomicWriteManifest(manifestPath, m)
 }
 
-var AtomicWriteManifestFunc = AtomicWriteManifest
+var atomicWriteManifestTestHook func(string, *Manifest) error
 
 // AtomicWriteManifest atomically writes the given manifest to the specified path.
 func AtomicWriteManifest(manifestPath string, m *Manifest) error {
+	if atomicWriteManifestTestHook != nil {
+		return atomicWriteManifestTestHook(manifestPath, m)
+	}
 	dir := filepath.Dir(manifestPath)
 	tmpFile, err := os.CreateTemp(dir, "Manifest.*.tmp")
 	if err != nil {
