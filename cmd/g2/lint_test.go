@@ -377,7 +377,8 @@ func TestCmdLintFailSeverityOutputFormats(t *testing.T) {
 	}
 	_ = os.WriteFile(overlayPath+"/profiles/repo_name", []byte("dummy-repo\n"), 0644)
 
-	noticeEbuild := []byte(`# Copyright 1999-2026 Gentoo Authors
+	noticeEbuild := []byte(`
+# Copyright 1999-2026 Gentoo Authors
 # Distributed under the terms of the GNU General Public License v2
 
 EAPI=8
@@ -398,62 +399,6 @@ KEYWORDS="~amd64"
 	</maintainer>
 </pkgmetadata>`)
 	_ = os.WriteFile(overlayPath+"/app-misc/notice-pkg/metadata.xml", metadataContent, 0644)
-	if err := os.MkdirAll(overlayPath+"/app-misc/info-pkg", 0755); err != nil {
-		t.Fatalf("failed to create info pkg dir: %v", err)
-	}
-	infoEbuild := []byte(`# Copyright 1999-2026 Gentoo Authors
-# Distributed under the terms of the GNU General Public License v2
-
-EAPI=8
-DESCRIPTION="A sufficiently descriptive test package"
-HOMEPAGE="https://example.com"
-LICENSE="MIT"
-SLOT="0"
-KEYWORDS="amd64"
-
-pkg_postinst() {
-	if [ -e /usr ]; then
-		einfo "Wait"
-	fi
-}
-`)
-	_ = os.WriteFile(overlayPath+"/app-misc/info-pkg/info-pkg-1.0.ebuild", infoEbuild, 0644)
-	_ = os.WriteFile(overlayPath+"/app-misc/info-pkg/Manifest", []byte(""), 0644)
-	_ = os.WriteFile(overlayPath+"/app-misc/info-pkg/metadata.xml", metadataContent, 0644)
-
-	// Error only package (no maintainer)
-	if err := os.MkdirAll(overlayPath+"/app-misc/error-pkg", 0755); err != nil {
-		t.Fatalf("failed to create error pkg dir: %v", err)
-	}
-	errorEbuild := []byte(`# Copyright 1999-2026 Gentoo Authors
-# Distributed under the terms of the GNU General Public License v2
-
-EAPI=8
-DESCRIPTION="A sufficiently descriptive test package"
-HOMEPAGE="https://example.com"
-LICENSE="MIT"
-SLOT="0"
-KEYWORDS="amd64"
-`)
-	_ = os.WriteFile(overlayPath+"/app-misc/error-pkg/error-pkg-1.0.ebuild", errorEbuild, 0644)
-	_ = os.WriteFile(overlayPath+"/app-misc/error-pkg/Manifest", []byte(""), 0644)
-
-	// Mixed Notice + Error
-	if err := os.MkdirAll(overlayPath+"/app-misc/mixed-pkg", 0755); err != nil {
-		t.Fatalf("failed to create mixed pkg dir: %v", err)
-	}
-	mixedEbuild := []byte(`# Copyright 1999-2026 Gentoo Authors
-# Distributed under the terms of the GNU General Public License v2
-
-EAPI=8
-DESCRIPTION="A sufficiently descriptive test package"
-HOMEPAGE="https://example.com"
-LICENSE="MIT"
-SLOT="0"
-KEYWORDS="~amd64"
-`)
-	_ = os.WriteFile(overlayPath+"/app-misc/mixed-pkg/mixed-pkg-1.0.ebuild", mixedEbuild, 0644)
-	_ = os.WriteFile(overlayPath+"/app-misc/mixed-pkg/Manifest", []byte(""), 0644)
 
 	// Test github-actions format returns 0 with default failSeverity, but still outputs a notice
 	outNotice, err := captureStdout(t, func() error {
@@ -465,6 +410,17 @@ KEYWORDS="~amd64"
 	}
 	if !strings.Contains(outNotice, "::notice ") {
 		t.Errorf("expected github-actions format to still output a notice, got: %s", outNotice)
+	}
+
+	// Test json format returns 0 with default failSeverity, but still outputs a notice
+	outJson, errJson := captureStdout(t, func() error {
+		return cfg.cmdLintPackage([]string{"--format", "json", overlayPath, "app-misc/notice-pkg"})
+	})
+	if errJson != nil {
+		t.Fatalf("expected json format to exit 0 with notice, got err: %v", errJson)
+	}
+	if !strings.Contains(outJson, `"severity": "Notice"`) {
+		t.Errorf("expected json format to still output a notice, got: %s", outJson)
 	}
 }
 
