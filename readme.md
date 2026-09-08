@@ -86,10 +86,15 @@ g2 manifest -sha256=true upsert-from-url https://example.com/software-1.0.tar.gz
 
 Verifies the `Manifest` against the actual ebuild files.
 
+*   `--fix`: Fetches/checksums missing DIST entries and commits only after all prerequisite work succeeds.
+*   `--clean`: Removes obsolete DIST entries as part of the same authoritative reconciliation when source resolution is complete.
+
+Uncertain/incomplete source resolution causes destructive reconciliation (like `--clean` and `--fix` overwriting entries) to be refused without rewriting the Manifest.
+
 **Usage:**
 
 ```bash
-g2 manifest verify [location]
+g2 manifest verify [--fix] [--clean] [location]
 ```
 
 #### `clean`
