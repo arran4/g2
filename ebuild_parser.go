@@ -205,12 +205,13 @@ type VariableAssignment struct {
 
 // ParsedEbuild contains the results of parsing an ebuild
 type ParsedEbuild struct {
-	Variables    map[string]string
-	Functions    map[string]AST
-	Order        []string
-	Assignments  []VariableAssignment
-	EbuildHeader string
-	Warnings     []string
+	Variables      map[string]string
+	Functions      map[string]AST
+	Order          []string
+	Assignments    []VariableAssignment
+	EbuildHeader   string
+	Warnings       []string
+	HasControlFlow bool
 }
 
 // Parse extracts variables and functions from the ebuild using a recursive descent approach
@@ -294,6 +295,7 @@ func (p *EbuildParser) Parse() (ParsedEbuild, error) {
 				if r != ')' {
 					// It's not a function declaration, probably part of a bash command like `if (( PLEVEL < 0 ))`
 					// We'll just skip the line.
+					result.HasControlFlow = true
 					p.skipLine()
 					continue
 				}
@@ -322,6 +324,7 @@ func (p *EbuildParser) Parse() (ParsedEbuild, error) {
 					// These reserved words open bash blocks, we shouldn't skip the whole line blindly
 					// and just ignore the keyword itself so the parser continues into the block
 					// We just skip the condition part
+					result.HasControlFlow = true
 					err := p.consumeCondition()
 					if err != nil && !errors.Is(err, io.EOF) {
 						return result, err
@@ -332,6 +335,7 @@ func (p *EbuildParser) Parse() (ParsedEbuild, error) {
 					continue
 				} else {
 					// Bare command or reserved word. Skip line.
+					result.HasControlFlow = true
 					p.skipLine()
 				}
 			}
@@ -347,6 +351,8 @@ func (p *EbuildParser) Parse() (ParsedEbuild, error) {
 			}
 		} else {
 			// Not an assignment or function we care about right now at top level.
+			// Could be operator-led cases `[[ ... ]] && SRC_URI=...`
+			result.HasControlFlow = true
 			p.skipLine()
 		}
 	}

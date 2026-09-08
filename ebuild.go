@@ -41,13 +41,14 @@ func (m ParsingMode) String() string {
 }
 
 type Ebuild struct {
-	Path          string
-	Vars          map[string]string
-	Functions     map[string]AST
-	SrcUri        []URIEntry
-	Mode          ParsingMode
-	RawText       string
-	ParseWarnings []string
+	Path            string
+	Vars            map[string]string
+	Functions       map[string]AST
+	SrcUri          []URIEntry
+	Mode            ParsingMode
+	RawText         string
+	ParseWarnings   []string
+	SrcUriUncertain bool
 
 	orderOverride []string
 	EbuildHeader  string
@@ -223,8 +224,36 @@ func ParseEbuild(fsys fs.FS, path string, mode ParsingMode) (*Ebuild, error) {
 
 		e.ParseWarnings = append(parser.Warnings, parsedEbuild.Warnings...)
 
+		uncertainVars := make(map[string]bool)
+		reVar := regexp.MustCompile(`\$+\{?([a-zA-Z0-9_]+)\}?`)
+
 		// Evaluate assignments sequentially in source order
 		for _, assignment := range parsedEbuild.Assignments {
+			isUncertain := false
+
+			if strings.Contains(assignment.Value, "`") || strings.Contains(assignment.Value, "$(") {
+				isUncertain = true
+			} else {
+				matches := reVar.FindAllStringSubmatch(assignment.Value, -1)
+				for _, m := range matches {
+					varName := m[1]
+					if _, exists := e.Vars[varName]; !exists {
+						isUncertain = true
+						break
+					}
+					if uncertainVars[varName] {
+						isUncertain = true
+						break
+					}
+				}
+			}
+
+			if isUncertain {
+				uncertainVars[assignment.Name] = true
+			} else if !assignment.Append {
+				delete(uncertainVars, assignment.Name)
+			}
+
 			val := ResolveVariables(assignment.Value, e.Vars)
 			if assignment.Append {
 				if e.Vars[assignment.Name] != "" {
@@ -237,19 +266,29 @@ func ParseEbuild(fsys fs.FS, path string, mode ParsingMode) (*Ebuild, error) {
 			}
 		}
 
+		if uncertainVars["SRC_URI"] {
+			e.SrcUriUncertain = true
+		}
+
 		e.Functions = make(map[string]AST)
 		for k, v := range parsedEbuild.Functions {
 			e.Functions[k] = v
 		}
 		e.orderOverride = parsedEbuild.Order
 		e.EbuildHeader = parsedEbuild.EbuildHeader
+		if parsedEbuild.HasControlFlow {
+			e.SrcUriUncertain = true
+		}
 	}
 
 	if mode >= ParseFull {
-		uris, _ := ExtractURIs(content, e.Vars)
-		// Don't fail hard on URI extraction?
-		// The user said "partial implementation".
-		e.SrcUri = uris
+		if srcUriStr, ok := e.Vars["SRC_URI"]; ok {
+			uris, uncertain := ParseSrcURI(srcUriStr)
+			e.SrcUri = uris
+			if uncertain {
+				e.SrcUriUncertain = true
+			}
+		}
 	}
 
 	return e, nil
@@ -1438,4 +1477,84 @@ func ParseEbuildVariablesFromReader(r io.Reader) map[string]string {
 		}
 	}
 	return vars
+}
+
+// IsSrcUriAuthoritative checks if the ebuild's SRC_URI resolution is complete and authoritative.
+func (e *Ebuild) IsSrcUriAuthoritative() bool {
+	// If INHERITED is set by the parser, eclasses are involved.
+	if e.Vars["INHERITED"] != "" {
+		return false
+	}
+	if len(e.ParseWarnings) > 0 {
+		return false
+	}
+	if e.SrcUriUncertain {
+		return false
+	}
+	return true
+}
+
+// ParseSrcURI parses the evaluated SRC_URI string into structured URI entries.
+// It recognizes Gentoo source-list syntax and flags unsupported lists.
+func ParseSrcURI(srcUriStr string) ([]URIEntry, bool) {
+	var uris []URIEntry
+	tokens := strings.Fields(srcUriStr)
+	i := 0
+	uncertain := false
+	balance := 0
+
+	for i < len(tokens) {
+		token := tokens[i]
+
+		// Control tokens or syntactical groupings
+		if token == "(" {
+			balance++
+			i++
+			continue
+		} else if token == ")" {
+			balance--
+			if balance < 0 {
+				uncertain = true
+			}
+			i++
+			continue
+		}
+		if strings.HasSuffix(token, "?") { // USE flag conditional
+			i++
+			continue
+		}
+
+		if token == "->" {
+			// Dangling rename arrow
+			uncertain = true
+			i++
+			continue
+		}
+
+		url := token
+		filename := filepath.Base(url)
+
+		if i+2 < len(tokens) && tokens[i+1] == "->" {
+			filename = tokens[i+2]
+			if filename == ")" || filename == "(" || filename == "->" || strings.HasSuffix(filename, "?") {
+				uncertain = true
+			}
+			i += 3
+		} else {
+			i += 1
+		}
+
+		// Only add actual URIs
+		if strings.Contains(url, "://") {
+			uris = append(uris, URIEntry{URL: url, Filename: filename})
+		} else {
+			uncertain = true
+		}
+	}
+
+	if balance != 0 {
+		uncertain = true
+	}
+
+	return uris, uncertain
 }
