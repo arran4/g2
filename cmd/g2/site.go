@@ -556,15 +556,21 @@ func sanitizeFilename(s string) string {
 	return res
 }
 
+type TargetPackages map[string]bool
+
 func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool, repoInfo *g2.Repository, opts ...any) (*g2.SiteData, error) {
 	title := defaultTitle
 	var repoName string
 	var remoteURL string
 
+	var targetPkgs TargetPackages
+
 	for _, opt := range opts {
 		switch o := opt.(type) {
 		case SourceURL:
 			remoteURL = string(o)
+		case TargetPackages:
+			targetPkgs = o
 		}
 	}
 
@@ -664,7 +670,7 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool, r
 		_ = pf.Close()
 	}
 
-	if err := parseRepoCategoriesAndPackages(sysFS, repoDir, repoName, fastGit, remoteURL, site); err != nil {
+	if err := parseRepoCategoriesAndPackages(sysFS, repoDir, repoName, fastGit, remoteURL, site, targetPkgs); err != nil {
 		return nil, err
 	}
 

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
+	"io/fs"
 	"os"
 	"reflect"
 	"strings"
@@ -174,4 +175,225 @@ func TestCmdLintList(t *testing.T) {
 	if !foundLabelledRef {
 		t.Error("expected at least one rule with a labelled reference in JSON output")
 	}
+}
+
+func TestSeverityLevel(t *testing.T) {
+	if severityLevel("error") != 3 {
+		t.Errorf("expected 3")
+	}
+	if severityLevel("warning") != 2 {
+		t.Errorf("expected 2")
+	}
+	if severityLevel("notice") != 1 {
+		t.Errorf("expected 1")
+	}
+	if severityLevel("info") != 0 {
+		t.Errorf("expected 0")
+	}
+
+	if !(severityLevel("error") > severityLevel("warning")) {
+		t.Errorf("error should be > warning")
+	}
+	if !(severityLevel("warning") > severityLevel("notice")) {
+		t.Errorf("warning should be > notice")
+	}
+	if !(severityLevel("notice") > severityLevel("info")) {
+		t.Errorf("notice should be > info")
+	}
+}
+
+func TestCmdLintFailSeverity(t *testing.T) {
+	cfg := &MainArgConfig{}
+
+	overlayPath := t.TempDir()
+
+	if err := os.MkdirAll(overlayPath+"/app-misc/warning-pkg", 0755); err != nil {
+		t.Fatalf("failed to create warning pkg dir: %v", err)
+	}
+	if err := os.MkdirAll(overlayPath+"/app-misc/notice-pkg", 0755); err != nil {
+		t.Fatalf("failed to create notice pkg dir: %v", err)
+	}
+	if err := os.MkdirAll(overlayPath+"/profiles", 0755); err != nil {
+		t.Fatalf("failed to create profiles dir: %v", err)
+	}
+	os.WriteFile(overlayPath+"/profiles/repo_name", []byte("dummy-repo\n"), 0644)
+
+	warningEbuild := []byte(`
+# Copyright 2026 Gentoo Authors
+# Distributed under the terms of the GNU General Public License v2
+
+EAPI=8
+DESCRIPTION="short"
+HOMEPAGE="https://example.com"
+LICENSE="MIT"
+SLOT="0"
+KEYWORDS="amd64"
+`)
+	os.WriteFile(overlayPath+"/app-misc/warning-pkg/warning-pkg-1.0.ebuild", warningEbuild, 0644)
+	os.WriteFile(overlayPath+"/app-misc/warning-pkg/Manifest", []byte(""), 0644)
+
+	noticeEbuild := []byte(`
+# Copyright 2026 Gentoo Authors
+# Distributed under the terms of the GNU General Public License v2
+
+EAPI=8
+DESCRIPTION="A sufficiently descriptive test package"
+HOMEPAGE="https://example.com"
+LICENSE="MIT"
+SLOT="0"
+KEYWORDS="~amd64"
+`)
+	os.WriteFile(overlayPath+"/app-misc/notice-pkg/notice-pkg-1.0.ebuild", noticeEbuild, 0644)
+	os.WriteFile(overlayPath+"/app-misc/notice-pkg/Manifest", []byte(""), 0644)
+
+	metadataContent := []byte(`<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE pkgmetadata SYSTEM "https://www.gentoo.org/dtd/metadata.dtd">
+<pkgmetadata>
+	<maintainer type="person">
+		<email>test@example.com</email>
+	</maintainer>
+</pkgmetadata>`)
+	os.WriteFile(overlayPath+"/app-misc/warning-pkg/metadata.xml", metadataContent, 0644)
+	os.WriteFile(overlayPath+"/app-misc/notice-pkg/metadata.xml", metadataContent, 0644)
+
+	// Pre-test validations
+	outWarning, _ := captureStdout(t, func() error {
+		return cfg.cmdLintPackage([]string{"--format", "json", overlayPath, "app-misc/warning-pkg"})
+	})
+	if strings.Contains(outWarning, `"severity": "Error"`) {
+		t.Fatalf("Fixture setup failed: warning-pkg contains Errors!\nOutput: %s", outWarning)
+	}
+	if !strings.Contains(outWarning, `"severity": "Warning"`) {
+		t.Fatalf("Fixture setup failed: warning-pkg does not contain a Warning!\nOutput: %s", outWarning)
+	}
+
+	outNotice, _ := captureStdout(t, func() error {
+		return cfg.cmdLintPackage([]string{"--format", "json", overlayPath, "app-misc/notice-pkg"})
+	})
+	if strings.Contains(outNotice, `"severity": "Error"`) || strings.Contains(outNotice, `"severity": "Warning"`) {
+		t.Fatalf("Fixture setup failed: notice-pkg contains Errors/Warnings!\nOutput: %s", outNotice)
+	}
+	if !strings.Contains(outNotice, `"severity": "Notice"`) {
+		t.Fatalf("Fixture setup failed: notice-pkg does not contain a Notice!\nOutput: %s", outNotice)
+	}
+
+	tests := []struct {
+		name         string
+		pkgTarget    string
+		failSeverity string
+		expectFail   bool
+	}{
+		{"warning pkg, default warning", "app-misc/warning-pkg", "warning", true},
+		{"warning pkg, --fail-severity=error", "app-misc/warning-pkg", "error", false},
+		{"notice pkg, default warning", "app-misc/notice-pkg", "warning", false},
+		{"notice pkg, --fail-severity=notice", "app-misc/notice-pkg", "notice", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			out, err := captureStdout(t, func() error {
+				args := []string{"--format", "text", "--fail-severity", tt.failSeverity, overlayPath, tt.pkgTarget}
+				return cfg.cmdLintPackage(args)
+			})
+
+			hasErr := err != nil
+			if hasErr != tt.expectFail {
+				t.Errorf("expected fail: %v, got: %v (err: %v)", tt.expectFail, hasErr, err)
+				t.Logf("Output: %s", out)
+			}
+		})
+	}
+}
+func TestCmdLintFailSeverityOutputFormats(t *testing.T) {
+	cfg := &MainArgConfig{}
+
+	overlayPath := t.TempDir()
+
+	if err := os.MkdirAll(overlayPath+"/app-misc/notice-pkg", 0755); err != nil {
+		t.Fatalf("failed to create notice pkg dir: %v", err)
+	}
+	if err := os.MkdirAll(overlayPath+"/profiles", 0755); err != nil {
+		t.Fatalf("failed to create profiles dir: %v", err)
+	}
+	os.WriteFile(overlayPath+"/profiles/repo_name", []byte("dummy-repo\n"), 0644)
+
+	noticeEbuild := []byte(`
+# Copyright 2026 Gentoo Authors
+# Distributed under the terms of the GNU General Public License v2
+
+EAPI=8
+DESCRIPTION="A sufficiently descriptive test package"
+HOMEPAGE="https://example.com"
+LICENSE="MIT"
+SLOT="0"
+KEYWORDS="~amd64"
+`)
+	os.WriteFile(overlayPath+"/app-misc/notice-pkg/notice-pkg-1.0.ebuild", noticeEbuild, 0644)
+	os.WriteFile(overlayPath+"/app-misc/notice-pkg/Manifest", []byte(""), 0644)
+
+	metadataContent := []byte(`<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE pkgmetadata SYSTEM "https://www.gentoo.org/dtd/metadata.dtd">
+<pkgmetadata>
+	<maintainer type="person">
+		<email>test@example.com</email>
+	</maintainer>
+</pkgmetadata>`)
+	os.WriteFile(overlayPath+"/app-misc/notice-pkg/metadata.xml", metadataContent, 0644)
+
+	// Test github-actions format returns 0 with default failSeverity, but still outputs a notice
+	outNotice, err := captureStdout(t, func() error {
+		return cfg.cmdLintPackage([]string{"--format", "github-actions", overlayPath, "app-misc/notice-pkg"})
+	})
+
+	if err != nil {
+		t.Fatalf("expected github-actions format to exit 0 with notice, got err: %v", err)
+	}
+	if !strings.Contains(outNotice, "::notice ") {
+		t.Errorf("expected github-actions format to still output a notice, got: %s", outNotice)
+	}
+}
+
+func TestCmdLintTargetedAccessLimit(t *testing.T) {
+	// A package with a noticeable problem (no maintainer -> Error, missing vars -> Warning, etc)
+	overlayPath := "../../testdata/test_overlay"
+
+	// Create tracking fs
+	tfs := &trackingFS{
+		FS:       os.DirFS(overlayPath),
+		Accessed: make(map[string]bool),
+	}
+
+	targetMap := make(map[string]bool)
+	targetMap["app-misc/foo"] = true
+
+	_, err := parseRepo(tfs, ".", "Test Overlay", false, nil, TargetPackages(targetMap))
+	if err != nil {
+		t.Fatalf("parseRepo failed: %v", err)
+	}
+
+	for k := range tfs.Accessed {
+		if strings.Contains(k, "bad_category") {
+			t.Errorf("targeted lint incorrectly accessed unrelated path: %s", k)
+		}
+	}
+
+	if !tfs.Accessed["app-misc/foo"] {
+		t.Errorf("targeted lint failed to access target package 'app-misc/foo'")
+	}
+}
+
+// trackingFS wraps an fs.FS to track directory and file accesses.
+type trackingFS struct {
+	fs.FS
+	Accessed map[string]bool
+}
+
+func (t *trackingFS) Open(name string) (fs.File, error) {
+	t.Accessed[name] = true
+	return t.FS.Open(name)
+}
+
+func (t *trackingFS) ReadDir(name string) ([]fs.DirEntry, error) {
+	t.Accessed[name] = true
+	return fs.ReadDir(t.FS, name)
 }
