@@ -34,6 +34,12 @@ func TestCmdVerifyTransactional(t *testing.T) {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
+		if r.URL.Path == "/trunc.tar.gz" {
+			w.Header().Set("Content-Length", "1000") // Claim 1000 bytes
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte("truncated")) // Send only 9 bytes
+			return
+		}
 		if r.URL.Path == "/good.tar.gz" {
 			_, _ = w.Write([]byte("good data"))
 			return
@@ -118,7 +124,7 @@ SLOT="0"
 		writeTestEbuild(t, dir, "foo-1.0.ebuild", fmt.Sprintf(`EAPI=8
 DESCRIPTION="foo"
 SLOT="0"
-SRC_URI="%s/fail.tar.gz -> fail.tar.gz"
+SRC_URI="%s/trunc.tar.gz -> trunc.tar.gz"
 `, ts.URL))
 		originalManifest := "DIST obsolete.tar.gz 123 SHA512 abc\n"
 		writeTestManifest(t, dir, originalManifest)
@@ -127,6 +133,9 @@ SRC_URI="%s/fail.tar.gz -> fail.tar.gz"
 		err := cfg.cmdVerify([]string{"--fix", "--clean", dir}, hashes)
 		if err == nil {
 			t.Fatalf("Expected cmdVerify to fail")
+		}
+		if strings.Contains(err.Error(), "bad status") {
+			t.Fatalf("Expected body processing failure, but got bad status error: %v", err)
 		}
 
 		b, _ := os.ReadFile(filepath.Join(dir, "Manifest"))

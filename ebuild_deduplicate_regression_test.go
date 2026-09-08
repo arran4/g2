@@ -52,7 +52,6 @@ func TestDeduplicateEbuildsRegression(t *testing.T) {
 	}
 }
 
-
 func TestDeduplicateEbuildsWriteErrorRegression(t *testing.T) {
 	dir := t.TempDir()
 

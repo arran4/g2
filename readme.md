@@ -94,7 +94,7 @@ g2 manifest verify [location]
 
 #### `clean`
 
-Cleans up unused entries from the `Manifest` file.
+Cleans up unused entries from the `Manifest` file, safely skipping directories containing any ebuild with incomplete or external sources (e.g., eclasses).
 
 **Usage:**
 
