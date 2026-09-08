@@ -397,3 +397,46 @@ func (t *trackingFS) ReadDir(name string) ([]fs.DirEntry, error) {
 	t.Accessed[name] = true
 	return fs.ReadDir(t.FS, name)
 }
+
+func TestCmdLintTargetedSyntaxes(t *testing.T) {
+	cfg := &MainArgConfig{}
+	overlayPath := "../../testdata/test_overlay"
+
+	// 1. New package syntax
+	outNew, errNew := captureStdout(t, func() error {
+		return cfg.cmdLintPackage([]string{"--format", "json", overlayPath, "app-misc/foo"})
+	})
+	if errNew == nil {
+		t.Errorf("expected new syntax to fail due to foo errors, but it passed")
+	}
+
+	// 2. Legacy package syntax
+	outLegacy, errLegacy := captureStdout(t, func() error {
+		return cfg.runOldLint([]string{"--format", "json", overlayPath, "app-misc/foo"})
+	})
+	if errLegacy == nil {
+		t.Errorf("expected legacy syntax to fail due to foo errors, but it passed")
+	}
+
+	// 3. Exact Category Target syntax
+	outCategory, errCat := captureStdout(t, func() error {
+		return cfg.runOldLint([]string{"--format", "json", overlayPath, "app-misc"})
+	})
+	if errCat == nil {
+		t.Errorf("expected category syntax to fail due to foo errors, but it passed")
+	}
+
+	// Check that none of these reached bad_category
+	for _, out := range []string{outNew, outLegacy, outCategory} {
+		if strings.Contains(out, "bad_category") {
+			t.Errorf("targeted lint incorrectly leaked into unrelated 'bad_category'. Output snippet: %s", out[:min(len(out), 200)])
+		}
+	}
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}

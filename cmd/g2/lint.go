@@ -126,18 +126,25 @@ func (cfg *MainArgConfig) runOldLint(args []string) error {
 		}
 	}
 
-	siteData, err := parseRepo(os.DirFS(location), ".", "Linting", true, nil)
-	if err != nil {
-		return fmt.Errorf("parsing repo: %w", err)
+	failLvl := severityLevel(*failSeverity)
+	if failLvl == -1 {
+		return fmt.Errorf("invalid fail-severity: %s", *failSeverity)
 	}
 
 	var targetMap map[string]bool
+	var opts []any
 	if len(targetPkgs) > 0 {
 		targetMap = make(map[string]bool)
 		for _, p := range targetPkgs {
 			cleanP := filepath.ToSlash(filepath.Clean(p))
 			targetMap[cleanP] = true
 		}
+		opts = append(opts, TargetPackages(targetMap))
+	}
+
+	siteData, err := parseRepo(os.DirFS(location), ".", "Linting", true, nil, opts...)
+	if err != nil {
+		return fmt.Errorf("parsing repo: %w", err)
 	}
 
 	hasErrors := false
