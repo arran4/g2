@@ -263,9 +263,18 @@ func TestDeduplicateEbuildsCacheRemovalRelative(t *testing.T) {
 	}
 
 	// Chdir to use relative paths
-	cwd, _ := os.Getwd()
-	os.Chdir(dir)
-	defer os.Chdir(cwd)
+	cwd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("Getwd failed: %v", err)
+	}
+	if err := os.Chdir(dir); err != nil {
+		t.Fatalf("Chdir failed: %v", err)
+	}
+	defer func() {
+		if err := os.Chdir(cwd); err != nil {
+			t.Fatalf("Chdir back failed: %v", err)
+		}
+	}()
 
 	// Deduplicate relative paths
 	removed, err := DeduplicateEbuilds([]string{filepath.Join(cat, pkg)})

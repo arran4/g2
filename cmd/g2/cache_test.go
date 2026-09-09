@@ -165,10 +165,15 @@ func TestDoCacheVerify(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "metadata", "md5-cache", "sys-apps", "orphan-2.0"), []byte(""), 0644); err != nil {
 		t.Fatalf("WriteFile failed: %v", err)
 	}
+
+	snapBefore := snapshotDir(t, dir)
 	err = doCacheVerify(cfs, ".")
 	if err == nil {
 		t.Errorf("Expected verify to fail due to orphan entry")
 	}
+	snapAfter := snapshotDir(t, dir)
+	assertSnapshotEqual(t, snapBefore, snapAfter)
+
 	if err := os.Remove(filepath.Join(dir, "metadata", "md5-cache", "sys-apps", "orphan-2.0")); err != nil {
 		t.Fatalf("Remove failed: %v", err)
 	}
