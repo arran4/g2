@@ -224,6 +224,27 @@ func GenerateCacheFS(cfs CacheFS, repoDir string, targetPkgs []string, genEclass
 	return nil
 }
 
+// GetCacheDir returns the canonical directory for the given cache format and category.
+func GetCacheDir(repoDir string, format string, category string) string {
+	if format == "md5-dict" {
+		return filepath.ToSlash(filepath.Join(repoDir, "metadata", "md5-cache", category))
+	}
+	return filepath.ToSlash(filepath.Join(repoDir, "metadata", format, category))
+}
+
+// GetCachePath returns the canonical file path for a specific package version's cache entry.
+func GetCachePath(repoDir string, format string, category string, name string, version string) string {
+	return filepath.ToSlash(filepath.Join(GetCacheDir(repoDir, format, category), fmt.Sprintf("%s-%s", name, version)))
+}
+
+// GetLegacyCacheDir returns the non-canonical legacy cache directory, if any.
+func GetLegacyCacheDir(repoDir string, format string) string {
+	if format == "md5-dict" {
+		return filepath.ToSlash(filepath.Join(repoDir, "metadata", "md5-dict"))
+	}
+	return ""
+}
+
 func isCacheVariable(key string) bool {
 	validKeys := map[string]bool{
 		"BDEPEND":        true,
