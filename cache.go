@@ -237,7 +237,7 @@ func GenerateCacheFS(cfs CacheFS, repoDir string, targetPkgs []string, genEclass
 						return fmt.Errorf("creating cache file %s: %w", verCachePath, err)
 					}
 					if _, err := f.Write([]byte(expectedContent.String())); err != nil {
-						f.Close()
+						_ = f.Close()
 						return fmt.Errorf("writing cache file %s: %w", verCachePath, err)
 					}
 					if err := f.Close(); err != nil {
