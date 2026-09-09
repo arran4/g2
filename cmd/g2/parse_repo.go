@@ -232,7 +232,7 @@ func isCategoryAllowed(repoCats map[string]bool, hasGentooMaster bool, mainCats 
 }
 
 // parseRepoCategoriesAndPackages recursively crawls and parses the repo's categories, packages, and their ebuilds.
-func parseRepoCategoriesAndPackages(sysFS fs.FS, repoDir string, repoName string, fastGit bool, remoteURL string, site *g2.SiteData) error {
+func parseRepoCategoriesAndPackages(sysFS fs.FS, repoDir string, repoName string, fastGit bool, remoteURL string, site *g2.SiteData, targetMap TargetPackages) error {
 	supportedCategories := make(map[string]bool)
 	if categoriesBytes, err := fs.ReadFile(sysFS, filepath.ToSlash(filepath.Join(repoDir, "profiles", "categories"))); err == nil {
 		for _, line := range strings.Split(string(categoriesBytes), "\n") {
@@ -309,6 +309,28 @@ func parseRepoCategoriesAndPackages(sysFS fs.FS, repoDir string, repoName string
 			continue
 		}
 
+		if len(targetMap) > 0 {
+			categoryAllowed := false
+			if targetMap[name] {
+				categoryAllowed = true
+			} else {
+				for tp := range targetMap {
+					parts := strings.Split(tp, "/")
+					if len(parts) == 2 && parts[0] == name {
+						categoryAllowed = true
+						break
+					} else if len(parts) == 1 {
+						// It's a bare package name, we must search all categories
+						categoryAllowed = true
+						break
+					}
+				}
+			}
+			if !categoryAllowed {
+				continue
+			}
+		}
+
 		catData := g2.CategoryData{Name: name}
 		catPath := filepath.Join(repoDir, name)
 
@@ -336,6 +358,13 @@ func parseRepoCategoriesAndPackages(sysFS fs.FS, repoDir string, repoName string
 			}
 
 			pkgStr := name + "/" + pkgName
+
+			if len(targetMap) > 0 {
+				qualified := pkgStr
+				if !targetMap[qualified] && !targetMap[pkgName] && !targetMap[name] {
+					continue
+				}
+			}
 
 			files, err := fs.ReadDir(sysFS, filepath.ToSlash(pkgPath))
 			if err != nil {

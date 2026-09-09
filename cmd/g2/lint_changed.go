@@ -26,6 +26,7 @@ func (cfg *MainArgConfig) cmdLintChanged(args []string) error {
 	}
 	format := fs.String("format", "text", "Output format: text, json, or github-actions")
 	severityFilter := fs.String("severity", "", "Only show warnings of this severity (error, warning, notice, info)")
+	failSeverity := fs.String("fail-severity", "warning", "Fail on this severity and worse (error, warning, notice, info)")
 	sourceFilter := fs.String("only-source", "", "Only show warnings from this source (g2, pkgcheck)")
 	tagFilter := fs.String("only-tag", "", "Only show warnings with this tag")
 	disableRule := fs.String("disable-rule", "", "Comma-separated list of rule IDs to ignore (case-insensitive)")
@@ -58,7 +59,7 @@ func (cfg *MainArgConfig) cmdLintChanged(args []string) error {
 		targetMap[p] = true
 	}
 
-	return cfg.runLintCore(location, targetMap, nil, *format, *severityFilter, *sourceFilter, *tagFilter, *disableRule, *ignoreTag)
+	return cfg.runLintCore(location, targetMap, nil, *format, *severityFilter, *failSeverity, *sourceFilter, *tagFilter, *disableRule, *ignoreTag)
 }
 
 func getGitModifiedPackagesChanged(repoDir string, explicitBase string) ([]string, error) {

@@ -286,6 +286,7 @@ g2 lint [flags] [<location>] [<target_package>...]
 * `-upstream-repo-path <path>`: Path to upstream repository on disk for layout linting (overrides GitHub API).
 * `-format <string>`: Output format: `text`, `json`, or `github-actions` (default `text`).
 * `-severity <string>`: Only show warnings of this severity (`error`, `warning`, `notice`, `info`).
+* `-fail-severity <string>`: Fail on this severity and worse (`error`, `warning`, `notice`, `info`, default `warning`).
 * `-only-source <string>`: Only show warnings from this source (`g2`, `pkgcheck`).
 * `-only-tag <string>`: Only show warnings with this tag.
 * `-disable-rule <string>`: Comma-separated list of rule IDs to ignore (case-insensitive).
@@ -535,6 +536,7 @@ Gentoo version ordering is natively supported for range queries like `version:>1
 
 *   `-format <string>`: Output format: `text` or `json` (default `text`).
 *   `-severity <string>`: Only show warnings of this severity (`Error`, `Warning`, `Notice`, `Info`).
+*   `-fail-severity <string>`: Fail on this severity and worse (`Error`, `Warning`, `Notice`, `Info`, default `Warning`).
 *   `-only-source <string>`: Only show warnings from this source (`g2`, `pkgcheck`).
 *   `-only-tag <string>`: Only show warnings with this tag (e.g., `site-quality`, `metadata.xml`).
 

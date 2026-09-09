@@ -32,6 +32,7 @@ func TestGetGitModifiedPackagesChanged(t *testing.T) {
 	runCmd("git", "init")
 	runCmd("git", "config", "user.name", "g2 test")
 	runCmd("git", "config", "user.email", "g2-test@example.invalid")
+	runCmd("git", "config", "commit.gpgsign", "false")
 
 	// 2. Initial state
 	err = os.MkdirAll(filepath.Join(tmpDir, "app-misc", "foo"), 0755)

@@ -84,6 +84,7 @@ func (cfg *MainArgConfig) runOldLint(args []string) error {
 	}
 	format := fs.String("format", "text", "Output format: text, json, or github-actions")
 	severityFilter := fs.String("severity", "", "Only show warnings of this severity (error, warning, notice, info)")
+	failSeverity := fs.String("fail-severity", "warning", "Fail on this severity and worse (error, warning, notice, info)")
 	sourceFilter := fs.String("only-source", "", "Only show warnings from this source (g2, pkgcheck)")
 	tagFilter := fs.String("only-tag", "", "Only show warnings with this tag")
 	disableRule := fs.String("disable-rule", "", "Comma-separated list of rule IDs to ignore (case-insensitive)")
@@ -125,21 +126,25 @@ func (cfg *MainArgConfig) runOldLint(args []string) error {
 		}
 	}
 
-	siteData, err := parseRepo(os.DirFS(location), ".", "Linting", true, nil)
-	if err != nil {
-		return fmt.Errorf("parsing repo: %w", err)
+	if severityLevel(*failSeverity) == -1 {
+		return fmt.Errorf("invalid fail-severity: %s", *failSeverity)
 	}
 
 	var targetMap map[string]bool
+	var opts []any
 	if len(targetPkgs) > 0 {
 		targetMap = make(map[string]bool)
 		for _, p := range targetPkgs {
 			cleanP := filepath.ToSlash(filepath.Clean(p))
 			targetMap[cleanP] = true
 		}
+		opts = append(opts, TargetPackages(targetMap))
 	}
 
-	hasErrors := false
+	siteData, err := parseRepo(os.DirFS(location), ".", "Linting", true, nil, opts...)
+	if err != nil {
+		return fmt.Errorf("parsing repo: %w", err)
+	}
 
 	var allResults []lints.LintResult
 
@@ -228,7 +233,6 @@ func (cfg *MainArgConfig) runOldLint(args []string) error {
 			}
 
 			if len(filteredWarnings) > 0 {
-				hasErrors = true
 				if *format == "text" {
 					packageGroups := make(map[string][]lints.LintResult)
 					for _, w := range filteredWarnings {
@@ -265,7 +269,7 @@ func (cfg *MainArgConfig) runOldLint(args []string) error {
 		printGithubActions(allResults)
 	}
 
-	if hasErrors {
+	if hasFailingLintResults(allResults, *failSeverity) {
 		return fmt.Errorf("linting found errors")
 	}
 
@@ -328,6 +332,34 @@ func escapeGithubProperty(s string) string {
 	return s
 }
 
+func severityLevel(s string) int {
+	switch strings.ToLower(s) {
+	case "error":
+		return 3
+	case "warning":
+		return 2
+	case "notice":
+		return 1
+	case "info":
+		return 0
+	default:
+		return -1
+	}
+}
+
+func hasFailingLintResults(results []lints.LintResult, failSeverity string) bool {
+	failLvl := severityLevel(failSeverity)
+	if failLvl == -1 {
+		return false
+	}
+	for _, res := range results {
+		if severityLevel(string(res.RuleMetadata.Severity)) >= failLvl {
+			return true
+		}
+	}
+	return false
+}
+
 type LintQuery struct {
 	RepoPath  string
 	Category  string
@@ -337,13 +369,20 @@ type LintQuery struct {
 	VWildcard string // e.g. "3." for "v3"
 }
 
-func (cfg *MainArgConfig) runLintCore(location string, targetMap map[string]bool, query *LintQuery, format, severityFilter, sourceFilter, tagFilter, disableRule, ignoreTag string) error {
-	siteData, err := parseRepo(os.DirFS(location), ".", "Linting", true, nil)
+func (cfg *MainArgConfig) runLintCore(location string, targetMap map[string]bool, query *LintQuery, format, severityFilter, failSeverity, sourceFilter, tagFilter, disableRule, ignoreTag string) error {
+	if severityLevel(failSeverity) == -1 {
+		return fmt.Errorf("invalid fail-severity: %s", failSeverity)
+	}
+
+	var opts []any
+	if len(targetMap) > 0 {
+		opts = append(opts, TargetPackages(targetMap))
+	}
+	siteData, err := parseRepo(os.DirFS(location), ".", "Linting", true, nil, opts...)
 	if err != nil {
 		return fmt.Errorf("parsing repo: %w", err)
 	}
 
-	hasErrors := false
 	var allResults []lints.LintResult
 
 	// Run repository-level lints
@@ -403,7 +442,6 @@ func (cfg *MainArgConfig) runLintCore(location string, targetMap map[string]bool
 			filteredRepoWarnings = append(filteredRepoWarnings, w)
 		}
 		if len(filteredRepoWarnings) > 0 {
-			hasErrors = true
 			if format == "text" {
 				fmt.Printf("[Repository]\n")
 				for _, w := range filteredRepoWarnings {
@@ -486,7 +524,6 @@ func (cfg *MainArgConfig) runLintCore(location string, targetMap map[string]bool
 		}
 
 		if len(filteredEclassWarnings) > 0 {
-			hasErrors = true
 			if format == "text" {
 				packageGroups := make(map[string][]lints.LintResult)
 				for _, w := range filteredEclassWarnings {
@@ -646,7 +683,6 @@ func (cfg *MainArgConfig) runLintCore(location string, targetMap map[string]bool
 			}
 
 			if len(filteredWarnings) > 0 {
-				hasErrors = true
 				if format == "text" {
 					packageGroups := make(map[string][]lints.LintResult)
 					for _, w := range filteredWarnings {
@@ -675,7 +711,7 @@ func (cfg *MainArgConfig) runLintCore(location string, targetMap map[string]bool
 		printGithubActions(allResults)
 	}
 
-	if hasErrors {
+	if hasFailingLintResults(allResults, failSeverity) {
 		return fmt.Errorf("linting found errors")
 	}
 
@@ -695,6 +731,7 @@ func (cfg *MainArgConfig) cmdLintRepo(args []string) error {
 	}
 	format := fs.String("format", "text", "Output format: text, json, or github-actions")
 	severityFilter := fs.String("severity", "", "Only show warnings of this severity (error, warning, notice, info)")
+	failSeverity := fs.String("fail-severity", "warning", "Fail on this severity and worse (error, warning, notice, info)")
 	sourceFilter := fs.String("only-source", "", "Only show warnings from this source (g2, pkgcheck)")
 	tagFilter := fs.String("only-tag", "", "Only show warnings with this tag")
 	disableRule := fs.String("disable-rule", "", "Comma-separated list of rule IDs to ignore (case-insensitive)")
@@ -719,7 +756,7 @@ func (cfg *MainArgConfig) cmdLintRepo(args []string) error {
 		location = fs.Arg(0)
 	}
 
-	return cfg.runLintCore(location, nil, nil, *format, *severityFilter, *sourceFilter, *tagFilter, *disableRule, *ignoreTag)
+	return cfg.runLintCore(location, nil, nil, *format, *severityFilter, *failSeverity, *sourceFilter, *tagFilter, *disableRule, *ignoreTag)
 }
 
 func (cfg *MainArgConfig) cmdLintPackage(args []string) error {
@@ -733,6 +770,7 @@ func (cfg *MainArgConfig) cmdLintPackage(args []string) error {
 	}
 	format := fs.String("format", "text", "Output format: text, json, or github-actions")
 	severityFilter := fs.String("severity", "", "Only show warnings of this severity (error, warning, notice, info)")
+	failSeverity := fs.String("fail-severity", "warning", "Fail on this severity and worse (error, warning, notice, info)")
 	sourceFilter := fs.String("only-source", "", "Only show warnings from this source (g2, pkgcheck)")
 	tagFilter := fs.String("only-tag", "", "Only show warnings with this tag")
 	disableRule := fs.String("disable-rule", "", "Comma-separated list of rule IDs to ignore (case-insensitive)")
@@ -784,7 +822,7 @@ func (cfg *MainArgConfig) cmdLintPackage(args []string) error {
 		targetMap[cleanP] = true
 	}
 
-	return cfg.runLintCore(location, targetMap, nil, *format, *severityFilter, *sourceFilter, *tagFilter, *disableRule, *ignoreTag)
+	return cfg.runLintCore(location, targetMap, nil, *format, *severityFilter, *failSeverity, *sourceFilter, *tagFilter, *disableRule, *ignoreTag)
 }
 
 func parseLintQuery(queryStr string, defaultLocation string) (*LintQuery, error) {
@@ -900,6 +938,7 @@ func (cfg *MainArgConfig) cmdLintQuery(args []string) error {
 	}
 	format := fs.String("format", "text", "Output format: text, json, or github-actions")
 	severityFilter := fs.String("severity", "", "Only show warnings of this severity (error, warning, notice, info)")
+	failSeverity := fs.String("fail-severity", "warning", "Fail on this severity and worse (error, warning, notice, info)")
 	sourceFilter := fs.String("only-source", "", "Only show warnings from this source (g2, pkgcheck)")
 	tagFilter := fs.String("only-tag", "", "Only show warnings with this tag")
 	disableRule := fs.String("disable-rule", "", "Comma-separated list of rule IDs to ignore (case-insensitive)")
@@ -926,5 +965,5 @@ func (cfg *MainArgConfig) cmdLintQuery(args []string) error {
 		return fmt.Errorf("parsing query: %w", err)
 	}
 
-	return cfg.runLintCore(query.RepoPath, nil, query, *format, *severityFilter, *sourceFilter, *tagFilter, *disableRule, *ignoreTag)
+	return cfg.runLintCore(query.RepoPath, nil, query, *format, *severityFilter, *failSeverity, *sourceFilter, *tagFilter, *disableRule, *ignoreTag)
 }
