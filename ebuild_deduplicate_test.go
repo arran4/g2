@@ -153,7 +153,7 @@ func TestDeduplicateEbuildsCacheRemoval(t *testing.T) {
 	// Setup repo
 	cat := "sys-apps"
 	pkg := "test"
-	os.MkdirAll(filepath.Join(dir, cat, pkg), 0755)
+	_ = os.MkdirAll(filepath.Join(dir, cat, pkg), 0755)
 
 	ebuildPaths := []string{
 		filepath.Join(dir, cat, pkg, "test-1.0.ebuild"),
@@ -161,16 +161,16 @@ func TestDeduplicateEbuildsCacheRemoval(t *testing.T) {
 		filepath.Join(dir, cat, pkg, "test-2.0.ebuild"),    // Kept (different version)
 	}
 
-	os.WriteFile(ebuildPaths[0], []byte(`DESCRIPTION="test1"
+	_ = os.WriteFile(ebuildPaths[0], []byte(`DESCRIPTION="test1"
 `), 0644)
-	os.WriteFile(ebuildPaths[1], []byte(`DESCRIPTION="test1"
+	_ = os.WriteFile(ebuildPaths[1], []byte(`DESCRIPTION="test1"
 `), 0644)
-	os.WriteFile(ebuildPaths[2], []byte(`DESCRIPTION="test2"
+	_ = os.WriteFile(ebuildPaths[2], []byte(`DESCRIPTION="test2"
 `), 0644)
 
 	// Create cache entries
 	cacheDir := filepath.Join(dir, "metadata", "md5-cache", cat)
-	os.MkdirAll(cacheDir, 0755)
+	_ = os.MkdirAll(cacheDir, 0755)
 
 	cachePaths := []string{
 		filepath.Join(cacheDir, "test-1.0"),
@@ -178,7 +178,7 @@ func TestDeduplicateEbuildsCacheRemoval(t *testing.T) {
 		filepath.Join(cacheDir, "test-2.0"),
 	}
 	for _, p := range cachePaths {
-		os.WriteFile(p, []byte(`_md5_=123
+		_ = os.WriteFile(p, []byte(`_md5_=123
 `), 0644)
 	}
 
