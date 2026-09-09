@@ -166,20 +166,16 @@ func doCacheVerify(cfs g2.CacheFS, repoDir string) error {
 		// 3. Detect orphan/stale entries
 		formatDir := g2.GetCacheRoot(repoDir, format)
 		if _, err := cfs.Stat(formatDir); err == nil {
-			_ = cfs.Walk(formatDir, func(path string, d fs.DirEntry, err error) error {
-				if err != nil || d.IsDir() {
+			err = cfs.Walk(formatDir, func(path string, d fs.DirEntry, err error) error {
+				if err != nil {
+					log.Printf("Walk error at %s: %v", path, err)
+					hasErrors = true
+					return err
+				}
+				if d.IsDir() {
 					return nil
 				}
 
-				// check if the file is in valid entries
-				// we stored validCacheEntries with GetCachePath output directly
-				// GetCachePath combines repoDir, so Walk gives relative path from Base in OsCacheFS?
-				// Actually Walk returns path passed to it in typical usage. OsCacheFS Walk returns path relative to base.
-				// Since we called g2.GetCacheDir with repoDir, if OsCacheFS base is repoDir, `cfs.Walk("metadata/md5-cache")` will yield `metadata/md5-cache/...`.
-				// GetCachePath uses repoDir. If repoDir=".", GetCachePath="metadata/md5-cache/...".
-				// We can just build expected full path for comparison
-
-				// Safest way: check base names and categories if they match valid map
 				found := false
 				for validPath := range validCacheEntries {
 					if filepath.Clean(validPath) == filepath.Clean(path) {
@@ -193,6 +189,10 @@ func doCacheVerify(cfs g2.CacheFS, repoDir string) error {
 				}
 				return nil
 			})
+			if err != nil {
+				log.Printf("Walk failed on format dir: %v", err)
+				hasErrors = true
+			}
 		}
 	}
 
@@ -327,7 +327,10 @@ func doCacheClean(cfs g2.CacheFS, repoDir string) error {
 		formatDir := g2.GetCacheRoot(repoDir, format)
 		if _, err := cfs.Stat(formatDir); err == nil {
 			err = cfs.Walk(formatDir, func(path string, d fs.DirEntry, err error) error {
-				if err != nil || d.IsDir() {
+				if err != nil {
+					return err
+				}
+				if d.IsDir() {
 					return nil
 				}
 				found := false
@@ -341,6 +344,7 @@ func doCacheClean(cfs g2.CacheFS, repoDir string) error {
 					log.Printf("Removing unused cache entry: %s", path)
 					if err := cfs.Remove(path); err != nil {
 						log.Printf("Failed to remove %s: %v", path, err)
+						return fmt.Errorf("removing cache entry %s: %w", path, err)
 					} else {
 						cleanedCount++
 					}
@@ -350,6 +354,8 @@ func doCacheClean(cfs g2.CacheFS, repoDir string) error {
 			if err != nil {
 				return fmt.Errorf("walking cache dir %s: %w", formatDir, err)
 			}
+		} else if !os.IsNotExist(err) {
+			return fmt.Errorf("stat cache dir %s: %w", formatDir, err)
 		}
 
 		// Explicit legacy cleanup
@@ -357,19 +363,29 @@ func doCacheClean(cfs g2.CacheFS, repoDir string) error {
 		if legacyDir != "" {
 			if _, err := cfs.Stat(legacyDir); err == nil {
 				log.Printf("Removing legacy metadata/md5-dict directory")
-				_ = cfs.Walk(legacyDir, func(path string, d fs.DirEntry, err error) error {
-					if err == nil && !d.IsDir() {
+				err = cfs.Walk(legacyDir, func(path string, d fs.DirEntry, err error) error {
+					if err != nil {
+						return err
+					}
+					if !d.IsDir() {
 						if err := cfs.Remove(path); err != nil {
 							log.Printf("Failed to remove legacy cache entry %s: %v", path, err)
+							return fmt.Errorf("removing legacy cache entry %s: %w", path, err)
 						} else {
 							cleanedCount++
 						}
 					}
 					return nil
 				})
+				if err != nil {
+					return fmt.Errorf("walking legacy dir %s: %w", legacyDir, err)
+				}
 				if err := cfs.RemoveAll(legacyDir); err != nil {
 					log.Printf("Failed to remove legacy directory %s: %v", legacyDir, err)
+					return fmt.Errorf("removing legacy dir %s: %w", legacyDir, err)
 				}
+			} else if !os.IsNotExist(err) {
+				return fmt.Errorf("stat legacy dir %s: %w", legacyDir, err)
 			}
 		}
 	}

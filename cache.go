@@ -184,22 +184,18 @@ func GenerateCacheFS(cfs CacheFS, repoDir string, targetPkgs []string, genEclass
 
 					verCachePath := GetCachePath(repoDir, format, cat, pkgName, pv)
 
-					f, err := cfs.Create(verCachePath)
-					if err != nil {
-						return fmt.Errorf("creating cache file %s: %w", verCachePath, err)
-					}
-
 					var keys []string
 					for k := range ebuild.Vars {
 						keys = append(keys, k)
 					}
 					sort.Strings(keys)
 
+					var expectedContent strings.Builder
 					for _, k := range keys {
 						v := ebuild.Vars[k]
 						if v != "" {
 							if isCacheVariable(k) {
-								_, _ = fmt.Fprintf(f, "%s=%s\n", k, v)
+								expectedContent.WriteString(fmt.Sprintf("%s=%s\n", k, v))
 							}
 						}
 					}
@@ -207,7 +203,7 @@ func GenerateCacheFS(cfs CacheFS, repoDir string, targetPkgs []string, genEclass
 					ebuildContent, err := fs.ReadFile(cfs, filepath.ToSlash(ebuildPath))
 					if err == nil {
 						md5sum := fmt.Sprintf("%x", md5.Sum(ebuildContent))
-						_, _ = fmt.Fprintf(f, "_md5_=%s\n", md5sum)
+						expectedContent.WriteString(fmt.Sprintf("_md5_=%s\n", md5sum))
 					}
 
 					if genEclasses {
@@ -223,11 +219,21 @@ func GenerateCacheFS(cfs CacheFS, repoDir string, targetPkgs []string, genEclass
 								}
 							}
 							if len(eclassParts) > 0 {
-								_, _ = fmt.Fprintf(f, "_eclasses_=%s\n", strings.Join(eclassParts, "\t"))
+								expectedContent.WriteString(fmt.Sprintf("_eclasses_=%s\n", strings.Join(eclassParts, "\t")))
 							}
 						}
 					}
 
+					existingContent, err := fs.ReadFile(cfs, verCachePath)
+					if err == nil && string(existingContent) == expectedContent.String() {
+						continue // Idempotent skip
+					}
+
+					f, err := cfs.Create(verCachePath)
+					if err != nil {
+						return fmt.Errorf("creating cache file %s: %w", verCachePath, err)
+					}
+					_, _ = f.Write([]byte(expectedContent.String()))
 					_ = f.Close()
 				}
 			}
