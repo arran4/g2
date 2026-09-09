@@ -78,9 +78,10 @@ func doCacheVerify(cfs g2.CacheFS, repoDir string) error {
 		_ = f.Close()
 		lc, err = parseLayoutConfFromFS(cfs, layoutConfPath)
 		if err != nil {
-			log.Printf("Warning: failed to parse layout.conf: %v", err)
-			lc = nil
+			return fmt.Errorf("failed to parse layout.conf: %w", err)
 		}
+	} else if !os.IsNotExist(err) {
+		return fmt.Errorf("failed to open layout.conf: %w", err)
 	}
 
 	cacheFormats := []string{"md5-dict"} // Default if not found
