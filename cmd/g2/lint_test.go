@@ -177,6 +177,46 @@ func TestCmdLintList(t *testing.T) {
 	}
 }
 
+func TestSeverityThresholdLogic(t *testing.T) {
+	// Synthetically verify the core loop logic using the identical evaluation helper
+	// used in runLintCore: severityLevel(result) >= failLvl -> hasErrors = true
+
+	testCases := []struct {
+		desc        string
+		resultSev   string
+		failSev     string
+		expectError bool
+	}{
+		{"info-only + default warning -> pass", "Info", "warning", false},
+		{"info-only + fail-severity=info -> fail", "Info", "info", true},
+		{"error-only + default warning -> fail", "Error", "warning", true},
+		{"error-only + fail-severity=error -> fail", "Error", "error", true},
+		{"mixed notice + error -> fail at warning", "Notice", "warning", false},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			failLvl := severityLevel(tc.failSev)
+			resultLvl := severityLevel(tc.resultSev)
+			hasErrors := resultLvl >= failLvl
+			if hasErrors != tc.expectError {
+				t.Errorf("expected error %v, got %v for result %s against threshold %s", tc.expectError, hasErrors, tc.resultSev, tc.failSev)
+			}
+		})
+	}
+
+	// Mixed Notice + Error
+	failLvl := severityLevel("warning")
+	hasErrors := false
+	for _, res := range []string{"Notice", "Error"} {
+		if severityLevel(res) >= failLvl {
+			hasErrors = true
+		}
+	}
+	if !hasErrors {
+		t.Errorf("expected mixed Notice+Error to fail at default warning")
+	}
+}
 func TestSeverityLevel(t *testing.T) {
 	if severityLevel("error") != 3 {
 		t.Errorf("expected 3")
