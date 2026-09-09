@@ -2,6 +2,7 @@ package main
 
 import (
 	"github.com/arran4/g2"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -49,6 +50,28 @@ func assertSnapshotEqual(t *testing.T, snap1, snap2 map[string]string) {
 	}
 }
 
+type SpyCacheFS struct {
+	g2.CacheFS
+	creates    int
+	removes    int
+	removesAll int
+}
+
+func (s *SpyCacheFS) Create(name string) (io.WriteCloser, error) {
+	s.creates++
+	return s.CacheFS.Create(name)
+}
+
+func (s *SpyCacheFS) Remove(name string) error {
+	s.removes++
+	return s.CacheFS.Remove(name)
+}
+
+func (s *SpyCacheFS) RemoveAll(name string) error {
+	s.removesAll++
+	return s.CacheFS.RemoveAll(name)
+}
+
 func setupTestRepo(t *testing.T) (string, g2.CacheFS) {
 	dir := t.TempDir()
 
@@ -72,7 +95,8 @@ func setupTestRepo(t *testing.T) (string, g2.CacheFS) {
 }
 
 func TestDoCacheReconcile(t *testing.T) {
-	dir, cfs := setupTestRepo(t)
+	dir, baseCfs := setupTestRepo(t)
+	cfs := &SpyCacheFS{CacheFS: baseCfs}
 
 	// 1. Create a legacy dict entry
 	legacyDir := filepath.Join(dir, "metadata", "md5-dict", "sys-apps")
@@ -115,12 +139,23 @@ func TestDoCacheReconcile(t *testing.T) {
 
 	// Idempotency check: run it again, it should still succeed
 	snap1 := snapshotDir(t, dir)
+
+	// Reset counters
+	cfs.creates = 0
+	cfs.removes = 0
+	cfs.removesAll = 0
+
 	err = doCacheReconcile(cfs, ".")
 	if err != nil {
 		t.Fatalf("Expected second reconcile to succeed idempotently, got %v", err)
 	}
 	snap2 := snapshotDir(t, dir)
 	assertSnapshotEqual(t, snap1, snap2)
+
+	// Assert ZERO mutations
+	if cfs.creates > 0 || cfs.removes > 0 || cfs.removesAll > 0 {
+		t.Fatalf("Expected 0 mutations on idempotent run, got %d creates, %d removes, %d removesAll", cfs.creates, cfs.removes, cfs.removesAll)
+	}
 }
 
 func TestDoCacheVerify(t *testing.T) {
@@ -185,5 +220,29 @@ func TestDoCacheVerify(t *testing.T) {
 	err = doCacheVerify(cfs, ".")
 	if err == nil {
 		t.Errorf("Expected verify to fail due to legacy directory")
+	}
+}
+
+func TestCacheUnknownFormat(t *testing.T) {
+	dir, cfs := setupTestRepo(t)
+	// Set layout to an unknown format
+	if err := os.WriteFile(filepath.Join(dir, "metadata", "layout.conf"), []byte("cache-formats = invalid-format\n"), 0644); err != nil {
+		t.Fatalf("WriteFile failed: %v", err)
+	}
+
+	// Clean should skip invalid-format and not create metadata/invalid-format
+	if err := doCacheClean(cfs, "."); err != nil {
+		t.Fatalf("clean failed: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "metadata", "invalid-format")); !os.IsNotExist(err) {
+		t.Fatalf("clean incorrectly created or operated on metadata/invalid-format")
+	}
+
+	// Generate should skip invalid-format
+	if err := g2.GenerateCacheFS(cfs, ".", nil, false); err != nil {
+		t.Fatalf("GenerateCacheFS failed: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "metadata", "invalid-format")); !os.IsNotExist(err) {
+		t.Fatalf("generate incorrectly created metadata/invalid-format")
 	}
 }

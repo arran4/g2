@@ -111,6 +111,9 @@ func doCacheVerify(cfs g2.CacheFS, repoDir string) error {
 			if _, err := cfs.Stat(legacyDir); err == nil {
 				fmt.Printf("Warning: Legacy metadata/md5-dict directory exists. Please run cache clean or reconcile.\n")
 				hasErrors = true
+			} else if !os.IsNotExist(err) {
+				log.Printf("Failed to stat legacy directory %s: %v", legacyDir, err)
+				hasErrors = true
 			}
 		}
 
@@ -165,32 +168,37 @@ func doCacheVerify(cfs g2.CacheFS, repoDir string) error {
 
 		// 3. Detect orphan/stale entries
 		formatDir := g2.GetCacheRoot(repoDir, format)
-		if _, err := cfs.Stat(formatDir); err == nil {
-			err = cfs.Walk(formatDir, func(path string, d fs.DirEntry, err error) error {
-				if err != nil {
-					log.Printf("Walk error at %s: %v", path, err)
-					hasErrors = true
-					return err
-				}
-				if d.IsDir() {
-					return nil
-				}
-
-				found := false
-				for validPath := range validCacheEntries {
-					if filepath.Clean(validPath) == filepath.Clean(path) {
-						found = true
-						break
+		if formatDir != "" {
+			if _, err := cfs.Stat(formatDir); err == nil {
+				err = cfs.Walk(formatDir, func(path string, d fs.DirEntry, err error) error {
+					if err != nil {
+						log.Printf("Walk error at %s: %v", path, err)
+						hasErrors = true
+						return err
 					}
-				}
-				if !found {
-					fmt.Printf("Stale/Orphan cache entry found: %s\n", path)
+					if d.IsDir() {
+						return nil
+					}
+
+					found := false
+					for validPath := range validCacheEntries {
+						if filepath.Clean(validPath) == filepath.Clean(path) {
+							found = true
+							break
+						}
+					}
+					if !found {
+						fmt.Printf("Stale/Orphan cache entry found: %s\n", path)
+						hasErrors = true
+					}
+					return nil
+				})
+				if err != nil {
+					log.Printf("Walk failed on format dir: %v", err)
 					hasErrors = true
 				}
-				return nil
-			})
-			if err != nil {
-				log.Printf("Walk failed on format dir: %v", err)
+			} else if !os.IsNotExist(err) {
+				log.Printf("Failed to stat cache directory %s: %v", formatDir, err)
 				hasErrors = true
 			}
 		}
@@ -325,6 +333,10 @@ func doCacheClean(cfs g2.CacheFS, repoDir string) error {
 
 	for _, format := range cacheFormats {
 		formatDir := g2.GetCacheRoot(repoDir, format)
+		if formatDir == "" {
+			log.Printf("Warning: cache format '%s' is not explicitly supported. Skipping.", format)
+			continue
+		}
 		if _, err := cfs.Stat(formatDir); err == nil {
 			err = cfs.Walk(formatDir, func(path string, d fs.DirEntry, err error) error {
 				if err != nil {

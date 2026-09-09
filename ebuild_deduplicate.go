@@ -177,8 +177,10 @@ func DeduplicateEbuilds(targets []string) ([]string, error) {
 								category := filepath.Base(filepath.Dir(filepath.Dir(dgItems[i].path)))
 								name := filepath.Base(filepath.Dir(dgItems[i].path))
 								cachePath := GetCachePath(repoRoot, "md5-dict", category, name, dgItems[i].version)
-								if err := os.Remove(cachePath); err != nil && !os.IsNotExist(err) {
-									log.Printf("Failed to remove cache entry %s: %v", cachePath, err)
+								if cachePath != "" {
+									if err := os.Remove(cachePath); err != nil && !os.IsNotExist(err) {
+										log.Printf("Failed to remove cache entry %s: %v", cachePath, err)
+									}
 								}
 
 							} else {
@@ -203,8 +205,10 @@ func DeduplicateEbuilds(targets []string) ([]string, error) {
 							category := filepath.Base(filepath.Dir(filepath.Dir(keptItems[i].path)))
 							name := filepath.Base(filepath.Dir(keptItems[i].path))
 							cachePath := GetCachePath(repoRoot, "md5-dict", category, name, keptItems[i].version)
-							if err := os.Remove(cachePath); err != nil && !os.IsNotExist(err) {
-								log.Printf("Failed to remove cache entry %s: %v", cachePath, err)
+							if cachePath != "" {
+								if err := os.Remove(cachePath); err != nil && !os.IsNotExist(err) {
+									log.Printf("Failed to remove cache entry %s: %v", cachePath, err)
+								}
 							}
 
 						} else {
@@ -257,10 +261,12 @@ func DeduplicateEbuilds(targets []string) ([]string, error) {
 				repoRoot := getRepoRoot(filepath.Join(pkgDir, "dummy.ebuild"))
 				if repoRoot != "" {
 					md5CacheDir := GetCacheDir(repoRoot, "md5-dict", category)
-					if cacheEntries, err := os.ReadDir(md5CacheDir); err == nil {
-						for _, ce := range cacheEntries {
-							if strings.HasPrefix(ce.Name(), pkg+"-") && len(ce.Name()) > len(pkg)+1 && (ce.Name()[len(pkg)] == '-' && ce.Name()[len(pkg)+1] >= '0' && ce.Name()[len(pkg)+1] <= '9') {
-								_ = os.Remove(filepath.Join(md5CacheDir, ce.Name()))
+					if md5CacheDir != "" {
+						if cacheEntries, err := os.ReadDir(md5CacheDir); err == nil {
+							for _, ce := range cacheEntries {
+								if strings.HasPrefix(ce.Name(), pkg+"-") && len(ce.Name()) > len(pkg)+1 && (ce.Name()[len(pkg)] == '-' && ce.Name()[len(pkg)+1] >= '0' && ce.Name()[len(pkg)+1] <= '9') {
+									_ = os.Remove(filepath.Join(md5CacheDir, ce.Name()))
+								}
 							}
 						}
 					}

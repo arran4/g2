@@ -178,6 +178,9 @@ func GenerateCacheFS(cfs CacheFS, repoDir string, targetPkgs []string, genEclass
 					}
 
 					cacheDir := GetCacheDir(repoDir, format, cat)
+					if cacheDir == "" {
+						continue // unsupported format
+					}
 					if err := cfs.MkdirAll(cacheDir, 0755); err != nil {
 						return fmt.Errorf("creating cache directory %s: %w", cacheDir, err)
 					}
@@ -195,7 +198,7 @@ func GenerateCacheFS(cfs CacheFS, repoDir string, targetPkgs []string, genEclass
 						v := ebuild.Vars[k]
 						if v != "" {
 							if isCacheVariable(k) {
-								expectedContent.WriteString(fmt.Sprintf("%s=%s\n", k, v))
+								fmt.Fprintf(&expectedContent, "%s=%s\n", k, v)
 							}
 						}
 					}
@@ -203,7 +206,7 @@ func GenerateCacheFS(cfs CacheFS, repoDir string, targetPkgs []string, genEclass
 					ebuildContent, err := fs.ReadFile(cfs, filepath.ToSlash(ebuildPath))
 					if err == nil {
 						md5sum := fmt.Sprintf("%x", md5.Sum(ebuildContent))
-						expectedContent.WriteString(fmt.Sprintf("_md5_=%s\n", md5sum))
+						fmt.Fprintf(&expectedContent, "_md5_=%s\n", md5sum)
 					}
 
 					if genEclasses {
@@ -219,7 +222,7 @@ func GenerateCacheFS(cfs CacheFS, repoDir string, targetPkgs []string, genEclass
 								}
 							}
 							if len(eclassParts) > 0 {
-								expectedContent.WriteString(fmt.Sprintf("_eclasses_=%s\n", strings.Join(eclassParts, "\t")))
+								fmt.Fprintf(&expectedContent, "_eclasses_=%s\n", strings.Join(eclassParts, "\t"))
 							}
 						}
 					}
@@ -233,8 +236,13 @@ func GenerateCacheFS(cfs CacheFS, repoDir string, targetPkgs []string, genEclass
 					if err != nil {
 						return fmt.Errorf("creating cache file %s: %w", verCachePath, err)
 					}
-					_, _ = f.Write([]byte(expectedContent.String()))
-					_ = f.Close()
+					if _, err := f.Write([]byte(expectedContent.String())); err != nil {
+						f.Close()
+						return fmt.Errorf("writing cache file %s: %w", verCachePath, err)
+					}
+					if err := f.Close(); err != nil {
+						return fmt.Errorf("closing cache file %s: %w", verCachePath, err)
+					}
 				}
 			}
 		}
@@ -244,16 +252,23 @@ func GenerateCacheFS(cfs CacheFS, repoDir string, targetPkgs []string, genEclass
 }
 
 // GetCacheDir returns the canonical directory for the given cache format and category.
+// Returns an empty string if the format is not explicitly supported.
 func GetCacheDir(repoDir string, format string, category string) string {
-	if format == "md5-dict" {
-		return filepath.ToSlash(filepath.Join(repoDir, "metadata", "md5-cache", category))
+	root := GetCacheRoot(repoDir, format)
+	if root == "" {
+		return ""
 	}
-	return filepath.ToSlash(filepath.Join(repoDir, "metadata", format, category))
+	return filepath.ToSlash(filepath.Join(root, category))
 }
 
 // GetCachePath returns the canonical file path for a specific package version's cache entry.
+// Returns an empty string if the format is not explicitly supported.
 func GetCachePath(repoDir string, format string, category string, name string, version string) string {
-	return filepath.ToSlash(filepath.Join(GetCacheDir(repoDir, format, category), fmt.Sprintf("%s-%s", name, version)))
+	dir := GetCacheDir(repoDir, format, category)
+	if dir == "" {
+		return ""
+	}
+	return filepath.ToSlash(filepath.Join(dir, fmt.Sprintf("%s-%s", name, version)))
 }
 
 // GetLegacyCacheDir returns the non-canonical legacy cache directory, if any.
@@ -265,11 +280,16 @@ func GetLegacyCacheDir(repoDir string, format string) string {
 }
 
 // GetCacheRoot returns the root directory for a given cache format.
+// Returns an empty string if the format is not explicitly supported.
 func GetCacheRoot(repoDir string, format string) string {
-	if format == "md5-dict" {
+	switch format {
+	case "md5-dict":
 		return filepath.ToSlash(filepath.Join(repoDir, "metadata", "md5-cache"))
+	case "pms":
+		return filepath.ToSlash(filepath.Join(repoDir, "metadata", "pms"))
+	default:
+		return ""
 	}
-	return filepath.ToSlash(filepath.Join(repoDir, "metadata", format))
 }
 
 func isCacheVariable(key string) bool {
