@@ -492,3 +492,126 @@ func (t *trackingFS) ReadDir(name string) ([]fs.DirEntry, error) {
 	t.Accessed[name] = true
 	return fs.ReadDir(t.FS, name)
 }
+
+func TestCmdLintTargetedSyntaxes(t *testing.T) {
+	cfg := &MainArgConfig{}
+	overlayPath := "../../testdata/test_overlay"
+
+	// 1. New package syntax
+	outNew, errNew := captureStdout(t, func() error {
+		return cfg.cmdLintPackage([]string{"--format", "json", overlayPath, "app-misc/foo"})
+	})
+	if errNew == nil {
+		t.Errorf("expected new syntax to fail due to foo errors, but it passed")
+	}
+
+	// 2. Legacy package syntax
+	outLegacy, errLegacy := captureStdout(t, func() error {
+		return cfg.runOldLint([]string{"--format", "json", overlayPath, "app-misc/foo"})
+	})
+	if errLegacy == nil {
+		t.Errorf("expected legacy syntax to fail due to foo errors, but it passed")
+	}
+
+	// 3. Exact Category Target syntax
+	outCategory, errCat := captureStdout(t, func() error {
+		return cfg.runOldLint([]string{"--format", "json", overlayPath, "app-misc"})
+	})
+	if errCat == nil {
+		t.Errorf("expected category syntax to fail due to foo errors, but it passed")
+	}
+
+	// Check that none of these reached bad_category
+	for _, out := range []string{outNew, outLegacy, outCategory} {
+		if strings.Contains(out, "bad_category") {
+			t.Errorf("targeted lint incorrectly leaked into unrelated 'bad_category'. Output snippet: %s", out[:min(len(out), 200)])
+		}
+	}
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+func TestCmdLintEffectiveSeverityOverride(t *testing.T) {
+	cfg := &MainArgConfig{}
+	overlayPath := t.TempDir()
+
+	_ = os.MkdirAll(overlayPath+"/app-misc/warning-pkg", 0755)
+	_ = os.MkdirAll(overlayPath+"/profiles", 0755)
+	_ = os.MkdirAll(overlayPath+"/metadata", 0755)
+	_ = os.WriteFile(overlayPath+"/profiles/repo_name", []byte("dummy-repo\n"), 0644)
+
+	// Provide a qa-policy.conf overriding PG0002 from Warning to Notice
+	qaPolicy := []byte(`
+[policy]
+PG0002 = notice
+`)
+	_ = os.WriteFile(overlayPath+"/metadata/qa-policy.conf", qaPolicy, 0644)
+
+	// Trigger PG0002: =-dependency with no revision
+	warningEbuild := []byte(`# Copyright 1999-2026 Gentoo Authors
+# Distributed under the terms of the GNU General Public License v2
+
+EAPI=8
+DESCRIPTION="A proper description"
+HOMEPAGE="https://example.com"
+LICENSE="MIT"
+SLOT="0"
+KEYWORDS="amd64"
+DEPEND="=app-misc/some-dep-1.0"
+`)
+	_ = os.WriteFile(overlayPath+"/app-misc/warning-pkg/warning-pkg-1.0.ebuild", warningEbuild, 0644)
+	_ = os.WriteFile(overlayPath+"/app-misc/warning-pkg/Manifest", []byte(""), 0644)
+	metadataContent := []byte(`<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE pkgmetadata SYSTEM "https://www.gentoo.org/dtd/metadata.dtd">
+<pkgmetadata>
+	<maintainer type="person">
+		<email>test@example.com</email>
+	</maintainer>
+</pkgmetadata>`)
+	_ = os.WriteFile(overlayPath+"/app-misc/warning-pkg/metadata.xml", metadataContent, 0644)
+
+	// Since we overrode PG0002 to Notice, it should NOT fail default (Warning) threshold
+	out, err := captureStdout(t, func() error {
+		return cfg.cmdLintPackage([]string{"--format", "json", overlayPath, "app-misc/warning-pkg"})
+	})
+
+	if err != nil {
+		t.Errorf("expected to PASS because effective severity of PG0002 is Notice. err: %v\nOut: %s", err, out)
+	}
+	if !strings.Contains(out, `"severity": "Notice"`) {
+		t.Errorf("expected JSON to contain Notice for PG0002, got: %s", out)
+	}
+
+	// But it should fail if fail-severity is Notice
+	out, err = captureStdout(t, func() error {
+		return cfg.cmdLintPackage([]string{"--format", "text", "--fail-severity", "notice", overlayPath, "app-misc/warning-pkg"})
+	})
+	if err == nil {
+		t.Errorf("expected to FAIL when fail-severity is Notice. Out: %s", out)
+	}
+}
+
+func TestCmdLintInvalidFailSeverity(t *testing.T) {
+	cfg := &MainArgConfig{}
+
+	// Newer path
+	_, err := captureStdout(t, func() error {
+		return cfg.cmdLintPackage([]string{"--fail-severity", "invalid_sev", ".", "app-misc/foo"})
+	})
+	if err == nil || !strings.Contains(err.Error(), "invalid fail-severity") {
+		t.Errorf("expected invalid fail-severity error from package cmd, got: %v", err)
+	}
+
+	// Legacy path
+	_, err = captureStdout(t, func() error {
+		return cfg.runOldLint([]string{"--fail-severity", "invalid_sev", ".", "app-misc/foo"})
+	})
+	if err == nil || !strings.Contains(err.Error(), "invalid fail-severity") {
+		t.Errorf("expected invalid fail-severity error from legacy cmd, got: %v", err)
+	}
+}
