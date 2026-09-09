@@ -126,8 +126,7 @@ func (cfg *MainArgConfig) runOldLint(args []string) error {
 		}
 	}
 
-	failLvl := severityLevel(*failSeverity)
-	if failLvl == -1 {
+	if severityLevel(*failSeverity) == -1 {
 		return fmt.Errorf("invalid fail-severity: %s", *failSeverity)
 	}
 
@@ -146,8 +145,6 @@ func (cfg *MainArgConfig) runOldLint(args []string) error {
 	if err != nil {
 		return fmt.Errorf("parsing repo: %w", err)
 	}
-
-	hasErrors := false
 
 	var allResults []lints.LintResult
 
@@ -236,12 +233,6 @@ func (cfg *MainArgConfig) runOldLint(args []string) error {
 			}
 
 			if len(filteredWarnings) > 0 {
-				failLvl := severityLevel(*failSeverity)
-				for i := range filteredWarnings {
-					if severityLevel(string(filteredWarnings[i].RuleMetadata.Severity)) >= failLvl {
-						hasErrors = true
-					}
-				}
 				if *format == "text" {
 					packageGroups := make(map[string][]lints.LintResult)
 					for _, w := range filteredWarnings {
@@ -278,7 +269,7 @@ func (cfg *MainArgConfig) runOldLint(args []string) error {
 		printGithubActions(allResults)
 	}
 
-	if hasErrors {
+	if hasFailingLintResults(allResults, *failSeverity) {
 		return fmt.Errorf("linting found errors")
 	}
 
@@ -356,6 +347,19 @@ func severityLevel(s string) int {
 	}
 }
 
+func hasFailingLintResults(results []lints.LintResult, failSeverity string) bool {
+	failLvl := severityLevel(failSeverity)
+	if failLvl == -1 {
+		return false
+	}
+	for _, res := range results {
+		if severityLevel(string(res.RuleMetadata.Severity)) >= failLvl {
+			return true
+		}
+	}
+	return false
+}
+
 type LintQuery struct {
 	RepoPath  string
 	Category  string
@@ -366,8 +370,7 @@ type LintQuery struct {
 }
 
 func (cfg *MainArgConfig) runLintCore(location string, targetMap map[string]bool, query *LintQuery, format, severityFilter, failSeverity, sourceFilter, tagFilter, disableRule, ignoreTag string) error {
-	failLvl := severityLevel(failSeverity)
-	if failLvl == -1 {
+	if severityLevel(failSeverity) == -1 {
 		return fmt.Errorf("invalid fail-severity: %s", failSeverity)
 	}
 
@@ -380,7 +383,6 @@ func (cfg *MainArgConfig) runLintCore(location string, targetMap map[string]bool
 		return fmt.Errorf("parsing repo: %w", err)
 	}
 
-	hasErrors := false
 	var allResults []lints.LintResult
 
 	// Run repository-level lints
@@ -436,9 +438,6 @@ func (cfg *MainArgConfig) runLintCore(location string, targetMap map[string]bool
 			}
 			if w.Package == "" {
 				w.Package = "repo"
-			}
-			if severityLevel(string(w.RuleMetadata.Severity)) >= failLvl {
-				hasErrors = true
 			}
 			filteredRepoWarnings = append(filteredRepoWarnings, w)
 		}
@@ -521,9 +520,6 @@ func (cfg *MainArgConfig) runLintCore(location string, targetMap map[string]bool
 		for i := range filteredEclassWarnings {
 			if filteredEclassWarnings[i].Package == "" {
 				filteredEclassWarnings[i].Package = filepath.Base(eclass.Path)
-			}
-			if severityLevel(string(filteredEclassWarnings[i].RuleMetadata.Severity)) >= failLvl {
-				hasErrors = true
 			}
 		}
 
@@ -684,9 +680,6 @@ func (cfg *MainArgConfig) runLintCore(location string, targetMap map[string]bool
 				if filteredWarnings[i].Package == "" {
 					filteredWarnings[i].Package = pkg.Category + "/" + pkg.Name
 				}
-				if severityLevel(string(filteredWarnings[i].RuleMetadata.Severity)) >= failLvl {
-					hasErrors = true
-				}
 			}
 
 			if len(filteredWarnings) > 0 {
@@ -718,7 +711,7 @@ func (cfg *MainArgConfig) runLintCore(location string, targetMap map[string]bool
 		printGithubActions(allResults)
 	}
 
-	if hasErrors {
+	if hasFailingLintResults(allResults, failSeverity) {
 		return fmt.Errorf("linting found errors")
 	}
 

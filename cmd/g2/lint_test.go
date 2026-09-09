@@ -9,6 +9,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/arran4/g2/lints"
 )
 
 func TestParseLintQuery(t *testing.T) {
@@ -178,43 +180,59 @@ func TestCmdLintList(t *testing.T) {
 }
 
 func TestSeverityThresholdLogic(t *testing.T) {
-	// Synthetically verify the core loop logic using the identical evaluation helper
-	// used in runLintCore: severityLevel(result) >= failLvl -> hasErrors = true
+	makeResult := func(sev lints.Severity) lints.LintResult {
+		return lints.LintResult{
+			RuleMetadata: lints.RuleMetadata{
+				Severity: sev,
+			},
+		}
+	}
 
 	testCases := []struct {
-		desc        string
-		resultSev   string
-		failSev     string
-		expectError bool
+		desc       string
+		results    []lints.LintResult
+		failSev    string
+		expectFail bool
 	}{
-		{"info-only + default warning -> pass", "Info", "warning", false},
-		{"info-only + fail-severity=info -> fail", "Info", "info", true},
-		{"error-only + default warning -> fail", "Error", "warning", true},
-		{"error-only + fail-severity=error -> fail", "Error", "error", true},
-		{"mixed notice + error -> fail at warning", "Notice", "warning", false},
+		{
+			desc:       "Info only + warning threshold => pass",
+			results:    []lints.LintResult{makeResult(lints.SeverityInfo)},
+			failSev:    "warning",
+			expectFail: false,
+		},
+		{
+			desc:       "Info only + info threshold => fail",
+			results:    []lints.LintResult{makeResult(lints.SeverityInfo)},
+			failSev:    "info",
+			expectFail: true,
+		},
+		{
+			desc:       "Error only + warning threshold => fail",
+			results:    []lints.LintResult{makeResult(lints.SeverityError)},
+			failSev:    "warning",
+			expectFail: true,
+		},
+		{
+			desc:       "Error only + error threshold => fail",
+			results:    []lints.LintResult{makeResult(lints.SeverityError)},
+			failSev:    "error",
+			expectFail: true,
+		},
+		{
+			desc:       "Notice + Error + warning threshold => fail",
+			results:    []lints.LintResult{makeResult(lints.SeverityNotice), makeResult(lints.SeverityError)},
+			failSev:    "warning",
+			expectFail: true,
+		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.desc, func(t *testing.T) {
-			failLvl := severityLevel(tc.failSev)
-			resultLvl := severityLevel(tc.resultSev)
-			hasErrors := resultLvl >= failLvl
-			if hasErrors != tc.expectError {
-				t.Errorf("expected error %v, got %v for result %s against threshold %s", tc.expectError, hasErrors, tc.resultSev, tc.failSev)
+			got := hasFailingLintResults(tc.results, tc.failSev)
+			if got != tc.expectFail {
+				t.Errorf("hasFailingLintResults() = %v, want %v for %s", got, tc.expectFail, tc.desc)
 			}
 		})
-	}
-
-	// Mixed Notice + Error
-	failLvl := severityLevel("warning")
-	hasErrors := false
-	for _, res := range []string{"Notice", "Error"} {
-		if severityLevel(res) >= failLvl {
-			hasErrors = true
-		}
-	}
-	if !hasErrors {
-		t.Errorf("expected mixed Notice+Error to fail at default warning")
 	}
 }
 func TestSeverityLevel(t *testing.T) {
@@ -296,30 +314,7 @@ KEYWORDS="~amd64"
 	_ = os.WriteFile(overlayPath+"/app-misc/warning-pkg/metadata.xml", metadataContent, 0644)
 	_ = os.WriteFile(overlayPath+"/app-misc/notice-pkg/metadata.xml", metadataContent, 0644)
 
-	if err := os.MkdirAll(overlayPath+"/app-misc/info-pkg", 0755); err != nil {
-		t.Fatalf("failed to create info pkg dir: %v", err)
-	}
-	infoEbuild := []byte(`# Copyright 1999-2026 Gentoo Authors
-# Distributed under the terms of the GNU General Public License v2
-
-EAPI=8
-DESCRIPTION="A sufficiently descriptive test package"
-HOMEPAGE="https://example.com"
-LICENSE="MIT"
-SLOT="0"
-KEYWORDS="amd64"
-
-pkg_postinst() {
-	if [[ -e /usr ]]; then
-		einfo "Wait"
-	fi
-}
-`)
-	_ = os.WriteFile(overlayPath+"/app-misc/info-pkg/info-pkg-1.0.ebuild", infoEbuild, 0644)
-	_ = os.WriteFile(overlayPath+"/app-misc/info-pkg/Manifest", []byte(""), 0644)
-	_ = os.WriteFile(overlayPath+"/app-misc/info-pkg/metadata.xml", metadataContent, 0644)
-
-	// Error only package (no maintainer)
+	// Error only package (no metadata.xml)
 	if err := os.MkdirAll(overlayPath+"/app-misc/error-pkg", 0755); err != nil {
 		t.Fatalf("failed to create error pkg dir: %v", err)
 	}
@@ -374,6 +369,46 @@ KEYWORDS="~amd64"
 		t.Fatalf("Fixture setup failed: notice-pkg does not contain a Notice!\nOutput: %s", outNotice)
 	}
 
+	outError, _ := captureStdout(t, func() error {
+		return cfg.cmdLintPackage([]string{"--format", "json", overlayPath, "app-misc/error-pkg"})
+	})
+	var errorResults []lints.LintResult
+	if err := json.Unmarshal([]byte(outError), &errorResults); err != nil {
+		t.Fatalf("Fixture setup failed: error-pkg json unmarshal error: %v\nOutput: %s", err, outError)
+	}
+	if len(errorResults) == 0 {
+		t.Fatalf("Fixture setup failed: error-pkg produced no findings!\nOutput: %s", outError)
+	}
+	for _, res := range errorResults {
+		if res.RuleMetadata.Severity != lints.SeverityError {
+			t.Fatalf("Fixture setup failed: error-pkg contains non-Error finding: %+v", res)
+		}
+	}
+
+	outMixed, _ := captureStdout(t, func() error {
+		return cfg.cmdLintPackage([]string{"--format", "json", overlayPath, "app-misc/mixed-pkg"})
+	})
+	var mixedResults []lints.LintResult
+	if err := json.Unmarshal([]byte(outMixed), &mixedResults); err != nil {
+		t.Fatalf("Fixture setup failed: mixed-pkg json unmarshal error: %v\nOutput: %s", err, outMixed)
+	}
+	hasNotice := false
+	hasError := false
+	for _, res := range mixedResults {
+		if res.RuleMetadata.Severity == lints.SeverityNotice {
+			hasNotice = true
+		}
+		if res.RuleMetadata.Severity == lints.SeverityError {
+			hasError = true
+		}
+		if res.RuleMetadata.Severity == lints.SeverityWarning {
+			t.Fatalf("Fixture setup failed: mixed-pkg contains Warning finding: %+v", res)
+		}
+	}
+	if !hasNotice || !hasError {
+		t.Fatalf("Fixture setup failed: mixed-pkg must contain both Notice and Error findings (hasNotice=%v, hasError=%v)\nOutput: %s", hasNotice, hasError, outMixed)
+	}
+
 	tests := []struct {
 		name         string
 		pkgTarget    string
@@ -384,6 +419,9 @@ KEYWORDS="~amd64"
 		{"warning pkg, --fail-severity=error", "app-misc/warning-pkg", "error", false},
 		{"notice pkg, default warning", "app-misc/notice-pkg", "warning", false},
 		{"notice pkg, --fail-severity=notice", "app-misc/notice-pkg", "notice", true},
+		{"error-only + default warning => fail", "app-misc/error-pkg", "warning", true},
+		{"error-only + --fail-severity=error => fail", "app-misc/error-pkg", "error", true},
+		{"mixed Notice + Error + default warning => fail", "app-misc/mixed-pkg", "warning", true},
 	}
 
 	for _, tt := range tests {
@@ -400,6 +438,24 @@ KEYWORDS="~amd64"
 			}
 		})
 	}
+
+	// Verify legacy runOldLint honors --fail-severity as well
+	t.Run("legacy notice pkg, default warning -> pass", func(t *testing.T) {
+		out, err := captureStdout(t, func() error {
+			return cfg.runOldLint([]string{"--format", "text", "--fail-severity", "warning", overlayPath, "app-misc/notice-pkg"})
+		})
+		if err != nil {
+			t.Errorf("expected legacy lint to pass on notice-pkg with default warning, got: %v (output: %s)", err, out)
+		}
+	})
+	t.Run("legacy notice pkg, --fail-severity=notice -> fail", func(t *testing.T) {
+		out, err := captureStdout(t, func() error {
+			return cfg.runOldLint([]string{"--format", "text", "--fail-severity", "notice", overlayPath, "app-misc/notice-pkg"})
+		})
+		if err == nil {
+			t.Errorf("expected legacy lint to fail on notice-pkg with --fail-severity=notice, got output: %s", out)
+		}
+	})
 }
 func TestCmdLintFailSeverityOutputFormats(t *testing.T) {
 	cfg := &MainArgConfig{}
@@ -488,6 +544,111 @@ KEYWORDS="amd64"
 	}
 }
 
+func TestCmdLintSuppression(t *testing.T) {
+	cfg := &MainArgConfig{}
+	overlayPath := t.TempDir()
+
+	if err := os.MkdirAll(overlayPath+"/app-misc/warning-pkg", 0755); err != nil {
+		t.Fatalf("failed to create warning pkg dir: %v", err)
+	}
+	if err := os.MkdirAll(overlayPath+"/profiles", 0755); err != nil {
+		t.Fatalf("failed to create profiles dir: %v", err)
+	}
+	_ = os.WriteFile(overlayPath+"/profiles/repo_name", []byte("dummy-repo\n"), 0644)
+
+	warningEbuild := []byte(`
+# Copyright 2026 Gentoo Authors
+# Distributed under the terms of the GNU General Public License v2
+
+EAPI=8
+DESCRIPTION="short"
+HOMEPAGE="https://example.com"
+LICENSE="MIT"
+SLOT="0"
+KEYWORDS="amd64"
+`)
+	_ = os.WriteFile(overlayPath+"/app-misc/warning-pkg/warning-pkg-1.0.ebuild", warningEbuild, 0644)
+	_ = os.WriteFile(overlayPath+"/app-misc/warning-pkg/Manifest", []byte(""), 0644)
+
+	metadataContent := []byte(`<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE pkgmetadata SYSTEM "https://www.gentoo.org/dtd/metadata.dtd">
+<pkgmetadata>
+	<maintainer type="person">
+		<email>test@example.com</email>
+	</maintainer>
+</pkgmetadata>`)
+	_ = os.WriteFile(overlayPath+"/app-misc/warning-pkg/metadata.xml", metadataContent, 0644)
+
+	// Verify unsuppressed baseline fails under default warning threshold and contains MissingDescription
+	outBaseline, errBaseline := captureStdout(t, func() error {
+		return cfg.cmdLintPackage([]string{"--format", "json", overlayPath, "app-misc/warning-pkg"})
+	})
+	if errBaseline == nil {
+		t.Fatalf("expected unsuppressed warning fixture to fail, but got success. Output: %s", outBaseline)
+	}
+	var baselineResults []lints.LintResult
+	if err := json.Unmarshal([]byte(outBaseline), &baselineResults); err != nil {
+		t.Fatalf("failed to parse baseline JSON: %v", err)
+	}
+	foundMissingDesc := false
+	for _, res := range baselineResults {
+		if strings.EqualFold(string(res.RuleMetadata.ID), "MissingDescription") {
+			foundMissingDesc = true
+		}
+	}
+	if !foundMissingDesc {
+		t.Fatalf("expected baseline results to contain MissingDescription finding: %s", outBaseline)
+	}
+
+	// 1. --disable-rule MissingDescription suppresses the finding and succeeds
+	t.Run("disable-rule MissingDescription", func(t *testing.T) {
+		out, err := captureStdout(t, func() error {
+			return cfg.cmdLintPackage([]string{
+				"--format", "json",
+				"--disable-rule", "MissingDescription",
+				overlayPath, "app-misc/warning-pkg",
+			})
+		})
+		if err != nil {
+			t.Errorf("expected command to succeed with --disable-rule MissingDescription, got err: %v\nOutput: %s", err, out)
+		}
+		var results []lints.LintResult
+		if err := json.Unmarshal([]byte(out), &results); err != nil {
+			t.Fatalf("failed to unmarshal JSON: %v\nOutput: %s", err, out)
+		}
+		for _, res := range results {
+			if strings.EqualFold(string(res.RuleMetadata.ID), "MissingDescription") ||
+				strings.Contains(res.Message, "DESCRIPTION is suspiciously short") {
+				t.Errorf("expected MissingDescription finding to be absent, but found: %+v", res)
+			}
+		}
+	})
+
+	// 2. --ignore-tag site-quality suppresses the finding and succeeds
+	t.Run("ignore-tag site-quality", func(t *testing.T) {
+		out, err := captureStdout(t, func() error {
+			return cfg.cmdLintPackage([]string{
+				"--format", "json",
+				"--ignore-tag", "site-quality",
+				overlayPath, "app-misc/warning-pkg",
+			})
+		})
+		if err != nil {
+			t.Errorf("expected command to succeed with --ignore-tag site-quality, got err: %v\nOutput: %s", err, out)
+		}
+		var results []lints.LintResult
+		if err := json.Unmarshal([]byte(out), &results); err != nil {
+			t.Fatalf("failed to unmarshal JSON: %v\nOutput: %s", err, out)
+		}
+		for _, res := range results {
+			if strings.EqualFold(string(res.RuleMetadata.ID), "MissingDescription") ||
+				strings.Contains(res.Message, "DESCRIPTION is suspiciously short") {
+				t.Errorf("expected MissingDescription finding to be absent, but found: %+v", res)
+			}
+		}
+	})
+}
+
 func TestCmdLintTargetedAccessLimit(t *testing.T) {
 	// A package with a noticeable problem (no maintainer -> Error, missing vars -> Warning, etc)
 	overlayPath := "../../testdata/test_overlay"
@@ -569,13 +730,6 @@ func TestCmdLintTargetedSyntaxes(t *testing.T) {
 	}
 }
 
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}
-
 func TestCmdLintEffectiveSeverityOverride(t *testing.T) {
 	cfg := &MainArgConfig{}
 	overlayPath := t.TempDir()
@@ -621,18 +775,46 @@ DEPEND="=app-misc/some-dep-1.0"
 	})
 
 	if err != nil {
-		t.Errorf("expected to PASS because effective severity of PG0002 is Notice. err: %v\nOut: %s", err, out)
+		t.Fatalf("expected to PASS because effective severity of PG0002 is Notice. err: %v\nOut: %s", err, out)
 	}
-	if !strings.Contains(out, `"severity": "Notice"`) {
-		t.Errorf("expected JSON to contain Notice for PG0002, got: %s", out)
+
+	// Parse JSON structurally
+	var results []lints.LintResult
+	if err := json.Unmarshal([]byte(out), &results); err != nil {
+		t.Fatalf("failed to unmarshal JSON output: %v\nOutput was:\n%s", err, out)
+	}
+
+	// Locate the actual PG0002 / dependency-no-revision result
+	var pg0002Result *lints.LintResult
+	for i := range results {
+		if strings.EqualFold(string(results[i].RuleMetadata.ID), "DependencyNoRevision") ||
+			strings.Contains(results[i].Message, "PG0002") {
+			pg0002Result = &results[i]
+			break
+		}
+	}
+	if pg0002Result == nil {
+		t.Fatalf("expected to find PG0002 / DependencyNoRevision finding in JSON output: %s", out)
+	}
+
+	// Assert that specific result has effective severity Notice
+	if pg0002Result.RuleMetadata.Severity != lints.SeverityNotice {
+		t.Errorf("expected PG0002 effective severity to be Notice, got: %s", pg0002Result.RuleMetadata.Severity)
+	}
+
+	// Ensure no unrelated Warning or Error is present
+	for _, res := range results {
+		if res.RuleMetadata.Severity == lints.SeverityWarning || res.RuleMetadata.Severity == lints.SeverityError {
+			t.Errorf("unexpected finding with severity %s: %s (id: %s)", res.RuleMetadata.Severity, res.Message, res.RuleMetadata.ID)
+		}
 	}
 
 	// But it should fail if fail-severity is Notice
-	out, err = captureStdout(t, func() error {
+	outNotice, errNotice := captureStdout(t, func() error {
 		return cfg.cmdLintPackage([]string{"--format", "text", "--fail-severity", "notice", overlayPath, "app-misc/warning-pkg"})
 	})
-	if err == nil {
-		t.Errorf("expected to FAIL when fail-severity is Notice. Out: %s", out)
+	if errNotice == nil {
+		t.Errorf("expected to FAIL when fail-severity is Notice. Out: %s", outNotice)
 	}
 }
 
