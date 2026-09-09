@@ -146,3 +146,60 @@ func TestDeduplicateEbuildsRevisionComparison(t *testing.T) {
 		t.Errorf("expected dummy-1.2-r1.ebuild to be retained: %v", err)
 	}
 }
+
+func TestDeduplicateEbuildsCacheRemoval(t *testing.T) {
+	dir := t.TempDir()
+
+	// Setup repo
+	cat := "sys-apps"
+	pkg := "test"
+	os.MkdirAll(filepath.Join(dir, cat, pkg), 0755)
+
+	ebuildPaths := []string{
+		filepath.Join(dir, cat, pkg, "test-1.0.ebuild"),
+		filepath.Join(dir, cat, pkg, "test-1.0-r1.ebuild"), // Revision should be kept, 1.0 removed
+		filepath.Join(dir, cat, pkg, "test-2.0.ebuild"),    // Kept (different version)
+	}
+
+	os.WriteFile(ebuildPaths[0], []byte(`DESCRIPTION="test1"
+`), 0644)
+	os.WriteFile(ebuildPaths[1], []byte(`DESCRIPTION="test1"
+`), 0644)
+	os.WriteFile(ebuildPaths[2], []byte(`DESCRIPTION="test2"
+`), 0644)
+
+	// Create cache entries
+	cacheDir := filepath.Join(dir, "metadata", "md5-cache", cat)
+	os.MkdirAll(cacheDir, 0755)
+
+	cachePaths := []string{
+		filepath.Join(cacheDir, "test-1.0"),
+		filepath.Join(cacheDir, "test-1.0-r1"),
+		filepath.Join(cacheDir, "test-2.0"),
+	}
+	for _, p := range cachePaths {
+		os.WriteFile(p, []byte(`_md5_=123
+`), 0644)
+	}
+
+	// Deduplicate absolute paths
+	removed, err := DeduplicateEbuilds([]string{filepath.Join(dir, cat, pkg)})
+	if err != nil {
+		t.Fatalf("DeduplicateEbuilds failed: %v", err)
+	}
+
+	if len(removed) != 2 {
+		t.Fatalf("Expected 2 files to be removed, got %v", removed)
+	}
+
+	// Check cache
+	if _, err := os.Stat(cachePaths[0]); !os.IsNotExist(err) {
+		t.Errorf("Cache for 1.0 should have been removed")
+	}
+	if _, err := os.Stat(cachePaths[1]); !os.IsNotExist(err) {
+		t.Errorf("Cache for 1.0-r1 should have been removed")
+	}
+	if _, err := os.Stat(cachePaths[2]); os.IsNotExist(err) {
+		t.Errorf("Cache for 2.0 should have been kept")
+	}
+}

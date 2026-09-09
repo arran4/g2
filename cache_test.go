@@ -60,6 +60,16 @@ func (m *MemCacheFS) Create(name string) (io.WriteCloser, error) {
 	}, nil
 }
 
+func (m *MemCacheFS) RemoveAll(name string) error {
+
+	for k := range m.Map {
+		if k == name || (len(k) > len(name) && k[:len(name)+1] == name+"/") {
+			delete(m.Map, k)
+		}
+	}
+	return nil
+}
+
 func (m *MemCacheFS) Remove(name string) error {
 	if _, ok := m.Map[name]; !ok {
 		return os.ErrNotExist
@@ -136,50 +146,5 @@ func TestCacheGenerate(t *testing.T) {
 				}
 			}
 		})
-	}
-}
-
-func TestCacheReconcile(t *testing.T) {
-	fixture := "testdata/cache/reconcile_basic.txtar"
-	raw, err := cacheTestdataFS.ReadFile(fixture)
-	if err != nil {
-		t.Fatalf("read fixture %s: %v", fixture, err)
-	}
-	ar := txtar.Parse(raw)
-	inputFS, expectedFS := SplitInputExpected(ar)
-
-	cfs := NewMemCacheFS(inputFS)
-
-	// Since doCacheReconcile is in cmd/g2, we can just test GenerateCacheFS followed by our clean and verify logic directly or via testing functions.
-	// We'll test GenerateCacheFS directly here just like the generate tests to ensure it matches the generated md5-cache correctly.
-	err = GenerateCacheFS(cfs, ".", nil, false)
-	if err != nil {
-		t.Fatalf("generate cache: %v", err)
-	}
-
-	// Compare with expected
-	err = fs.WalkDir(expectedFS, ".", func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if d.IsDir() {
-			return nil
-		}
-		expectedContent, err := fs.ReadFile(expectedFS, path)
-		if err != nil {
-			return err
-		}
-		actualContent, err := fs.ReadFile(cfs, path)
-		if err != nil {
-			t.Errorf("missing actual file %s: %v", path, err)
-			return nil
-		}
-		if string(expectedContent) != string(actualContent) {
-			t.Errorf("content mismatch for %s:\nExpected:\n%s\nActual:\n%s", path, expectedContent, actualContent)
-		}
-		return nil
-	})
-	if err != nil {
-		t.Fatalf("walk expected: %v", err)
 	}
 }

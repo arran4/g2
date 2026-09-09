@@ -164,8 +164,7 @@ func doCacheVerify(cfs g2.CacheFS, repoDir string) error {
 		}
 
 		// 3. Detect orphan/stale entries
-		formatDir := g2.GetCacheDir(repoDir, format, "")
-		formatDir = filepath.ToSlash(filepath.Dir(formatDir)) // gets to md5-cache root
+		formatDir := g2.GetCacheRoot(repoDir, format)
 		if _, err := cfs.Stat(formatDir); err == nil {
 			_ = cfs.Walk(formatDir, func(path string, d fs.DirEntry, err error) error {
 				if err != nil || d.IsDir() {
@@ -368,16 +367,8 @@ func doCacheClean(cfs g2.CacheFS, repoDir string) error {
 					}
 					return nil
 				})
-				if _, ok := cfs.(*g2.OsCacheFS); ok {
-					// repoDir here is redundant because os.RemoveAll is called locally
-					// However, osCfs.Base() could be used but it's private.
-					// cfs is created with repoDir as base, so legacyDir as is should be removed directly via os.RemoveAll inside the repoDir if possible.
-					// Actually, the cleanest way is just to try to remove the directory itself through the abstraction if possible, but cfs.Remove doesn't handle non-empty dirs.
-					// Let's just remove it safely using standard os packages if it's the os filesystem, but we have to construct the path correctly.
-					// filepath.Join(repoDir, "metadata", "md5-dict") is already returned by GetLegacyCacheDir.
-					if err := os.RemoveAll(legacyDir); err != nil {
-						log.Printf("Failed to remove legacy directory %s: %v", legacyDir, err)
-					}
+				if err := cfs.RemoveAll(legacyDir); err != nil {
+					log.Printf("Failed to remove legacy directory %s: %v", legacyDir, err)
 				}
 			}
 		}

@@ -25,6 +25,22 @@ type ebuildItem struct {
 // (ignoring `# Generated via:` lines), keeps the highest version within each grade,
 // and cleans up empty package directories (including `Manifest`, `metadata.xml`,
 // and `md5-cache` entries). It returns a slice of file paths that were removed.
+
+// getRepoRoot extracts the repository root by taking the parent of the parent directory of an ebuild.
+// e.g. for /tmp/repo/app-misc/foo/foo-1.ebuild, it returns /tmp/repo.
+// for app-misc/foo/foo-1.ebuild, it returns .
+func getRepoRoot(ebuildPath string) string {
+	pkgDir := filepath.Dir(ebuildPath)
+	catDir := filepath.Dir(pkgDir)
+	repoRoot := filepath.Dir(catDir)
+
+	if repoRoot == "" {
+		return "."
+	}
+	// Avoid returning single slash if possible, but keep it clean
+	return filepath.ToSlash(filepath.Clean(repoRoot))
+}
+
 func DeduplicateEbuilds(targets []string) ([]string, error) {
 	if len(targets) == 0 {
 		targets = []string{"."}
@@ -157,22 +173,13 @@ func DeduplicateEbuilds(targets []string) ([]string, error) {
 								removedFiles = append(removedFiles, dgItems[i].path)
 
 								// remove cache entry
-								pathParts := strings.Split(filepath.ToSlash(filepath.Dir(filepath.Dir(dgItems[i].path))), "/")
-								var repoRoot string
-								if len(pathParts) >= 2 {
-									if filepath.IsAbs(dgItems[i].path) {
-										repoRoot = "/" + filepath.Join(pathParts[:len(pathParts)-2]...)
-									} else {
-										repoRoot = filepath.Join(pathParts[:len(pathParts)-2]...)
-									}
-								}
-								if repoRoot == "" {
-									repoRoot = "."
-								}
+								repoRoot := getRepoRoot(dgItems[i].path)
 								category := filepath.Base(filepath.Dir(filepath.Dir(dgItems[i].path)))
 								name := filepath.Base(filepath.Dir(dgItems[i].path))
 								cachePath := GetCachePath(repoRoot, "md5-dict", category, name, dgItems[i].version)
-								_ = os.Remove(cachePath)
+								if err := os.Remove(cachePath); err != nil && !os.IsNotExist(err) {
+									log.Printf("Failed to remove cache entry %s: %v", cachePath, err)
+								}
 
 							} else {
 								log.Printf("Failed to remove duplicate %s: %v", dgItems[i].path, err)
@@ -192,22 +199,13 @@ func DeduplicateEbuilds(targets []string) ([]string, error) {
 							removedFiles = append(removedFiles, keptItems[i].path)
 
 							// remove cache entry
-							pathParts := strings.Split(filepath.ToSlash(filepath.Dir(filepath.Dir(keptItems[i].path))), "/")
-							var repoRoot string
-							if len(pathParts) >= 2 {
-								if filepath.IsAbs(keptItems[i].path) {
-									repoRoot = "/" + filepath.Join(pathParts[:len(pathParts)-2]...)
-								} else {
-									repoRoot = filepath.Join(pathParts[:len(pathParts)-2]...)
-								}
-							}
-							if repoRoot == "" {
-								repoRoot = "."
-							}
+							repoRoot := getRepoRoot(keptItems[i].path)
 							category := filepath.Base(filepath.Dir(filepath.Dir(keptItems[i].path)))
 							name := filepath.Base(filepath.Dir(keptItems[i].path))
 							cachePath := GetCachePath(repoRoot, "md5-dict", category, name, keptItems[i].version)
-							_ = os.Remove(cachePath)
+							if err := os.Remove(cachePath); err != nil && !os.IsNotExist(err) {
+								log.Printf("Failed to remove cache entry %s: %v", cachePath, err)
+							}
 
 						} else {
 							log.Printf("Failed to remove older version %s: %v", keptItems[i].path, err)
@@ -254,21 +252,10 @@ func DeduplicateEbuilds(targets []string) ([]string, error) {
 				_ = os.Remove(filepath.Join(pkgDir, "metadata.xml"))
 
 				// Attempt to remove md5-cache
-				parts := strings.Split(filepath.ToSlash(pkgDir), "/")
-				if len(parts) >= 2 {
-					category := parts[len(parts)-2]
-					pkg := parts[len(parts)-1]
-
-					var repoRoot string
-					if filepath.IsAbs(pkgDir) {
-						repoRoot = "/" + filepath.Join(parts[:len(parts)-2]...)
-					} else {
-						repoRoot = filepath.Join(parts[:len(parts)-2]...)
-					}
-					if repoRoot == "" {
-						repoRoot = "."
-					}
-
+				category := filepath.Base(filepath.Dir(pkgDir))
+				pkg := filepath.Base(pkgDir)
+				repoRoot := getRepoRoot(filepath.Join(pkgDir, "dummy.ebuild"))
+				if repoRoot != "" {
 					md5CacheDir := GetCacheDir(repoRoot, "md5-dict", category)
 					if cacheEntries, err := os.ReadDir(md5CacheDir); err == nil {
 						for _, ce := range cacheEntries {

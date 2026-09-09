@@ -18,6 +18,7 @@ type CacheFS interface {
 	MkdirAll(path string, perm os.FileMode) error
 	Create(name string) (io.WriteCloser, error)
 	Remove(name string) error
+	RemoveAll(name string) error
 	Walk(root string, fn fs.WalkDirFunc) error
 	Stat(name string) (fs.FileInfo, error)
 }
@@ -41,6 +42,10 @@ func (o *OsCacheFS) MkdirAll(path string, perm os.FileMode) error {
 
 func (o *OsCacheFS) Create(name string) (io.WriteCloser, error) {
 	return os.Create(filepath.Join(o.base, name))
+}
+
+func (o *OsCacheFS) RemoveAll(name string) error {
+	return os.RemoveAll(filepath.Join(o.base, name))
 }
 
 func (o *OsCacheFS) Remove(name string) error {
