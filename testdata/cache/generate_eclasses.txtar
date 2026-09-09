@@ -18,8 +18,8 @@ INHERITED="test another"
 -- expected/eclass/missing.eclass --
 # This eclass will not be found in INHERITED
 
--- expected/metadata/md5-dict/sys-apps/test-1.0 --
+-- expected/metadata/md5-cache/sys-apps/test-1.0 --
 DESCRIPTION=A test ebuild with eclasses
 INHERITED=test another
-_eclasses_=test	cc6fb8635f44bdc4b1069586c582db43
 _md5_=dbfd834f6fbf844fc205c39728b331b1
+_eclasses_=test	cc6fb8635f44bdc4b1069586c582db43

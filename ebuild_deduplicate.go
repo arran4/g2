@@ -155,6 +155,25 @@ func DeduplicateEbuilds(targets []string) ([]string, error) {
 						for i := 0; i < len(dgItems)-1; i++ {
 							if err := os.Remove(dgItems[i].path); err == nil {
 								removedFiles = append(removedFiles, dgItems[i].path)
+
+								// remove cache entry
+								pathParts := strings.Split(filepath.ToSlash(filepath.Dir(filepath.Dir(dgItems[i].path))), "/")
+								var repoRoot string
+								if len(pathParts) >= 2 {
+									if filepath.IsAbs(dgItems[i].path) {
+										repoRoot = "/" + filepath.Join(pathParts[:len(pathParts)-2]...)
+									} else {
+										repoRoot = filepath.Join(pathParts[:len(pathParts)-2]...)
+									}
+								}
+								if repoRoot == "" {
+									repoRoot = "."
+								}
+								category := filepath.Base(filepath.Dir(filepath.Dir(dgItems[i].path)))
+								name := filepath.Base(filepath.Dir(dgItems[i].path))
+								cachePath := GetCachePath(repoRoot, "md5-dict", category, name, dgItems[i].version)
+								_ = os.Remove(cachePath)
+
 							} else {
 								log.Printf("Failed to remove duplicate %s: %v", dgItems[i].path, err)
 							}
@@ -171,6 +190,25 @@ func DeduplicateEbuilds(targets []string) ([]string, error) {
 					for i := 0; i < len(keptItems)-1; i++ {
 						if err := os.Remove(keptItems[i].path); err == nil {
 							removedFiles = append(removedFiles, keptItems[i].path)
+
+							// remove cache entry
+							pathParts := strings.Split(filepath.ToSlash(filepath.Dir(filepath.Dir(keptItems[i].path))), "/")
+							var repoRoot string
+							if len(pathParts) >= 2 {
+								if filepath.IsAbs(keptItems[i].path) {
+									repoRoot = "/" + filepath.Join(pathParts[:len(pathParts)-2]...)
+								} else {
+									repoRoot = filepath.Join(pathParts[:len(pathParts)-2]...)
+								}
+							}
+							if repoRoot == "" {
+								repoRoot = "."
+							}
+							category := filepath.Base(filepath.Dir(filepath.Dir(keptItems[i].path)))
+							name := filepath.Base(filepath.Dir(keptItems[i].path))
+							cachePath := GetCachePath(repoRoot, "md5-dict", category, name, keptItems[i].version)
+							_ = os.Remove(cachePath)
+
 						} else {
 							log.Printf("Failed to remove older version %s: %v", keptItems[i].path, err)
 						}
@@ -221,16 +259,17 @@ func DeduplicateEbuilds(targets []string) ([]string, error) {
 					category := parts[len(parts)-2]
 					pkg := parts[len(parts)-1]
 
-					// repo root would be len(parts)-2 levels up
 					var repoRoot string
 					if filepath.IsAbs(pkgDir) {
-						repoRoot = filepath.Join(parts[:len(parts)-2]...)
-						repoRoot = "/" + repoRoot
+						repoRoot = "/" + filepath.Join(parts[:len(parts)-2]...)
 					} else {
 						repoRoot = filepath.Join(parts[:len(parts)-2]...)
 					}
+					if repoRoot == "" {
+						repoRoot = "."
+					}
 
-					md5CacheDir := filepath.Join(repoRoot, "metadata", "md5-cache", category)
+					md5CacheDir := GetCacheDir(repoRoot, "md5-dict", category)
 					if cacheEntries, err := os.ReadDir(md5CacheDir); err == nil {
 						for _, ce := range cacheEntries {
 							if strings.HasPrefix(ce.Name(), pkg+"-") && len(ce.Name()) > len(pkg)+1 && (ce.Name()[len(pkg)] == '-' && ce.Name()[len(pkg)+1] >= '0' && ce.Name()[len(pkg)+1] <= '9') {

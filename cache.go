@@ -8,6 +8,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 )
 
@@ -171,19 +172,26 @@ func GenerateCacheFS(cfs CacheFS, repoDir string, targetPkgs []string, genEclass
 						continue
 					}
 
-					cacheDir := filepath.ToSlash(filepath.Join(repoDir, "metadata", format, cat))
+					cacheDir := GetCacheDir(repoDir, format, cat)
 					if err := cfs.MkdirAll(cacheDir, 0755); err != nil {
 						return fmt.Errorf("creating cache directory %s: %w", cacheDir, err)
 					}
 
-					verCachePath := filepath.ToSlash(filepath.Join(cacheDir, fmt.Sprintf("%s-%s", pkgName, pv)))
+					verCachePath := GetCachePath(repoDir, format, cat, pkgName, pv)
 
 					f, err := cfs.Create(verCachePath)
 					if err != nil {
 						return fmt.Errorf("creating cache file %s: %w", verCachePath, err)
 					}
 
-					for k, v := range ebuild.Vars {
+					var keys []string
+					for k := range ebuild.Vars {
+						keys = append(keys, k)
+					}
+					sort.Strings(keys)
+
+					for _, k := range keys {
+						v := ebuild.Vars[k]
 						if v != "" {
 							if isCacheVariable(k) {
 								_, _ = fmt.Fprintf(f, "%s=%s\n", k, v)
@@ -243,6 +251,14 @@ func GetLegacyCacheDir(repoDir string, format string) string {
 		return filepath.ToSlash(filepath.Join(repoDir, "metadata", "md5-dict"))
 	}
 	return ""
+}
+
+// GetCacheRoot returns the root directory for a given cache format.
+func GetCacheRoot(repoDir string, format string) string {
+	if format == "md5-dict" {
+		return filepath.ToSlash(filepath.Join(repoDir, "metadata", "md5-cache"))
+	}
+	return filepath.ToSlash(filepath.Join(repoDir, "metadata", format))
 }
 
 func isCacheVariable(key string) bool {

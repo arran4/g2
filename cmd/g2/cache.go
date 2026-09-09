@@ -150,7 +150,13 @@ func doCacheVerify(cfs g2.CacheFS, repoDir string) error {
 									fmt.Printf("Missing _md5_ entry in cache for %s/%s-%s\n", pkg.Category, pkg.Name, ver.Version)
 									hasErrors = true
 								}
+							} else {
+								fmt.Printf("Failed to read cache file %s: %v\n", verCachePath, err)
+								hasErrors = true
 							}
+						} else {
+							fmt.Printf("Failed to read ebuild file %s: %v\n", ebuildPath, err)
+							hasErrors = true
 						}
 					}
 				}
@@ -319,7 +325,7 @@ func doCacheClean(cfs g2.CacheFS, repoDir string) error {
 	cleanedCount := 0
 
 	for _, format := range cacheFormats {
-		formatDir := filepath.ToSlash(filepath.Dir(g2.GetCacheDir(repoDir, format, "")))
+		formatDir := g2.GetCacheRoot(repoDir, format)
 		if _, err := cfs.Stat(formatDir); err == nil {
 			err = cfs.Walk(formatDir, func(path string, d fs.DirEntry, err error) error {
 				if err != nil || d.IsDir() {
@@ -354,13 +360,24 @@ func doCacheClean(cfs g2.CacheFS, repoDir string) error {
 				log.Printf("Removing legacy metadata/md5-dict directory")
 				_ = cfs.Walk(legacyDir, func(path string, d fs.DirEntry, err error) error {
 					if err == nil && !d.IsDir() {
-						cfs.Remove(path)
-						cleanedCount++
+						if err := cfs.Remove(path); err != nil {
+							log.Printf("Failed to remove legacy cache entry %s: %v", path, err)
+						} else {
+							cleanedCount++
+						}
 					}
 					return nil
 				})
 				if _, ok := cfs.(*g2.OsCacheFS); ok {
-					_ = os.RemoveAll(filepath.Join(repoDir, legacyDir))
+					// repoDir here is redundant because os.RemoveAll is called locally
+					// However, osCfs.Base() could be used but it's private.
+					// cfs is created with repoDir as base, so legacyDir as is should be removed directly via os.RemoveAll inside the repoDir if possible.
+					// Actually, the cleanest way is just to try to remove the directory itself through the abstraction if possible, but cfs.Remove doesn't handle non-empty dirs.
+					// Let's just remove it safely using standard os packages if it's the os filesystem, but we have to construct the path correctly.
+					// filepath.Join(repoDir, "metadata", "md5-dict") is already returned by GetLegacyCacheDir.
+					if err := os.RemoveAll(legacyDir); err != nil {
+						log.Printf("Failed to remove legacy directory %s: %v", legacyDir, err)
+					}
 				}
 			}
 		}
