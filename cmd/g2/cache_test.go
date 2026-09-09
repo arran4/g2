@@ -1,23 +1,72 @@
 package main
 
 import (
+	"github.com/arran4/g2"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
-	"github.com/arran4/g2"
 )
+
+func snapshotDir(t *testing.T, dir string) map[string]string {
+	snapshot := make(map[string]string)
+	err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if info.IsDir() {
+			return nil
+		}
+		rel, err := filepath.Rel(dir, path)
+		if err != nil {
+			return err
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		snapshot[rel] = string(data)
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("snapshot error: %v", err)
+	}
+	return snapshot
+}
+
+func assertSnapshotEqual(t *testing.T, snap1, snap2 map[string]string) {
+	for k, v1 := range snap1 {
+		if v2, ok := snap2[k]; !ok {
+			t.Errorf("file %s is missing in second snapshot", k)
+		} else if v1 != v2 {
+			t.Errorf("file %s content differs", k)
+		}
+	}
+	for k := range snap2 {
+		if _, ok := snap1[k]; !ok {
+			t.Errorf("file %s is unexpectedly present in second snapshot", k)
+		}
+	}
+}
 
 func setupTestRepo(t *testing.T) (string, g2.CacheFS) {
 	dir := t.TempDir()
 
 	// Create layout.conf
-	_ = os.MkdirAll(filepath.Join(dir, "metadata"), 0755)
-	_ = os.WriteFile(filepath.Join(dir, "metadata", "layout.conf"), []byte("cache-formats = md5-dict\n"), 0644)
+	if err := os.MkdirAll(filepath.Join(dir, "metadata"), 0755); err != nil {
+		t.Fatalf("MkdirAll failed: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "metadata", "layout.conf"), []byte("cache-formats = md5-dict\n"), 0644); err != nil {
+		t.Fatalf("WriteFile failed: %v", err)
+	}
 
 	// Create an ebuild
-	_ = os.MkdirAll(filepath.Join(dir, "sys-apps", "test"), 0755)
-	_ = os.WriteFile(filepath.Join(dir, "sys-apps", "test", "test-1.0.ebuild"), []byte("DESCRIPTION=\"A test ebuild\"\nSLOT=\"0\"\n"), 0644)
+	if err := os.MkdirAll(filepath.Join(dir, "sys-apps", "test"), 0755); err != nil {
+		t.Fatalf("MkdirAll failed: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "sys-apps", "test", "test-1.0.ebuild"), []byte("DESCRIPTION=\"A test ebuild\"\nSLOT=\"0\"\n"), 0644); err != nil {
+		t.Fatalf("WriteFile failed: %v", err)
+	}
 
 	return dir, g2.NewOsCacheFS(dir)
 }
@@ -27,13 +76,21 @@ func TestDoCacheReconcile(t *testing.T) {
 
 	// 1. Create a legacy dict entry
 	legacyDir := filepath.Join(dir, "metadata", "md5-dict", "sys-apps")
-	_ = os.MkdirAll(legacyDir, 0755)
-	_ = os.WriteFile(filepath.Join(legacyDir, "test-1.0"), []byte("DESCRIPTION=A test ebuild\n_md5_=legacy\n"), 0644)
+	if err := os.MkdirAll(legacyDir, 0755); err != nil {
+		t.Fatalf("MkdirAll failed: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(legacyDir, "test-1.0"), []byte("DESCRIPTION=A test ebuild\n_md5_=legacy\n"), 0644); err != nil {
+		t.Fatalf("WriteFile failed: %v", err)
+	}
 
 	// 2. Create an orphan cache entry
 	orphanDir := filepath.Join(dir, "metadata", "md5-cache", "sys-apps")
-	_ = os.MkdirAll(orphanDir, 0755)
-	_ = os.WriteFile(filepath.Join(orphanDir, "orphan-1.0"), []byte("DESCRIPTION=Orphan\n_md5_=123\n"), 0644)
+	if err := os.MkdirAll(orphanDir, 0755); err != nil {
+		t.Fatalf("MkdirAll failed: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(orphanDir, "orphan-1.0"), []byte("DESCRIPTION=Orphan\n_md5_=123\n"), 0644); err != nil {
+		t.Fatalf("WriteFile failed: %v", err)
+	}
 
 	// Run reconcile
 	err := doCacheReconcile(cfs, ".")
@@ -57,10 +114,13 @@ func TestDoCacheReconcile(t *testing.T) {
 	}
 
 	// Idempotency check: run it again, it should still succeed
+	snap1 := snapshotDir(t, dir)
 	err = doCacheReconcile(cfs, ".")
 	if err != nil {
 		t.Fatalf("Expected second reconcile to succeed idempotently, got %v", err)
 	}
+	snap2 := snapshotDir(t, dir)
+	assertSnapshotEqual(t, snap1, snap2)
 }
 
 func TestDoCacheVerify(t *testing.T) {
@@ -73,7 +133,9 @@ func TestDoCacheVerify(t *testing.T) {
 	}
 
 	// Generate cache correctly
-	_ = g2.GenerateCacheFS(cfs, ".", nil, false)
+	if err := g2.GenerateCacheFS(cfs, ".", nil, false); err != nil {
+		t.Fatalf("GenerateCacheFS failed: %v", err)
+	}
 
 	// Verify should succeed now
 	err = doCacheVerify(cfs, ".")
@@ -85,7 +147,9 @@ func TestDoCacheVerify(t *testing.T) {
 	cachePath := filepath.Join(dir, "metadata", "md5-cache", "sys-apps", "test-1.0")
 	cacheBytes, _ := os.ReadFile(cachePath)
 	badBytes := strings.Replace(string(cacheBytes), "_md5_=", "_md5_=bad", 1)
-	_ = os.WriteFile(cachePath, []byte(badBytes), 0644)
+	if err := os.WriteFile(cachePath, []byte(badBytes), 0644); err != nil {
+		t.Fatalf("WriteFile failed: %v", err)
+	}
 
 	err = doCacheVerify(cfs, ".")
 	if err == nil {
@@ -93,18 +157,26 @@ func TestDoCacheVerify(t *testing.T) {
 	}
 
 	// Reset cache
-	_ = g2.GenerateCacheFS(cfs, ".", nil, false)
+	if err := g2.GenerateCacheFS(cfs, ".", nil, false); err != nil {
+		t.Fatalf("GenerateCacheFS failed: %v", err)
+	}
 
 	// Create orphan
-	_ = os.WriteFile(filepath.Join(dir, "metadata", "md5-cache", "sys-apps", "orphan-2.0"), []byte(""), 0644)
+	if err := os.WriteFile(filepath.Join(dir, "metadata", "md5-cache", "sys-apps", "orphan-2.0"), []byte(""), 0644); err != nil {
+		t.Fatalf("WriteFile failed: %v", err)
+	}
 	err = doCacheVerify(cfs, ".")
 	if err == nil {
 		t.Errorf("Expected verify to fail due to orphan entry")
 	}
-	_ = os.Remove(filepath.Join(dir, "metadata", "md5-cache", "sys-apps", "orphan-2.0"))
+	if err := os.Remove(filepath.Join(dir, "metadata", "md5-cache", "sys-apps", "orphan-2.0")); err != nil {
+		t.Fatalf("Remove failed: %v", err)
+	}
 
 	// Create legacy
-	_ = os.MkdirAll(filepath.Join(dir, "metadata", "md5-dict"), 0755)
+	if err := os.MkdirAll(filepath.Join(dir, "metadata", "md5-dict"), 0755); err != nil {
+		t.Fatalf("MkdirAll failed: %v", err)
+	}
 	err = doCacheVerify(cfs, ".")
 	if err == nil {
 		t.Errorf("Expected verify to fail due to legacy directory")
