@@ -60,6 +60,16 @@ func (m *MemCacheFS) Create(name string) (io.WriteCloser, error) {
 	}, nil
 }
 
+func (m *MemCacheFS) RemoveAll(name string) error {
+
+	for k := range m.Map {
+		if k == name || (len(k) > len(name) && k[:len(name)+1] == name+"/") {
+			delete(m.Map, k)
+		}
+	}
+	return nil
+}
+
 func (m *MemCacheFS) Remove(name string) error {
 	if _, ok := m.Map[name]; !ok {
 		return os.ErrNotExist

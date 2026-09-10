@@ -146,3 +146,154 @@ func TestDeduplicateEbuildsRevisionComparison(t *testing.T) {
 		t.Errorf("expected dummy-1.2-r1.ebuild to be retained: %v", err)
 	}
 }
+
+func TestDeduplicateEbuildsCacheRemoval(t *testing.T) {
+	dir := t.TempDir()
+
+	// Setup repo
+	cat := "sys-apps"
+	pkg := "test"
+	if err := os.MkdirAll(filepath.Join(dir, cat, pkg), 0755); err != nil {
+		t.Fatalf("MkdirAll failed: %v", err)
+	}
+
+	ebuildPaths := []string{
+		filepath.Join(dir, cat, pkg, "test-1.0.ebuild"),
+		filepath.Join(dir, cat, pkg, "test-1.0-r1.ebuild"), // Revision should be kept, 1.0 removed
+		filepath.Join(dir, cat, pkg, "test-2.0.ebuild"),    // Kept (different version)
+	}
+
+	if err := os.WriteFile(ebuildPaths[0], []byte(`DESCRIPTION="test1"
+`), 0644); err != nil {
+		t.Fatalf("WriteFile failed: %v", err)
+	}
+	if err := os.WriteFile(ebuildPaths[1], []byte(`DESCRIPTION="test1"
+`), 0644); err != nil {
+		t.Fatalf("WriteFile failed: %v", err)
+	}
+	if err := os.WriteFile(ebuildPaths[2], []byte(`DESCRIPTION="test2"
+`), 0644); err != nil {
+		t.Fatalf("WriteFile failed: %v", err)
+	}
+
+	// Create cache entries
+	cacheDir := filepath.Join(dir, "metadata", "md5-cache", cat)
+	if err := os.MkdirAll(cacheDir, 0755); err != nil {
+		t.Fatalf("MkdirAll failed: %v", err)
+	}
+
+	cachePaths := []string{
+		filepath.Join(cacheDir, "test-1.0"),
+		filepath.Join(cacheDir, "test-1.0-r1"),
+		filepath.Join(cacheDir, "test-2.0"),
+	}
+	for _, p := range cachePaths {
+		if err := os.WriteFile(p, []byte(`_md5_=123
+`), 0644); err != nil {
+			t.Fatalf("WriteFile failed: %v", err)
+		}
+	}
+
+	// Deduplicate absolute paths
+	removed, err := DeduplicateEbuilds([]string{filepath.Join(dir, cat, pkg)})
+	if err != nil {
+		t.Fatalf("DeduplicateEbuilds failed: %v", err)
+	}
+
+	if len(removed) != 2 {
+		t.Fatalf("Expected 2 files to be removed, got %v", removed)
+	}
+
+	// Check cache
+	if _, err := os.Stat(cachePaths[0]); !os.IsNotExist(err) {
+		t.Errorf("Cache for 1.0 should have been removed")
+	}
+	if _, err := os.Stat(cachePaths[1]); !os.IsNotExist(err) {
+		t.Errorf("Cache for 1.0-r1 should have been removed")
+	}
+	if _, err := os.Stat(cachePaths[2]); os.IsNotExist(err) {
+		t.Errorf("Cache for 2.0 should have been kept")
+	}
+}
+
+func TestDeduplicateEbuildsCacheRemovalRelative(t *testing.T) {
+	dir := t.TempDir()
+
+	// Set up repo structure and chdir to it to test relative paths properly
+	cat := "sys-apps"
+	pkg := "test"
+	if err := os.MkdirAll(filepath.Join(dir, cat, pkg), 0755); err != nil {
+		t.Fatalf("MkdirAll failed: %v", err)
+	}
+
+	ebuildPaths := []string{
+		filepath.Join(dir, cat, pkg, "test-1.0.ebuild"),
+		filepath.Join(dir, cat, pkg, "test-1.0-r1.ebuild"),
+		filepath.Join(dir, cat, pkg, "test-2.0.ebuild"),
+	}
+
+	if err := os.WriteFile(ebuildPaths[0], []byte(`DESCRIPTION="test1"
+`), 0644); err != nil {
+		t.Fatalf("WriteFile failed: %v", err)
+	}
+	if err := os.WriteFile(ebuildPaths[1], []byte(`DESCRIPTION="test1"
+`), 0644); err != nil {
+		t.Fatalf("WriteFile failed: %v", err)
+	}
+	if err := os.WriteFile(ebuildPaths[2], []byte(`DESCRIPTION="test2"
+`), 0644); err != nil {
+		t.Fatalf("WriteFile failed: %v", err)
+	}
+
+	cacheDir := filepath.Join(dir, "metadata", "md5-cache", cat)
+	if err := os.MkdirAll(cacheDir, 0755); err != nil {
+		t.Fatalf("MkdirAll failed: %v", err)
+	}
+
+	cachePaths := []string{
+		filepath.Join(cacheDir, "test-1.0"),
+		filepath.Join(cacheDir, "test-1.0-r1"),
+		filepath.Join(cacheDir, "test-2.0"),
+	}
+	for _, p := range cachePaths {
+		if err := os.WriteFile(p, []byte(`_md5_=123
+`), 0644); err != nil {
+			t.Fatalf("WriteFile failed: %v", err)
+		}
+	}
+
+	// Chdir to use relative paths
+	cwd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("Getwd failed: %v", err)
+	}
+	if err := os.Chdir(dir); err != nil {
+		t.Fatalf("Chdir failed: %v", err)
+	}
+	defer func() {
+		if err := os.Chdir(cwd); err != nil {
+			t.Fatalf("Chdir back failed: %v", err)
+		}
+	}()
+
+	// Deduplicate relative paths
+	removed, err := DeduplicateEbuilds([]string{filepath.Join(cat, pkg)})
+	if err != nil {
+		t.Fatalf("DeduplicateEbuilds failed: %v", err)
+	}
+
+	if len(removed) != 2 {
+		t.Fatalf("Expected 2 files to be removed, got %v", removed)
+	}
+
+	// Check cache via original absolute paths
+	if _, err := os.Stat(cachePaths[0]); !os.IsNotExist(err) {
+		t.Errorf("Cache for 1.0 should have been removed")
+	}
+	if _, err := os.Stat(cachePaths[1]); !os.IsNotExist(err) {
+		t.Errorf("Cache for 1.0-r1 should have been removed")
+	}
+	if _, err := os.Stat(cachePaths[2]); os.IsNotExist(err) {
+		t.Errorf("Cache for 2.0 should have been kept")
+	}
+}

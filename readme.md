@@ -360,6 +360,10 @@ Generate the ebuild cache for the current overlay:
 g2 cache generate
 ```
 
+```bash
+g2 cache reconcile
+```
+
 Generate the ebuild cache for specific packages:
 ```bash
 g2 cache generate app-admin/sudoers-emerge app-test/app

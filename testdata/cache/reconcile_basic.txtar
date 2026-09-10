@@ -3,19 +3,15 @@ cache-formats = md5-dict
 -- input/sys-apps/test/test-1.0.ebuild --
 DESCRIPTION="A test ebuild"
 
--- input/metadata/md5-cache/sys-apps/test-1.0 --
+-- input/metadata/md5-dict/sys-apps/test-1.0 --
 DESCRIPTION=A test ebuild
-_md5_=abcdef1234567890
-
--- input/metadata/md5-cache/sys-apps/old-1.0 --
-DESCRIPTION=Old cache that should be removed
+_md5_=legacy
 
 -- expected/metadata/layout.conf --
 cache-formats = md5-dict
-
 -- expected/sys-apps/test/test-1.0.ebuild --
 DESCRIPTION="A test ebuild"
 
 -- expected/metadata/md5-cache/sys-apps/test-1.0 --
 DESCRIPTION=A test ebuild
-_md5_=abcdef1234567890
+_md5_=5cbdd2c85f6a5451a37f8eb56f2b0218

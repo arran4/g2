@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/md5"
 	"flag"
 	"fmt"
 	"io/fs"
@@ -22,6 +23,7 @@ func (cfg *MainArgConfig) cmdCache(args []string) error {
 		fmt.Printf("\t\t %s \t\t %s\n", "set-method", "To set the cache method in layout.conf")
 		fmt.Printf("\t\t %s \t\t %s\n", "list-methods", "To list available cache methods")
 		fmt.Printf("\t\t %s \t\t %s\n", "clean", "To clean up unused cache entries")
+		fmt.Printf("\t\t %s \t\t %s\n", "reconcile", "To idempotently generate, verify and clean cache entries")
 	}
 
 	if err := fs.Parse(args); err != nil {
@@ -47,6 +49,8 @@ func (cfg *MainArgConfig) cmdCache(args []string) error {
 		return cfg.cmdCacheListMethods(fs.Args()[1:])
 	case "clean":
 		return cfg.cmdCacheClean(fs.Args()[1:])
+	case "reconcile":
+		return cfg.cmdCacheReconcile(fs.Args()[1:])
 	case "help", "-help", "--help":
 		fs.Usage()
 		return nil
@@ -74,9 +78,10 @@ func doCacheVerify(cfs g2.CacheFS, repoDir string) error {
 		_ = f.Close()
 		lc, err = parseLayoutConfFromFS(cfs, layoutConfPath)
 		if err != nil {
-			log.Printf("Warning: failed to parse layout.conf: %v", err)
-			lc = nil
+			return fmt.Errorf("failed to parse layout.conf: %w", err)
 		}
+	} else if !os.IsNotExist(err) {
+		return fmt.Errorf("failed to open layout.conf: %w", err)
 	}
 
 	cacheFormats := []string{"md5-dict"} // Default if not found
@@ -101,17 +106,101 @@ func doCacheVerify(cfs g2.CacheFS, repoDir string) error {
 		}
 		log.Printf("Verifying cache for format: %s", format)
 
+		// 1. Detect legacy state
+		legacyDir := g2.GetLegacyCacheDir(repoDir, format)
+		if legacyDir != "" {
+			if _, err := cfs.Stat(legacyDir); err == nil {
+				fmt.Printf("Warning: Legacy metadata/md5-dict directory exists. Please run cache clean or reconcile.\n")
+				hasErrors = true
+			} else if !os.IsNotExist(err) {
+				log.Printf("Failed to stat legacy directory %s: %v", legacyDir, err)
+				hasErrors = true
+			}
+		}
+
+		validCacheEntries := make(map[string]bool)
+
+		// 2. Check for missing entries and MD5 mismatches
 		for _, cat := range siteData.Categories {
 			for _, pkg := range cat.Packages {
-				cachePath := filepath.Join(repoDir, "metadata", format, pkg.Category, pkg.Name)
-
 				for _, ver := range pkg.Versions {
-					verCachePath := filepath.ToSlash(fmt.Sprintf("%s-%s", cachePath, ver.Version))
+					verCachePath := g2.GetCachePath(repoDir, format, pkg.Category, pkg.Name, ver.Version)
+					validCacheEntries[filepath.Clean(verCachePath)] = true
+
 					if _, err := cfs.Stat(verCachePath); os.IsNotExist(err) || err != nil {
 						fmt.Printf("Missing %s cache for %s/%s-%s\n", format, pkg.Category, pkg.Name, ver.Version)
 						hasErrors = true
+					} else {
+						// verify MD5 match
+						ebuildPath := filepath.ToSlash(filepath.Join(repoDir, pkg.Category, pkg.Name, fmt.Sprintf("%s-%s.ebuild", pkg.Name, ver.Version)))
+						ebuildContent, err := fs.ReadFile(cfs, ebuildPath)
+						if err == nil {
+							expectedMd5 := fmt.Sprintf("%x", md5.Sum(ebuildContent))
+							cacheContent, err := fs.ReadFile(cfs, verCachePath)
+							if err == nil {
+								foundMd5 := false
+								for _, line := range strings.Split(string(cacheContent), "\n") {
+									if strings.HasPrefix(line, "_md5_=") {
+										actualMd5 := strings.TrimSpace(strings.TrimPrefix(line, "_md5_="))
+										if actualMd5 != expectedMd5 {
+											fmt.Printf("MD5 mismatch for %s/%s-%s (expected %s, got %s)\n", pkg.Category, pkg.Name, ver.Version, expectedMd5, actualMd5)
+											hasErrors = true
+										}
+										foundMd5 = true
+										break
+									}
+								}
+								if !foundMd5 {
+									fmt.Printf("Missing _md5_ entry in cache for %s/%s-%s\n", pkg.Category, pkg.Name, ver.Version)
+									hasErrors = true
+								}
+							} else {
+								fmt.Printf("Failed to read cache file %s: %v\n", verCachePath, err)
+								hasErrors = true
+							}
+						} else {
+							fmt.Printf("Failed to read ebuild file %s: %v\n", ebuildPath, err)
+							hasErrors = true
+						}
 					}
 				}
+			}
+		}
+
+		// 3. Detect orphan/stale entries
+		formatDir := g2.GetCacheRoot(repoDir, format)
+		if formatDir != "" {
+			if _, err := cfs.Stat(formatDir); err == nil {
+				err = cfs.Walk(formatDir, func(path string, d fs.DirEntry, err error) error {
+					if err != nil {
+						log.Printf("Walk error at %s: %v", path, err)
+						hasErrors = true
+						return err
+					}
+					if d.IsDir() {
+						return nil
+					}
+
+					found := false
+					for validPath := range validCacheEntries {
+						if filepath.Clean(validPath) == filepath.Clean(path) {
+							found = true
+							break
+						}
+					}
+					if !found {
+						fmt.Printf("Stale/Orphan cache entry found: %s\n", path)
+						hasErrors = true
+					}
+					return nil
+				})
+				if err != nil {
+					log.Printf("Walk failed on format dir: %v", err)
+					hasErrors = true
+				}
+			} else if !os.IsNotExist(err) {
+				log.Printf("Failed to stat cache directory %s: %v", formatDir, err)
+				hasErrors = true
 			}
 		}
 	}
@@ -234,9 +323,8 @@ func doCacheClean(cfs g2.CacheFS, repoDir string) error {
 		for _, cat := range siteData.Categories {
 			for _, pkg := range cat.Packages {
 				for _, ver := range pkg.Versions {
-					// cache path format: metadata/md5-dict/sys-apps/pkg-version
-					relPath := filepath.Join("metadata", format, pkg.Category, fmt.Sprintf("%s-%s", pkg.Name, ver.Version))
-					validCacheEntries[relPath] = true
+					relPath := g2.GetCachePath(repoDir, format, pkg.Category, pkg.Name, ver.Version)
+					validCacheEntries[filepath.Clean(relPath)] = true
 				}
 			}
 		}
@@ -245,39 +333,112 @@ func doCacheClean(cfs g2.CacheFS, repoDir string) error {
 	cleanedCount := 0
 
 	for _, format := range cacheFormats {
-		formatDir := filepath.ToSlash(filepath.Join(repoDir, "metadata", format))
-		if _, err := cfs.Stat(formatDir); os.IsNotExist(err) || err != nil {
+		formatDir := g2.GetCacheRoot(repoDir, format)
+		if formatDir == "" {
+			log.Printf("Warning: cache format '%s' is not explicitly supported. Skipping.", format)
 			continue
 		}
-
-		err = cfs.Walk(formatDir, func(path string, d fs.DirEntry, err error) error {
-			if err != nil {
-				return err
-			}
-			if d.IsDir() {
-				return nil
-			}
-
-			relPath := filepath.ToSlash(path)
-
-			// If it's not a valid cache entry based on current ebuilds, delete it
-			if !validCacheEntries[relPath] {
-				log.Printf("Removing unused cache entry: %s", relPath)
-				if err := cfs.Remove(path); err != nil {
-					log.Printf("Failed to remove %s: %v", path, err)
-				} else {
-					cleanedCount++
+		if _, err := cfs.Stat(formatDir); err == nil {
+			err = cfs.Walk(formatDir, func(path string, d fs.DirEntry, err error) error {
+				if err != nil {
+					return err
 				}
+				if d.IsDir() {
+					return nil
+				}
+				found := false
+				for validPath := range validCacheEntries {
+					if filepath.Clean(validPath) == filepath.Clean(path) {
+						found = true
+						break
+					}
+				}
+				if !found {
+					log.Printf("Removing unused cache entry: %s", path)
+					if err := cfs.Remove(path); err != nil {
+						log.Printf("Failed to remove %s: %v", path, err)
+						return fmt.Errorf("removing cache entry %s: %w", path, err)
+					} else {
+						cleanedCount++
+					}
+				}
+				return nil
+			})
+			if err != nil {
+				return fmt.Errorf("walking cache dir %s: %w", formatDir, err)
 			}
+		} else if !os.IsNotExist(err) {
+			return fmt.Errorf("stat cache dir %s: %w", formatDir, err)
+		}
 
-			return nil
-		})
-
-		if err != nil {
-			return fmt.Errorf("walking cache dir %s: %w", formatDir, err)
+		// Explicit legacy cleanup
+		legacyDir := g2.GetLegacyCacheDir(repoDir, format)
+		if legacyDir != "" {
+			if _, err := cfs.Stat(legacyDir); err == nil {
+				log.Printf("Removing legacy metadata/md5-dict directory")
+				err = cfs.Walk(legacyDir, func(path string, d fs.DirEntry, err error) error {
+					if err != nil {
+						return err
+					}
+					if !d.IsDir() {
+						if err := cfs.Remove(path); err != nil {
+							log.Printf("Failed to remove legacy cache entry %s: %v", path, err)
+							return fmt.Errorf("removing legacy cache entry %s: %w", path, err)
+						} else {
+							cleanedCount++
+						}
+					}
+					return nil
+				})
+				if err != nil {
+					return fmt.Errorf("walking legacy dir %s: %w", legacyDir, err)
+				}
+				if err := cfs.RemoveAll(legacyDir); err != nil {
+					log.Printf("Failed to remove legacy directory %s: %v", legacyDir, err)
+					return fmt.Errorf("removing legacy dir %s: %w", legacyDir, err)
+				}
+			} else if !os.IsNotExist(err) {
+				return fmt.Errorf("stat legacy dir %s: %w", legacyDir, err)
+			}
 		}
 	}
 
 	fmt.Printf("Cleaned %d unused cache entries.\n", cleanedCount)
+	return nil
+}
+
+func (cfg *MainArgConfig) cmdCacheReconcile(args []string) error {
+	fsFlags := flag.NewFlagSet("reconcile", flag.ExitOnError)
+	repoDir := fsFlags.String("repo", ".", "Path to the repository root")
+	if err := fsFlags.Parse(args); err != nil {
+		return err
+	}
+
+	cfs := g2.NewOsCacheFS(*repoDir)
+	return doCacheReconcile(cfs, ".")
+}
+
+func doCacheReconcile(cfs g2.CacheFS, repoDir string) error {
+	log.Printf("Starting cache reconciliation...")
+
+	// 1. generate/update expected cache entries
+	log.Printf("Generating expected cache entries...")
+	if err := g2.GenerateCacheFS(cfs, repoDir, nil, false); err != nil {
+		return fmt.Errorf("failed generating cache: %w", err)
+	}
+
+	// 2. & 3. clean up orphans and handle legacy paths
+	log.Printf("Cleaning up stale cache entries and legacy paths...")
+	if err := doCacheClean(cfs, repoDir); err != nil {
+		return fmt.Errorf("failed cleaning cache: %w", err)
+	}
+
+	// 4. verify resulting repository state
+	log.Printf("Verifying resulting cache consistency...")
+	if err := doCacheVerify(cfs, repoDir); err != nil {
+		return fmt.Errorf("cache consistency check failed after reconciliation: %w", err)
+	}
+
+	fmt.Println("Cache reconciliation completed successfully.")
 	return nil
 }

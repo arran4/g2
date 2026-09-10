@@ -25,6 +25,22 @@ type ebuildItem struct {
 // (ignoring `# Generated via:` lines), keeps the highest version within each grade,
 // and cleans up empty package directories (including `Manifest`, `metadata.xml`,
 // and `md5-cache` entries). It returns a slice of file paths that were removed.
+
+// getRepoRoot extracts the repository root by taking the parent of the parent directory of an ebuild.
+// e.g. for /tmp/repo/app-misc/foo/foo-1.ebuild, it returns /tmp/repo.
+// for app-misc/foo/foo-1.ebuild, it returns .
+func getRepoRoot(ebuildPath string) string {
+	pkgDir := filepath.Dir(ebuildPath)
+	catDir := filepath.Dir(pkgDir)
+	repoRoot := filepath.Dir(catDir)
+
+	if repoRoot == "" {
+		return "."
+	}
+	// Avoid returning single slash if possible, but keep it clean
+	return filepath.ToSlash(filepath.Clean(repoRoot))
+}
+
 func DeduplicateEbuilds(targets []string) ([]string, error) {
 	if len(targets) == 0 {
 		targets = []string{"."}
@@ -155,6 +171,18 @@ func DeduplicateEbuilds(targets []string) ([]string, error) {
 						for i := 0; i < len(dgItems)-1; i++ {
 							if err := os.Remove(dgItems[i].path); err == nil {
 								removedFiles = append(removedFiles, dgItems[i].path)
+
+								// remove cache entry
+								repoRoot := getRepoRoot(dgItems[i].path)
+								category := filepath.Base(filepath.Dir(filepath.Dir(dgItems[i].path)))
+								name := filepath.Base(filepath.Dir(dgItems[i].path))
+								cachePath := GetCachePath(repoRoot, "md5-dict", category, name, dgItems[i].version)
+								if cachePath != "" {
+									if err := os.Remove(cachePath); err != nil && !os.IsNotExist(err) {
+										log.Printf("Failed to remove cache entry %s: %v", cachePath, err)
+									}
+								}
+
 							} else {
 								log.Printf("Failed to remove duplicate %s: %v", dgItems[i].path, err)
 							}
@@ -171,6 +199,18 @@ func DeduplicateEbuilds(targets []string) ([]string, error) {
 					for i := 0; i < len(keptItems)-1; i++ {
 						if err := os.Remove(keptItems[i].path); err == nil {
 							removedFiles = append(removedFiles, keptItems[i].path)
+
+							// remove cache entry
+							repoRoot := getRepoRoot(keptItems[i].path)
+							category := filepath.Base(filepath.Dir(filepath.Dir(keptItems[i].path)))
+							name := filepath.Base(filepath.Dir(keptItems[i].path))
+							cachePath := GetCachePath(repoRoot, "md5-dict", category, name, keptItems[i].version)
+							if cachePath != "" {
+								if err := os.Remove(cachePath); err != nil && !os.IsNotExist(err) {
+									log.Printf("Failed to remove cache entry %s: %v", cachePath, err)
+								}
+							}
+
 						} else {
 							log.Printf("Failed to remove older version %s: %v", keptItems[i].path, err)
 						}
@@ -216,25 +256,17 @@ func DeduplicateEbuilds(targets []string) ([]string, error) {
 				_ = os.Remove(filepath.Join(pkgDir, "metadata.xml"))
 
 				// Attempt to remove md5-cache
-				parts := strings.Split(filepath.ToSlash(pkgDir), "/")
-				if len(parts) >= 2 {
-					category := parts[len(parts)-2]
-					pkg := parts[len(parts)-1]
-
-					// repo root would be len(parts)-2 levels up
-					var repoRoot string
-					if filepath.IsAbs(pkgDir) {
-						repoRoot = filepath.Join(parts[:len(parts)-2]...)
-						repoRoot = "/" + repoRoot
-					} else {
-						repoRoot = filepath.Join(parts[:len(parts)-2]...)
-					}
-
-					md5CacheDir := filepath.Join(repoRoot, "metadata", "md5-cache", category)
-					if cacheEntries, err := os.ReadDir(md5CacheDir); err == nil {
-						for _, ce := range cacheEntries {
-							if strings.HasPrefix(ce.Name(), pkg+"-") && len(ce.Name()) > len(pkg)+1 && (ce.Name()[len(pkg)] == '-' && ce.Name()[len(pkg)+1] >= '0' && ce.Name()[len(pkg)+1] <= '9') {
-								_ = os.Remove(filepath.Join(md5CacheDir, ce.Name()))
+				category := filepath.Base(filepath.Dir(pkgDir))
+				pkg := filepath.Base(pkgDir)
+				repoRoot := getRepoRoot(filepath.Join(pkgDir, "dummy.ebuild"))
+				if repoRoot != "" {
+					md5CacheDir := GetCacheDir(repoRoot, "md5-dict", category)
+					if md5CacheDir != "" {
+						if cacheEntries, err := os.ReadDir(md5CacheDir); err == nil {
+							for _, ce := range cacheEntries {
+								if strings.HasPrefix(ce.Name(), pkg+"-") && len(ce.Name()) > len(pkg)+1 && (ce.Name()[len(pkg)] == '-' && ce.Name()[len(pkg)+1] >= '0' && ce.Name()[len(pkg)+1] <= '9') {
+									_ = os.Remove(filepath.Join(md5CacheDir, ce.Name()))
+								}
 							}
 						}
 					}
