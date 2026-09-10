@@ -66,6 +66,8 @@ func parseLayoutConfFromReader(r io.Reader) (*LayoutConf, error) {
 			}
 			lc.Entries = append(lc.Entries, entry)
 			currentComments = nil // reset for next entry
+		} else {
+			return nil, fmt.Errorf("malformed layout.conf line: %s", line)
 		}
 	}
 

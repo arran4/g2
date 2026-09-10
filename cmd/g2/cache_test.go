@@ -3,6 +3,7 @@ package main
 import (
 	"github.com/arran4/g2"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -180,7 +181,10 @@ func TestDoCacheVerify(t *testing.T) {
 
 	// Create _md5_ mismatch
 	cachePath := filepath.Join(dir, "metadata", "md5-cache", "sys-apps", "test-1.0")
-	cacheBytes, _ := os.ReadFile(cachePath)
+	cacheBytes, err := os.ReadFile(cachePath)
+	if err != nil {
+		t.Fatalf("ReadFile failed: %v", err)
+	}
 	badBytes := strings.Replace(string(cacheBytes), "_md5_=", "_md5_=bad", 1)
 	if err := os.WriteFile(cachePath, []byte(badBytes), 0644); err != nil {
 		t.Fatalf("WriteFile failed: %v", err)
@@ -244,5 +248,45 @@ func TestCacheUnknownFormat(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(dir, "metadata", "invalid-format")); !os.IsNotExist(err) {
 		t.Fatalf("generate incorrectly created metadata/invalid-format")
+	}
+}
+
+func TestCacheVerifyLayoutError(t *testing.T) {
+	dir, cfs := setupTestRepo(t)
+
+	if err := os.WriteFile(filepath.Join(dir, "metadata", "layout.conf"), []byte("invalid syntax that cannot parse\n"), 0644); err != nil {
+		t.Fatalf("WriteFile failed: %v", err)
+	}
+
+	err := doCacheVerify(cfs, ".")
+	if err == nil {
+		t.Fatalf("Expected verify to fail when layout.conf is unparseable")
+	}
+	if !strings.Contains(err.Error(), "failed to parse layout.conf") {
+		t.Fatalf("Expected layout.conf parse error, got: %v", err)
+	}
+}
+
+type failingOpenFS struct {
+	g2.CacheFS
+}
+
+func (f *failingOpenFS) Open(name string) (fs.File, error) {
+	if name == filepath.ToSlash(filepath.Join(".", "metadata", "layout.conf")) || name == "metadata/layout.conf" {
+		return nil, os.ErrPermission
+	}
+	return f.CacheFS.Open(name)
+}
+
+func TestCacheVerifyLayoutOpenError(t *testing.T) {
+	_, cfs := setupTestRepo(t)
+
+	errFS := &failingOpenFS{CacheFS: cfs}
+	err := doCacheVerify(errFS, ".")
+	if err == nil {
+		t.Fatalf("Expected verify to fail when layout.conf cannot be opened")
+	}
+	if !strings.Contains(err.Error(), "failed to open layout.conf") {
+		t.Fatalf("Expected layout.conf open error, got: %v", err)
 	}
 }
