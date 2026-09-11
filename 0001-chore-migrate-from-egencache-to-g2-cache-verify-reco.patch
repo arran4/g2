@@ -1,0 +1,286 @@
+From 5177fa4b7728429a73ffa6382491c36a7f613aad Mon Sep 17 00:00:00 2001
+From: "google-labs-jules[bot]"
+ <161369871+google-labs-jules[bot]@users.noreply.github.com>
+Date: Fri, 11 Sep 2026 09:38:25 +0000
+Subject: [PATCH] chore: migrate from egencache to g2 cache verify/reconcile
+
+---
+ .github/workflows/cache-consistency.yml     | 21 ++++++++
+ .github/workflows/delete-all-cache.yml      | 31 -----------
+ .github/workflows/regenerate-all-cache.yml  | 51 ------------------
+ .github/workflows/repair-cache.yml          | 60 +++++++++++++++++++++
+ .github/workflows/scheduled-daily-tasks.yml | 54 -------------------
+ 5 files changed, 81 insertions(+), 136 deletions(-)
+ create mode 100644 .github/workflows/cache-consistency.yml
+ delete mode 100644 .github/workflows/delete-all-cache.yml
+ delete mode 100644 .github/workflows/regenerate-all-cache.yml
+ create mode 100644 .github/workflows/repair-cache.yml
+
+diff --git a/.github/workflows/cache-consistency.yml b/.github/workflows/cache-consistency.yml
+new file mode 100644
+index 00000000..32a0af46
+--- /dev/null
++++ b/.github/workflows/cache-consistency.yml
+@@ -0,0 +1,21 @@
++name: Cache Consistency Check
++
++on:
++  schedule:
++    - cron: '0 5 * * *'
++  workflow_dispatch:
++
++jobs:
++  verify:
++    runs-on: ubuntu-latest
++    steps:
++      - name: Checkout repository
++        uses: actions/checkout@v4
++        with:
++          fetch-depth: 0
++
++      - name: Install g2
++        uses: arran4/g2-action@v1.2
++
++      - name: Verify Cache
++        run: g2 cache verify --repo .
+diff --git a/.github/workflows/delete-all-cache.yml b/.github/workflows/delete-all-cache.yml
+deleted file mode 100644
+index 299ccb2c..00000000
+--- a/.github/workflows/delete-all-cache.yml
++++ /dev/null
+@@ -1,31 +0,0 @@
+-name: Delete All Cache
+-
+-permissions:
+-  contents: write
+-
+-on:
+-  workflow_dispatch:
+-
+-jobs:
+-  delete-cache:
+-    runs-on: ubuntu-latest
+-    steps:
+-      - uses: actions/checkout@v4
+-        with:
+-          fetch-depth: 0
+-
+-      - name: Delete cache directories
+-        run: |
+-          rm -rf metadata/md5-cache
+-          rm -rf metadata/md5-dict
+-
+-          git config --global user.name "github-actions[bot]"
+-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+-          git add -A metadata/md5-cache metadata/md5-dict || true
+-
+-          if git diff --staged --quiet; then
+-            echo "No cache files to delete."
+-          else
+-            git commit -m "chore: delete all cache"
+-            git push
+-          fi
+diff --git a/.github/workflows/regenerate-all-cache.yml b/.github/workflows/regenerate-all-cache.yml
+deleted file mode 100644
+index 7c9e3204..00000000
+--- a/.github/workflows/regenerate-all-cache.yml
++++ /dev/null
+@@ -1,51 +0,0 @@
+-name: Regenerate All Cache
+-
+-permissions:
+-  contents: write
+-
+-on:
+-  workflow_dispatch:
+-
+-jobs:
+-  regenerate-cache:
+-    runs-on: ubuntu-latest
+-    container:
+-      image: gentoo/stage3
+-      options: --user root
+-    steps:
+-      - name: Install dependencies
+-        run: |
+-          mkdir -p /etc/portage
+-          echo 'ACCEPT_LICENSE="*"' > /etc/portage/make.conf
+-          echo 'FEATURES="-ipc-sandbox -network-sandbox -pid-sandbox"' >> /etc/portage/make.conf
+-          mkdir -p /var/db/repos/gentoo
+-          emerge-webrsync
+-          emerge --quiet app-portage/portage-utils dev-vcs/git net-misc/curl app-misc/jq dev-util/github-cli
+-
+-      - uses: actions/checkout@v4
+-        with:
+-          fetch-depth: 0
+-
+-      - name: Configure Overlay
+-        run: |
+-          mkdir -p /etc/portage/repos.conf
+-          cat > /etc/portage/repos.conf/arrans-overlay.conf << INNER_EOF
+-          [arrans-overlay]
+-          location = $(pwd)
+-          INNER_EOF
+-
+-      - name: Run egencache update
+-        run: |
+-          egencache --repo=arrans-overlay --update
+-
+-          git config --global user.name "github-actions[bot]"
+-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+-          git add metadata/md5-cache metadata/md5-dict || true
+-          git config --global --add safe.directory "$(pwd)"
+-
+-          if git diff --staged --quiet; then
+-            echo "No cache files to update."
+-          else
+-            git commit -m "chore: regenerate all cache"
+-            git push
+-          fi
+diff --git a/.github/workflows/repair-cache.yml b/.github/workflows/repair-cache.yml
+new file mode 100644
+index 00000000..4112c5a7
+--- /dev/null
++++ b/.github/workflows/repair-cache.yml
+@@ -0,0 +1,60 @@
++name: Repair Cache
++
++permissions:
++  contents: write
++  pull-requests: write
++
++on:
++  workflow_dispatch:
++
++jobs:
++  repair:
++    runs-on: ubuntu-latest
++    steps:
++      - name: Checkout repository
++        uses: actions/checkout@v4
++        with:
++          fetch-depth: 0
++
++      - name: Install g2
++        uses: arran4/g2-action@v1.2
++
++      - name: Run g2 cache reconcile
++        run: g2 cache reconcile --repo .
++
++      - name: Verify Cache
++        run: g2 cache verify --repo .
++
++      - name: Check for Cache changes
++        id: changes
++        shell: bash
++        run: |
++          set -euo pipefail
++          git add metadata/md5-cache/ || true
++          if git diff --staged --quiet; then
++            echo "changed=false" >> "$GITHUB_OUTPUT"
++          else
++            echo "changed=true" >> "$GITHUB_OUTPUT"
++          fi
++
++      - name: Build PR body
++        if: steps.changes.outputs.changed == 'true'
++        shell: bash
++        run: |
++          {
++            echo "Repairs cache consistency drift using \`g2 cache reconcile .\`."
++            echo
++            echo "This synchronizes missing canonical metadata/md5-cache entries, removes stale ones, and corrects mismatches."
++          } > /tmp/pr-body.md
++
++      - name: Create pull request
++        if: steps.changes.outputs.changed == 'true'
++        uses: peter-evans/create-pull-request@v6
++        with:
++          token: ${{ secrets.GITHUB_TOKEN }}
++          commit-message: "chore: repair cache consistency"
++          title: "chore: repair cache consistency"
++          body-path: /tmp/pr-body.md
++          branch: "chore/repair-cache"
++          delete-branch: true
++          base: main
+diff --git a/.github/workflows/scheduled-daily-tasks.yml b/.github/workflows/scheduled-daily-tasks.yml
+index 302ecab3..602671de 100644
+--- a/.github/workflows/scheduled-daily-tasks.yml
++++ b/.github/workflows/scheduled-daily-tasks.yml
+@@ -16,11 +16,6 @@ on:
+         required: false
+         default: 'latest'
+         type: string
+-      run_egencache:
+-        description: 'Run egencache update'
+-        required: false
+-        default: false
+-        type: boolean
+       run_dedupe:
+         description: 'Run dedupe step'
+         required: false
+@@ -65,23 +60,6 @@ jobs:
+           location = $(pwd)
+           INNER_EOF
+
+-      # Temporary safety guard while https://github.com/arran4/g2/issues/483
+-      # / https://github.com/arran4/g2/pull/540 is unresolved. DeduplicateEbuilds
+-      # can currently invoke an unsafe Manifest cleanup internally. Preserve the
+-      # exact pre-dedup Manifest bytes so dedupe may remove redundant ebuilds
+-      # without publishing any Manifest mutation.
+-      - name: Snapshot manifests before dedupe
+-        if: ${{ github.event_name == 'schedule' || inputs.run_dedupe == true }}
+-        shell: bash
+-        run: |
+-          set -euo pipefail
+-          rm -rf /tmp/manifest-snapshot
+-          mkdir -p /tmp/manifest-snapshot
+-          while IFS= read -r -d '' manifest; do
+-            relative=${manifest#./}
+-            mkdir -p "/tmp/manifest-snapshot/$(dirname "$relative")"
+-            cp -p -- "$manifest" "/tmp/manifest-snapshot/$relative"
+-          done < <(find . -type f -name Manifest -print0)
+
+       - name: Remove duplicate ebuilds
+         id: dedupe
+@@ -89,38 +67,6 @@ jobs:
+         continue-on-error: true
+         run: g2 ebuild deduplicate .
+
+-      - name: Restore manifests after dedupe
+-        if: ${{ github.event_name == 'schedule' || inputs.run_dedupe == true }}
+-        shell: bash
+-        run: |
+-          set -euo pipefail
+-          while IFS= read -r -d '' manifest; do
+-            relative=${manifest#/tmp/manifest-snapshot/}
+-            mkdir -p "$(dirname "$relative")"
+-            cp -p -- "$manifest" "$relative"
+-          done < <(find /tmp/manifest-snapshot -type f -name Manifest -print0)
+-
+-          if ! git diff --quiet -- '**/Manifest'; then
+-            echo "Refusing to continue: dedupe left Manifest changes after restoration." >&2
+-            git diff -- '**/Manifest' >&2
+-            exit 1
+-          fi
+-
+-      # Repository-wide `g2 manifest clean .` is intentionally disabled while
+-      # g2#483 / PR #540 is pending. Use the package-scoped manual
+-      # `Repair package Manifest` workflow for repairs in the meantime.
+-
+-      - name: Run egencache update
+-        id: egencache
+-        if: ${{ inputs.run_egencache == true }}
+-        continue-on-error: true
+-        run: |
+-          OUTPUT=$(egencache --repo=arrans-overlay --update 2>&1 || true)
+-          echo "EGENCACHE_OUTPUT<<INNER_EOF" >> $GITHUB_ENV
+-          echo "$OUTPUT" >> $GITHUB_ENV
+-          echo "INNER_EOF" >> $GITHUB_ENV
+-          echo "$OUTPUT"
+-
+       - name: Check for unstaged changes
+         id: check_changes
+         run: |
+--
+2.53.0
