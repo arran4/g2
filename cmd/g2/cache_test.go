@@ -290,3 +290,215 @@ func TestCacheVerifyLayoutOpenError(t *testing.T) {
 		t.Fatalf("Expected layout.conf open error, got: %v", err)
 	}
 }
+
+func TestCacheRevisionedEbuilds(t *testing.T) {
+	dir := t.TempDir()
+
+	// Create layout.conf
+	if err := os.MkdirAll(filepath.Join(dir, "metadata"), 0755); err != nil {
+		t.Fatalf("MkdirAll failed: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "metadata", "layout.conf"), []byte("cache-formats = md5-dict\n"), 0644); err != nil {
+		t.Fatalf("WriteFile failed: %v", err)
+	}
+
+	// 1. Revisioned ebuild with non-zero PV: sys-apps/test/test-1.2.3-r1.ebuild
+	if err := os.MkdirAll(filepath.Join(dir, "sys-apps", "test"), 0755); err != nil {
+		t.Fatalf("MkdirAll failed: %v", err)
+	}
+	testEbuildContent := "DESCRIPTION=\"Revisioned test package\"\nSLOT=\"0\"\n"
+	if err := os.WriteFile(filepath.Join(dir, "sys-apps", "test", "test-1.2.3-r1.ebuild"), []byte(testEbuildContent), 0644); err != nil {
+		t.Fatalf("WriteFile failed: %v", err)
+	}
+
+	// 2. Revisioned ebuild with zero PV: acct-group/ollama/ollama-0-r1.ebuild
+	if err := os.MkdirAll(filepath.Join(dir, "acct-group", "ollama"), 0755); err != nil {
+		t.Fatalf("MkdirAll failed: %v", err)
+	}
+	ollamaEbuildContent := "DESCRIPTION=\"Revisioned zero PV package\"\nSLOT=\"0\"\n"
+	if err := os.WriteFile(filepath.Join(dir, "acct-group", "ollama", "ollama-0-r1.ebuild"), []byte(ollamaEbuildContent), 0644); err != nil {
+		t.Fatalf("WriteFile failed: %v", err)
+	}
+
+	// 3. Unrevised ebuild: dev-libs/unrevised/unrevised-2.0.ebuild
+	if err := os.MkdirAll(filepath.Join(dir, "dev-libs", "unrevised"), 0755); err != nil {
+		t.Fatalf("MkdirAll failed: %v", err)
+	}
+	unrevisedContent := "DESCRIPTION=\"Unrevised package\"\nSLOT=\"0\"\n"
+	if err := os.WriteFile(filepath.Join(dir, "dev-libs", "unrevised", "unrevised-2.0.ebuild"), []byte(unrevisedContent), 0644); err != nil {
+		t.Fatalf("WriteFile failed: %v", err)
+	}
+
+	cfs := g2.NewOsCacheFS(dir)
+
+	// Verify should fail before generation
+	if err := doCacheVerify(cfs, "."); err == nil {
+		t.Fatalf("Expected verify to fail prior to cache generation")
+	}
+
+	// Generate cache
+	if err := g2.GenerateCacheFS(cfs, ".", nil, false); err != nil {
+		t.Fatalf("GenerateCacheFS failed: %v", err)
+	}
+
+	// Verify expected files exist
+	expectedFiles := []string{
+		filepath.Join(dir, "metadata", "md5-cache", "sys-apps", "test-1.2.3-r1"),
+		filepath.Join(dir, "metadata", "md5-cache", "acct-group", "ollama-0-r1"),
+		filepath.Join(dir, "metadata", "md5-cache", "dev-libs", "unrevised-2.0"),
+	}
+	for _, f := range expectedFiles {
+		if _, err := os.Stat(f); os.IsNotExist(err) {
+			t.Errorf("Expected cache file %s does not exist", f)
+		}
+	}
+
+	// Verify unwanted files DO NOT exist
+	unwantedFiles := []string{
+		filepath.Join(dir, "metadata", "md5-cache", "sys-apps", "test-1.2.3"),
+		filepath.Join(dir, "metadata", "md5-cache", "acct-group", "ollama-0"),
+		filepath.Join(dir, "metadata", "md5-cache", "dev-libs", "unrevised-2.0-r0"),
+	}
+	for _, f := range unwantedFiles {
+		if _, err := os.Stat(f); !os.IsNotExist(err) {
+			t.Errorf("Unwanted cache file %s unexpectedly exists", f)
+		}
+	}
+
+	// Verification should succeed cleanly
+	if err := doCacheVerify(cfs, "."); err != nil {
+		t.Fatalf("Expected doCacheVerify to succeed cleanly, got: %v", err)
+	}
+
+	// Verify that MD5 mismatch on revisioned ebuild is detected
+	if err := os.WriteFile(filepath.Join(dir, "sys-apps", "test", "test-1.2.3-r1.ebuild"), []byte("DESCRIPTION=\"Mutated content\"\nSLOT=\"0\"\n"), 0644); err != nil {
+		t.Fatalf("WriteFile failed: %v", err)
+	}
+	if err := doCacheVerify(cfs, "."); err == nil {
+		t.Fatalf("Expected doCacheVerify to fail after mutating revisioned ebuild")
+	}
+}
+
+func TestCacheCleanRevisioned(t *testing.T) {
+	dir := t.TempDir()
+
+	// Create layout.conf
+	if err := os.MkdirAll(filepath.Join(dir, "metadata"), 0755); err != nil {
+		t.Fatalf("MkdirAll failed: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "metadata", "layout.conf"), []byte("cache-formats = md5-dict\n"), 0644); err != nil {
+		t.Fatalf("WriteFile failed: %v", err)
+	}
+
+	// Only pkg-1.0-r2.ebuild exists in the tree
+	if err := os.MkdirAll(filepath.Join(dir, "sys-apps", "pkg"), 0755); err != nil {
+		t.Fatalf("MkdirAll failed: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "sys-apps", "pkg", "pkg-1.0-r2.ebuild"), []byte("DESCRIPTION=\"Pkg\"\nSLOT=\"0\"\n"), 0644); err != nil {
+		t.Fatalf("WriteFile failed: %v", err)
+	}
+
+	// In metadata/md5-cache/sys-apps, populate current revision and stale sibling revisions
+	cacheDir := filepath.Join(dir, "metadata", "md5-cache", "sys-apps")
+	if err := os.MkdirAll(cacheDir, 0755); err != nil {
+		t.Fatalf("MkdirAll failed: %v", err)
+	}
+	_ = os.WriteFile(filepath.Join(cacheDir, "pkg-1.0-r2"), []byte("DESCRIPTION=Pkg\n_md5_=valid\n"), 0644)
+	_ = os.WriteFile(filepath.Join(cacheDir, "pkg-1.0-r1"), []byte("DESCRIPTION=Pkg\n_md5_=stale-r1\n"), 0644)
+	_ = os.WriteFile(filepath.Join(cacheDir, "pkg-1.0"), []byte("DESCRIPTION=Pkg\n_md5_=stale-r0\n"), 0644)
+
+	cfs := g2.NewOsCacheFS(dir)
+	if err := doCacheClean(cfs, "."); err != nil {
+		t.Fatalf("doCacheClean failed: %v", err)
+	}
+
+	// Current revision pkg-1.0-r2 must be preserved
+	if _, err := os.Stat(filepath.Join(cacheDir, "pkg-1.0-r2")); os.IsNotExist(err) {
+		t.Errorf("Expected current revision pkg-1.0-r2 to be preserved")
+	}
+
+	// Stale revisions pkg-1.0-r1 and pkg-1.0 must be removed
+	if _, err := os.Stat(filepath.Join(cacheDir, "pkg-1.0-r1")); !os.IsNotExist(err) {
+		t.Errorf("Expected stale revision pkg-1.0-r1 to be removed")
+	}
+	if _, err := os.Stat(filepath.Join(cacheDir, "pkg-1.0")); !os.IsNotExist(err) {
+		t.Errorf("Expected stale unrevisioned pkg-1.0 to be removed")
+	}
+}
+
+func TestCacheReconcileRevisionedIdempotency(t *testing.T) {
+	dir := t.TempDir()
+
+	// Create layout.conf
+	if err := os.MkdirAll(filepath.Join(dir, "metadata"), 0755); err != nil {
+		t.Fatalf("MkdirAll failed: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "metadata", "layout.conf"), []byte("cache-formats = md5-dict\n"), 0644); err != nil {
+		t.Fatalf("WriteFile failed: %v", err)
+	}
+
+	// Add revisioned ebuilds
+	if err := os.MkdirAll(filepath.Join(dir, "acct-group", "ollama"), 0755); err != nil {
+		t.Fatalf("MkdirAll failed: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "acct-group", "ollama", "ollama-0-r1.ebuild"), []byte("DESCRIPTION=\"Ollama\"\nSLOT=\"0\"\n"), 0644); err != nil {
+		t.Fatalf("WriteFile failed: %v", err)
+	}
+
+	if err := os.MkdirAll(filepath.Join(dir, "sys-apps", "test"), 0755); err != nil {
+		t.Fatalf("MkdirAll failed: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "sys-apps", "test", "test-1.2.3-r1.ebuild"), []byte("DESCRIPTION=\"Test\"\nSLOT=\"0\"\n"), 0644); err != nil {
+		t.Fatalf("WriteFile failed: %v", err)
+	}
+
+	// Add stale orphan and legacy entries
+	if err := os.MkdirAll(filepath.Join(dir, "metadata", "md5-cache", "acct-group"), 0755); err != nil {
+		t.Fatalf("MkdirAll failed: %v", err)
+	}
+	_ = os.WriteFile(filepath.Join(dir, "metadata", "md5-cache", "acct-group", "ollama-0"), []byte("STALE\n"), 0644)
+
+	if err := os.MkdirAll(filepath.Join(dir, "metadata", "md5-dict", "acct-group"), 0755); err != nil {
+		t.Fatalf("MkdirAll failed: %v", err)
+	}
+	_ = os.WriteFile(filepath.Join(dir, "metadata", "md5-dict", "acct-group", "ollama-0-r1"), []byte("LEGACY\n"), 0644)
+
+	baseCfs := g2.NewOsCacheFS(dir)
+	spy := &SpyCacheFS{CacheFS: baseCfs}
+
+	// First reconcile
+	if err := doCacheReconcile(spy, "."); err != nil {
+		t.Fatalf("First reconcile failed: %v", err)
+	}
+
+	// Assert correct state
+	if _, err := os.Stat(filepath.Join(dir, "metadata", "md5-cache", "acct-group", "ollama-0-r1")); os.IsNotExist(err) {
+		t.Errorf("Expected acct-group/ollama-0-r1 to exist after reconcile")
+	}
+	if _, err := os.Stat(filepath.Join(dir, "metadata", "md5-cache", "sys-apps", "test-1.2.3-r1")); os.IsNotExist(err) {
+		t.Errorf("Expected sys-apps/test-1.2.3-r1 to exist after reconcile")
+	}
+	if _, err := os.Stat(filepath.Join(dir, "metadata", "md5-cache", "acct-group", "ollama-0")); !os.IsNotExist(err) {
+		t.Errorf("Expected stale acct-group/ollama-0 to be cleaned")
+	}
+	if _, err := os.Stat(filepath.Join(dir, "metadata", "md5-dict")); !os.IsNotExist(err) {
+		t.Errorf("Expected legacy metadata/md5-dict to be cleaned")
+	}
+
+	// Idempotency: snapshot and run reconcile second time
+	snap1 := snapshotDir(t, dir)
+	spy.creates = 0
+	spy.removes = 0
+	spy.removesAll = 0
+
+	if err := doCacheReconcile(spy, "."); err != nil {
+		t.Fatalf("Second reconcile failed: %v", err)
+	}
+
+	snap2 := snapshotDir(t, dir)
+	assertSnapshotEqual(t, snap1, snap2)
+
+	if spy.creates > 0 || spy.removes > 0 || spy.removesAll > 0 {
+		t.Fatalf("Expected 0 mutations on second reconcile run, got %d creates, %d removes, %d removesAll", spy.creates, spy.removes, spy.removesAll)
+	}
+}

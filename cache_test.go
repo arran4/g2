@@ -148,3 +148,64 @@ func TestCacheGenerate(t *testing.T) {
 		})
 	}
 }
+
+func TestVersionDataGetPVR(t *testing.T) {
+	// 1. Unrevised version
+	v1 := VersionData{Version: "1.0"}
+	if got := v1.GetPVR(); got != "1.0" {
+		t.Errorf("v1.GetPVR() = %s, want 1.0", got)
+	}
+
+	// 2. Explicit PVR
+	v2 := VersionData{Version: "1.0", PVR: "1.0-r1"}
+	if got := v2.GetPVR(); got != "1.0-r1" {
+		t.Errorf("v2.GetPVR() = %s, want 1.0-r1", got)
+	}
+
+	// 3. PVR derived from Ebuild Path
+	v3 := VersionData{Version: "0", Ebuild: &Ebuild{Path: "acct-group/ollama/ollama-0-r1.ebuild"}}
+	if got := v3.GetPVR(); got != "0-r1" {
+		t.Errorf("v3.GetPVR() = %s, want 0-r1", got)
+	}
+
+	// 4. PVR derived from Ebuild Vars
+	v4 := VersionData{Version: "2.0", Ebuild: &Ebuild{Vars: map[string]string{"PVR": "2.0-r2"}}}
+	if got := v4.GetPVR(); got != "2.0-r2" {
+		t.Errorf("v4.GetPVR() = %s, want 2.0-r2", got)
+	}
+}
+
+func TestGetCacheIdentity(t *testing.T) {
+	// Relative repoDir
+	v := VersionData{Version: "0", PVR: "0-r1"}
+	ident := GetCacheIdentity(".", "md5-dict", "acct-group", "ollama", v)
+	if ident.Category != "acct-group" || ident.Package != "ollama" || ident.PVR != "0-r1" {
+		t.Errorf("Unexpected ident basic fields: %+v", ident)
+	}
+	if ident.CachePath != "metadata/md5-cache/acct-group/ollama-0-r1" {
+		t.Errorf("ident.CachePath = %s, want metadata/md5-cache/acct-group/ollama-0-r1", ident.CachePath)
+	}
+	if ident.EbuildPath != "acct-group/ollama/ollama-0-r1.ebuild" {
+		t.Errorf("ident.EbuildPath = %s, want acct-group/ollama/ollama-0-r1.ebuild", ident.EbuildPath)
+	}
+
+	// Absolute repoDir
+	v2 := VersionData{Version: "1.0", PVR: "1.0-r1"}
+	ident2 := GetCacheIdentity("/var/db/repos/foo", "md5-dict", "sys-apps", "test", v2)
+	if ident2.CachePath != "/var/db/repos/foo/metadata/md5-cache/sys-apps/test-1.0-r1" {
+		t.Errorf("ident2.CachePath = %s, want /var/db/repos/foo/metadata/md5-cache/sys-apps/test-1.0-r1", ident2.CachePath)
+	}
+	if ident2.EbuildPath != "/var/db/repos/foo/sys-apps/test/test-1.0-r1.ebuild" {
+		t.Errorf("ident2.EbuildPath = %s, want /var/db/repos/foo/sys-apps/test/test-1.0-r1.ebuild", ident2.EbuildPath)
+	}
+
+	// Unrevised version has no synthetic -r0
+	v3 := VersionData{Version: "2.5", PVR: "2.5"}
+	ident3 := GetCacheIdentity(".", "md5-dict", "dev-libs", "unrevised", v3)
+	if ident3.CachePath != "metadata/md5-cache/dev-libs/unrevised-2.5" {
+		t.Errorf("ident3.CachePath = %s, want metadata/md5-cache/dev-libs/unrevised-2.5", ident3.CachePath)
+	}
+	if ident3.EbuildPath != "dev-libs/unrevised/unrevised-2.5.ebuild" {
+		t.Errorf("ident3.EbuildPath = %s, want dev-libs/unrevised/unrevised-2.5.ebuild", ident3.EbuildPath)
+	}
+}

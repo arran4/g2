@@ -395,8 +395,25 @@ func parseRepoCategoriesAndPackages(sysFS fs.FS, repoDir string, repoName string
 				if version == "" {
 					vars := g2.ParseEbuildVariables(file.Name())
 					if vars != nil {
-						version = vars["PVR"]
+						version = vars["PV"]
+						if version == "" {
+							version = vars["PVR"]
+						}
 					}
+				}
+
+				pvr := ""
+				if ebuild.Vars != nil {
+					pvr = ebuild.Vars["PVR"]
+				}
+				if pvr == "" {
+					vars := g2.ParseEbuildVariables(file.Name())
+					if vars != nil {
+						pvr = vars["PVR"]
+					}
+				}
+				if pvr == "" {
+					pvr = version
 				}
 
 				var ebuildRawURL string
@@ -414,6 +431,7 @@ func parseRepoCategoriesAndPackages(sysFS fs.FS, repoDir string, repoName string
 
 				vd := g2.VersionData{
 					Version:      version,
+					PVR:          pvr,
 					Ebuild:       ebuild,
 					EbuildRawURL: ebuildRawURL,
 					ModTime:      modTime,
@@ -581,6 +599,7 @@ func parseRepoCategoriesAndPackages(sysFS fs.FS, repoDir string, repoName string
 
 				g2PkgData.Versions = append(g2PkgData.Versions, g2.VersionData{
 					Version:      v.Version,
+					PVR:          v.PVR,
 					Ebuild:       v.Ebuild,
 					EbuildRawURL: v.EbuildRawURL,
 					Deprecated:   pkgData.Versions[i].Deprecated,

@@ -124,26 +124,25 @@ func doCacheVerify(cfs g2.CacheFS, repoDir string) error {
 		for _, cat := range siteData.Categories {
 			for _, pkg := range cat.Packages {
 				for _, ver := range pkg.Versions {
-					verCachePath := g2.GetCachePath(repoDir, format, pkg.Category, pkg.Name, ver.Version)
-					validCacheEntries[filepath.Clean(verCachePath)] = true
+					ident := g2.GetCacheIdentity(repoDir, format, pkg.Category, pkg.Name, ver)
+					validCacheEntries[filepath.Clean(ident.CachePath)] = true
 
-					if _, err := cfs.Stat(verCachePath); os.IsNotExist(err) || err != nil {
-						fmt.Printf("Missing %s cache for %s/%s-%s\n", format, pkg.Category, pkg.Name, ver.Version)
+					if _, err := cfs.Stat(ident.CachePath); os.IsNotExist(err) || err != nil {
+						fmt.Printf("Missing %s cache for %s/%s-%s\n", format, ident.Category, ident.Package, ident.PVR)
 						hasErrors = true
 					} else {
 						// verify MD5 match
-						ebuildPath := filepath.ToSlash(filepath.Join(repoDir, pkg.Category, pkg.Name, fmt.Sprintf("%s-%s.ebuild", pkg.Name, ver.Version)))
-						ebuildContent, err := fs.ReadFile(cfs, ebuildPath)
+						ebuildContent, err := fs.ReadFile(cfs, ident.EbuildPath)
 						if err == nil {
 							expectedMd5 := fmt.Sprintf("%x", md5.Sum(ebuildContent))
-							cacheContent, err := fs.ReadFile(cfs, verCachePath)
+							cacheContent, err := fs.ReadFile(cfs, ident.CachePath)
 							if err == nil {
 								foundMd5 := false
 								for _, line := range strings.Split(string(cacheContent), "\n") {
 									if strings.HasPrefix(line, "_md5_=") {
 										actualMd5 := strings.TrimSpace(strings.TrimPrefix(line, "_md5_="))
 										if actualMd5 != expectedMd5 {
-											fmt.Printf("MD5 mismatch for %s/%s-%s (expected %s, got %s)\n", pkg.Category, pkg.Name, ver.Version, expectedMd5, actualMd5)
+											fmt.Printf("MD5 mismatch for %s/%s-%s (expected %s, got %s)\n", ident.Category, ident.Package, ident.PVR, expectedMd5, actualMd5)
 											hasErrors = true
 										}
 										foundMd5 = true
@@ -151,15 +150,15 @@ func doCacheVerify(cfs g2.CacheFS, repoDir string) error {
 									}
 								}
 								if !foundMd5 {
-									fmt.Printf("Missing _md5_ entry in cache for %s/%s-%s\n", pkg.Category, pkg.Name, ver.Version)
+									fmt.Printf("Missing _md5_ entry in cache for %s/%s-%s\n", ident.Category, ident.Package, ident.PVR)
 									hasErrors = true
 								}
 							} else {
-								fmt.Printf("Failed to read cache file %s: %v\n", verCachePath, err)
+								fmt.Printf("Failed to read cache file %s: %v\n", ident.CachePath, err)
 								hasErrors = true
 							}
 						} else {
-							fmt.Printf("Failed to read ebuild file %s: %v\n", ebuildPath, err)
+							fmt.Printf("Failed to read ebuild file %s: %v\n", ident.EbuildPath, err)
 							hasErrors = true
 						}
 					}
@@ -323,8 +322,8 @@ func doCacheClean(cfs g2.CacheFS, repoDir string) error {
 		for _, cat := range siteData.Categories {
 			for _, pkg := range cat.Packages {
 				for _, ver := range pkg.Versions {
-					relPath := g2.GetCachePath(repoDir, format, pkg.Category, pkg.Name, ver.Version)
-					validCacheEntries[filepath.Clean(relPath)] = true
+					ident := g2.GetCacheIdentity(repoDir, format, pkg.Category, pkg.Name, ver)
+					validCacheEntries[filepath.Clean(ident.CachePath)] = true
 				}
 			}
 		}

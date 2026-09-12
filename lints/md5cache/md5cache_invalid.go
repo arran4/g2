@@ -232,7 +232,8 @@ func (r *MD5CacheInvalidLintRule) LintWithQA(repoDir string, pkg *g2.PackageData
 
 	for _, ver := range pkg.Versions {
 		if ver.Ebuild != nil {
-			cachePath := filepath.Join(repoDir, "metadata", "md5-cache", pkg.Category, pkg.Name+"-"+ver.Version)
+			ident := g2.GetCacheIdentity(repoDir, "md5-dict", pkg.Category, pkg.Name, ver)
+			cachePath := ident.CachePath
 
 			f, err := os.Open(cachePath)
 			if err != nil {
@@ -252,8 +253,8 @@ func (r *MD5CacheInvalidLintRule) LintWithQA(repoDir string, pkg *g2.PackageData
 					sevTitle := strings.ToUpper(sevStr[:1]) + sevStr[1:]
 					res := lints.LintResult{
 						RuleMetadata: ruleMD5CacheInvalid,
-						Message:      fmt.Sprintf("[%s] Invalid format in md5-cache for %s-%s: %s", sevTitle, pkg.Name, ver.Version, line),
-						Package:      pkg.Category + "/" + pkg.Name,
+						Message:      fmt.Sprintf("[%s] Invalid format in md5-cache for %s-%s: %s", sevTitle, ident.Package, ident.PVR, line),
+						Package:      ident.Category + "/" + ident.Package,
 					}
 					res.RuleMetadata.Severity = severity
 					results = append(results, res)
@@ -276,21 +277,21 @@ func (r *MD5CacheInvalidLintRule) LintWithQA(repoDir string, pkg *g2.PackageData
 			if !hasEbuildMd5 {
 				res := lints.LintResult{
 					RuleMetadata: ruleMD5CacheInvalid,
-					Message:      fmt.Sprintf("[%s] Missing _md5_ in md5-cache for %s-%s", sevTitle, pkg.Name, ver.Version),
-					Package:      pkg.Category + "/" + pkg.Name,
+					Message:      fmt.Sprintf("[%s] Missing _md5_ in md5-cache for %s-%s", sevTitle, ident.Package, ident.PVR),
+					Package:      ident.Category + "/" + ident.Package,
 				}
 				res.RuleMetadata.Severity = severity
 				results = append(results, res)
 			} else {
-				ebuildPath := filepath.Join(repoDir, pkg.Category, pkg.Name, pkg.Name+"-"+ver.Version+".ebuild")
+				ebuildPath := ident.EbuildPath
 				ebuildData, err := os.ReadFile(ebuildPath)
 				if err == nil {
 					actualMd5 := fmt.Sprintf("%x", md5.Sum(ebuildData))
 					if actualMd5 != ebuildMd5 {
 						res := lints.LintResult{
 							RuleMetadata: ruleMD5CacheInvalid,
-							Message:      fmt.Sprintf("[%s] Incorrect _md5_ in md5-cache for %s-%s. Expected %s, got %s", sevTitle, pkg.Name, ver.Version, actualMd5, ebuildMd5),
-							Package:      pkg.Category + "/" + pkg.Name,
+							Message:      fmt.Sprintf("[%s] Incorrect _md5_ in md5-cache for %s-%s. Expected %s, got %s", sevTitle, ident.Package, ident.PVR, actualMd5, ebuildMd5),
+							Package:      ident.Category + "/" + ident.Package,
 						}
 						res.RuleMetadata.Severity = severity
 						results = append(results, res)
@@ -303,8 +304,8 @@ func (r *MD5CacheInvalidLintRule) LintWithQA(repoDir string, pkg *g2.PackageData
 				if len(eclassParts)%2 != 0 {
 					res := lints.LintResult{
 						RuleMetadata: ruleMD5CacheInvalid,
-						Message:      fmt.Sprintf("[%s] Invalid _eclasses_ format in md5-cache for %s-%s", sevTitle, pkg.Name, ver.Version),
-						Package:      pkg.Category + "/" + pkg.Name,
+						Message:      fmt.Sprintf("[%s] Invalid _eclasses_ format in md5-cache for %s-%s", sevTitle, ident.Package, ident.PVR),
+						Package:      ident.Category + "/" + ident.Package,
 					}
 					res.RuleMetadata.Severity = severity
 					results = append(results, res)
@@ -319,8 +320,8 @@ func (r *MD5CacheInvalidLintRule) LintWithQA(repoDir string, pkg *g2.PackageData
 						if err == nil && actualEclassMd5 != eclassMd5 {
 							res := lints.LintResult{
 								RuleMetadata: ruleMD5CacheInvalid,
-								Message:      fmt.Sprintf("[%s] Incorrect eclass md5 for %s in md5-cache of %s-%s. Expected %s, got %s", sevTitle, eclassName, pkg.Name, ver.Version, actualEclassMd5, eclassMd5),
-								Package:      pkg.Category + "/" + pkg.Name,
+								Message:      fmt.Sprintf("[%s] Incorrect eclass md5 for %s in md5-cache of %s-%s. Expected %s, got %s", sevTitle, eclassName, ident.Package, ident.PVR, actualEclassMd5, eclassMd5),
+								Package:      ident.Category + "/" + ident.Package,
 							}
 							res.RuleMetadata.Severity = severity
 							results = append(results, res)
