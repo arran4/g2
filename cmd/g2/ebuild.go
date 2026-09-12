@@ -712,14 +712,25 @@ func (cfg *CmdEbuildArgConfig) cmdEbuildCheck(args []string) error {
 			Category: category,
 		}
 
-		vData := g2.VersionData{
-			Version: strings.TrimSuffix(base, ".ebuild"), // Approximate, sufficient for some lints
-			Ebuild:  ebuild,
+		vars := g2.ParseEbuildVariables(base)
+		pv := ""
+		pvr := ""
+		if vars != nil {
+			pv = vars["PV"]
+			pvr = vars["PVR"]
+		}
+		if pv == "" {
+			pv = strings.TrimSuffix(base, ".ebuild")
+			if strings.HasPrefix(pv, pkgName+"-") {
+				pv = strings.TrimPrefix(pv, pkgName+"-")
+			}
+			pvr = pv
 		}
 
-		// Adjust version by stripping PN if it matches
-		if strings.HasPrefix(vData.Version, pkgName+"-") {
-			vData.Version = strings.TrimPrefix(vData.Version, pkgName+"-")
+		vData := g2.VersionData{
+			Version: pv,
+			PVR:     pvr,
+			Ebuild:  ebuild,
 		}
 
 		pkgData.Versions = append(pkgData.Versions, vData)

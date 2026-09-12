@@ -383,3 +383,46 @@ func TestMD5CacheInvalidLintRule_CrossPackageReuse(t *testing.T) {
 		t.Fatalf("Expected exactly 1 shared cache entry, got %d", l)
 	}
 }
+
+func TestMD5CacheInvalid_Revisioned(t *testing.T) {
+	tempDir := t.TempDir()
+	rule := &MD5CacheInvalidLintRule{}
+
+	pkg := &g2.PackageData{
+		Category: "acct-group",
+		Name:     "ollama",
+		Versions: []g2.VersionData{
+			{
+				Version: "0",
+				PVR:     "0-r1",
+				Ebuild:  &g2.Ebuild{},
+			},
+		},
+	}
+
+	cacheDir := filepath.Join(tempDir, "metadata", "md5-cache", "acct-group")
+	_ = os.MkdirAll(cacheDir, 0755)
+	cacheFile := filepath.Join(cacheDir, "ollama-0-r1")
+
+	ebuildDir := filepath.Join(tempDir, "acct-group", "ollama")
+	_ = os.MkdirAll(ebuildDir, 0755)
+	ebuildFile := filepath.Join(ebuildDir, "ollama-0-r1.ebuild")
+	_ = os.WriteFile(ebuildFile, []byte("EAPI=8\n"), 0644)
+	md5sum := fmt.Sprintf("%x", md5.Sum([]byte("EAPI=8\n")))
+
+	_ = os.WriteFile(cacheFile, []byte(fmt.Sprintf("_md5_=%s\n", md5sum)), 0644)
+
+	results := rule.Lint(tempDir, pkg)
+	if len(results) != 0 {
+		t.Errorf("Expected 0 results for valid revisioned cache, got %d: %v", len(results), results)
+	}
+
+	// Corrupted md5
+	_ = os.WriteFile(cacheFile, []byte("_md5_=badhash\n"), 0644)
+	results = rule.Lint(tempDir, pkg)
+	if len(results) != 1 {
+		t.Errorf("Expected 1 result for invalid md5 in revisioned cache, got %d", len(results))
+	} else if results[0].Message != fmt.Sprintf("[Warning] Incorrect _md5_ in md5-cache for ollama-0-r1. Expected %s, got badhash", md5sum) {
+		t.Errorf("Unexpected message: %s", results[0].Message)
+	}
+}

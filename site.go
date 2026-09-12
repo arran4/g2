@@ -1,6 +1,9 @@
 package g2
 
-import "time"
+import (
+	"path/filepath"
+	"time"
+)
 
 type SiteData struct {
 	Title             string
@@ -142,7 +145,8 @@ type PackageData struct {
 }
 
 type VersionData struct {
-	Version string
+	Version string // PV (package version, revision-free according to Gentoo PMS)
+	PVR     string // PVR (package version with revision, e.g. "0-r1" or "1.2.3")
 	Ebuild  *Ebuild
 
 	// Git info
@@ -159,6 +163,26 @@ type VersionData struct {
 	ResolvedDepsJSON string
 	// Mirrors
 	ApplicableMirrors map[string][]string
+}
+
+// GetPVR returns the package version with revision (PVR).
+// If PVR is explicitly set on VersionData, it is returned.
+// Otherwise, it attempts to derive PVR from the associated ebuild variables or filename,
+// falling back to Version.
+func (v VersionData) GetPVR() string {
+	if v.PVR != "" {
+		return v.PVR
+	}
+	if v.Ebuild != nil && v.Ebuild.Vars != nil && v.Ebuild.Vars["PVR"] != "" {
+		return v.Ebuild.Vars["PVR"]
+	}
+	if v.Ebuild != nil && v.Ebuild.Path != "" {
+		vars := ParseEbuildVariables(filepath.Base(v.Ebuild.Path))
+		if vars != nil && vars["PVR"] != "" {
+			return vars["PVR"]
+		}
+	}
+	return v.Version
 }
 
 type EclassData struct {

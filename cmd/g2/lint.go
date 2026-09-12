@@ -166,6 +166,7 @@ func (cfg *MainArgConfig) runOldLint(args []string) error {
 			for _, v := range pkg.Versions {
 				pkgCopy.Versions = append(pkgCopy.Versions, g2.VersionData{
 					Version:      v.Version,
+					PVR:          v.PVR,
 					Ebuild:       v.Ebuild,
 					EbuildRawURL: v.EbuildRawURL,
 				})
@@ -612,6 +613,7 @@ func (cfg *MainArgConfig) runLintCore(location string, targetMap map[string]bool
 
 				pkgCopy.Versions = append(pkgCopy.Versions, g2.VersionData{
 					Version:      v.Version,
+					PVR:          v.PVR,
 					Ebuild:       v.Ebuild,
 					EbuildRawURL: v.EbuildRawURL,
 				})

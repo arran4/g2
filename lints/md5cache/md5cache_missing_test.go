@@ -74,4 +74,25 @@ func TestMD5CacheMissing(t *testing.T) {
 	if len(results) != 0 {
 		t.Errorf("Expected 0 results when cache file exists, got %d", len(results))
 	}
+
+	// Test case 5: revisioned ebuild (e.g. PV="0", PVR="0-r1")
+	revisionedPkg := &g2.PackageData{
+		Category: "acct-group",
+		Name:     "ollama",
+		Versions: []g2.VersionData{
+			{
+				Version: "0",
+				PVR:     "0-r1",
+				Ebuild:  &g2.Ebuild{},
+			},
+		},
+	}
+	rule = &MD5CacheLintRule{fs: mockFileStat{paths: map[string]bool{
+		filepath.Join(repoDir, "metadata", "md5-cache"):                               true,
+		filepath.Join(repoDir, "metadata", "md5-cache", "acct-group", "ollama-0-r1"): true,
+	}}}
+	results = rule.LintWithQA(repoDir, revisionedPkg, nil)
+	if len(results) != 0 {
+		t.Errorf("Expected 0 results when revisioned cache file exists, got %d", len(results))
+	}
 }

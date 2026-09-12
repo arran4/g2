@@ -170,22 +170,28 @@ func GenerateCacheFS(cfs CacheFS, repoDir string, targetPkgs []string, genEclass
 						continue
 					}
 
-					// Extract PV
+					// Extract PVR
 					vars := ParseEbuildVariables(ebuildName)
-					pv, ok := vars["PVR"]
-					if !ok || pv == "" {
+					pvr, ok := vars["PVR"]
+					if !ok || pvr == "" {
 						continue
 					}
 
-					cacheDir := GetCacheDir(repoDir, format, cat)
-					if cacheDir == "" {
+					verData := VersionData{
+						Version: vars["PV"],
+						PVR:     pvr,
+						Ebuild:  ebuild,
+					}
+					ident := GetCacheIdentity(repoDir, format, cat, pkgName, verData)
+					if ident.CachePath == "" {
 						continue // unsupported format
 					}
+					cacheDir := filepath.ToSlash(filepath.Dir(ident.CachePath))
 					if err := cfs.MkdirAll(cacheDir, 0755); err != nil {
 						return fmt.Errorf("creating cache directory %s: %w", cacheDir, err)
 					}
 
-					verCachePath := GetCachePath(repoDir, format, cat, pkgName, pv)
+					verCachePath := ident.CachePath
 
 					var keys []string
 					for k := range ebuild.Vars {
@@ -262,6 +268,7 @@ func GetCacheDir(repoDir string, format string, category string) string {
 }
 
 // GetCachePath returns the canonical file path for a specific package version's cache entry.
+// The version parameter should be the package version with revision (PVR), e.g. "0-r1" or "1.2.3".
 // Returns an empty string if the format is not explicitly supported.
 func GetCachePath(repoDir string, format string, category string, name string, version string) string {
 	dir := GetCacheDir(repoDir, format, category)
@@ -269,6 +276,37 @@ func GetCachePath(repoDir string, format string, category string, name string, v
 		return ""
 	}
 	return filepath.ToSlash(filepath.Join(dir, fmt.Sprintf("%s-%s", name, version)))
+}
+
+// CacheIdentity represents the resolved identity of a package version for caching purposes.
+type CacheIdentity struct {
+	Category   string
+	Package    string
+	PVR        string
+	CachePath  string
+	EbuildPath string
+}
+
+// GetEbuildPath returns the path to the ebuild file for a VersionData.
+func GetEbuildPath(repoDir, category, name string, ver VersionData) string {
+	pvr := ver.GetPVR()
+	ebuildFile := fmt.Sprintf("%s-%s.ebuild", name, pvr)
+	if repoDir == "" || repoDir == "." {
+		return filepath.ToSlash(filepath.Join(category, name, ebuildFile))
+	}
+	return filepath.ToSlash(filepath.Join(repoDir, category, name, ebuildFile))
+}
+
+// GetCacheIdentity returns the resolved CacheIdentity for a given package and version.
+func GetCacheIdentity(repoDir, format, category, pkgName string, ver VersionData) CacheIdentity {
+	pvr := ver.GetPVR()
+	return CacheIdentity{
+		Category:   category,
+		Package:    pkgName,
+		PVR:        pvr,
+		CachePath:  GetCachePath(repoDir, format, category, pkgName, pvr),
+		EbuildPath: GetEbuildPath(repoDir, category, pkgName, ver),
+	}
 }
 
 // GetLegacyCacheDir returns the non-canonical legacy cache directory, if any.
