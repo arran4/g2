@@ -2,7 +2,6 @@
 # https://arran4.github.io/blog/post/2026/043-canonical-github-actions-ci-cd-super-reference/
 # Release safety details:
 # https://arran4.github.io/blog/post/2026/041-release-safe-single-owner-github-ci/
-# Built using these posts as reference/guidance.
 
 name: CI/CD
 
@@ -33,14 +32,10 @@ on:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ !startsWith(github.event.inputs.mode, 'release-') }}
 
 permissions:
-  contents: write
-  pull-requests: write
-  checks: write
-  packages: write
-  security-events: write
+  contents: read
 
 jobs:
   route:
@@ -200,6 +195,9 @@ jobs:
     needs: [route]
     if: ${{ needs.route.outputs.run_release == 'true' }}
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: write
     outputs:
       release_tag: ${{ steps.tag.outputs.release_tag }}
       next_version: ${{ steps.tag.outputs.next_version }}
@@ -212,6 +210,23 @@ jobs:
         uses: arran4/git-tag-inc-action@v1
         with:
           mode: install
+      - name: Verify Exact Origin/Main
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.mode != 'publish-tag' }}
+        env:
+          GITHUB_REF_NAME: ${{ github.ref }}
+          GITHUB_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          if [[ "$GITHUB_REF_NAME" != "refs/heads/main" ]]; then
+            echo "Error: Manual release preparation must run on refs/heads/main, got $GITHUB_REF_NAME"
+            exit 1
+          fi
+          git fetch origin main
+          MAIN_SHA=$(git rev-parse origin/main)
+          if [[ "$MAIN_SHA" != "$GITHUB_SHA" ]]; then
+            echo "Error: Requested release against $GITHUB_SHA but origin/main is at $MAIN_SHA"
+            exit 1
+          fi
       - id: tag
         shell: bash
         env:
@@ -266,7 +281,14 @@ jobs:
 
           if git rev-parse "$next_tag" >/dev/null 2>&1; then
             # Safe recovery semantics: verify existing tag against remote
-            REMOTE_TAG_SHA=$(git ls-remote --tags origin "refs/tags/$next_tag" | awk '{print $1}')
+            # Check remote state for idempotency/retry
+            REMOTE_TAG_SHA=$(git ls-remote --tags origin "refs/tags/$next_tag" | grep -v '^{}$' | awk '{print $1}' || true)
+            # Also check peeled annotated tag if it exists
+            PEELED_SHA=$(git ls-remote --tags origin "refs/tags/$next_tag^{}" | awk '{print $1}' || true)
+            if [[ -n "$PEELED_SHA" ]]; then
+                REMOTE_TAG_SHA="$PEELED_SHA"
+            fi
+
             if [[ "$REMOTE_TAG_SHA" == "${GITHUB_SHA}" ]]; then
               echo "Tag $next_tag exists and points to GITHUB_SHA. Safe to retry."
             else
@@ -372,6 +394,9 @@ jobs:
     needs: [route, discover]
     if: ${{ needs.discover.outputs.has_go == 'true' && github.event_name == 'workflow_dispatch' && inputs.mode == 'lint-fix' && inputs.allow_prs == true }}
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v6
@@ -452,6 +477,9 @@ jobs:
     needs: [route, discover]
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.mode == 'lint-fix' && inputs.allow_prs == true }}
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
     steps:
       - uses: actions/checkout@v4
 
@@ -523,6 +551,9 @@ jobs:
     needs: [route]
     if: ${{ needs.route.outputs.run_cleanup == 'true' }}
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
     steps:
       - uses: actions/checkout@v4
 
@@ -607,12 +638,13 @@ jobs:
 
               # 2. inspect remote refs/tags/$TAG
               if git ls-remote --tags origin "refs/tags/$TAG" | grep -q "$TAG"; then
-                # 3. verify an existing tag points at the expected commit
-                # Use ^{} to peel the tag if it's annotated
-                REMOTE_SHA=$(git ls-remote --tags origin "refs/tags/$TAG^{}" | awk '{print $1}')
-                if [[ -z "$REMOTE_SHA" ]]; then
-                  REMOTE_SHA=$(git ls-remote --tags origin "refs/tags/$TAG" | awk '{print $1}')
+                REMOTE_SHA=$(git ls-remote --tags origin "refs/tags/$TAG" | grep -v '^{}$' | awk '{print $1}' || true)
+                # Also check peeled annotated tag if it exists
+                PEELED_SHA=$(git ls-remote --tags origin "refs/tags/$TAG^{}" | awk '{print $1}' || true)
+                if [[ -n "$PEELED_SHA" ]]; then
+                  REMOTE_SHA="$PEELED_SHA"
                 fi
+
                 LOCAL_SHA=$(git rev-parse HEAD)
                 if [[ "$REMOTE_SHA" != "$LOCAL_SHA" ]]; then
                   echo "Error: Tag $TAG already exists and points to $REMOTE_SHA, not current commit $LOCAL_SHA." >&2
@@ -620,19 +652,34 @@ jobs:
                 fi
                 echo "Tag $TAG exists and points to current commit."
               else
-                # 4. otherwise create/push the tag explicitly anchored to the validated commit
-                git tag "$TAG" "${GITHUB_SHA}"
-                if [[ "$INPUT_MODE" != "release-test" ]]; then
-                  git push origin "refs/tags/$TAG"
-                fi
+               # Final race guard: verify origin/main is STILL exactly GITHUB_SHA right before tagging
+             git fetch origin main
+             CURRENT_MAIN_SHA=$(git rev-parse origin/main)
+             if [[ "$CURRENT_MAIN_SHA" != "$GITHUB_SHA" ]]; then
+                echo "Race condition: origin/main advanced to $CURRENT_MAIN_SHA before tagging"
+                exit 1
+             fi
+
+             # If local tag exists but wasn't pushed, delete to recreate fresh
+             git tag -d "$TAG" 2>/dev/null || true
+
+             # Create and push the tag
+             git tag "$TAG" "${GITHUB_SHA}"
+             if [[ "$INPUT_MODE" != "release-test" ]]; then
+               git push origin "refs/tags/$TAG"
+             fi
+
               fi
 
               # 5. verify remote state points to expected commit
               if [[ "$INPUT_MODE" != "release-test" ]]; then
-                VERIFY_SHA=$(git ls-remote --tags origin "refs/tags/$TAG^{}" | awk '{print $1}')
-                if [[ -z "$VERIFY_SHA" ]]; then
-                  VERIFY_SHA=$(git ls-remote --tags origin "refs/tags/$TAG" | awk '{print $1}')
+                VERIFY_SHA=$(git ls-remote --tags origin "refs/tags/$TAG" | grep -v '^{}$' | awk '{print $1}' || true)
+                # Also check peeled annotated tag if it exists
+                PEELED_SHA=$(git ls-remote --tags origin "refs/tags/$TAG^{}" | awk '{print $1}' || true)
+                if [[ -n "$PEELED_SHA" ]]; then
+                  VERIFY_SHA="$PEELED_SHA"
                 fi
+
                 if [[ "$VERIFY_SHA" != "${GITHUB_SHA}" ]]; then
                   echo "Error: Tag push failed or remote verification failed (expected ${GITHUB_SHA}, got ${VERIFY_SHA})." >&2
                   exit 1
@@ -670,7 +717,7 @@ jobs:
         with:
           distribution: goreleaser
           version: '~> v2'
-          args: release --clean ${{ (contains(needs.release-context.outputs.release_tag, '-test.') || (github.event_name == 'workflow_dispatch' && inputs.mode == 'release-test')) && '--snapshot' || '' }}
+          args: release --clean ${{ (contains(needs.release-context.outputs.release_tag, 'test-') || (github.event_name == 'workflow_dispatch' && inputs.mode == 'release-test')) && '--snapshot' || '' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAP_GITHUB_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
