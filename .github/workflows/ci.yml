@@ -1,7 +1,5 @@
 # Agent rules for generation:
 # https://arran4.github.io/blog/post/2026/043-canonical-github-actions-ci-cd-super-reference/
-# Release safety details:
-# https://arran4.github.io/blog/post/2026/041-release-safe-single-owner-github-ci/
 
 name: CI/CD
 
@@ -717,7 +715,7 @@ jobs:
         with:
           distribution: goreleaser
           version: '~> v2'
-          args: release --clean ${{ (contains(needs.release-context.outputs.release_tag, 'test-') || (github.event_name == 'workflow_dispatch' && inputs.mode == 'release-test')) && '--snapshot' || '' }}
+          args: release --clean ${{ (startsWith(needs.release-context.outputs.release_tag, 'test-') || contains(needs.release-context.outputs.release_tag, '-test') || (github.event_name == 'workflow_dispatch' && inputs.mode == 'release-test')) && '--snapshot' || '' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAP_GITHUB_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}

@@ -42,8 +42,8 @@ def run_tests():
     assert "publish-draft" not in jobs, "competing draft publish job remains"
     assert "promote-release" not in jobs, "competing promote job remains"
 
-    # Check 3: test-* tag pushes use snapshot
-    assert "(contains(needs.release-context.outputs.release_tag, 'test-') || (github.event_name == 'workflow_dispatch' && inputs.mode == 'release-test')) && '--snapshot' || ''" in goreleaser.get('steps', [{}])[2].get('with', {}).get('args', ''), "test- tags must trigger snapshot mode"
+    # Check 3: test-* and *-test* tag pushes use snapshot
+    assert "(startsWith(needs.release-context.outputs.release_tag, 'test-') || contains(needs.release-context.outputs.release_tag, '-test') || (github.event_name == 'workflow_dispatch' && inputs.mode == 'release-test')) && '--snapshot' || ''" in goreleaser.get('steps', [{}])[2].get('with', {}).get('args', ''), "test tags must trigger snapshot mode"
 
     # Check 4: manual release-test is snapshot-only and does not run permanent tag-push step
     context_script = context.get('steps', [{}])[1].get('run', '')
@@ -55,6 +55,15 @@ def run_tests():
     prep_steps = prepare.get('steps', [])
     exact_main = [s for s in prep_steps if "Verify Exact Origin/Main" in s.get('name', '')]
     assert exact_main, "Must check exact main commit before tagging"
+    exact_main_script = exact_main[0].get('run', '')
+    assert "refs/heads/main" in exact_main_script, "Must ensure current ref is refs/heads/main"
+    assert "git fetch origin main" in exact_main_script, "Must fetch origin/main"
+    assert "$MAIN_SHA\" != \"$GITHUB_SHA" in exact_main_script, "Must require exact commit equality with origin/main"
+
+    # Check 1b: Final race check
+    context_script = context.get('steps', [{}])[1].get('run', '')
+    assert "CURRENT_MAIN_SHA=$(git rev-parse origin/main)" in context_script, "Must check race condition before tagging"
+    assert "$CURRENT_MAIN_SHA\" != \"$GITHUB_SHA" in context_script, "Must fail race condition check if origin/main advanced"
 
     # Check 2: Release concurrency cancel-in-progress uses safe release semantics
     concurrency = ci.get('concurrency', {})
