@@ -33,9 +33,9 @@ def run_tests():
     assert goreleaser, "goreleaser job missing"
     g_if = goreleaser.get('if', '')
 
-    assert "needs.route.outputs.run_release == 'true'" in g_if, "goreleaser must require run_release == 'true'"
-    assert "github.event_name == 'push'" in g_if, "goreleaser must support push"
-    assert "inputs.mode == 'publish-tag'" in g_if, "goreleaser must support publish-tag mode"
+    assert "needs.route.outputs.run_publisher == 'true'" in g_if, "goreleaser must check run_publisher"
+    assert "needs.route.outputs.run_release == 'true'" in g_if, "goreleaser must check run_release"
+
     assert "release-context" in goreleaser.get('needs', []), "goreleaser must depend on release-context"
 
     # Check 7: Only GoReleaser owns GitHub Release publication
@@ -43,7 +43,7 @@ def run_tests():
     assert "promote-release" not in jobs, "competing promote job remains"
 
     # Check 3: test-* and *-test* tag pushes use snapshot
-    assert "(startsWith(needs.release-context.outputs.release_tag, 'test-') || contains(needs.release-context.outputs.release_tag, '-test') || (github.event_name == 'workflow_dispatch' && inputs.mode == 'release-test')) && '--snapshot' || ''" in goreleaser.get('steps', [{}])[2].get('with', {}).get('args', ''), "test tags must trigger snapshot mode"
+    assert "(startsWith(needs.release-context.outputs.release_tag || github.ref_name, 'test-') || contains(needs.release-context.outputs.release_tag || github.ref_name, '-test') || (github.event_name == 'workflow_dispatch' && inputs.mode == 'release-test')) && '--snapshot' || ''" in goreleaser.get('steps', [{}])[2].get('with', {}).get('args', ''), "test tags must trigger snapshot mode"
 
     # Check 4: manual release-test is snapshot-only and does not run permanent tag-push step
     context_script = context.get('steps', [{}])[1].get('run', '')

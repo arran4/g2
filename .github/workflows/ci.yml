@@ -44,6 +44,7 @@ jobs:
       run_pr_meta_checks: ${{ steps.route.outputs.run_pr_meta_checks }}
       run_cleanup: ${{ steps.route.outputs.run_cleanup }}
       run_release: ${{ steps.route.outputs.run_release }}
+      run_publisher: ${{ steps.route.outputs.run_publisher }}
       is_monthly: ${{ steps.route.outputs.is_monthly }}
       is_nightly: ${{ steps.route.outputs.is_nightly }}
     steps:
@@ -64,6 +65,7 @@ jobs:
           run_pr_meta_checks=false
           run_cleanup=false
           run_release=false
+          run_publisher=false
           is_monthly=false
           is_nightly=false
 
@@ -71,7 +73,8 @@ jobs:
             push)
               run_code_checks=true
               if [[ "$REF" == refs/tags/v* ]] || [[ "$REF" == refs/tags/test-* ]]; then
-                run_release=true
+                run_publisher=true
+                run_code_checks=false
               fi
               ;;
             pull_request)
@@ -103,7 +106,8 @@ jobs:
                     echo "publish-tag mode requires an eligible tag context (e.g. refs/tags/v* or refs/tags/test-*)" >&2
                     exit 1
                   fi
-                  run_release=true
+                  run_publisher=true
+                  run_code_checks=false
                   ;;
                 monthly-maintenance)
                   is_monthly=true
@@ -124,6 +128,7 @@ jobs:
           echo "run_pr_meta_checks=$run_pr_meta_checks" >> "$GITHUB_OUTPUT"
           echo "run_cleanup=$run_cleanup" >> "$GITHUB_OUTPUT"
           echo "run_release=$run_release" >> "$GITHUB_OUTPUT"
+          echo "run_publisher=$run_publisher" >> "$GITHUB_OUTPUT"
           echo "is_monthly=$is_monthly" >> "$GITHUB_OUTPUT"
           echo "is_nightly=$is_nightly" >> "$GITHUB_OUTPUT"
   discover:
@@ -204,12 +209,12 @@ jobs:
         with:
           fetch-depth: 0
       - name: Setup git-tag-inc
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.mode != 'publish-tag' }}
+        if: ${{ github.event_name == 'workflow_dispatch' }}
         uses: arran4/git-tag-inc-action@v1
         with:
           mode: install
       - name: Verify Exact Origin/Main
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.mode != 'publish-tag' }}
+        if: ${{ github.event_name == 'workflow_dispatch' }}
         env:
           GITHUB_REF_NAME: ${{ github.ref }}
           GITHUB_SHA: ${{ github.sha }}
@@ -235,21 +240,8 @@ jobs:
         run: |
           set -euo pipefail
 
-          if [[ "$EVENT_NAME" == "push" ]]; then
-            echo "release_tag=$REF_NAME" >> "$GITHUB_OUTPUT"
-            echo "next_version=$REF_NAME" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
           MODE="$INPUT_MODE"
           OVERRIDE="$INPUT_RELEASE_VERSION_OVERRIDE"
-
-          if [[ "$MODE" == "publish-tag" ]]; then
-            # The publisher run doesn't compute new tags
-            echo "release_tag=$REF_NAME" >> "$GITHUB_OUTPUT"
-            echo "next_version=$REF_NAME" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
 
           git fetch --tags --force
 
@@ -616,19 +608,6 @@ jobs:
           fi
           echo "release_tag=$TAG" >> "$GITHUB_OUTPUT"
 
-          if [[ "$EVENT_NAME" == "push" ]]; then
-            exit 0
-          fi
-
-          if [[ "$EVENT_NAME" == "workflow_dispatch" && "$INPUT_MODE" == "publish-tag" ]]; then
-            if [[ "$REF_TYPE" != "tag" ]]; then
-              echo "Error: publish-tag mode invoked on a non-tag ref." >&2
-              exit 1
-            fi
-            echo "Running in internal publisher mode; tag is immutable context."
-            exit 0
-          fi
-
           if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
             (
               # 1. git fetch --tags --force
@@ -697,7 +676,10 @@ jobs:
   goreleaser:
     name: Run GoReleaser
     needs: [route, discover, release-context]
-    if: ${{ !failure() && !cancelled() && needs.route.outputs.run_release == 'true' && needs.discover.outputs.has_goreleaser == 'true' && (startsWith(needs.release-context.outputs.release_tag, 'v') || startsWith(needs.release-context.outputs.release_tag, 'test-')) && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && (inputs.mode == 'publish-tag' || inputs.mode == 'release-test'))) }}
+    if: |
+      !failure() && !cancelled() &&
+      needs.discover.outputs.has_goreleaser == 'true' &&
+      (needs.route.outputs.run_release == 'true' || needs.route.outputs.run_publisher == 'true')
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -715,11 +697,11 @@ jobs:
         with:
           distribution: goreleaser
           version: '~> v2'
-          args: release --clean ${{ (startsWith(needs.release-context.outputs.release_tag, 'test-') || contains(needs.release-context.outputs.release_tag, '-test') || (github.event_name == 'workflow_dispatch' && inputs.mode == 'release-test')) && '--snapshot' || '' }}
+          args: release --clean ${{ (startsWith(needs.release-context.outputs.release_tag || github.ref_name, 'test-') || contains(needs.release-context.outputs.release_tag || github.ref_name, '-test') || (github.event_name == 'workflow_dispatch' && inputs.mode == 'release-test')) && '--snapshot' || '' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAP_GITHUB_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
-          GORELEASER_CURRENT_TAG: ${{ needs.release-context.outputs.release_tag }}
+          GORELEASER_CURRENT_TAG: ${{ needs.release-context.outputs.release_tag || github.ref_name }}
 
   release-graph-validation:
     name: Validate Release Graph Policy
