@@ -292,70 +292,6 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh workflow run ci.yml --ref "$TAG" -f mode=publish-tag
-            exit 0
-          fi
-
-          MODE="$INPUT_MODE"
-          OVERRIDE="$INPUT_RELEASE_VERSION_OVERRIDE"
-
-          if [[ "$MODE" == "publish-tag" ]]; then
-            # The publisher run doesn't compute new tags
-            echo "release_tag=$REF_NAME" >> "$GITHUB_OUTPUT"
-            echo "next_version=$REF_NAME" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          git fetch --tags --force
-
-          if [[ -n "$OVERRIDE" ]]; then
-            OVERRIDE="${OVERRIDE#v}"
-            next_tag="v$OVERRIDE"
-          else
-            case "$MODE" in
-              release-major) level="major"; suffix="" ;;
-              release-minor) level="minor"; suffix="" ;;
-              release-patch) level="patch"; suffix="" ;;
-              release-test)  level="patch"; suffix="test" ;;
-              release-rc)    level="patch"; suffix="rc" ;;
-              release-alpha) level="patch"; suffix="alpha" ;;
-              *) echo "Unsupported release mode: $MODE" >&2; exit 1 ;;
-            esac
-
-            args=(-print-version-only "$level")
-            [[ -n "$suffix" ]] && args+=("$suffix")
-            next_tag=$(git-tag-inc "${args[@]}")
-          fi
-
-          [[ "$next_tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z.]+)?$ ]] || {
-            echo "Invalid tag format: $next_tag" >&2
-            exit 1
-          }
-
-          if git rev-parse "$next_tag" >/dev/null 2>&1; then
-            # Safe recovery semantics: verify existing tag against remote
-            # Check remote state for idempotency/retry
-            REMOTE_TAG_SHA=$(git ls-remote --tags origin "refs/tags/$next_tag" | grep -v '^{}$' | awk '{print $1}' || true)
-            # Also check peeled annotated tag if it exists
-            PEELED_SHA=$(git ls-remote --tags origin "refs/tags/$next_tag^{}" | awk '{print $1}' || true)
-            if [[ -n "$PEELED_SHA" ]]; then
-                REMOTE_TAG_SHA="$PEELED_SHA"
-            fi
-
-            if [[ "$REMOTE_TAG_SHA" == "${GITHUB_SHA}" ]]; then
-              echo "Tag $next_tag exists and points to GITHUB_SHA. Safe to retry."
-            else
-              echo "Tag already exists and points to $REMOTE_TAG_SHA (expected ${GITHUB_SHA}): $next_tag" >&2
-              echo "To retry a failed publication for this exact version, ensure release_version_override is used and GITHUB_SHA matches." >&2
-              exit 1
-            fi
-          fi
-
-          echo "release_tag=$next_tag" >> "$GITHUB_OUTPUT"
-
-          clean_tag="${next_tag#v}"
-          clean_tag="${clean_tag%%-*}"
-          IFS='.' read -r maj min pat <<< "$clean_tag"
-          echo "next_version=${maj:-0}.${min:-0}.$(( ${pat:-0} + 1 ))-SNAPSHOT" >> "$GITHUB_OUTPUT"
 
   gitleaks:
     name: Secret scan
@@ -444,7 +380,7 @@ jobs:
   go-fmt-pr:
     name: go fmt -> PR (manual dispatch)
     needs: [route, discover]
-    if: ${{ needs.discover.outputs.has_go == 'true' && github.event_name == 'workflow_dispatch' && inputs.mode == 'lint-fix' && inputs.allow_prs == true }}
+    if: ${{ needs.discover.outputs.has_go == 'true' && needs.route.outputs.run_autofix == 'true' && (github.event_name != 'workflow_dispatch' || inputs.allow_prs == true) }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -527,7 +463,7 @@ jobs:
   autofix:
     name: Auto-format and open PR
     needs: [route, discover]
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.mode == 'lint-fix' && inputs.allow_prs == true }}
+    if: ${{ needs.route.outputs.run_autofix == 'true' && (github.event_name != 'workflow_dispatch' || inputs.allow_prs == true) }}
     runs-on: ubuntu-latest
     permissions:
       contents: write

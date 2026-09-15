@@ -24,6 +24,17 @@ def run_tests():
     validation = jobs.get('release-ready')
     assert validation, "release-ready job missing"
 
+    route_outputs = route.get('outputs', {})
+    assert 'is_nightly' not in route_outputs, "route is_nightly should be removed"
+    assert 'is_monthly' not in route_outputs, "route is_monthly should be removed"
+
+    autofix = jobs.get('autofix') or jobs.get('go-fmt-pr')
+    assert autofix, "Autofix lane must exist"
+    assert "needs.route.outputs.run_autofix == 'true'" in autofix.get('if', ''), "autofix lane must use run_autofix output"
+
+    assert 'git fetch --tags --force' not in str(prepare), "prepare-release-tag must not contain stale logic"
+
+
     goreleaser = jobs.get('goreleaser') or jobs.get('publisher')
     assert goreleaser, "goreleaser/publisher job missing"
     g_if = goreleaser.get('if', '')
