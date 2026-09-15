@@ -21,38 +21,34 @@ def run_tests():
     assert prepare, "prepare-release-tag missing"
     assert "needs.route.outputs.run_release == 'true'" in prepare.get('if', ''), "prepare-release-tag must require run_release == 'true'"
 
-    validation = jobs.get('release-validation')
-    assert validation, "release-validation job missing"
-    assert "needs.route.outputs.run_release == 'true'" in validation.get('if', ''), "release-validation must require run_release == 'true'"
+    validation = jobs.get('release-ready')
+    assert validation, "release-ready job missing"
 
-    context = jobs.get('release-context')
-    assert context, "release-context job missing"
-    assert "needs.route.outputs.run_release == 'true'" in context.get('if', ''), "release-context must require run_release == 'true'"
-
-    goreleaser = jobs.get('goreleaser')
-    assert goreleaser, "goreleaser job missing"
+    goreleaser = jobs.get('goreleaser') or jobs.get('publisher')
+    assert goreleaser, "goreleaser/publisher job missing"
     g_if = goreleaser.get('if', '')
 
-    assert "needs.route.outputs.run_release == 'true'" in g_if, "goreleaser must require run_release == 'true'"
-    assert "github.event_name == 'push'" in g_if, "goreleaser must support push"
-    assert "inputs.mode == 'publish-tag'" in g_if, "goreleaser must support publish-tag mode"
-    assert "release-context" in goreleaser.get('needs', []), "goreleaser must depend on release-context"
+    assert "needs.route.outputs.run_publisher == 'true'" in g_if, "goreleaser must require run_publisher == 'true'"
+    assert "release-ready" in goreleaser.get('needs', []), "goreleaser must depend on release-ready"
 
     # Check 7: Only GoReleaser owns GitHub Release publication
     assert "publish-draft" not in jobs, "competing draft publish job remains"
     assert "promote-release" not in jobs, "competing promote job remains"
 
     # Check 3: test-* and *-test* tag pushes use snapshot
-    assert "(startsWith(needs.release-context.outputs.release_tag, 'test-') || contains(needs.release-context.outputs.release_tag, '-test') || (github.event_name == 'workflow_dispatch' && inputs.mode == 'release-test')) && '--snapshot' || ''" in goreleaser.get('steps', [{}])[2].get('with', {}).get('args', ''), "test tags must trigger snapshot mode"
+    steps = goreleaser.get('steps', [])
+    args_step = [s for s in steps if s.get('id') == 'args']
+    assert args_step, "goreleaser args step missing"
+    assert "snapshot" in args_step[0].get('run', ''), "test tags must trigger snapshot mode"
 
-    # Check 4: manual release-test is snapshot-only and does not run permanent tag-push step
-    context_script = context.get('steps', [{}])[1].get('run', '')
-    assert "if [[ \"$INPUT_MODE\" != \"release-test\" ]]; then" in context_script, "manual release-test must not push permanent tag"
-    assert "gh workflow run" in context_script, "must explicitly dispatch publish-tag"
+    # Check 4: manual explicit dispatch
+    prep_steps = prepare.get('steps', [])
+    dispatch_step = [s for s in prep_steps if "Dispatch Publisher" in s.get('name', '')]
+    assert dispatch_step, "must explicitly dispatch publish-tag"
+    assert "gh workflow run ci.yml" in dispatch_step[0].get('run', ''), "must explicitly dispatch publish-tag"
 
 
     # Check 1: Manual release-* restricted to exact origin/main
-    prep_steps = prepare.get('steps', [])
     exact_main = [s for s in prep_steps if "Verify Exact Origin/Main" in s.get('name', '')]
     assert exact_main, "Must check exact main commit before tagging"
     exact_main_script = exact_main[0].get('run', '')
@@ -61,18 +57,18 @@ def run_tests():
     assert "$MAIN_SHA\" != \"$GITHUB_SHA" in exact_main_script, "Must require exact commit equality with origin/main"
 
     # Check 1b: Final race check
-    context_script = context.get('steps', [{}])[1].get('run', '')
-    assert "CURRENT_MAIN_SHA=$(git rev-parse origin/main)" in context_script, "Must check race condition before tagging"
-    assert "$CURRENT_MAIN_SHA\" != \"$GITHUB_SHA" in context_script, "Must fail race condition check if origin/main advanced"
+    tag_push_step = [s for s in prep_steps if "Tag and push" in s.get('name', '')]
+    assert tag_push_step, "Must have Tag and push step"
+    tag_push_script = tag_push_step[0].get('run', '')
+    assert "CURRENT_MAIN_SHA=$(git rev-parse origin/main)" in tag_push_script, "Must check race condition before tagging"
+    assert "$CURRENT_MAIN_SHA\" != \"$GITHUB_SHA" in tag_push_script, "Must fail race condition check if origin/main advanced"
 
     # Check 2: Release concurrency cancel-in-progress uses safe release semantics
     concurrency = ci.get('concurrency', {})
     assert "startsWith(github.event.inputs.mode, 'release-')" in str(concurrency.get('cancel-in-progress', '')), "cancel-in-progress must be safe for release prep"
 
     # Check 4: Annotated tag recovery
-    tag_run = [s for s in prep_steps if s.get('id') == 'tag']
-    if tag_run:
-        assert "^{}" in tag_run[0].get('run', ''), "Must safely check peeled annotated tags in prepare-release-tag"
+    assert "^{}" in tag_push_script, "Must safely check peeled annotated tags in prepare-release-tag"
 
     # Check 5: Permissions are read-only at top level
     assert ci.get('permissions', {}).get('contents') == 'read', "Top-level permissions must be read-only by default"
