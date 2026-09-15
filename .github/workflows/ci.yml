@@ -112,6 +112,8 @@ jobs:
                run_build=true
             fi
           elif [[ "$EVENT_NAME" == "push" && "$REF_TYPE" == "tag" && ( "$GITHUB_REF" == refs/tags/v* || "$GITHUB_REF" == refs/tags/test-* ) ]]; then
+             run_code_checks=false
+             run_build=false
              run_publisher=true
           elif [[ "$EVENT_NAME" == "release" ]]; then
              run_code_checks=false
