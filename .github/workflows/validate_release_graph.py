@@ -17,6 +17,25 @@ def run_tests():
         inputs_options = on_triggers['workflow_dispatch'].get('inputs', {}).get('mode', {}).get('options', [])
     assert 'publish-tag' in inputs_options, "publish-tag missing from inputs mode options"
 
+    route_steps = route.get('steps', [])
+    route_step = [s for s in route_steps if s.get('id') == 'route']
+    assert route_step, "route step missing"
+    route_script = route_step[0].get('run', '')
+
+    publish_tag_marker = 'elif [[ "$mode" == "publish-tag" ]]; then'
+    assert publish_tag_marker in route_script, "publish-tag route missing"
+    publish_tag_block = route_script.split(publish_tag_marker, 1)[1].split('elif [[ "$mode" == release-* ]]', 1)[0]
+    assert 'run_publisher=true' in publish_tag_block, "publish-tag must route to publisher"
+    assert 'run_code_checks=false' in publish_tag_block, "publish-tag must not rerun code checks"
+    assert 'run_build=false' in publish_tag_block, "publish-tag must not rerun build checks"
+
+    tag_push_marker = 'elif [[ "$EVENT_NAME" == "push" && "$REF_TYPE" == "tag"'
+    assert tag_push_marker in route_script, "eligible external tag-push route missing"
+    tag_push_block = route_script.split(tag_push_marker, 1)[1].split('elif [[ "$EVENT_NAME" == "release" ]]', 1)[0]
+    assert 'run_publisher=true' in tag_push_block, "eligible external tag pushes must route to publisher"
+    assert 'run_code_checks=false' in tag_push_block, "eligible external tag pushes must not rerun code checks"
+    assert 'run_build=false' in tag_push_block, "eligible external tag pushes must not rerun build checks"
+
     prepare = jobs.get('prepare-release-tag')
     assert prepare, "prepare-release-tag missing"
     assert "needs.route.outputs.run_release == 'true'" in prepare.get('if', ''), "prepare-release-tag must require run_release == 'true'"
@@ -31,7 +50,7 @@ def run_tests():
         ci_str = ci_f.read()
     assert 'is_nightly' not in ci_str, "no job should reference is_nightly"
     assert 'is_monthly' not in ci_str, "no job should reference is_monthly"
-    assert 'EVENT_NAME" == "release"' in ci_str, "release no-op should be configured in route"
+    assert 'EVENT_NAME\" == \"release\"' in ci_str, "release no-op should be configured in route"
     assert 'PEELED_SHA=$(git ls-remote --tags origin "refs/tags/$TAG^{}"' in ci_str, "push fallback must include annotated-tag peeling"
 
 
@@ -49,6 +68,7 @@ def run_tests():
     g_if = goreleaser.get('if', '')
 
     assert "needs.route.outputs.run_publisher == 'true'" in g_if, "goreleaser must require run_publisher == 'true'"
+    assert "needs.route.outputs.run_release == 'true'" not in g_if, "publisher must not be reachable directly from release preparation"
     assert "release-ready" in goreleaser.get('needs', []), "goreleaser must depend on release-ready"
 
     # Check 7: Only GoReleaser owns GitHub Release publication
