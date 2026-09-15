@@ -34,7 +34,8 @@ def run_tests():
     g_if = goreleaser.get('if', '')
 
     assert "needs.route.outputs.run_publisher == 'true'" in g_if, "goreleaser must check run_publisher"
-    assert "needs.route.outputs.run_release == 'true'" in g_if, "goreleaser must check run_release"
+    assert "needs.route.outputs.run_release == 'true'" not in g_if, "goreleaser must NOT check run_release directly to avoid duplicate publication"
+    assert "inputs.mode == 'release-test'" in g_if, "goreleaser must explicitly support release-test mode"
 
     assert "release-context" in goreleaser.get('needs', []), "goreleaser must depend on release-context"
 

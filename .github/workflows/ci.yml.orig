@@ -679,7 +679,7 @@ jobs:
     if: |
       !failure() && !cancelled() &&
       needs.discover.outputs.has_goreleaser == 'true' &&
-      (needs.route.outputs.run_publisher == 'true' || (github.event_name == 'workflow_dispatch' && inputs.mode == 'release-test'))
+      (needs.route.outputs.run_release == 'true' || needs.route.outputs.run_publisher == 'true')
     runs-on: ubuntu-latest
     permissions:
       contents: write
