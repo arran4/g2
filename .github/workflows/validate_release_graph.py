@@ -27,6 +27,13 @@ def run_tests():
     route_outputs = route.get('outputs', {})
     assert 'is_nightly' not in route_outputs, "route is_nightly should be removed"
     assert 'is_monthly' not in route_outputs, "route is_monthly should be removed"
+    with open(".github/workflows/ci.yml") as ci_f:
+        ci_str = ci_f.read()
+    assert 'is_nightly' not in ci_str, "no job should reference is_nightly"
+    assert 'is_monthly' not in ci_str, "no job should reference is_monthly"
+    assert 'EVENT_NAME" == "release"' in ci_str, "release no-op should be configured in route"
+    assert 'PEELED_SHA=$(git ls-remote --tags origin "refs/tags/$TAG^{}"' in ci_str, "push fallback must include annotated-tag peeling"
+
 
     autofix = jobs.get('autofix') or jobs.get('go-fmt-pr')
     assert autofix, "Autofix lane must exist"
