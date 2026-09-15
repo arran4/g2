@@ -35,8 +35,10 @@ def run_tests():
     assert 'PEELED_SHA=$(git ls-remote --tags origin "refs/tags/$TAG^{}"' in ci_str, "push fallback must include annotated-tag peeling"
 
 
-    autofix = jobs.get('autofix') or jobs.get('go-fmt-pr')
-    assert autofix, "Autofix lane must exist"
+    autofix = jobs.get('autofix')
+    go_fmt_pr = jobs.get('go-fmt-pr')
+    assert autofix and not go_fmt_pr, "Autofix lane must exist and go-fmt-pr must be removed to avoid competing PRs"
+
     assert "needs.route.outputs.run_autofix == 'true'" in autofix.get('if', ''), "autofix lane must use run_autofix output"
 
     assert 'git fetch --tags --force' not in str(prepare), "prepare-release-tag must not contain stale logic"
