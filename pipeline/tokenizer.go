@@ -38,21 +38,24 @@ func TokenizePipeline(pipelineStr string) ([]string, error) {
 		}
 
 		if inQuote == 0 {
-			if char == '(' {
+			switch char {
+			case '(':
 				parenDepth++
-			} else if char == ')' {
+			case ')':
 				parenDepth--
 				if parenDepth < 0 {
 					return nil, errors.New("unbalanced parentheses in pipeline")
 				}
-			} else if char == '|' && parenDepth == 0 {
-				cmd := strings.TrimSpace(currentCmd.String())
-				if cmd == "" {
-					return nil, errors.New("empty pipeline stage")
+			case '|':
+				if parenDepth == 0 {
+					cmd := strings.TrimSpace(currentCmd.String())
+					if cmd == "" {
+						return nil, errors.New("empty pipeline stage")
+					}
+					commands = append(commands, cmd)
+					currentCmd.Reset()
+					continue
 				}
-				commands = append(commands, cmd)
-				currentCmd.Reset()
-				continue
 			}
 		}
 

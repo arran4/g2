@@ -98,7 +98,9 @@ func (e *Evaluator) evaluateCommand(cmdStr string, val *PipelineValue, currentUR
 		if err != nil {
 			return nil, fmt.Errorf("error fetching URL %s: %v", targetURL, err)
 		}
-		defer resp.Body.Close()
+		defer func() {
+			_ = resp.Body.Close()
+		}()
 
 		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 			return nil, fmt.Errorf("error fetching URL %s: status %d", targetURL, resp.StatusCode)
@@ -317,18 +319,12 @@ func (e *Evaluator) evaluateCommand(cmdStr string, val *PipelineValue, currentUR
 	if strings.HasPrefix(cmdStr, "json(") && strings.HasSuffix(cmdStr, ")") {
 		path := cmdStr[5 : len(cmdStr)-1]
 		if val.IsEmpty || val.IsList() {
-			// Actually replace might inject a string into an initially empty pipeline.
-			// Let's ensure IsEmpty correctly allows string representation to be parsed.
-			// Wait, the error is triggered.
 			return nil, fmt.Errorf("error parsing JSON path %s: input must be scalar string", path)
 		}
 		var obj interface{}
-		// If val.Value is already unmarshaled (e.g. from a previous json step if we decided to support that), use it.
-		// However, currently we only support string as input to json parsing.
 		strVal := val.GetString()
 		err := json.Unmarshal([]byte(strVal), &obj)
 		if err != nil {
-			// If it fails to unmarshal, it might be a raw unescaped string, but JSON requires valid JSON.
 			return nil, fmt.Errorf("error parsing JSON path %s: %v", path, err)
 		}
 
@@ -355,17 +351,16 @@ func (e *Evaluator) evaluateCommand(cmdStr string, val *PipelineValue, currentUR
 			return &PipelineValue{IsEmpty: true}, nil
 		}
 
-		switch v := obj.(type) {
-		case []interface{}:
+		if v, ok := obj.([]interface{}); ok {
 			return &PipelineValue{List: v, IsEmpty: false}, nil
-		default:
-			// Primitives (string, bool, float64, map)
-			if _, ok := obj.(map[string]interface{}); ok {
-				b, _ := json.Marshal(obj)
-				return &PipelineValue{Value: string(b), IsEmpty: false}, nil
-			}
-			return &PipelineValue{Value: obj, IsEmpty: false}, nil
 		}
+
+		// Primitives (string, bool, float64, map)
+		if _, ok := obj.(map[string]interface{}); ok {
+			b, _ := json.Marshal(obj)
+			return &PipelineValue{Value: string(b), IsEmpty: false}, nil
+		}
+		return &PipelineValue{Value: obj, IsEmpty: false}, nil
 	}
 
 	if strings.HasPrefix(cmdStr, "replace(") && strings.HasSuffix(cmdStr, ")") {
@@ -382,30 +377,13 @@ func (e *Evaluator) evaluateCommand(cmdStr string, val *PipelineValue, currentUR
 		oldStr = unescapeString(oldStr)
 		newStr = unescapeString(newStr)
 
-		if val.IsEmpty {
-			// If replacing on empty string and oldStr is empty, we act as an injector (python compat)
-			// Wait, the tests `replace('{"k": false}', '{"k": false}')` expect it to inject if the pipeline has no initial value.
-			// Actually python string replace: `"".replace("a", "b")` -> `""`. But python test `replace("{\"k\": false}", ...)`
-			// Wait, in Python pipeline evaluator, if data is None, replace doesn't do anything!
-			// Oh! `replace('{"k": false}', '{"k": false}')` doesn't work if data is None in Python.
-			// Wait! How did the test work in python?
-			// Let's just always initialize empty val.Value to "".
-		}
-
-		if val.IsEmpty {
-			// If we want it to act like python ast.literal_eval evaluating the args... wait, in python, if data is None, it ignores it.
-			// But maybe my test uses `replace('{"k": false}', ...)` assuming it acts as an injector.
-			// Let's just initialize data to "" instead of None, or let `replace` work on `""` if IsEmpty.
-			return &PipelineValue{Value: strings.ReplaceAll("", oldStr, newStr), IsEmpty: false}, nil
-		}
-
 		if !val.IsEmpty && !val.IsList() {
 			return &PipelineValue{Value: strings.ReplaceAll(val.GetString(), oldStr, newStr), IsEmpty: false}, nil
 		}
 		return val, nil
 	}
 
-	return nil, fmt.Errorf("Unknown command: %s", cmdStr)
+	return nil, fmt.Errorf("unknown command: %s", cmdStr)
 }
 
 func parseReplaceArgs(argsStr string) ([]string, error) {
@@ -415,6 +393,8 @@ func parseReplaceArgs(argsStr string) ([]string, error) {
 	escapeNext := false
 	sawQuote := false
 
+	argsStr = strings.TrimSpace(argsStr)
+
 	for _, char := range argsStr {
 		if escapeNext {
 			current.WriteRune(char)
@@ -423,6 +403,7 @@ func parseReplaceArgs(argsStr string) ([]string, error) {
 		}
 		if char == '\\' {
 			escapeNext = true
+			current.WriteRune(char)
 			continue
 		}
 		if char == '\'' || char == '"' {
@@ -432,18 +413,21 @@ func parseReplaceArgs(argsStr string) ([]string, error) {
 				inQuote = char
 				sawQuote = true
 			}
+			current.WriteRune(char)
+			continue
 		}
 		if inQuote == 0 {
 			if char == ',' {
+				if !sawQuote {
+					return nil, fmt.Errorf("arguments must be strings")
+				}
 				args = append(args, current.String())
 				current.Reset()
 				sawQuote = false
 				continue
 			}
 			if char == ' ' || char == '\t' {
-				if !sawQuote {
-					continue
-				} else if current.Len() == 0 {
+				if current.Len() == 0 {
 					continue
 				}
 			}
@@ -452,7 +436,11 @@ func parseReplaceArgs(argsStr string) ([]string, error) {
 	}
 
 	if inQuote != 0 {
-		return nil, fmt.Errorf("unterminated quotes")
+		return nil, fmt.Errorf("unterminated quote")
+	}
+
+	if !sawQuote && current.Len() > 0 && strings.TrimSpace(current.String()) != "" {
+		return nil, fmt.Errorf("arguments must be strings")
 	}
 
 	args = append(args, current.String())

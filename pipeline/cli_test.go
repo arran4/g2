@@ -17,6 +17,11 @@ func TestCLI(t *testing.T) {
 			_, _ = w.Write([]byte(`[]`))
 			return
 		}
+		if r.URL.Path == "/empty_scalar" {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(``))
+			return
+		}
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`["a", "", "c"]`))
 	}))
@@ -58,6 +63,13 @@ func TestCLI(t *testing.T) {
 		{
 			"zero cardinality list emits no output",
 			[]string{"pipeline", "get(" + ts.URL + "/empty) | json()"},
+			"",
+			false,
+			"",
+		},
+		{
+			"empty scalar string without cardinality check produces no output",
+			[]string{"pipeline", "get(" + ts.URL + "/empty_scalar) | replace('a', '')"}, // string replacing 'a' on empty gives empty
 			"",
 			false,
 			"",

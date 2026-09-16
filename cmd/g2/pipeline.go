@@ -72,7 +72,9 @@ func (cfg *MainArgConfig) cmdPipeline(args []string) error {
 			}
 		} else {
 			strVal := val.GetString()
-			fmt.Println(strVal)
+			if strVal != "" {
+				fmt.Println(strVal)
+			}
 		}
 	}
 

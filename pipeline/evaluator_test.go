@@ -14,6 +14,21 @@ import (
 func setupTestServer() *httptest.Server {
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
+		case "/legit_false_scalar":
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`0`))
+		case "/legit_false_string":
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`false`))
+		case "/json_bool":
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"k": false}`))
+		case "/json_int":
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"k": 0}`))
+		case "/empty":
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(``))
 		case "/rss":
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(`<rss><channel><item><link>http://example.com/v1.0.tar.gz</link></item></channel></rss>`))
@@ -71,7 +86,7 @@ func TestPythonPipeline(t *testing.T) {
 		{"Regex escaped paren", "get(" + ts.URL + "/json) | replace('v2.0', '(v2.0)') | regex(\\((.*?)\\))", "v2.0", false, ""},
 		{"Replace spaces and quotes", "get(" + ts.URL + "/json) | replace('\"tag\": \"v2.0\"', '\"tag\": \"v3.0\"') | json(releases.0.tag)", "v3.0", false, ""},
 		{"Fail 404", "get(" + ts.URL + "/404) | trim", "", true, "status 404"},
-		{"Fail Unknown", "unknown_cmd", "", true, "Unknown command"},
+		{"Fail Unknown", "unknown_cmd", "", true, "unknown command"},
 		{"Fail Empty", "get(" + ts.URL + "/rss) | ", "", true, "empty pipeline stage"},
 		{"Fail Unbalanced", "get(" + ts.URL + "/rss | trim", "", true, "unbalanced parentheses"},
 		{"Fail Dangling Escape", "get(" + ts.URL + "/rss) | regex(v\\", "", true, "dangling escape in pipeline"},
@@ -168,6 +183,9 @@ func TestSubstitutions(t *testing.T) {
 }
 
 func TestCardinality(t *testing.T) {
+	ts := setupTestServer()
+	defer ts.Close()
+
 	tests := []struct {
 		name        string
 		pipeline    string
@@ -175,13 +193,13 @@ func TestCardinality(t *testing.T) {
 		expectValue interface{}
 		expectList  bool
 	}{
-		{"json bool", `replace('', '{"k": false}') | json(k)`, false, false, false},
-		{"json num", `replace('', '{"k": 0}') | json(k)`, false, float64(0), false},
-		{"empty string", `replace('a', '')`, false, "", false},
-		{"empty scalar after regex match nothing", `replace('a', 'a') | regex(z)`, false, "", false},
+		{"json bool", "get(" + ts.URL + "/json_bool) | json(k)", false, false, false},
+		{"json num", "get(" + ts.URL + "/json_int) | json(k)", false, float64(0), false},
+		{"empty string", "get(" + ts.URL + "/empty)", false, "", false},
+		{"empty scalar after regex match nothing", "get(" + ts.URL + "/legit_false_scalar) | regex(z)", false, "", false},
 	}
 
-	evaluator := pipeline.NewEvaluator(nil)
+	evaluator := pipeline.NewEvaluator(ts.Client())
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			val, err := evaluator.Evaluate(tt.pipeline)
