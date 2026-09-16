@@ -121,7 +121,7 @@ func (e *Evaluator) evaluateCommand(cmdStr string, val *PipelineValue, currentUR
 		}
 		doc, err := xmlquery.Parse(strings.NewReader(val.GetString()))
 		if err != nil {
-			return nil, fmt.Errorf("error parsing XML/RSS: %v", err)
+			return nil, fmt.Errorf("error parsing %s: %w", cmdStr, err)
 		}
 
 		var items []*xmlquery.Node
@@ -143,7 +143,7 @@ func (e *Evaluator) evaluateCommand(cmdStr string, val *PipelineValue, currentUR
 		}
 		doc, err := xmlquery.Parse(strings.NewReader(val.GetString()))
 		if err != nil {
-			return nil, fmt.Errorf("error parsing XML: %v", err)
+			return nil, fmt.Errorf("error parsing XML: %w", err)
 		}
 		return &PipelineValue{RawNode: doc, Value: val.Value}, nil
 
@@ -208,20 +208,39 @@ func (e *Evaluator) evaluateCommand(cmdStr string, val *PipelineValue, currentUR
 		return &PipelineValue{IsEmpty: true}, nil
 
 	case "url.basename":
-		if val.IsEmpty || val.IsList() {
+		if val.IsEmpty {
 			return val, nil
+		}
+		if val.IsList() {
+			var results []interface{}
+			for _, item := range val.List {
+				u, err := url.Parse(fmt.Sprintf("%v", item))
+				if err == nil && u.Path != "" {
+					results = append(results, path.Base(u.Path))
+				} else {
+					results = append(results, "")
+				}
+			}
+			return &PipelineValue{List: results, IsEmpty: false}, nil
 		}
 		u, err := url.Parse(val.GetString())
 		if err == nil && u.Path != "" {
-			return &PipelineValue{Value: path.Base(u.Path)}, nil
+			return &PipelineValue{Value: path.Base(u.Path), IsEmpty: false}, nil
 		}
-		return &PipelineValue{Value: ""}, nil
+		return &PipelineValue{Value: "", IsEmpty: false}, nil
 
 	case "trim":
-		if val.IsEmpty || val.IsList() {
+		if val.IsEmpty {
 			return val, nil
 		}
-		return &PipelineValue{Value: strings.TrimSpace(val.GetString())}, nil
+		if val.IsList() {
+			var results []interface{}
+			for _, item := range val.List {
+				results = append(results, strings.TrimSpace(fmt.Sprintf("%v", item)))
+			}
+			return &PipelineValue{List: results, IsEmpty: false}, nil
+		}
+		return &PipelineValue{Value: strings.TrimSpace(val.GetString()), IsEmpty: false}, nil
 
 	case "html_links":
 		if val.IsEmpty || val.IsList() {
@@ -367,33 +386,55 @@ func (e *Evaluator) evaluateCommand(cmdStr string, val *PipelineValue, currentUR
 		argsStr := cmdStr[8 : len(cmdStr)-1]
 		args, err := parseReplaceArgs(argsStr)
 		if err != nil {
-			return nil, fmt.Errorf("error parsing replace arguments: %v", err)
-		}
-		if len(args) != 2 {
-			return nil, fmt.Errorf("replace requires exactly 2 arguments")
+			return nil, fmt.Errorf("error parsing replace arguments: %w", err)
 		}
 		oldStr, newStr := args[0], args[1]
 
-		oldStr = unescapeString(oldStr)
-		newStr = unescapeString(newStr)
-
-		if !val.IsEmpty && !val.IsList() {
-			return &PipelineValue{Value: strings.ReplaceAll(val.GetString(), oldStr, newStr), IsEmpty: false}, nil
+		if val.IsEmpty {
+			return val, nil
 		}
-		return val, nil
+		if val.IsList() {
+			var results []interface{}
+			for _, item := range val.List {
+				results = append(results, strings.ReplaceAll(fmt.Sprintf("%v", item), oldStr, newStr))
+			}
+			return &PipelineValue{List: results, IsEmpty: false}, nil
+		}
+		return &PipelineValue{Value: strings.ReplaceAll(val.GetString(), oldStr, newStr), IsEmpty: false}, nil
 	}
 
 	return nil, fmt.Errorf("unknown command: %s", cmdStr)
 }
 
 func parseReplaceArgs(argsStr string) ([]string, error) {
+	rawArgs, err := splitReplaceArgs(argsStr)
+	if err != nil {
+		return nil, err
+	}
+	if len(rawArgs) != 2 {
+		return nil, fmt.Errorf("replace requires exactly 2 arguments")
+	}
+
+	parsed := make([]string, 0, len(rawArgs))
+	for _, raw := range rawArgs {
+		trimmed := strings.TrimSpace(raw)
+		if trimmed == "" {
+			return nil, fmt.Errorf("arguments must be strings")
+		}
+		unquoted, err := parseQuotedString(trimmed)
+		if err != nil {
+			return nil, fmt.Errorf("arguments must be strings: %w", err)
+		}
+		parsed = append(parsed, unquoted)
+	}
+	return parsed, nil
+}
+
+func splitReplaceArgs(argsStr string) ([]string, error) {
 	var args []string
 	var current strings.Builder
 	inQuote := rune(0)
 	escapeNext := false
-	sawQuote := false
-
-	argsStr = strings.TrimSpace(argsStr)
 
 	for _, char := range argsStr {
 		if escapeNext {
@@ -410,23 +451,13 @@ func parseReplaceArgs(argsStr string) ([]string, error) {
 		case 0:
 			if char == '\'' || char == '"' {
 				inQuote = char
-				sawQuote = true
 				current.WriteRune(char)
 				continue
 			}
 			if char == ',' {
-				if !sawQuote {
-					return nil, fmt.Errorf("arguments must be strings")
-				}
 				args = append(args, current.String())
 				current.Reset()
-				sawQuote = false
 				continue
-			}
-			if char == ' ' || char == '\t' {
-				if current.Len() == 0 {
-					continue
-				}
 			}
 		default:
 			if char == inQuote {
@@ -438,41 +469,71 @@ func parseReplaceArgs(argsStr string) ([]string, error) {
 		current.WriteRune(char)
 	}
 
+	if escapeNext {
+		return nil, fmt.Errorf("dangling escape in replace arguments")
+	}
 	if inQuote != 0 {
 		return nil, fmt.Errorf("unterminated quote")
 	}
 
-	if !sawQuote && current.Len() > 0 && strings.TrimSpace(current.String()) != "" {
-		return nil, fmt.Errorf("arguments must be strings")
-	}
-
 	args = append(args, current.String())
-
 	return args, nil
 }
 
-func unescapeString(s string) string {
-	s = strings.TrimSpace(s)
-	if len(s) < 2 {
-		return s
+func parseQuotedString(arg string) (string, error) {
+	arg = strings.TrimSpace(arg)
+	if len(arg) < 2 {
+		return "", fmt.Errorf("argument must be a quoted string, got: %s", arg)
+	}
+	runes := []rune(arg)
+	quote := runes[0]
+	if quote != '\'' && quote != '"' {
+		return "", fmt.Errorf("argument must be a quoted string, got: %s", arg)
 	}
 
-	if s[0] == '\'' && s[len(s)-1] == '\'' {
-		inner := s[1 : len(s)-1]
-		inner = strings.ReplaceAll(inner, `\"`, `"`)
-		inner = strings.ReplaceAll(inner, `"`, `\"`)
-		inner = strings.ReplaceAll(inner, `\'`, `'`)
-		s = `"` + inner + `"`
+	var unescaped strings.Builder
+	escapeNext := false
+	closed := false
+
+	for i := 1; i < len(runes); i++ {
+		c := runes[i]
+		if closed {
+			return "", fmt.Errorf("argument has trailing characters after quote: %s", arg)
+		}
+		if escapeNext {
+			switch c {
+			case '\'', '"', '\\':
+				unescaped.WriteRune(c)
+			case 'n':
+				unescaped.WriteRune('\n')
+			case 't':
+				unescaped.WriteRune('\t')
+			case 'r':
+				unescaped.WriteRune('\r')
+			default:
+				unescaped.WriteRune('\\')
+				unescaped.WriteRune(c)
+			}
+			escapeNext = false
+			continue
+		}
+		if c == '\\' {
+			escapeNext = true
+			continue
+		}
+		if c == quote {
+			closed = true
+			continue
+		}
+		unescaped.WriteRune(c)
 	}
 
-	unq, err := strconv.Unquote(s)
-	if err == nil {
-		return unq
+	if escapeNext {
+		return "", fmt.Errorf("dangling escape in string: %s", arg)
+	}
+	if !closed {
+		return "", fmt.Errorf("unterminated quote in string: %s", arg)
 	}
 
-	if len(s) >= 2 && s[0] == '"' && s[len(s)-1] == '"' {
-		return s[1 : len(s)-1]
-	}
-
-	return s
+	return unescaped.String(), nil
 }

@@ -421,7 +421,7 @@ The `g2 masks` command provides tools for inspecting and modifying user-level an
 
 ### `pipeline`
 
-Evaluate data extraction pipeline expressions to safely fetch, parse, and filter URLs, HTML, JSON, and XML using a lightweight, deterministic operator chain. This supports the `arrans_overlay_workflow_builder` extraction tasks without requiring external scripting environments.
+Evaluate declarative data extraction pipeline expressions to safely fetch, parse, and filter URLs, HTML, JSON, and XML using a lightweight, deterministic operator chain. This provides a clean, auditable alternative to embedded scripting runtimes for automated workflow builders (such as `arrans_overlay_workflow_builder`) without requiring base64 encoding or eval workarounds.
 
 **Usage:**
 
@@ -431,26 +431,70 @@ g2 pipeline [flags] <pipeline_string>
 
 **Flags:**
 
-* `-s <KEY>=<VALUE>`: Apply a variable substitution for `${KEY}` in the pipeline string. Can be specified multiple times. Missing required variables will cause a hard failure.
+* `-s <KEY>=<VALUE>`: Apply a variable substitution for `${KEY}` in the pipeline string. Can be specified multiple times. Missing required variables will cause a hard failure with non-zero exit code.
+
+**Supported Operators:**
+
+* `get(url)`: Fetches an HTTP/HTTPS URL with User-Agent `g2/pipeline`.
+* `json(path)`: Parses JSON string input and navigates dot-separated paths (e.g. `releases.0.tag`).
+* `xml`: Parses XML string input for subsequent XPath queries.
+* `rss`: Parses RSS XML feeds and emits `<item>` entries as a list.
+* `atom`: Parses Atom XML feeds and emits `<entry>` entries as a list.
+* `xpath(query)`: Executes an XPath query against parsed XML documents.
+* `regex(pattern)`: Evaluates a regular expression against scalar or list elements. Extracts first capture group if defined, otherwise full match.
+* `trim`: Strips leading and trailing whitespace from scalar strings or list elements.
+* `html_links`: Extracts and resolves all `<a href>` URLs from HTML content relative to the fetched URL.
+* `replace('old', 'new')`: Replaces substrings in scalar or list inputs. Both arguments must be fully quoted strings (single or double quotes with support for escaped quotes, escaped backslashes, and commas within strings).
+* `url.basename`: Extracts the filename or path basename from URL strings.
+* `link`: Extracts the link URL from an RSS or Atom XML item.
+* `first`: Selects the first item from a list.
+* `last`: Selects the last item from a list.
+* `single`, `exactly_one`: Enforces strict cardinality that the stage yields exactly one item.
+
+**Stdout and Cardinality Semantics:**
+
+* **Zero results without strict cardinality**: Exits cleanly with status 0 and produces no stdout.
+* **Single scalar result**: Emitted to stdout followed by a newline.
+* **Multiple results**: Emitted to stdout with each result on its own line (newline-separated).
+* **Strict cardinality (`single` / `exactly_one`)**:
+  * If zero items are produced, exits non-zero with an actionable error on stderr.
+  * If multiple ambiguous items are produced, exits non-zero with an actionable error on stderr.
+  * An empty scalar string `""` represents zero cardinality under strict checks and exits non-zero.
+  * Legitimate zero/falsy values such as JSON numeric `0`, boolean `false`, and string `"0"` or `"false"` are preserved and succeed as valid single results.
+* **Readable security model**: Expressions are written directly as human-readable shell pipeline arguments without needing base64 wrappers, dynamic evaluation, or shell subshell escapes.
 
 **Examples:**
 
-Fetch a URL, resolve HTML links relative to that URL, filter by regex, and mandate exactly one result:
+Fetch a release download page, resolve HTML links relative to the URL, filter for linux deb packages, and ensure exactly one package is found:
 ```bash
 g2 pipeline "get(https://example.com/downloads) | html_links | regex(.*linux[.]deb$) | exactly_one"
 ```
 
-Fetch JSON data and extract specific fields safely using dot-notation:
+Extract the download URL filename basename:
 ```bash
-g2 pipeline -s TAG=v2.0 "get(https://api.example.com) | replace('\"tag\": \"v2.0\"', '\"tag\": \"${TAG}\"') | json(releases.0.tag)"
+g2 pipeline "get(https://example.com/downloads) | html_links | regex(.*linux[.]deb$) | url.basename | exactly_one"
 ```
 
-Extract all version tags from an Atom feed, returning multiple items as line-separated output:
+Extract the latest tag from a JSON API using dot-notation:
 ```bash
-g2 pipeline "get(https://example.com/feed.xml) | atom | regex(v(.*)\\.tar\\.gz)"
+g2 pipeline "get(https://api.example.com/repos/tool/releases) | json(0.tag_name) | trim | exactly_one"
 ```
 
-Error Behavior: The `exactly_one` and `single` operators rigorously enforce cardinality. If a search yields zero matches or multiple ambiguous results, the pipeline exits with a non-zero code. Similarly, valid zero-values (like JSON `0` or `false`) are accurately maintained as legitimate scalar strings without incorrectly failing cardinality checks.
+Extract all release archive links from an Atom feed (line-separated output):
+```bash
+g2 pipeline "get(https://example.com/releases.atom) | atom | link | regex(v(.*)\\.tar\\.gz)"
+```
+
+Extract and normalize version strings using substitutions and strict replacement:
+```bash
+g2 pipeline -s TAG=v1.2.3 -s RELEASE_FILENAME=app-1.2.3.tar.gz \
+    "get(https://example.com/releases/${TAG}/${RELEASE_FILENAME}) | regex(app-(.*)\\.tar\\.gz) | replace('+', '.') | exactly_one"
+```
+
+Execute XPath query against an XML document:
+```bash
+g2 pipeline "get(https://example.com/project.xml) | xml | xpath(//download/url) | first | trim"
+```
 
 ### `eclass`
 

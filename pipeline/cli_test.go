@@ -22,6 +22,36 @@ func TestCLI(t *testing.T) {
 			_, _ = w.Write([]byte(``))
 			return
 		}
+		if r.URL.Path == "/replace_base" {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`base`))
+			return
+		}
+		if r.URL.Path == "/whitespace" {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte("   \n\t  padded string  \t\n   "))
+			return
+		}
+		if r.URL.Path == "/json_zero" {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"num": 0}`))
+			return
+		}
+		if r.URL.Path == "/json_false" {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"b": false}`))
+			return
+		}
+		if r.URL.Path == "/json_str_zero" {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"s": "0"}`))
+			return
+		}
+		if r.URL.Path == "/json_str_false" {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"s": "false"}`))
+			return
+		}
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`["a", "", "c"]`))
 	}))
@@ -54,6 +84,89 @@ func TestCLI(t *testing.T) {
 			"missing required substitution: ${VAR}",
 		},
 		{
+			"required substitutions all succeed via CLI flags",
+			[]string{
+				"pipeline",
+				"-s", "VERSION=1.2.3",
+				"-s", "TAG=v1.2.3",
+				"-s", "RELEASE_FILENAME=pkg-1.2.3.tar.gz",
+				"get(" + ts.URL + "/replace_base) | replace('base', '${VERSION}-${TAG}-${RELEASE_FILENAME}')",
+			},
+			"1.2.3-v1.2.3-pkg-1.2.3.tar.gz\n",
+			false,
+			"",
+		},
+		{
+			"positive trim via CLI",
+			[]string{"pipeline", "get(" + ts.URL + "/whitespace) | trim"},
+			"padded string\n",
+			false,
+			"",
+		},
+		{
+			"single zero cardinality fails via CLI",
+			[]string{"pipeline", "get(" + ts.URL + "/empty) | json() | single"},
+			"",
+			true,
+			"expected 1 item, got 0",
+		},
+		{
+			"single multiple items fails via CLI",
+			[]string{"pipeline", "get(" + ts.URL + ") | json() | single"},
+			"",
+			true,
+			"expected 1 item, got 3",
+		},
+		{
+			"single scalar numeric 0 preserves value via CLI",
+			[]string{"pipeline", "get(" + ts.URL + "/json_zero) | json(num) | single"},
+			"0\n",
+			false,
+			"",
+		},
+		{
+			"single scalar bool false preserves value via CLI",
+			[]string{"pipeline", "get(" + ts.URL + "/json_false) | json(b) | single"},
+			"false\n",
+			false,
+			"",
+		},
+		{
+			"single scalar string 0 preserves value via CLI",
+			[]string{"pipeline", "get(" + ts.URL + "/json_str_zero) | json(s) | single"},
+			"0\n",
+			false,
+			"",
+		},
+		{
+			"single scalar string false preserves value via CLI",
+			[]string{"pipeline", "get(" + ts.URL + "/json_str_false) | json(s) | single"},
+			"false\n",
+			false,
+			"",
+		},
+		{
+			"single empty scalar string fails via CLI",
+			[]string{"pipeline", "get(" + ts.URL + "/empty_scalar) | single"},
+			"",
+			true,
+			"expected 1 item, got 0",
+		},
+		{
+			"replace non-string argument fails via CLI",
+			[]string{"pipeline", "get(" + ts.URL + "/replace_base) | replace('base', 1)"},
+			"",
+			true,
+			"arguments must be strings",
+		},
+		{
+			"replace trailing characters after quote fails via CLI",
+			[]string{"pipeline", "get(" + ts.URL + "/replace_base) | replace('base'junk, 'new')"},
+			"",
+			true,
+			"trailing characters after quote",
+		},
+		{
 			"list printing empty strings as empty lines",
 			[]string{"pipeline", "get(" + ts.URL + ") | json()"},
 			"a\n\nc\n",
@@ -69,7 +182,7 @@ func TestCLI(t *testing.T) {
 		},
 		{
 			"empty scalar string without cardinality check produces no output",
-			[]string{"pipeline", "get(" + ts.URL + "/empty_scalar) | replace('a', '')"}, // string replacing 'a' on empty gives empty
+			[]string{"pipeline", "get(" + ts.URL + "/empty_scalar) | replace('a', '')"},
 			"",
 			false,
 			"",
