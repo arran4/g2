@@ -445,9 +445,9 @@ Fetch JSON data and extract specific fields safely using dot-notation:
 g2 pipeline -s TAG=v2.0 "get(https://api.example.com) | replace('\"tag\": \"v2.0\"', '\"tag\": \"${TAG}\"') | json(releases.0.tag)"
 ```
 
-Use `first` or `last` operators on XML/RSS structures, returning multiple items as line-separated output if applicable:
+Extract all version tags from an Atom feed, returning multiple items as line-separated output:
 ```bash
-g2 pipeline "get(https://example.com/feed.xml) | rss | first | link | url.basename"
+g2 pipeline "get(https://example.com/feed.xml) | atom | regex(v(.*)\\.tar\\.gz)"
 ```
 
 Error Behavior: The `exactly_one` and `single` operators rigorously enforce cardinality. If a search yields zero matches or multiple ambiguous results, the pipeline exits with a non-zero code. Similarly, valid zero-values (like JSON `0` or `false`) are accurately maintained as legitimate scalar strings without incorrectly failing cardinality checks.

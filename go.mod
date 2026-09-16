@@ -4,7 +4,6 @@ go 1.25.0
 
 require (
 	github.com/antchfx/xmlquery v1.5.1
-	github.com/antchfx/xpath v1.3.8
 	github.com/go-git/go-git/v5 v5.19.2
 	github.com/google/go-cmp v0.7.0
 	github.com/stretchr/testify v1.11.1
@@ -15,6 +14,7 @@ require (
 )
 
 require (
+	github.com/antchfx/xpath v1.3.6 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/klauspost/cpuid/v2 v2.3.0 // indirect
 	github.com/onsi/gomega v1.36.2 // indirect

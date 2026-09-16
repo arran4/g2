@@ -92,7 +92,7 @@ func (e *Evaluator) evaluateCommand(cmdStr string, val *PipelineValue, currentUR
 		if err != nil {
 			return nil, fmt.Errorf("error creating request for %s: %v", targetURL, err)
 		}
-		req.Header.Set("User-Agent", "Mozilla/5.0")
+		req.Header.Set("User-Agent", "g2/pipeline")
 
 		resp, err := e.Client.Do(req)
 		if err != nil {

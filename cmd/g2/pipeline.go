@@ -51,12 +51,10 @@ func (cfg *MainArgConfig) cmdPipeline(args []string) error {
 
 	pipelineStr := fs.Arg(0)
 
-	if len(subs) > 0 {
-		var err error
-		pipelineStr, err = pipeline.PerformSubstitutions(pipelineStr, subs)
-		if err != nil {
-			return &ExitError{Code: 1, Err: err}
-		}
+	var err error
+	pipelineStr, err = pipeline.PerformSubstitutions(pipelineStr, subs)
+	if err != nil {
+		return &ExitError{Code: 1, Err: err}
 	}
 
 	evaluator := pipeline.NewEvaluator(nil) // Uses http.DefaultClient
@@ -68,15 +66,13 @@ func (cfg *MainArgConfig) cmdPipeline(args []string) error {
 	if val != nil && !val.IsEmpty {
 		if val.IsList() {
 			for _, item := range val.List {
-				if item != "" && item != nil {
+				if item != nil {
 					fmt.Println(item)
 				}
 			}
 		} else {
 			strVal := val.GetString()
-			if strVal != "" {
-				fmt.Println(strVal)
-			}
+			fmt.Println(strVal)
 		}
 	}
 
