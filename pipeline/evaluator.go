@@ -406,17 +406,14 @@ func parseReplaceArgs(argsStr string) ([]string, error) {
 			current.WriteRune(char)
 			continue
 		}
-		if char == '\'' || char == '"' {
-			if inQuote == char {
-				inQuote = 0
-			} else if inQuote == 0 {
+		switch inQuote {
+		case 0:
+			if char == '\'' || char == '"' {
 				inQuote = char
 				sawQuote = true
+				current.WriteRune(char)
+				continue
 			}
-			current.WriteRune(char)
-			continue
-		}
-		if inQuote == 0 {
 			if char == ',' {
 				if !sawQuote {
 					return nil, fmt.Errorf("arguments must be strings")
@@ -431,6 +428,12 @@ func parseReplaceArgs(argsStr string) ([]string, error) {
 					continue
 				}
 			}
+		default:
+			if char == inQuote {
+				inQuote = 0
+			}
+			current.WriteRune(char)
+			continue
 		}
 		current.WriteRune(char)
 	}

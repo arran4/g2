@@ -27,17 +27,13 @@ func TokenizePipeline(pipelineStr string) ([]string, error) {
 			continue
 		}
 
-		if char == '\'' || char == '"' {
-			if inQuote == char {
-				inQuote = 0
-			} else if inQuote == 0 {
+		switch inQuote {
+		case 0:
+			if char == '\'' || char == '"' {
 				inQuote = char
+				currentCmd.WriteRune(char)
+				continue
 			}
-			currentCmd.WriteRune(char)
-			continue
-		}
-
-		if inQuote == 0 {
 			switch char {
 			case '(':
 				parenDepth++
@@ -57,6 +53,12 @@ func TokenizePipeline(pipelineStr string) ([]string, error) {
 					continue
 				}
 			}
+		default:
+			if char == inQuote {
+				inQuote = 0
+			}
+			currentCmd.WriteRune(char)
+			continue
 		}
 
 		currentCmd.WriteRune(char)
