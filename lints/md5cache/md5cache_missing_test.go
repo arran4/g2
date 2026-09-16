@@ -88,7 +88,7 @@ func TestMD5CacheMissing(t *testing.T) {
 		},
 	}
 	rule = &MD5CacheLintRule{fs: mockFileStat{paths: map[string]bool{
-		filepath.Join(repoDir, "metadata", "md5-cache"):                               true,
+		filepath.Join(repoDir, "metadata", "md5-cache"):                              true,
 		filepath.Join(repoDir, "metadata", "md5-cache", "acct-group", "ollama-0-r1"): true,
 	}}}
 	results = rule.LintWithQA(repoDir, revisionedPkg, nil)
