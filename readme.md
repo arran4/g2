@@ -419,6 +419,39 @@ The `g2 masks` command provides tools for inspecting and modifying user-level an
 * `g2 masks unmask <package>`: Add a package to the user's `package.unmask` configuration. If `package.unmask` is a directory, it creates or appends to a `g2.conf` file inside it. (e.g. `g2 masks unmask sci-libs/onnxruntime::guru`)
 * `g2 masks reset <package>`: Remove all mentions of a package from the user's `package.mask` and `package.unmask` configurations, sweeping through configuration directories as well.
 
+### `pipeline`
+
+Evaluate data extraction pipeline expressions to safely fetch, parse, and filter URLs, HTML, JSON, and XML using a lightweight, deterministic operator chain. This supports the `arrans_overlay_workflow_builder` extraction tasks without requiring external scripting environments.
+
+**Usage:**
+
+```bash
+g2 pipeline [flags] <pipeline_string>
+```
+
+**Flags:**
+
+* `-s <KEY>=<VALUE>`: Apply a variable substitution for `${KEY}` in the pipeline string. Can be specified multiple times. Missing required variables will cause a hard failure.
+
+**Examples:**
+
+Fetch a URL, resolve HTML links relative to that URL, filter by regex, and mandate exactly one result:
+```bash
+g2 pipeline "get(https://example.com/downloads) | html_links | regex(.*linux[.]deb$) | exactly_one"
+```
+
+Fetch JSON data and extract specific fields safely using dot-notation:
+```bash
+g2 pipeline -s TAG=v2.0 "get(https://api.example.com) | replace('\"tag\": \"v2.0\"', '\"tag\": \"${TAG}\"') | json(releases.0.tag)"
+```
+
+Use `first` or `last` operators on XML/RSS structures, returning multiple items as line-separated output if applicable:
+```bash
+g2 pipeline "get(https://example.com/feed.xml) | rss | first | link | url.basename"
+```
+
+Error Behavior: The `exactly_one` and `single` operators rigorously enforce cardinality. If a search yields zero matches or multiple ambiguous results, the pipeline exits with a non-zero code. Similarly, valid zero-values (like JSON `0` or `false`) are accurately maintained as legitimate scalar strings without incorrectly failing cardinality checks.
+
 ### `eclass`
 
 Commands relating to eclasses.

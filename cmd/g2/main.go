@@ -68,6 +68,7 @@ func main() {
 		fmt.Printf("\t\t %s \t\t %s\n", "conf", "commands relating to portage configuration")
 		fmt.Printf("\t\t %s \t\t %s\n", "skill", "manage agent skills")
 		fmt.Printf("\t\t %s \t\t %s\n", "world", "manage the portage world file via TUI")
+		fmt.Printf("\t\t %s \t\t %s\n", "pipeline", "evaluates a data extraction pipeline expression")
 	}
 	if err := fs.Parse(os.Args); err != nil {
 		log.Printf("Flag parse error: %s", err)
@@ -120,6 +121,8 @@ func main() {
 		err = cfg.cmdLint(fs.Args()[2:])
 	case "use":
 		err = cfg.cmdUse(fs.Args()[2:])
+	case "pipeline":
+		err = cfg.cmdPipeline(fs.Args()[2:])
 	case "site":
 		err = cfg.cmdSite(fs.Args()[2:])
 	case "cache":
