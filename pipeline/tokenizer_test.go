@@ -14,6 +14,7 @@ func TestTokenizePipeline(t *testing.T) {
 	}{
 		{"quoted pipes", "get('http://foo|bar') | trim", []string{"get('http://foo|bar')", "trim"}, false},
 		{"nested/argument parentheses", "replace('a', '(b)') | trim", []string{"replace('a', '(b)')", "trim"}, false},
+		{"genuine nested parentheses", "foo(bar(baz)) | trim", []string{"foo(bar(baz))", "trim"}, false},
 		{"escaped quotes", "replace('a\\'b', 'c')", []string{"replace('a\\'b', 'c')"}, false},
 		{"escaped backslashes", "replace('a\\\\b', 'c')", []string{"replace('a\\\\b', 'c')"}, false},
 		{"unterminated single quotes", "replace('a, 'b')", nil, true},

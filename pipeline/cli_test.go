@@ -210,3 +210,38 @@ func TestCLI(t *testing.T) {
 		})
 	}
 }
+func TestCLI_UnknownOperatorFailure(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`ok`))
+	}))
+	defer ts.Close()
+
+	cmd := exec.Command("go", "run", "../cmd/g2", "pipeline", "get("+ts.URL+") | unknown_operator")
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	err := cmd.Run()
+
+	assert.Error(t, err)
+	assert.Contains(t, stderr.String(), "unknown command")
+	assert.Empty(t, stdout.String())
+}
+
+func TestCLI_TokenizerFailure(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`ok`))
+	}))
+	defer ts.Close()
+
+	cmd := exec.Command("go", "run", "../cmd/g2", "pipeline", "get("+ts.URL+") | replace('a, 'b')")
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	err := cmd.Run()
+
+	assert.Error(t, err)
+	assert.Contains(t, stderr.String(), "unterminated quote")
+	assert.Empty(t, stdout.String())
+}
