@@ -208,20 +208,8 @@ func (e *Evaluator) evaluateCommand(cmdStr string, val *PipelineValue, currentUR
 		return &PipelineValue{IsEmpty: true}, nil
 
 	case "url.basename":
-		if val.IsEmpty {
+		if val.IsEmpty || val.IsList() {
 			return val, nil
-		}
-		if val.IsList() {
-			var results []interface{}
-			for _, item := range val.List {
-				u, err := url.Parse(fmt.Sprintf("%v", item))
-				if err == nil && u.Path != "" {
-					results = append(results, path.Base(u.Path))
-				} else {
-					results = append(results, "")
-				}
-			}
-			return &PipelineValue{List: results, IsEmpty: false}, nil
 		}
 		u, err := url.Parse(val.GetString())
 		if err == nil && u.Path != "" {
@@ -230,15 +218,8 @@ func (e *Evaluator) evaluateCommand(cmdStr string, val *PipelineValue, currentUR
 		return &PipelineValue{Value: "", IsEmpty: false}, nil
 
 	case "trim":
-		if val.IsEmpty {
+		if val.IsEmpty || val.IsList() {
 			return val, nil
-		}
-		if val.IsList() {
-			var results []interface{}
-			for _, item := range val.List {
-				results = append(results, strings.TrimSpace(fmt.Sprintf("%v", item)))
-			}
-			return &PipelineValue{List: results, IsEmpty: false}, nil
 		}
 		return &PipelineValue{Value: strings.TrimSpace(val.GetString()), IsEmpty: false}, nil
 
@@ -390,15 +371,8 @@ func (e *Evaluator) evaluateCommand(cmdStr string, val *PipelineValue, currentUR
 		}
 		oldStr, newStr := args[0], args[1]
 
-		if val.IsEmpty {
+		if val.IsEmpty || val.IsList() {
 			return val, nil
-		}
-		if val.IsList() {
-			var results []interface{}
-			for _, item := range val.List {
-				results = append(results, strings.ReplaceAll(fmt.Sprintf("%v", item), oldStr, newStr))
-			}
-			return &PipelineValue{List: results, IsEmpty: false}, nil
 		}
 		return &PipelineValue{Value: strings.ReplaceAll(val.GetString(), oldStr, newStr), IsEmpty: false}, nil
 	}

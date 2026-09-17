@@ -442,10 +442,10 @@ g2 pipeline [flags] <pipeline_string>
 * `atom`: Parses Atom XML feeds and emits `<entry>` entries as a list.
 * `xpath(query)`: Executes an XPath query against parsed XML documents.
 * `regex(pattern)`: Evaluates a regular expression against scalar or list elements. Extracts first capture group if defined, otherwise full match.
-* `trim`: Strips leading and trailing whitespace from scalar strings or list elements.
+* `trim`: Strips leading and trailing whitespace from scalar strings (leaves list inputs unchanged).
 * `html_links`: Extracts and resolves all `<a href>` URLs from HTML content relative to the fetched URL.
-* `replace('old', 'new')`: Replaces substrings in scalar or list inputs. Both arguments must be fully quoted strings (single or double quotes with support for escaped quotes, escaped backslashes, and commas within strings).
-* `url.basename`: Extracts the filename or path basename from URL strings.
+* `replace('old', 'new')`: Replaces substrings in scalar strings (leaves list inputs unchanged). Both arguments must be fully quoted strings (single or double quotes with support for escaped quotes, escaped backslashes, and commas within strings).
+* `url.basename`: Extracts the filename or path basename from a scalar URL string (leaves list inputs unchanged).
 * `link`: Extracts the link URL from an RSS or Atom XML item.
 * `first`: Selects the first item from a list.
 * `last`: Selects the last item from a list.
@@ -472,7 +472,7 @@ g2 pipeline "get(https://example.com/downloads) | html_links | regex(.*linux[.]d
 
 Extract the download URL filename basename:
 ```bash
-g2 pipeline "get(https://example.com/downloads) | html_links | regex(.*linux[.]deb$) | url.basename | exactly_one"
+g2 pipeline "get(https://example.com/downloads) | html_links | regex(.*linux[.]deb$) | exactly_one | url.basename"
 ```
 
 Extract the latest tag from a JSON API using dot-notation:

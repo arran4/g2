@@ -1,9 +1,13 @@
 package pipeline_test
 
 import (
+	"crypto/sha512"
+	"encoding/hex"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"testing/fstest"
@@ -61,6 +65,9 @@ func setupTestServer() *httptest.Server {
 		case "/whitespace":
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte("  \t\r\n  extracted content  \t\r\n  "))
+		case "/whitespaced_list":
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"items": ["  apple  ", "  banana  "]}`))
 		case "/which_browser/":
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(`<html><body><a href="downloads/v0.2.6/which_browser-0.2.6+44-linux.deb">download</a></body></html>`))
@@ -307,55 +314,49 @@ func TestWhichBrowser_RegressionHandoff(t *testing.T) {
 	rawVersion := rawVerVal.GetString()
 	assert.Equal(t, "0.2.6+44", rawVersion)
 
-	// 2. Discovered full URL and artifact filename handoff
+	// 2. Discovered full URL
 	urlVal, err := evaluator.Evaluate("get(" + ts.URL + "/which_browser/) | html_links | regex((.*which_browser-.*-linux[.]deb$)) | exactly_one")
 	assert.NoError(t, err)
 	discoveredURL := urlVal.GetString()
 	assert.Equal(t, ts.URL+"/which_browser/downloads/v0.2.6/which_browser-0.2.6+44-linux.deb", discoveredURL)
 
-	artifactVal, err := evaluator.Evaluate("get(" + ts.URL + "/which_browser/) | html_links | regex((.*which_browser-.*-linux[.]deb$)) | url.basename | exactly_one")
+	// 3. Artifact filename extracted using exactly_one before url.basename (since url.basename is scalar-only)
+	artifactVal, err := evaluator.Evaluate("get(" + ts.URL + "/which_browser/) | html_links | regex((.*which_browser-.*-linux[.]deb$)) | exactly_one | url.basename")
 	assert.NoError(t, err)
 	artifactFilename := artifactVal.GetString()
 	assert.Equal(t, "which_browser-0.2.6+44-linux.deb", artifactFilename)
 
-	// 3. Normalized Gentoo version produced via generic pipeline
-	gentooVerVal, err := evaluator.Evaluate("get(" + ts.URL + "/which_browser/) | html_links | regex(which_browser-([^/]+)-linux[.]deb$) | replace('+', '.') | exactly_one")
+	// 4. Normalized Gentoo version using replace('+', '_p') after exactly_one (downstream oracle s/\+/_p/g)
+	gentooVerVal, err := evaluator.Evaluate("get(" + ts.URL + "/which_browser/) | html_links | regex(which_browser-([^/]+)-linux[.]deb$) | exactly_one | replace('+', '_p')")
 	assert.NoError(t, err)
 	gentooVersion := gentooVerVal.GetString()
-	assert.Equal(t, "0.2.6.44", gentooVersion)
+	assert.Equal(t, "0.2.6_p44", gentooVersion)
 
-	// 4. Resulting SRC_URI and package-maintenance handoff:
+	// 5. Resulting ebuild parsing and variable expansion handoff:
 	// Verify that normalized Gentoo version and discovered artifact filename integrate cleanly
-	// with the downstream Gentoo ebuild model used by workflow-builder.
-	ebuildName := fmt.Sprintf("which_browser-%s-r1.ebuild", gentooVersion)
+	// with the downstream Gentoo ebuild model used by workflow-builder (www-client/which-browser-bin/which-browser-bin-0.2.6_p44.ebuild).
+	ebuildName := fmt.Sprintf("which-browser-bin-%s.ebuild", gentooVersion)
+	ebuildContent := fmt.Sprintf(`EAPI=8
+DESCRIPTION="Web browser binary package"
+HOMEPAGE="https://example.com"
+SRC_URI="%s -> ${P}-%s"
+`, discoveredURL, artifactFilename)
+
 	mockFS := fstest.MapFS{
 		ebuildName: &fstest.MapFile{
-			Data: []byte(`
-MY_PV_NO_REV="${PV%%-r*}"
-MY_BASE_PV="${MY_PV_NO_REV%.*}"
-MY_BUILD_SUFFIX="${MY_PV_NO_REV##*.}"
-MY_DEB_ARCHIVE="${PN}-${MY_BASE_PV}+${MY_BUILD_SUFFIX}-linux.deb"
-SRC_URI="` + ts.URL + `/which_browser/downloads/v${MY_BASE_PV}/${MY_DEB_ARCHIVE}"
-`),
+			Data: []byte(ebuildContent),
 		},
 	}
 
 	parsed, err := g2.ParseEbuild(mockFS, ebuildName, g2.ParseFull)
 	assert.NoError(t, err)
-	assert.Equal(t, "0.2.6", parsed.Vars["MY_BASE_PV"])
-	assert.Equal(t, "44", parsed.Vars["MY_BUILD_SUFFIX"])
-	assert.Equal(t, artifactFilename, parsed.Vars["MY_DEB_ARCHIVE"])
+	assert.Equal(t, "which-browser-bin", parsed.Vars["PN"])
+	assert.Equal(t, "0.2.6_p44", parsed.Vars["PV"])
+	assert.Equal(t, "which-browser-bin-0.2.6_p44", parsed.Vars["P"])
 	assert.NotEmpty(t, parsed.SrcUri)
-	assert.Equal(t, artifactFilename, parsed.SrcUri[0].Filename)
+	expectedDistfileName := fmt.Sprintf("which-browser-bin-%s-%s", gentooVersion, artifactFilename)
+	assert.Equal(t, expectedDistfileName, parsed.SrcUri[0].Filename)
 	assert.Equal(t, discoveredURL, parsed.SrcUri[0].URL)
-
-	// 5. Manifest handoff: verify the package maintenance manifest entry matches the discovered artifact
-	manifestEntry := &g2.ManifestEntry{
-		Type:     "DIST",
-		Filename: artifactFilename,
-	}
-	assert.Equal(t, "DIST", manifestEntry.Type)
-	assert.Equal(t, "which_browser-0.2.6+44-linux.deb", manifestEntry.Filename)
 
 	// 6. Generic download verification using pipeline variable substitutions
 	downloadPipeline, err := pipeline.PerformSubstitutions(
@@ -366,6 +367,83 @@ SRC_URI="` + ts.URL + `/which_browser/downloads/v${MY_BASE_PV}/${MY_DEB_ARCHIVE}
 	debVal, err := evaluator.Evaluate(downloadPipeline)
 	assert.NoError(t, err)
 	assert.Equal(t, "binary-deb-content", debVal.GetString())
+
+	// 7. Real manifest handoff using g2.UpsertManifest and round-trip verification
+	manifestDir := t.TempDir()
+	manifestPath := filepath.Join(manifestDir, "Manifest")
+
+	debBytes := []byte(debVal.GetString())
+	hash512 := sha512.Sum512(debBytes)
+	entry := g2.NewManifestEntry(
+		"DIST",
+		parsed.SrcUri[0].Filename,
+		int64(len(debBytes)),
+		g2.Hash{Type: "SHA512", Value: hex.EncodeToString(hash512[:])},
+	)
+
+	err = g2.UpsertManifest(manifestPath, entry)
+	assert.NoError(t, err)
+
+	manifestData, err := os.ReadFile(manifestPath)
+	assert.NoError(t, err)
+	expectedLine := fmt.Sprintf("DIST %s %d SHA512 %s\n", parsed.SrcUri[0].Filename, len(debBytes), hex.EncodeToString(hash512[:]))
+	assert.Equal(t, expectedLine, string(manifestData))
+
+	parsedManifest, err := g2.ParseManifest(manifestPath)
+	assert.NoError(t, err)
+	assert.Len(t, parsedManifest.Entries, 1)
+	assert.Equal(t, parsed.SrcUri[0].Filename, parsedManifest.Entries[0].Filename)
+	assert.Equal(t, int64(len(debBytes)), parsedManifest.Entries[0].Size)
+	assert.Equal(t, "SHA512", parsedManifest.Entries[0].Hashes[0].Type)
+	assert.Equal(t, hex.EncodeToString(hash512[:]), parsedManifest.Entries[0].Hashes[0].Value)
+}
+
+func TestScalarOnlyOperators(t *testing.T) {
+	ts := setupTestServer()
+	defer ts.Close()
+
+	evaluator := pipeline.NewEvaluator(ts.Client())
+
+	t.Run("trim leaves list unchanged", func(t *testing.T) {
+		val, err := evaluator.Evaluate("get(" + ts.URL + "/whitespaced_list) | json(items) | trim")
+		assert.NoError(t, err)
+		assert.True(t, val.IsList())
+		assert.Equal(t, []interface{}{"  apple  ", "  banana  "}, val.List)
+
+		// But when reduced to a scalar, trim strips whitespace
+		scalarVal, err := evaluator.Evaluate("get(" + ts.URL + "/whitespaced_list) | json(items) | first | trim")
+		assert.NoError(t, err)
+		assert.False(t, scalarVal.IsList())
+		assert.Equal(t, "apple", scalarVal.GetString())
+	})
+
+	t.Run("replace leaves list unchanged", func(t *testing.T) {
+		val, err := evaluator.Evaluate("get(" + ts.URL + "/whitespaced_list) | json(items) | replace('apple', 'pear')")
+		assert.NoError(t, err)
+		assert.True(t, val.IsList())
+		assert.Equal(t, []interface{}{"  apple  ", "  banana  "}, val.List)
+
+		// But when reduced to a scalar, replace replaces
+		scalarVal, err := evaluator.Evaluate("get(" + ts.URL + "/whitespaced_list) | json(items) | first | replace('apple', 'pear')")
+		assert.NoError(t, err)
+		assert.False(t, scalarVal.IsList())
+		assert.Equal(t, "  pear  ", scalarVal.GetString())
+	})
+
+	t.Run("url.basename leaves list unchanged", func(t *testing.T) {
+		val, err := evaluator.Evaluate("get(" + ts.URL + "/html) | html_links | url.basename")
+		assert.NoError(t, err)
+		assert.True(t, val.IsList())
+		assert.Equal(t, 2, len(val.List))
+		assert.Equal(t, ts.URL+"/relative.tar.gz", val.List[0])
+		assert.Equal(t, ts.URL+"/other.tar.gz", val.List[1])
+
+		// But when reduced to a scalar, url.basename extracts basename
+		scalarVal, err := evaluator.Evaluate("get(" + ts.URL + "/html) | html_links | first | url.basename")
+		assert.NoError(t, err)
+		assert.False(t, scalarVal.IsList())
+		assert.Equal(t, "relative.tar.gz", scalarVal.GetString())
+	})
 }
 
 func TestCardinality(t *testing.T) {
