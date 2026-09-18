@@ -1,7 +1,6 @@
 package main
 
 import (
-	"crypto/md5"
 	"flag"
 	"fmt"
 	"io/fs"
@@ -63,15 +62,17 @@ func (cfg *MainArgConfig) cmdCache(args []string) error {
 func (cfg *MainArgConfig) cmdCacheVerify(args []string) error {
 	fsFlags := flag.NewFlagSet("verify", flag.ExitOnError)
 	repoDir := fsFlags.String("repo", ".", "Path to the repository root")
+	modeStr := fsFlags.String("mode", "ci", "Execution mode: ci or strict")
 	if err := fsFlags.Parse(args); err != nil {
 		return err
 	}
 
 	cfs := g2.NewOsCacheFS(*repoDir)
-	return doCacheVerify(cfs, ".")
+	policy := g2.NewCachePolicy(g2.CacheMode(*modeStr))
+	return doCacheVerify(cfs, ".", policy)
 }
 
-func doCacheVerify(cfs g2.CacheFS, repoDir string) error {
+func doCacheVerify(cfs g2.CacheFS, repoDir string, policy *g2.CachePolicy) error {
 	layoutConfPath := filepath.ToSlash(filepath.Join(repoDir, "metadata", "layout.conf"))
 	var lc *g2.LayoutConf
 	if f, err := cfs.Open(layoutConfPath); err == nil {
@@ -98,7 +99,13 @@ func doCacheVerify(cfs g2.CacheFS, repoDir string) error {
 
 	hasErrors := false
 
+	eclassResolver, err := g2.BuildEclassResolver(cfs, repoDir, policy)
+	if err != nil {
+		return fmt.Errorf("building eclass resolver: %w", err)
+	}
+
 	for _, format := range cacheFormats {
+
 		if format != "md5-dict" {
 			log.Printf("Warning: Cache format '%s' is not supported. Only md5-dict is supported.", format)
 			hasErrors = true
@@ -127,39 +134,37 @@ func doCacheVerify(cfs g2.CacheFS, repoDir string) error {
 					ident := g2.GetCacheIdentity(repoDir, format, pkg.Category, pkg.Name, ver)
 					validCacheEntries[filepath.Clean(ident.CachePath)] = true
 
+					expectedContentStr, status, err := g2.GetExpectedCacheContent(cfs, ident.EbuildPath, ver.Ebuild, policy, eclassResolver)
+					if err != nil {
+						fmt.Printf("Error generating expected cache content for %s: %v\n", ident.CachePath, err)
+						hasErrors = true
+						continue
+					}
+
+					if status == g2.CacheSkipped {
+						fmt.Printf("Skipped %s cache for %s/%s-%s due to missing context\n", format, ident.Category, ident.Package, ident.PVR)
+						continue
+					}
+
+					if status == g2.CacheError {
+						fmt.Printf("Error resolving context for %s/%s-%s\n", ident.Category, ident.Package, ident.PVR)
+						hasErrors = true
+						continue
+					}
+
 					if _, err := cfs.Stat(ident.CachePath); os.IsNotExist(err) || err != nil {
 						fmt.Printf("Missing %s cache for %s/%s-%s\n", format, ident.Category, ident.Package, ident.PVR)
 						hasErrors = true
 					} else {
-						// verify MD5 match
-						ebuildContent, err := fs.ReadFile(cfs, ident.EbuildPath)
-						if err == nil {
-							expectedMd5 := fmt.Sprintf("%x", md5.Sum(ebuildContent))
-							cacheContent, err := fs.ReadFile(cfs, ident.CachePath)
-							if err == nil {
-								foundMd5 := false
-								for _, line := range strings.Split(string(cacheContent), "\n") {
-									if strings.HasPrefix(line, "_md5_=") {
-										actualMd5 := strings.TrimSpace(strings.TrimPrefix(line, "_md5_="))
-										if actualMd5 != expectedMd5 {
-											fmt.Printf("MD5 mismatch for %s/%s-%s (expected %s, got %s)\n", ident.Category, ident.Package, ident.PVR, expectedMd5, actualMd5)
-											hasErrors = true
-										}
-										foundMd5 = true
-										break
-									}
-								}
-								if !foundMd5 {
-									fmt.Printf("Missing _md5_ entry in cache for %s/%s-%s\n", ident.Category, ident.Package, ident.PVR)
-									hasErrors = true
-								}
-							} else {
-								fmt.Printf("Failed to read cache file %s: %v\n", ident.CachePath, err)
+						cacheContent, err := fs.ReadFile(cfs, ident.CachePath)
+						if err != nil {
+							fmt.Printf("Failed to read cache file %s: %v\n", ident.CachePath, err)
+							hasErrors = true
+						} else {
+							if string(cacheContent) != expectedContentStr {
+								fmt.Printf("Drift detected in cache for %s/%s-%s\n", ident.Category, ident.Package, ident.PVR)
 								hasErrors = true
 							}
-						} else {
-							fmt.Printf("Failed to read ebuild file %s: %v\n", ident.EbuildPath, err)
-							hasErrors = true
 						}
 					}
 				}
@@ -215,13 +220,14 @@ func doCacheVerify(cfs g2.CacheFS, repoDir string) error {
 func (cfg *MainArgConfig) cmdCacheGenerate(args []string) error {
 	fsFlags := flag.NewFlagSet("generate", flag.ExitOnError)
 	repoDir := fsFlags.String("repo", ".", "Path to the repository root")
-	eclasses := fsFlags.Bool("eclasses", false, "Generate eclasses metadata in cache (off by default)")
+	modeStr := fsFlags.String("mode", "ci", "Execution mode: ci or strict")
 	if err := fsFlags.Parse(args); err != nil {
 		return err
 	}
 
 	cfs := g2.NewOsCacheFS(*repoDir)
-	err := g2.GenerateCacheFS(cfs, ".", fsFlags.Args(), *eclasses)
+	policy := g2.NewCachePolicy(g2.CacheMode(*modeStr))
+	err := g2.GenerateCacheFS(cfs, ".", fsFlags.Args(), policy)
 	if err == nil {
 		fmt.Println("Cache generation completed successfully.")
 	}
@@ -409,20 +415,22 @@ func doCacheClean(cfs g2.CacheFS, repoDir string) error {
 func (cfg *MainArgConfig) cmdCacheReconcile(args []string) error {
 	fsFlags := flag.NewFlagSet("reconcile", flag.ExitOnError)
 	repoDir := fsFlags.String("repo", ".", "Path to the repository root")
+	modeStr := fsFlags.String("mode", "ci", "Execution mode: ci or strict")
 	if err := fsFlags.Parse(args); err != nil {
 		return err
 	}
 
 	cfs := g2.NewOsCacheFS(*repoDir)
-	return doCacheReconcile(cfs, ".")
+	policy := g2.NewCachePolicy(g2.CacheMode(*modeStr))
+	return doCacheReconcile(cfs, ".", policy)
 }
 
-func doCacheReconcile(cfs g2.CacheFS, repoDir string) error {
+func doCacheReconcile(cfs g2.CacheFS, repoDir string, policy *g2.CachePolicy) error {
 	log.Printf("Starting cache reconciliation...")
 
 	// 1. generate/update expected cache entries
 	log.Printf("Generating expected cache entries...")
-	if err := g2.GenerateCacheFS(cfs, repoDir, nil, false); err != nil {
+	if err := g2.GenerateCacheFS(cfs, repoDir, nil, policy); err != nil {
 		return fmt.Errorf("failed generating cache: %w", err)
 	}
 
@@ -434,7 +442,7 @@ func doCacheReconcile(cfs g2.CacheFS, repoDir string) error {
 
 	// 4. verify resulting repository state
 	log.Printf("Verifying resulting cache consistency...")
-	if err := doCacheVerify(cfs, repoDir); err != nil {
+	if err := doCacheVerify(cfs, repoDir, policy); err != nil {
 		return fmt.Errorf("cache consistency check failed after reconciliation: %w", err)
 	}
 

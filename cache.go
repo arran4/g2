@@ -64,13 +64,13 @@ func (o *OsCacheFS) Stat(name string) (fs.FileInfo, error) {
 }
 
 // GenerateCache generates the cache for the repository.
-func GenerateCache(repoDir string, targetPkgs []string, genEclasses bool) error {
+func GenerateCache(repoDir string, targetPkgs []string, policy *CachePolicy) error {
 	cfs := NewOsCacheFS(repoDir)
-	return GenerateCacheFS(cfs, ".", targetPkgs, genEclasses)
+	return GenerateCacheFS(cfs, ".", targetPkgs, policy)
 }
 
 // GenerateCacheFS generates the cache for the repository using a custom CacheFS.
-func GenerateCacheFS(cfs CacheFS, repoDir string, targetPkgs []string, genEclasses bool) error {
+func GenerateCacheFS(cfs CacheFS, repoDir string, targetPkgs []string, policy *CachePolicy) error {
 	layoutConfPath := filepath.ToSlash(filepath.Join(repoDir, "metadata", "layout.conf"))
 	var lc *LayoutConf
 	if f, err := cfs.Open(layoutConfPath); err == nil {
@@ -89,7 +89,13 @@ func GenerateCacheFS(cfs CacheFS, repoDir string, targetPkgs []string, genEclass
 		}
 	}
 
+	eclassResolver, err := BuildEclassResolver(cfs, repoDir, policy)
+	if err != nil {
+		return fmt.Errorf("building eclass resolver: %w", err)
+	}
+
 	for _, format := range cacheFormats {
+
 		if format != "md5-dict" {
 			log.Printf("Warning: Cache format '%s' is not supported. Skipping. Only md5-dict is supported.", format)
 			continue
@@ -193,48 +199,16 @@ func GenerateCacheFS(cfs CacheFS, repoDir string, targetPkgs []string, genEclass
 
 					verCachePath := ident.CachePath
 
-					var keys []string
-					for k := range ebuild.Vars {
-						keys = append(keys, k)
+					expectedContentStr, status, err := GetExpectedCacheContent(cfs, ebuildPath, ebuild, policy, eclassResolver)
+					if err != nil {
+						return fmt.Errorf("getting expected cache for %s: %w", ident.CachePath, err)
 					}
-					sort.Strings(keys)
-
-					var expectedContent strings.Builder
-					for _, k := range keys {
-						v := ebuild.Vars[k]
-						if v != "" {
-							if isCacheVariable(k) {
-								fmt.Fprintf(&expectedContent, "%s=%s\n", k, v)
-							}
-						}
-					}
-
-					ebuildContent, err := fs.ReadFile(cfs, filepath.ToSlash(ebuildPath))
-					if err == nil {
-						md5sum := fmt.Sprintf("%x", md5.Sum(ebuildContent))
-						fmt.Fprintf(&expectedContent, "_md5_=%s\n", md5sum)
-					}
-
-					if genEclasses {
-						if inherited, ok := ebuild.Vars["INHERITED"]; ok && inherited != "" {
-							eclasses := strings.Fields(inherited)
-							var eclassParts []string
-							for _, ec := range eclasses {
-								eclassPath := filepath.ToSlash(filepath.Join("eclass", ec+".eclass"))
-								ecContent, err := fs.ReadFile(cfs, eclassPath)
-								if err == nil {
-									ecMd5 := fmt.Sprintf("%x", md5.Sum(ecContent))
-									eclassParts = append(eclassParts, ec, ecMd5)
-								}
-							}
-							if len(eclassParts) > 0 {
-								fmt.Fprintf(&expectedContent, "_eclasses_=%s\n", strings.Join(eclassParts, "\t"))
-							}
-						}
+					if status == CacheSkipped {
+						continue
 					}
 
 					existingContent, err := fs.ReadFile(cfs, verCachePath)
-					if err == nil && string(existingContent) == expectedContent.String() {
+					if err == nil && string(existingContent) == expectedContentStr {
 						continue // Idempotent skip
 					}
 
@@ -242,7 +216,7 @@ func GenerateCacheFS(cfs CacheFS, repoDir string, targetPkgs []string, genEclass
 					if err != nil {
 						return fmt.Errorf("creating cache file %s: %w", verCachePath, err)
 					}
-					if _, err := f.Write([]byte(expectedContent.String())); err != nil {
+					if _, err := f.Write([]byte(expectedContentStr)); err != nil {
 						_ = f.Close()
 						return fmt.Errorf("writing cache file %s: %w", verCachePath, err)
 					}
@@ -353,4 +327,66 @@ func isCacheVariable(key string) bool {
 		"DEFINED_PHASES": true,
 	}
 	return validKeys[key]
+}
+
+// GetExpectedCacheContent returns the expected cache string for an ebuild, or a CacheResultStatus indicating why it couldn't.
+func GetExpectedCacheContent(cfs CacheFS, ebuildPath string, ebuild *Ebuild, policy *CachePolicy, eclassResolver *EclassResolver) (string, CacheResultStatus, error) {
+	var keys []string
+	for k := range ebuild.Vars {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	var expectedContent strings.Builder
+	for _, k := range keys {
+		v := ebuild.Vars[k]
+		if v != "" {
+			if isCacheVariable(k) {
+				fmt.Fprintf(&expectedContent, "%s=%s\n", k, v)
+			}
+		}
+	}
+
+	ebuildContent, err := fs.ReadFile(cfs, filepath.ToSlash(ebuildPath))
+	if err != nil {
+		// ebuild read failure => CacheError and operation failure
+		return "", CacheError, fmt.Errorf("failed to read ebuild file %s: %w", ebuildPath, err)
+	}
+
+	md5sum := fmt.Sprintf("%x", md5.Sum(ebuildContent))
+	fmt.Fprintf(&expectedContent, "_md5_=%s\n", md5sum)
+
+	if inherited, ok := ebuild.Vars["INHERITED"]; ok && inherited != "" {
+		eclasses := strings.Fields(inherited)
+		var eclassParts []string
+		allEclassesResolved := true
+		for _, ec := range eclasses {
+			ecContent, _, err := eclassResolver.Resolve(ec)
+			if err == nil {
+				ecMd5 := fmt.Sprintf("%x", md5.Sum(ecContent))
+				eclassParts = append(eclassParts, ec, ecMd5)
+			} else {
+				if policy.Mode == CacheModeStrict {
+					return "", CacheError, fmt.Errorf("strict mode: required eclass %q could not be resolved: %w", ec, err)
+				} else {
+					// CI mode
+					if eclassResolver.MissingContext {
+						// we genuinely don't have some repos, skip
+						allEclassesResolved = false
+						break
+					} else {
+						// we have all repos, but eclass is missing/unreadable -> error
+						return "", CacheError, fmt.Errorf("failed to read required eclass %q: %w", ec, err)
+					}
+				}
+			}
+		}
+		if allEclassesResolved && len(eclassParts) > 0 {
+			fmt.Fprintf(&expectedContent, "_eclasses_=%s\n", strings.Join(eclassParts, "\t"))
+		} else if !allEclassesResolved && policy.Mode == CacheModeCI {
+			return "", CacheSkipped, nil
+		}
+	}
+
+	return expectedContent.String(), CacheVerified, nil
 }

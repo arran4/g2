@@ -104,7 +104,7 @@ func TestCacheGenerate(t *testing.T) {
 
 			memFS := NewMemCacheFS(inputFS)
 
-			err = GenerateCacheFS(memFS, ".", nil, true)
+			err = GenerateCacheFS(memFS, ".", nil, NewCachePolicy(CacheModeCI))
 			if err != nil {
 				t.Fatalf("run cache generate: %v", err)
 			}
