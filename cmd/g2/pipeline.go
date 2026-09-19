@@ -41,9 +41,9 @@ func runPipeline(args []string, stdout, stderr io.Writer) error {
 	fs.Var(&subs, "s", "Variable substitutions in KEY=VALUE format (can be specified multiple times)")
 
 	fs.Usage = func() {
-		fmt.Fprintf(stderr, "Usage: g2 pipeline [flags] <pipeline_string>\n\n")
-		fmt.Fprintf(stderr, "Evaluates a data extraction pipeline expression.\n\n")
-		fmt.Fprintf(stderr, "Flags:\n")
+		_, _ = fmt.Fprintf(stderr, "Usage: g2 pipeline [flags] <pipeline_string>\n\n")
+		_, _ = fmt.Fprintf(stderr, "Evaluates a data extraction pipeline expression.\n\n")
+		_, _ = fmt.Fprintf(stderr, "Flags:\n")
 		fs.PrintDefaults()
 	}
 
@@ -74,13 +74,13 @@ func runPipeline(args []string, stdout, stderr io.Writer) error {
 		if val.IsList() {
 			for _, item := range val.List {
 				if item != nil {
-					fmt.Fprintln(stdout, item)
+					_, _ = fmt.Fprintln(stdout, item)
 				}
 			}
 		} else {
 			strVal := val.GetString()
 			if strVal != "" {
-				fmt.Fprintln(stdout, strVal)
+				_, _ = fmt.Fprintln(stdout, strVal)
 			}
 		}
 	}
