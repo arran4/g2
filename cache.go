@@ -2,11 +2,13 @@ package g2
 
 import (
 	"crypto/md5"
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
 	"log"
 	"os"
+	"path"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -64,22 +66,32 @@ func (o *OsCacheFS) Stat(name string) (fs.FileInfo, error) {
 }
 
 // GenerateCache generates the cache for the repository.
-func GenerateCache(repoDir string, targetPkgs []string, genEclasses bool) error {
+func GenerateCache(repoDir string, targetPkgs []string, policy *CachePolicy) error {
 	cfs := NewOsCacheFS(repoDir)
-	return GenerateCacheFS(cfs, ".", targetPkgs, genEclasses)
+	return GenerateCacheFS(cfs, ".", targetPkgs, policy)
 }
 
 // GenerateCacheFS generates the cache for the repository using a custom CacheFS.
-func GenerateCacheFS(cfs CacheFS, repoDir string, targetPkgs []string, genEclasses bool) error {
+func GenerateCacheFS(cfs CacheFS, repoDir string, targetPkgs []string, policy *CachePolicy) error {
+	if policy == nil {
+		policy = NewCachePolicy(CacheModeCI)
+	}
+	if err := policy.Validate(); err != nil {
+		return err
+	}
 	layoutConfPath := filepath.ToSlash(filepath.Join(repoDir, "metadata", "layout.conf"))
 	var lc *LayoutConf
 	if f, err := cfs.Open(layoutConfPath); err == nil {
 		lc, err = ParseLayoutConfFromReader(f)
 		if err != nil {
-			log.Printf("Warning: failed to parse layout.conf: %v", err)
-			lc = nil
+			_ = f.Close()
+			return fmt.Errorf("parsing layout.conf %s: %w", layoutConfPath, err)
 		}
-		_ = f.Close()
+		if err := f.Close(); err != nil {
+			return fmt.Errorf("closing layout.conf %s: %w", layoutConfPath, err)
+		}
+	} else if !errors.Is(err, fs.ErrNotExist) {
+		return fmt.Errorf("opening layout.conf %s: %w", layoutConfPath, err)
 	}
 
 	cacheFormats := []string{"md5-dict"} // Default if not found
@@ -89,7 +101,13 @@ func GenerateCacheFS(cfs CacheFS, repoDir string, targetPkgs []string, genEclass
 		}
 	}
 
+	eclassResolver, err := BuildEclassResolver(cfs, repoDir, policy)
+	if err != nil {
+		return fmt.Errorf("building eclass resolver: %w", err)
+	}
+
 	for _, format := range cacheFormats {
+
 		if format != "md5-dict" {
 			log.Printf("Warning: Cache format '%s' is not supported. Skipping. Only md5-dict is supported.", format)
 			continue
@@ -107,16 +125,19 @@ func GenerateCacheFS(cfs CacheFS, repoDir string, targetPkgs []string, genEclass
 					categories = append(categories, cat)
 				}
 			}
-		} else {
+		} else if errors.Is(err, fs.ErrNotExist) {
 			// fallback: scan directory for things that look like categories.
 			entries, err := fs.ReadDir(cfs, repoDir)
-			if err == nil {
-				for _, entry := range entries {
-					if entry.IsDir() && !strings.HasPrefix(entry.Name(), ".") && entry.Name() != "metadata" && entry.Name() != "profiles" && entry.Name() != "eclass" {
-						categories = append(categories, entry.Name())
-					}
+			if err != nil {
+				return fmt.Errorf("reading repository root %s while discovering categories: %w", repoDir, err)
+			}
+			for _, entry := range entries {
+				if entry.IsDir() && !strings.HasPrefix(entry.Name(), ".") && entry.Name() != "metadata" && entry.Name() != "profiles" && entry.Name() != "eclass" {
+					categories = append(categories, entry.Name())
 				}
 			}
+		} else {
+			return fmt.Errorf("reading categories from %s: %w", repoDir, err)
 		}
 
 		// Read packages in each category
@@ -124,7 +145,7 @@ func GenerateCacheFS(cfs CacheFS, repoDir string, targetPkgs []string, genEclass
 			catPath := filepath.Join(repoDir, cat)
 			pkgEntries, err := fs.ReadDir(cfs, filepath.ToSlash(catPath))
 			if err != nil {
-				continue
+				return fmt.Errorf("reading category directory %s: %w", catPath, err)
 			}
 
 			for _, pkgEntry := range pkgEntries {
@@ -153,7 +174,7 @@ func GenerateCacheFS(cfs CacheFS, repoDir string, targetPkgs []string, genEclass
 				pkgPath := filepath.Join(catPath, pkgName)
 				ebuildEntries, err := fs.ReadDir(cfs, filepath.ToSlash(pkgPath))
 				if err != nil {
-					continue
+					return fmt.Errorf("reading package directory %s: %w", pkgPath, err)
 				}
 
 				for _, ebuildEntry := range ebuildEntries {
@@ -167,7 +188,10 @@ func GenerateCacheFS(cfs CacheFS, repoDir string, targetPkgs []string, genEclass
 					// Parse the ebuild
 					ebuild, err := ParseEbuild(cfs, filepath.ToSlash(ebuildPath), ParseFull)
 					if err != nil || ebuild == nil || ebuild.Vars == nil {
-						continue
+						if err != nil {
+							return fmt.Errorf("parsing ebuild %s: %w", ebuildPath, err)
+						}
+						return fmt.Errorf("parsing ebuild %s: no metadata was produced", ebuildPath)
 					}
 
 					// Extract PVR
@@ -193,56 +217,27 @@ func GenerateCacheFS(cfs CacheFS, repoDir string, targetPkgs []string, genEclass
 
 					verCachePath := ident.CachePath
 
-					var keys []string
-					for k := range ebuild.Vars {
-						keys = append(keys, k)
+					expectedContentStr, status, err := GetExpectedCacheContent(cfs, ebuildPath, ebuild, policy, eclassResolver)
+					if err != nil {
+						return fmt.Errorf("getting expected cache for %s: %w", ident.CachePath, err)
 					}
-					sort.Strings(keys)
-
-					var expectedContent strings.Builder
-					for _, k := range keys {
-						v := ebuild.Vars[k]
-						if v != "" {
-							if isCacheVariable(k) {
-								fmt.Fprintf(&expectedContent, "%s=%s\n", k, v)
-							}
-						}
-					}
-
-					ebuildContent, err := fs.ReadFile(cfs, filepath.ToSlash(ebuildPath))
-					if err == nil {
-						md5sum := fmt.Sprintf("%x", md5.Sum(ebuildContent))
-						fmt.Fprintf(&expectedContent, "_md5_=%s\n", md5sum)
-					}
-
-					if genEclasses {
-						if inherited, ok := ebuild.Vars["INHERITED"]; ok && inherited != "" {
-							eclasses := strings.Fields(inherited)
-							var eclassParts []string
-							for _, ec := range eclasses {
-								eclassPath := filepath.ToSlash(filepath.Join("eclass", ec+".eclass"))
-								ecContent, err := fs.ReadFile(cfs, eclassPath)
-								if err == nil {
-									ecMd5 := fmt.Sprintf("%x", md5.Sum(ecContent))
-									eclassParts = append(eclassParts, ec, ecMd5)
-								}
-							}
-							if len(eclassParts) > 0 {
-								fmt.Fprintf(&expectedContent, "_eclasses_=%s\n", strings.Join(eclassParts, "\t"))
-							}
-						}
+					if status == CacheSkipped {
+						return fmt.Errorf("cannot generate authoritative cache for %s: %s", ident.EbuildPath, strings.Join(eclassResolver.MissingMasters(), ", "))
 					}
 
 					existingContent, err := fs.ReadFile(cfs, verCachePath)
-					if err == nil && string(existingContent) == expectedContent.String() {
+					if err == nil && string(existingContent) == expectedContentStr {
 						continue // Idempotent skip
+					}
+					if err != nil && !errors.Is(err, fs.ErrNotExist) {
+						return fmt.Errorf("reading existing cache file %s: %w", verCachePath, err)
 					}
 
 					f, err := cfs.Create(verCachePath)
 					if err != nil {
 						return fmt.Errorf("creating cache file %s: %w", verCachePath, err)
 					}
-					if _, err := f.Write([]byte(expectedContent.String())); err != nil {
+					if _, err := f.Write([]byte(expectedContentStr)); err != nil {
 						_ = f.Close()
 						return fmt.Errorf("writing cache file %s: %w", verCachePath, err)
 					}
@@ -353,4 +348,130 @@ func isCacheVariable(key string) bool {
 		"DEFINED_PHASES": true,
 	}
 	return validKeys[key]
+}
+
+// GetExpectedCacheContent returns the expected cache string for an ebuild, or a CacheResultStatus indicating why it couldn't.
+func GetExpectedCacheContent(cfs CacheFS, ebuildPath string, ebuild *Ebuild, policy *CachePolicy, eclassResolver *EclassResolver) (string, CacheResultStatus, error) {
+	if ebuild == nil || ebuild.Vars == nil {
+		return "", CacheError, fmt.Errorf("ebuild %s has no parsed metadata", ebuildPath)
+	}
+	if ebuild.SrcUriUncertain {
+		return "", CacheError, fmt.Errorf("ebuild %s contains control flow or unresolved values; canonical cache metadata requires Portage evaluation", ebuildPath)
+	}
+	for key := range ebuild.UncertainVars {
+		if isCacheVariable(key) {
+			return "", CacheError, fmt.Errorf("ebuild %s has unresolved %s; canonical cache metadata requires Portage evaluation", ebuildPath, key)
+		}
+	}
+	var keys []string
+	for k := range ebuild.Vars {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	var expectedContent strings.Builder
+	for _, k := range keys {
+		v := ebuild.Vars[k]
+		if v != "" {
+			if isCacheVariable(k) {
+				fmt.Fprintf(&expectedContent, "%s=%s\n", k, v)
+			}
+		}
+	}
+
+	ebuildContent, err := fs.ReadFile(cfs, filepath.ToSlash(ebuildPath))
+	if err != nil {
+		// ebuild read failure => CacheError and operation failure
+		return "", CacheError, fmt.Errorf("failed to read ebuild file %s: %w", ebuildPath, err)
+	}
+
+	md5sum := fmt.Sprintf("%x", md5.Sum(ebuildContent))
+	fmt.Fprintf(&expectedContent, "_md5_=%s\n", md5sum)
+
+	if inherited := ebuild.Vars["INHERITED"]; inherited != "" {
+		eclassParts, err := eclassClosure(eclassResolver, strings.Fields(inherited), map[string]bool{}, map[string]bool{})
+		if err != nil {
+			if policy.Mode == CacheModeCI && len(eclassResolver.MissingMasters()) > 0 && strings.Contains(err.Error(), "unavailable masters") {
+				return "", CacheSkipped, nil
+			}
+			return "", CacheError, fmt.Errorf("resolving required eclass metadata for %s: %w", ebuildPath, err)
+		}
+		fmt.Fprintf(&expectedContent, "_eclasses_=%s\n", strings.Join(eclassParts, "\t"))
+	}
+
+	// Constructing expected data is not verification of an on-disk cache entry.
+	return expectedContent.String(), CacheDrift, nil
+}
+
+// CompareCacheEntry gives verification a structured result. Expected-content
+// construction intentionally never claims CacheVerified; that status is only
+// emitted after the on-disk cache entry has been compared successfully.
+func CompareCacheEntry(cfs CacheFS, cachePath, expected string) CacheResult {
+	content, err := fs.ReadFile(cfs, cachePath)
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return CacheResult{Status: CacheDrift, Path: cachePath, Message: "cache entry is missing"}
+		}
+		return CacheResult{Status: CacheError, Path: cachePath, Message: "reading cache entry", Error: err}
+	}
+	if string(content) != expected {
+		return CacheResult{Status: CacheDrift, Path: cachePath, Message: "cache entry differs from canonical metadata"}
+	}
+	return CacheResult{Status: CacheVerified, Path: cachePath, Message: "cache entry matches canonical metadata"}
+}
+
+// eclassClosure produces the complete, deterministic transitive inheritance
+// closure. Eclass content is hashed exactly as resolved; cycles are harmless
+// because Portage does not need duplicate _eclasses_ records.
+func eclassClosure(resolver *EclassResolver, names []string, visiting, seen map[string]bool) ([]string, error) {
+	parts := make(map[string]string)
+	ordered := make([]string, 0)
+	var visit func(string) error
+	visit = func(name string) error {
+		if seen[name] || visiting[name] {
+			return nil
+		}
+		visiting[name] = true
+		content, repo, err := resolver.resolve(name)
+		if err != nil {
+			return err
+		}
+		parsed, err := ParseEbuild(repo.FS, path.Join("eclass", name+".eclass"), ParseFull)
+		if err != nil {
+			return fmt.Errorf("parsing eclass %q from repository %q: %w", name, repo.Name, err)
+		}
+		if parsed.SrcUriUncertain {
+			return fmt.Errorf("eclass %q from repository %q contains control flow or an unmodelled command; canonical cache metadata requires Portage evaluation", name, repo.Name)
+		}
+		for key := range parsed.UncertainVars {
+			if isCacheVariable(key) {
+				return fmt.Errorf("eclass %q from repository %q has unresolved %s; canonical cache metadata requires Portage evaluation", name, repo.Name, key)
+			}
+		}
+		for key, value := range parsed.Vars {
+			if key != "INHERITED" && value != "" && isCacheVariable(key) {
+				return fmt.Errorf("eclass %q from repository %q contributes %s; canonical cache metadata requires Portage evaluation", name, repo.Name, key)
+			}
+		}
+		for _, child := range strings.Fields(parsed.Vars["INHERITED"]) {
+			if err := visit(child); err != nil {
+				return err
+			}
+		}
+		parts[name] = fmt.Sprintf("%s\t%x", name, md5.Sum(content))
+		ordered = append(ordered, name)
+		visiting[name] = false
+		seen[name] = true
+		return nil
+	}
+	for _, name := range names {
+		if err := visit(name); err != nil {
+			return nil, err
+		}
+	}
+	result := make([]string, 0, len(ordered))
+	for _, name := range ordered {
+		result = append(result, parts[name])
+	}
+	return result, nil
 }

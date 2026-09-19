@@ -347,11 +347,37 @@ g2 cache <subcommand>
 
 **Subcommands:**
 
-* `verify [location]`: Verify cache exists for ebuilds.
-* `generate [target-packages...]`: Generate cache for ebuilds. Optionally specify package atoms to only generate cache for them.
+* `verify`: Verify complete supported `metadata/md5-cache` entries.
+* `generate [target-packages...]`: Generate complete supported cache entries. Optionally specify package atoms to only generate cache for them.
 * `set-method <method>`: Set the cache method in `layout.conf`.
 * `list-methods`: List available cache methods.
 * `clean [location]`: Clean up unused cache entries.
+* `reconcile`: Generate, conservatively clean, then verify cache entries.
+
+`generate`, `verify`, and `reconcile` accept `--mode=ci` (the default) or
+`--mode=strict`, `--repo=PATH`, `--master-repo=name=PATH[,name=PATH]`, and
+`--repos-conf=PATH`. CI mode uses only the repository and master repositories
+supplied through those options. A required eclass that could only be in an
+unavailable declared master is reported as a skipped check by verification;
+ordinary repository read, parse, and eclass-read failures are errors. Supply
+all declared masters to make CI verification complete. Strict mode resolves
+declared masters through the supplied `repos.conf` (or the system Portage
+configuration) and fails if required context cannot be established.
+
+Cache entries contain supported parsed metadata, the ebuild MD5, and the
+transitive `_eclasses_` closure resolved through the repository stack. A
+successful verification has checked every required entry. “Completed with
+explicitly skipped checks” means CI could not establish the named master
+context; it is not full verification. The parser does not execute ebuilds, so
+metadata it cannot reliably derive is treated as an error rather than silently
+accepted as canonical. In particular, eclasses which contribute cache variables
+or contain unresolved cache-variable expressions require Portage evaluation and
+are rejected by this static implementation.
+
+Strict mode currently resolves repository context but does not evaluate an
+active Portage profile or execute ebuild metadata. It fails closed when those
+inputs are needed, rather than presenting static cache reconstruction as a
+complete on-machine verification.
 
 **Example:**
 

@@ -1,7 +1,7 @@
 package main
 
 import (
-	"crypto/md5"
+	"errors"
 	"flag"
 	"fmt"
 	"io/fs"
@@ -63,15 +63,22 @@ func (cfg *MainArgConfig) cmdCache(args []string) error {
 func (cfg *MainArgConfig) cmdCacheVerify(args []string) error {
 	fsFlags := flag.NewFlagSet("verify", flag.ExitOnError)
 	repoDir := fsFlags.String("repo", ".", "Path to the repository root")
+	modeStr := fsFlags.String("mode", "ci", "Execution mode: ci or strict")
+	masters := fsFlags.String("master-repo", "", "Comma-separated master repository mappings: name=path")
+	reposConf := fsFlags.String("repos-conf", "", "Path to Portage repos.conf used to resolve masters")
 	if err := fsFlags.Parse(args); err != nil {
 		return err
 	}
 
 	cfs := g2.NewOsCacheFS(*repoDir)
-	return doCacheVerify(cfs, ".")
+	policy, err := cachePolicy(*modeStr, *masters, *reposConf)
+	if err != nil {
+		return err
+	}
+	return doCacheVerify(cfs, ".", policy)
 }
 
-func doCacheVerify(cfs g2.CacheFS, repoDir string) error {
+func doCacheVerify(cfs g2.CacheFS, repoDir string, policy *g2.CachePolicy) error {
 	layoutConfPath := filepath.ToSlash(filepath.Join(repoDir, "metadata", "layout.conf"))
 	var lc *g2.LayoutConf
 	if f, err := cfs.Open(layoutConfPath); err == nil {
@@ -91,14 +98,21 @@ func doCacheVerify(cfs g2.CacheFS, repoDir string) error {
 		}
 	}
 
-	siteData, err := parseRepo(cfs, repoDir, "Cache Verification", false, nil)
+	ebuilds, err := discoverCacheEbuilds(cfs, repoDir)
 	if err != nil {
-		return fmt.Errorf("parsing repo: %w", err)
+		return fmt.Errorf("discovering cache ebuilds: %w", err)
 	}
 
 	hasErrors := false
+	hasSkipped := false
+
+	eclassResolver, err := g2.BuildEclassResolver(cfs, repoDir, policy)
+	if err != nil {
+		return fmt.Errorf("building eclass resolver: %w", err)
+	}
 
 	for _, format := range cacheFormats {
+
 		if format != "md5-dict" {
 			log.Printf("Warning: Cache format '%s' is not supported. Only md5-dict is supported.", format)
 			hasErrors = true
@@ -121,48 +135,38 @@ func doCacheVerify(cfs g2.CacheFS, repoDir string) error {
 		validCacheEntries := make(map[string]bool)
 
 		// 2. Check for missing entries and MD5 mismatches
-		for _, cat := range siteData.Categories {
-			for _, pkg := range cat.Packages {
-				for _, ver := range pkg.Versions {
-					ident := g2.GetCacheIdentity(repoDir, format, pkg.Category, pkg.Name, ver)
-					validCacheEntries[filepath.Clean(ident.CachePath)] = true
+		for _, ebuild := range ebuilds {
+			ident := g2.GetCacheIdentity(repoDir, format, ebuild.Category, ebuild.Package, ebuild.Version)
+			validCacheEntries[filepath.Clean(ident.CachePath)] = true
 
-					if _, err := cfs.Stat(ident.CachePath); os.IsNotExist(err) || err != nil {
-						fmt.Printf("Missing %s cache for %s/%s-%s\n", format, ident.Category, ident.Package, ident.PVR)
-						hasErrors = true
-					} else {
-						// verify MD5 match
-						ebuildContent, err := fs.ReadFile(cfs, ident.EbuildPath)
-						if err == nil {
-							expectedMd5 := fmt.Sprintf("%x", md5.Sum(ebuildContent))
-							cacheContent, err := fs.ReadFile(cfs, ident.CachePath)
-							if err == nil {
-								foundMd5 := false
-								for _, line := range strings.Split(string(cacheContent), "\n") {
-									if strings.HasPrefix(line, "_md5_=") {
-										actualMd5 := strings.TrimSpace(strings.TrimPrefix(line, "_md5_="))
-										if actualMd5 != expectedMd5 {
-											fmt.Printf("MD5 mismatch for %s/%s-%s (expected %s, got %s)\n", ident.Category, ident.Package, ident.PVR, expectedMd5, actualMd5)
-											hasErrors = true
-										}
-										foundMd5 = true
-										break
-									}
-								}
-								if !foundMd5 {
-									fmt.Printf("Missing _md5_ entry in cache for %s/%s-%s\n", ident.Category, ident.Package, ident.PVR)
-									hasErrors = true
-								}
-							} else {
-								fmt.Printf("Failed to read cache file %s: %v\n", ident.CachePath, err)
-								hasErrors = true
-							}
-						} else {
-							fmt.Printf("Failed to read ebuild file %s: %v\n", ident.EbuildPath, err)
-							hasErrors = true
-						}
-					}
-				}
+			expectedContentStr, status, err := g2.GetExpectedCacheContent(cfs, ident.EbuildPath, ebuild.Version.Ebuild, policy, eclassResolver)
+			if err != nil {
+				fmt.Printf("Error generating expected cache content for %s: %v\n", ident.CachePath, err)
+				hasErrors = true
+				continue
+			}
+
+			if status == g2.CacheSkipped {
+				fmt.Printf("Skipped %s cache for %s/%s-%s: unavailable masters permitted by CI policy: %s\n", format, ident.Category, ident.Package, ident.PVR, strings.Join(eclassResolver.MissingMasters(), ", "))
+				hasSkipped = true
+				continue
+			}
+
+			if status == g2.CacheError {
+				fmt.Printf("Error resolving context for %s/%s-%s\n", ident.Category, ident.Package, ident.PVR)
+				hasErrors = true
+				continue
+			}
+
+			result := g2.CompareCacheEntry(cfs, ident.CachePath, expectedContentStr)
+			switch result.Status {
+			case g2.CacheVerified:
+			case g2.CacheDrift:
+				fmt.Printf("Cache drift for %s/%s-%s: %s\n", ident.Category, ident.Package, ident.PVR, result.Message)
+				hasErrors = true
+			case g2.CacheError:
+				fmt.Printf("Failed to read cache file %s: %v\n", ident.CachePath, result.Error)
+				hasErrors = true
 			}
 		}
 
@@ -208,20 +212,30 @@ func doCacheVerify(cfs g2.CacheFS, repoDir string) error {
 		return fmt.Errorf("cache verification found errors")
 	}
 
-	fmt.Println("Cache verification passed successfully.")
+	if hasSkipped {
+		fmt.Println("Cache verification completed with explicitly skipped checks.")
+	} else {
+		fmt.Println("Cache verification passed successfully.")
+	}
 	return nil
 }
 
 func (cfg *MainArgConfig) cmdCacheGenerate(args []string) error {
 	fsFlags := flag.NewFlagSet("generate", flag.ExitOnError)
 	repoDir := fsFlags.String("repo", ".", "Path to the repository root")
-	eclasses := fsFlags.Bool("eclasses", false, "Generate eclasses metadata in cache (off by default)")
+	modeStr := fsFlags.String("mode", "ci", "Execution mode: ci or strict")
+	masters := fsFlags.String("master-repo", "", "Comma-separated master repository mappings: name=path")
+	reposConf := fsFlags.String("repos-conf", "", "Path to Portage repos.conf used to resolve masters")
 	if err := fsFlags.Parse(args); err != nil {
 		return err
 	}
 
 	cfs := g2.NewOsCacheFS(*repoDir)
-	err := g2.GenerateCacheFS(cfs, ".", fsFlags.Args(), *eclasses)
+	policy, err := cachePolicy(*modeStr, *masters, *reposConf)
+	if err != nil {
+		return err
+	}
+	err = g2.GenerateCacheFS(cfs, ".", fsFlags.Args(), policy)
 	if err == nil {
 		fmt.Println("Cache generation completed successfully.")
 	}
@@ -295,12 +309,16 @@ func doCacheClean(cfs g2.CacheFS, repoDir string) error {
 	layoutConfPath := filepath.ToSlash(filepath.Join(repoDir, "metadata", "layout.conf"))
 	var lc *g2.LayoutConf
 	if f, err := cfs.Open(layoutConfPath); err == nil {
-		_ = f.Close()
-		lc, err = parseLayoutConfFromFS(cfs, layoutConfPath)
+		lc, err = g2.ParseLayoutConfFromReader(f)
+		closeErr := f.Close()
 		if err != nil {
-			log.Printf("Warning: failed to parse layout.conf: %v", err)
-			lc = nil
+			return fmt.Errorf("parsing layout.conf %s: %w", layoutConfPath, err)
 		}
+		if closeErr != nil {
+			return fmt.Errorf("closing layout.conf %s: %w", layoutConfPath, closeErr)
+		}
+	} else if !errors.Is(err, fs.ErrNotExist) {
+		return fmt.Errorf("opening layout.conf %s: %w", layoutConfPath, err)
 	}
 
 	cacheFormats := []string{"md5-dict", "pms"} // check common ones during clean
@@ -310,22 +328,18 @@ func doCacheClean(cfs g2.CacheFS, repoDir string) error {
 		}
 	}
 
-	siteData, err := parseRepo(cfs, repoDir, "Cache Cleaning", false, nil)
+	ebuilds, err := discoverCacheEbuilds(cfs, repoDir)
 	if err != nil {
-		return fmt.Errorf("parsing repo: %w", err)
+		return fmt.Errorf("discovering cache ebuilds: %w", err)
 	}
 
 	// build a set of valid ebuild cache paths
 	validCacheEntries := make(map[string]bool)
 
 	for _, format := range cacheFormats {
-		for _, cat := range siteData.Categories {
-			for _, pkg := range cat.Packages {
-				for _, ver := range pkg.Versions {
-					ident := g2.GetCacheIdentity(repoDir, format, pkg.Category, pkg.Name, ver)
-					validCacheEntries[filepath.Clean(ident.CachePath)] = true
-				}
-			}
+		for _, ebuild := range ebuilds {
+			ident := g2.GetCacheIdentity(repoDir, format, ebuild.Category, ebuild.Package, ebuild.Version)
+			validCacheEntries[filepath.Clean(ident.CachePath)] = true
 		}
 	}
 
@@ -409,20 +423,116 @@ func doCacheClean(cfs g2.CacheFS, repoDir string) error {
 func (cfg *MainArgConfig) cmdCacheReconcile(args []string) error {
 	fsFlags := flag.NewFlagSet("reconcile", flag.ExitOnError)
 	repoDir := fsFlags.String("repo", ".", "Path to the repository root")
+	modeStr := fsFlags.String("mode", "ci", "Execution mode: ci or strict")
+	masters := fsFlags.String("master-repo", "", "Comma-separated master repository mappings: name=path")
+	reposConf := fsFlags.String("repos-conf", "", "Path to Portage repos.conf used to resolve masters")
 	if err := fsFlags.Parse(args); err != nil {
 		return err
 	}
 
 	cfs := g2.NewOsCacheFS(*repoDir)
-	return doCacheReconcile(cfs, ".")
+	policy, err := cachePolicy(*modeStr, *masters, *reposConf)
+	if err != nil {
+		return err
+	}
+	return doCacheReconcile(cfs, ".", policy)
 }
 
-func doCacheReconcile(cfs g2.CacheFS, repoDir string) error {
+func cachePolicy(mode, masters, reposConf string) (*g2.CachePolicy, error) {
+	policy := g2.NewCachePolicy(g2.CacheMode(mode))
+	if err := policy.Validate(); err != nil {
+		return nil, err
+	}
+	policy.ReposConfPath = reposConf
+	if masters == "" {
+		return policy, nil
+	}
+	for _, mapping := range strings.Split(masters, ",") {
+		name, location, ok := strings.Cut(mapping, "=")
+		if !ok || strings.TrimSpace(name) == "" || strings.TrimSpace(location) == "" {
+			return nil, fmt.Errorf("invalid --master-repo mapping %q (want name=path)", mapping)
+		}
+		policy.ExplicitRepos[strings.TrimSpace(name)] = strings.TrimSpace(location)
+	}
+	return policy, nil
+}
+
+type cacheEbuild struct {
+	Category string
+	Package  string
+	Version  g2.VersionData
+}
+
+// discoverCacheEbuilds is deliberately stricter than the site generator's
+// repository parser. Cache verification and cleanup must have a complete
+// inventory before they can claim success or delete an apparent orphan.
+func discoverCacheEbuilds(cfs g2.CacheFS, repoDir string) ([]cacheEbuild, error) {
+	categoryNames := make([]string, 0)
+	categoriesPath := filepath.ToSlash(filepath.Join(repoDir, "profiles", "categories"))
+	contents, err := fs.ReadFile(cfs, categoriesPath)
+	if err == nil {
+		for _, line := range strings.Split(string(contents), "\n") {
+			name := strings.TrimSpace(line)
+			if name != "" && !strings.HasPrefix(name, "#") {
+				categoryNames = append(categoryNames, name)
+			}
+		}
+	} else if os.IsNotExist(err) {
+		entries, rootErr := fs.ReadDir(cfs, repoDir)
+		if rootErr != nil {
+			return nil, fmt.Errorf("reading repository root %s: %w", repoDir, rootErr)
+		}
+		for _, entry := range entries {
+			if entry.IsDir() && !isIgnoredDir(entry.Name()) {
+				categoryNames = append(categoryNames, entry.Name())
+			}
+		}
+	} else {
+		return nil, fmt.Errorf("reading categories file %s: %w", categoriesPath, err)
+	}
+
+	result := make([]cacheEbuild, 0)
+	for _, category := range categoryNames {
+		categoryPath := filepath.ToSlash(filepath.Join(repoDir, category))
+		packages, err := fs.ReadDir(cfs, categoryPath)
+		if err != nil {
+			return nil, fmt.Errorf("reading category directory %s: %w", categoryPath, err)
+		}
+		for _, pkg := range packages {
+			if !pkg.IsDir() || strings.HasPrefix(pkg.Name(), ".") {
+				continue
+			}
+			packagePath := filepath.ToSlash(filepath.Join(categoryPath, pkg.Name()))
+			files, err := fs.ReadDir(cfs, packagePath)
+			if err != nil {
+				return nil, fmt.Errorf("reading package directory %s: %w", packagePath, err)
+			}
+			for _, file := range files {
+				if file.IsDir() || !strings.HasSuffix(file.Name(), ".ebuild") {
+					continue
+				}
+				ebuildPath := filepath.ToSlash(filepath.Join(packagePath, file.Name()))
+				ebuild, err := g2.ParseEbuild(cfs, ebuildPath, g2.ParseFull)
+				if err != nil {
+					return nil, fmt.Errorf("parsing ebuild %s: %w", ebuildPath, err)
+				}
+				pvr := g2.ParseEbuildVariables(file.Name())["PVR"]
+				if pvr == "" {
+					return nil, fmt.Errorf("deriving PVR from ebuild name %s", ebuildPath)
+				}
+				result = append(result, cacheEbuild{Category: category, Package: pkg.Name(), Version: g2.VersionData{Version: ebuild.Vars["PV"], PVR: pvr, Ebuild: ebuild}})
+			}
+		}
+	}
+	return result, nil
+}
+
+func doCacheReconcile(cfs g2.CacheFS, repoDir string, policy *g2.CachePolicy) error {
 	log.Printf("Starting cache reconciliation...")
 
 	// 1. generate/update expected cache entries
 	log.Printf("Generating expected cache entries...")
-	if err := g2.GenerateCacheFS(cfs, repoDir, nil, false); err != nil {
+	if err := g2.GenerateCacheFS(cfs, repoDir, nil, policy); err != nil {
 		return fmt.Errorf("failed generating cache: %w", err)
 	}
 
@@ -434,7 +544,7 @@ func doCacheReconcile(cfs g2.CacheFS, repoDir string) error {
 
 	// 4. verify resulting repository state
 	log.Printf("Verifying resulting cache consistency...")
-	if err := doCacheVerify(cfs, repoDir); err != nil {
+	if err := doCacheVerify(cfs, repoDir, policy); err != nil {
 		return fmt.Errorf("cache consistency check failed after reconciliation: %w", err)
 	}
 

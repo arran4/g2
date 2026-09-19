@@ -49,6 +49,9 @@ type Ebuild struct {
 	RawText         string
 	ParseWarnings   []string
 	SrcUriUncertain bool
+	// UncertainVars records assignments whose value could not be determined by
+	// the static parser. Canonical-metadata consumers must not trust them.
+	UncertainVars map[string]bool
 
 	orderOverride []string
 	EbuildHeader  string
@@ -268,6 +271,12 @@ func ParseEbuild(fsys fs.FS, path string, mode ParsingMode) (*Ebuild, error) {
 
 		if uncertainVars["SRC_URI"] {
 			e.SrcUriUncertain = true
+		}
+		e.UncertainVars = make(map[string]bool, len(uncertainVars))
+		for key, uncertain := range uncertainVars {
+			if uncertain {
+				e.UncertainVars[key] = true
+			}
 		}
 
 		e.Functions = make(map[string]AST)

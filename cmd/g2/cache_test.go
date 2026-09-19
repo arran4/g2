@@ -58,6 +58,30 @@ type SpyCacheFS struct {
 	removesAll int
 }
 
+type failingCacheEbuildFS struct {
+	g2.CacheFS
+	path string
+}
+
+type denyingExistingCacheReadFS struct {
+	*SpyCacheFS
+	path string
+}
+
+func (f *denyingExistingCacheReadFS) Open(name string) (fs.File, error) {
+	if name == f.path {
+		return nil, os.ErrPermission
+	}
+	return f.SpyCacheFS.Open(name)
+}
+
+func (f failingCacheEbuildFS) Open(name string) (fs.File, error) {
+	if name == f.path {
+		return nil, os.ErrPermission
+	}
+	return f.CacheFS.Open(name)
+}
+
 func (s *SpyCacheFS) Create(name string) (io.WriteCloser, error) {
 	s.creates++
 	return s.CacheFS.Create(name)
@@ -95,6 +119,113 @@ func setupTestRepo(t *testing.T) (string, g2.CacheFS) {
 	return dir, g2.NewOsCacheFS(dir)
 }
 
+func TestCachePolicyFlags(t *testing.T) {
+	policy, err := cachePolicy("ci", "master-a=/tmp/master-a,master-b=/tmp/master-b", "/tmp/repos.conf")
+	if err != nil {
+		t.Fatalf("cachePolicy: %v", err)
+	}
+	if policy.Mode != g2.CacheModeCI || policy.ReposConfPath != "/tmp/repos.conf" || policy.ExplicitRepos["master-a"] != "/tmp/master-a" || policy.ExplicitRepos["master-b"] != "/tmp/master-b" {
+		t.Fatalf("policy flags were not propagated: %#v", policy)
+	}
+	if _, err := cachePolicy("invalid", "", ""); err == nil {
+		t.Fatal("invalid cache mode accepted")
+	}
+	if _, err := cachePolicy("ci", "bad-mapping", ""); err == nil {
+		t.Fatal("invalid master mapping accepted")
+	}
+}
+
+func TestCacheDiscoveryFailureFailsVerifyAndPreservesCacheDuringClean(t *testing.T) {
+	dir, base := setupTestRepo(t)
+	policy := g2.NewCachePolicy(g2.CacheModeCI)
+	if err := g2.GenerateCacheFS(base, ".", nil, policy); err != nil {
+		t.Fatalf("generating baseline cache: %v", err)
+	}
+	cachePath := filepath.Join(dir, "metadata", "md5-cache", "sys-apps", "test-1.0")
+	if _, err := os.Stat(cachePath); err != nil {
+		t.Fatalf("baseline cache missing: %v", err)
+	}
+	failing := failingCacheEbuildFS{CacheFS: base, path: "sys-apps/test/test-1.0.ebuild"}
+	if err := doCacheVerify(failing, ".", policy); err == nil {
+		t.Fatal("verification succeeded after ebuild discovery failed")
+	}
+	if err := doCacheClean(failing, "."); err == nil {
+		t.Fatal("cleanup succeeded with an incomplete ebuild inventory")
+	}
+	if _, err := os.Stat(cachePath); err != nil {
+		t.Fatalf("cleanup removed valid cache after discovery failure: %v", err)
+	}
+	if err := doCacheReconcile(failing, ".", policy); err == nil {
+		t.Fatal("reconcile succeeded after ebuild discovery failed")
+	}
+	if _, err := os.Stat(cachePath); err != nil {
+		t.Fatalf("reconcile removed valid cache after discovery failure: %v", err)
+	}
+}
+
+func TestCacheCleanFailsClosedOnLayoutFailure(t *testing.T) {
+	for _, test := range []struct {
+		name        string
+		breakLayout func(t *testing.T, dir string, cfs g2.CacheFS) g2.CacheFS
+	}{
+		{name: "open", breakLayout: func(_ *testing.T, _ string, cfs g2.CacheFS) g2.CacheFS { return &failingOpenFS{CacheFS: cfs} }},
+		{name: "parse", breakLayout: func(t *testing.T, dir string, cfs g2.CacheFS) g2.CacheFS {
+			if err := os.WriteFile(filepath.Join(dir, "metadata", "layout.conf"), []byte("not valid layout syntax\n"), 0644); err != nil {
+				t.Fatal(err)
+			}
+			return cfs
+		}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			dir, cfs := setupTestRepo(t)
+			if err := g2.GenerateCacheFS(cfs, ".", nil, g2.NewCachePolicy(g2.CacheModeCI)); err != nil {
+				t.Fatal(err)
+			}
+			cachePath := filepath.Join(dir, "metadata", "md5-cache", "sys-apps", "test-1.0")
+			if err := doCacheClean(test.breakLayout(t, dir, cfs), "."); err == nil {
+				t.Fatal("cleanup proceeded after layout failure")
+			}
+			if _, err := os.Stat(cachePath); err != nil {
+				t.Fatalf("layout failure removed valid cache entry: %v", err)
+			}
+		})
+	}
+}
+
+func TestCacheReadFailureDoesNotOverwriteOrReconcile(t *testing.T) {
+	dir, base := setupTestRepo(t)
+	policy := g2.NewCachePolicy(g2.CacheModeCI)
+	if err := g2.GenerateCacheFS(base, ".", nil, policy); err != nil {
+		t.Fatal(err)
+	}
+	cachePath := filepath.Join(dir, "metadata", "md5-cache", "sys-apps", "test-1.0")
+	before, err := os.ReadFile(cachePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	spy := &SpyCacheFS{CacheFS: base}
+	failing := &denyingExistingCacheReadFS{SpyCacheFS: spy, path: "metadata/md5-cache/sys-apps/test-1.0"}
+	if err := g2.GenerateCacheFS(failing, ".", nil, policy); err == nil {
+		t.Fatal("generation overwrote unreadable cache entry")
+	}
+	if spy.creates != 0 || spy.removes != 0 || spy.removesAll != 0 {
+		t.Fatalf("generation mutated unreadable cache entry: %+v", spy)
+	}
+	if err := doCacheReconcile(failing, ".", policy); err == nil {
+		t.Fatal("reconcile proceeded after unreadable cache entry")
+	}
+	if spy.creates != 0 || spy.removes != 0 || spy.removesAll != 0 {
+		t.Fatalf("reconcile mutated unreadable cache entry: %+v", spy)
+	}
+	after, err := os.ReadFile(cachePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(after) != string(before) {
+		t.Fatal("unreadable cache entry was overwritten")
+	}
+}
+
 func TestDoCacheReconcile(t *testing.T) {
 	dir, baseCfs := setupTestRepo(t)
 	cfs := &SpyCacheFS{CacheFS: baseCfs}
@@ -118,7 +249,7 @@ func TestDoCacheReconcile(t *testing.T) {
 	}
 
 	// Run reconcile
-	err := doCacheReconcile(cfs, ".")
+	err := doCacheReconcile(cfs, ".", g2.NewCachePolicy(g2.CacheModeCI))
 	if err != nil {
 		t.Fatalf("Expected reconcile to succeed, got %v", err)
 	}
@@ -146,7 +277,7 @@ func TestDoCacheReconcile(t *testing.T) {
 	cfs.removes = 0
 	cfs.removesAll = 0
 
-	err = doCacheReconcile(cfs, ".")
+	err = doCacheReconcile(cfs, ".", g2.NewCachePolicy(g2.CacheModeCI))
 	if err != nil {
 		t.Fatalf("Expected second reconcile to succeed idempotently, got %v", err)
 	}
@@ -163,18 +294,18 @@ func TestDoCacheVerify(t *testing.T) {
 	dir, cfs := setupTestRepo(t)
 
 	// Verify should fail initially (missing cache)
-	err := doCacheVerify(cfs, ".")
+	err := doCacheVerify(cfs, ".", g2.NewCachePolicy(g2.CacheModeCI))
 	if err == nil {
 		t.Errorf("Expected verify to fail due to missing cache")
 	}
 
 	// Generate cache correctly
-	if err := g2.GenerateCacheFS(cfs, ".", nil, false); err != nil {
+	if err := g2.GenerateCacheFS(cfs, ".", nil, g2.NewCachePolicy(g2.CacheModeCI)); err != nil {
 		t.Fatalf("GenerateCacheFS failed: %v", err)
 	}
 
 	// Verify should succeed now
-	err = doCacheVerify(cfs, ".")
+	err = doCacheVerify(cfs, ".", g2.NewCachePolicy(g2.CacheModeCI))
 	if err != nil {
 		t.Errorf("Expected verify to succeed, got %v", err)
 	}
@@ -190,13 +321,13 @@ func TestDoCacheVerify(t *testing.T) {
 		t.Fatalf("WriteFile failed: %v", err)
 	}
 
-	err = doCacheVerify(cfs, ".")
+	err = doCacheVerify(cfs, ".", g2.NewCachePolicy(g2.CacheModeCI))
 	if err == nil {
 		t.Errorf("Expected verify to fail due to md5 mismatch")
 	}
 
 	// Reset cache
-	if err := g2.GenerateCacheFS(cfs, ".", nil, false); err != nil {
+	if err := g2.GenerateCacheFS(cfs, ".", nil, g2.NewCachePolicy(g2.CacheModeCI)); err != nil {
 		t.Fatalf("GenerateCacheFS failed: %v", err)
 	}
 
@@ -206,7 +337,7 @@ func TestDoCacheVerify(t *testing.T) {
 	}
 
 	snapBefore := snapshotDir(t, dir)
-	err = doCacheVerify(cfs, ".")
+	err = doCacheVerify(cfs, ".", g2.NewCachePolicy(g2.CacheModeCI))
 	if err == nil {
 		t.Errorf("Expected verify to fail due to orphan entry")
 	}
@@ -221,7 +352,7 @@ func TestDoCacheVerify(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(dir, "metadata", "md5-dict"), 0755); err != nil {
 		t.Fatalf("MkdirAll failed: %v", err)
 	}
-	err = doCacheVerify(cfs, ".")
+	err = doCacheVerify(cfs, ".", g2.NewCachePolicy(g2.CacheModeCI))
 	if err == nil {
 		t.Errorf("Expected verify to fail due to legacy directory")
 	}
@@ -243,7 +374,7 @@ func TestCacheUnknownFormat(t *testing.T) {
 	}
 
 	// Generate should skip invalid-format
-	if err := g2.GenerateCacheFS(cfs, ".", nil, false); err != nil {
+	if err := g2.GenerateCacheFS(cfs, ".", nil, g2.NewCachePolicy(g2.CacheModeCI)); err != nil {
 		t.Fatalf("GenerateCacheFS failed: %v", err)
 	}
 	if _, err := os.Stat(filepath.Join(dir, "metadata", "invalid-format")); !os.IsNotExist(err) {
@@ -258,7 +389,7 @@ func TestCacheVerifyLayoutError(t *testing.T) {
 		t.Fatalf("WriteFile failed: %v", err)
 	}
 
-	err := doCacheVerify(cfs, ".")
+	err := doCacheVerify(cfs, ".", g2.NewCachePolicy(g2.CacheModeCI))
 	if err == nil {
 		t.Fatalf("Expected verify to fail when layout.conf is unparseable")
 	}
@@ -282,7 +413,7 @@ func TestCacheVerifyLayoutOpenError(t *testing.T) {
 	_, cfs := setupTestRepo(t)
 
 	errFS := &failingOpenFS{CacheFS: cfs}
-	err := doCacheVerify(errFS, ".")
+	err := doCacheVerify(errFS, ".", g2.NewCachePolicy(g2.CacheModeCI))
 	if err == nil {
 		t.Fatalf("Expected verify to fail when layout.conf cannot be opened")
 	}
@@ -332,12 +463,12 @@ func TestCacheRevisionedEbuilds(t *testing.T) {
 	cfs := g2.NewOsCacheFS(dir)
 
 	// Verify should fail before generation
-	if err := doCacheVerify(cfs, "."); err == nil {
+	if err := doCacheVerify(cfs, ".", g2.NewCachePolicy(g2.CacheModeCI)); err == nil {
 		t.Fatalf("Expected verify to fail prior to cache generation")
 	}
 
 	// Generate cache
-	if err := g2.GenerateCacheFS(cfs, ".", nil, false); err != nil {
+	if err := g2.GenerateCacheFS(cfs, ".", nil, g2.NewCachePolicy(g2.CacheModeCI)); err != nil {
 		t.Fatalf("GenerateCacheFS failed: %v", err)
 	}
 
@@ -366,7 +497,7 @@ func TestCacheRevisionedEbuilds(t *testing.T) {
 	}
 
 	// Verification should succeed cleanly
-	if err := doCacheVerify(cfs, "."); err != nil {
+	if err := doCacheVerify(cfs, ".", g2.NewCachePolicy(g2.CacheModeCI)); err != nil {
 		t.Fatalf("Expected doCacheVerify to succeed cleanly, got: %v", err)
 	}
 
@@ -374,7 +505,7 @@ func TestCacheRevisionedEbuilds(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "sys-apps", "test", "test-1.2.3-r1.ebuild"), []byte("DESCRIPTION=\"Mutated content\"\nSLOT=\"0\"\n"), 0644); err != nil {
 		t.Fatalf("WriteFile failed: %v", err)
 	}
-	if err := doCacheVerify(cfs, "."); err == nil {
+	if err := doCacheVerify(cfs, ".", g2.NewCachePolicy(g2.CacheModeCI)); err == nil {
 		t.Fatalf("Expected doCacheVerify to fail after mutating revisioned ebuild")
 	}
 }
@@ -467,7 +598,7 @@ func TestCacheReconcileRevisionedIdempotency(t *testing.T) {
 	spy := &SpyCacheFS{CacheFS: baseCfs}
 
 	// First reconcile
-	if err := doCacheReconcile(spy, "."); err != nil {
+	if err := doCacheReconcile(spy, ".", g2.NewCachePolicy(g2.CacheModeCI)); err != nil {
 		t.Fatalf("First reconcile failed: %v", err)
 	}
 
@@ -491,7 +622,7 @@ func TestCacheReconcileRevisionedIdempotency(t *testing.T) {
 	spy.removes = 0
 	spy.removesAll = 0
 
-	if err := doCacheReconcile(spy, "."); err != nil {
+	if err := doCacheReconcile(spy, ".", g2.NewCachePolicy(g2.CacheModeCI)); err != nil {
 		t.Fatalf("Second reconcile failed: %v", err)
 	}
 
@@ -500,5 +631,114 @@ func TestCacheReconcileRevisionedIdempotency(t *testing.T) {
 
 	if spy.creates > 0 || spy.removes > 0 || spy.removesAll > 0 {
 		t.Fatalf("Expected 0 mutations on second reconcile run, got %d creates, %d removes, %d removesAll", spy.creates, spy.removes, spy.removesAll)
+	}
+}
+
+func TestDoCacheReconcile_EclassesIdempotency(t *testing.T) {
+	dir := t.TempDir()
+	masterDir := t.TempDir()
+
+	// 1. Setup repository
+	if err := os.MkdirAll(filepath.Join(dir, "metadata"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "metadata", "layout.conf"), []byte("cache-formats = md5-dict\nmasters = gentoo\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := os.MkdirAll(filepath.Join(dir, "eclass"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "eclass", "test.eclass"), []byte("inherit second\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(masterDir, "eclass"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(masterDir, "eclass", "second.eclass"), []byte("# master eclass\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := os.MkdirAll(filepath.Join(dir, "sys-apps", "test"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "sys-apps", "test", "test-1.0.ebuild"), []byte("DESCRIPTION=\"Test\"\nINHERITED=\"test\"\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	baseCfs := g2.NewOsCacheFS(dir)
+	spy := &SpyCacheFS{CacheFS: baseCfs}
+
+	policy := g2.NewCachePolicy(g2.CacheModeCI)
+	policy.ExplicitRepos["gentoo"] = masterDir
+
+	// First reconcile
+	if err := doCacheReconcile(spy, ".", policy); err != nil {
+		t.Fatalf("First reconcile failed: %v", err)
+	}
+
+	// Verify generated is present and contains _eclasses_
+	cachePath := filepath.Join(dir, "metadata", "md5-cache", "sys-apps", "test-1.0")
+	cacheBytes, err := os.ReadFile(cachePath)
+	if err != nil {
+		t.Fatalf("Cache not created")
+	}
+	cacheContent := string(cacheBytes)
+	if !strings.Contains(cacheContent, "_eclasses_=") {
+		t.Fatalf("Cache should contain _eclasses_: %s", cacheContent)
+	}
+
+	// Snapshot
+	snap1 := snapshotDir(t, dir)
+	spy.creates = 0
+	spy.removes = 0
+	spy.removesAll = 0
+
+	// Second reconcile
+	if err := doCacheReconcile(spy, ".", policy); err != nil {
+		t.Fatalf("Second reconcile failed: %v", err)
+	}
+
+	snap2 := snapshotDir(t, dir)
+	assertSnapshotEqual(t, snap1, snap2)
+
+	// ZERO mutations
+	if spy.creates > 0 || spy.removes > 0 || spy.removesAll > 0 {
+		t.Fatalf("Expected 0 mutations on idempotent run, got %d creates, %d removes, %d removesAll", spy.creates, spy.removes, spy.removesAll)
+	}
+
+	// Modify a master eclass and ensure reconciliation repairs the actual cache.
+	if err := os.WriteFile(filepath.Join(masterDir, "eclass", "second.eclass"), []byte("# master eclass MODIFIED\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	spy.creates = 0
+	spy.removes = 0
+	spy.removesAll = 0
+
+	// Third reconcile - should detect eclass change and rewrite
+	if err := doCacheReconcile(spy, ".", policy); err != nil {
+		t.Fatalf("Third reconcile failed: %v", err)
+	}
+
+	if spy.creates == 0 {
+		t.Fatalf("Expected cache to be recreated after eclass modification")
+	}
+	updated, err := os.ReadFile(cachePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(updated) == cacheContent {
+		t.Fatal("master eclass change did not update _eclasses_ cache metadata")
+	}
+
+	spy.creates = 0
+	spy.removes = 0
+	spy.removesAll = 0
+	if err := doCacheReconcile(spy, ".", policy); err != nil {
+		t.Fatalf("Fourth reconcile failed: %v", err)
+	}
+	if spy.creates > 0 || spy.removes > 0 || spy.removesAll > 0 {
+		t.Fatalf("expected no mutations after master eclass repair, got %d creates, %d removes, %d removesAll", spy.creates, spy.removes, spy.removesAll)
 	}
 }
