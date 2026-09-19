@@ -63,12 +63,17 @@ func (cfg *MainArgConfig) cmdCacheVerify(args []string) error {
 	fsFlags := flag.NewFlagSet("verify", flag.ExitOnError)
 	repoDir := fsFlags.String("repo", ".", "Path to the repository root")
 	modeStr := fsFlags.String("mode", "ci", "Execution mode: ci or strict")
+	masters := fsFlags.String("master-repo", "", "Comma-separated master repository mappings: name=path")
+	reposConf := fsFlags.String("repos-conf", "", "Path to Portage repos.conf used to resolve masters")
 	if err := fsFlags.Parse(args); err != nil {
 		return err
 	}
 
 	cfs := g2.NewOsCacheFS(*repoDir)
-	policy := g2.NewCachePolicy(g2.CacheMode(*modeStr))
+	policy, err := cachePolicy(*modeStr, *masters, *reposConf)
+	if err != nil {
+		return err
+	}
 	return doCacheVerify(cfs, ".", policy)
 }
 
@@ -98,6 +103,7 @@ func doCacheVerify(cfs g2.CacheFS, repoDir string, policy *g2.CachePolicy) error
 	}
 
 	hasErrors := false
+	hasSkipped := false
 
 	eclassResolver, err := g2.BuildEclassResolver(cfs, repoDir, policy)
 	if err != nil {
@@ -142,7 +148,8 @@ func doCacheVerify(cfs g2.CacheFS, repoDir string, policy *g2.CachePolicy) error
 					}
 
 					if status == g2.CacheSkipped {
-						fmt.Printf("Skipped %s cache for %s/%s-%s due to missing context\n", format, ident.Category, ident.Package, ident.PVR)
+						fmt.Printf("Skipped %s cache for %s/%s-%s: unavailable masters permitted by CI policy: %s\n", format, ident.Category, ident.Package, ident.PVR, strings.Join(eclassResolver.MissingMasters(), ", "))
+						hasSkipped = true
 						continue
 					}
 
@@ -152,20 +159,15 @@ func doCacheVerify(cfs g2.CacheFS, repoDir string, policy *g2.CachePolicy) error
 						continue
 					}
 
-					if _, err := cfs.Stat(ident.CachePath); os.IsNotExist(err) || err != nil {
-						fmt.Printf("Missing %s cache for %s/%s-%s\n", format, ident.Category, ident.Package, ident.PVR)
+					result := g2.CompareCacheEntry(cfs, ident.CachePath, expectedContentStr)
+					switch result.Status {
+					case g2.CacheVerified:
+					case g2.CacheDrift:
+						fmt.Printf("Cache drift for %s/%s-%s: %s\n", ident.Category, ident.Package, ident.PVR, result.Message)
 						hasErrors = true
-					} else {
-						cacheContent, err := fs.ReadFile(cfs, ident.CachePath)
-						if err != nil {
-							fmt.Printf("Failed to read cache file %s: %v\n", ident.CachePath, err)
-							hasErrors = true
-						} else {
-							if string(cacheContent) != expectedContentStr {
-								fmt.Printf("Drift detected in cache for %s/%s-%s\n", ident.Category, ident.Package, ident.PVR)
-								hasErrors = true
-							}
-						}
+					case g2.CacheError:
+						fmt.Printf("Failed to read cache file %s: %v\n", ident.CachePath, result.Error)
+						hasErrors = true
 					}
 				}
 			}
@@ -213,7 +215,11 @@ func doCacheVerify(cfs g2.CacheFS, repoDir string, policy *g2.CachePolicy) error
 		return fmt.Errorf("cache verification found errors")
 	}
 
-	fmt.Println("Cache verification passed successfully.")
+	if hasSkipped {
+		fmt.Println("Cache verification completed with explicitly skipped checks.")
+	} else {
+		fmt.Println("Cache verification passed successfully.")
+	}
 	return nil
 }
 
@@ -221,13 +227,18 @@ func (cfg *MainArgConfig) cmdCacheGenerate(args []string) error {
 	fsFlags := flag.NewFlagSet("generate", flag.ExitOnError)
 	repoDir := fsFlags.String("repo", ".", "Path to the repository root")
 	modeStr := fsFlags.String("mode", "ci", "Execution mode: ci or strict")
+	masters := fsFlags.String("master-repo", "", "Comma-separated master repository mappings: name=path")
+	reposConf := fsFlags.String("repos-conf", "", "Path to Portage repos.conf used to resolve masters")
 	if err := fsFlags.Parse(args); err != nil {
 		return err
 	}
 
 	cfs := g2.NewOsCacheFS(*repoDir)
-	policy := g2.NewCachePolicy(g2.CacheMode(*modeStr))
-	err := g2.GenerateCacheFS(cfs, ".", fsFlags.Args(), policy)
+	policy, err := cachePolicy(*modeStr, *masters, *reposConf)
+	if err != nil {
+		return err
+	}
+	err = g2.GenerateCacheFS(cfs, ".", fsFlags.Args(), policy)
 	if err == nil {
 		fmt.Println("Cache generation completed successfully.")
 	}
@@ -416,13 +427,37 @@ func (cfg *MainArgConfig) cmdCacheReconcile(args []string) error {
 	fsFlags := flag.NewFlagSet("reconcile", flag.ExitOnError)
 	repoDir := fsFlags.String("repo", ".", "Path to the repository root")
 	modeStr := fsFlags.String("mode", "ci", "Execution mode: ci or strict")
+	masters := fsFlags.String("master-repo", "", "Comma-separated master repository mappings: name=path")
+	reposConf := fsFlags.String("repos-conf", "", "Path to Portage repos.conf used to resolve masters")
 	if err := fsFlags.Parse(args); err != nil {
 		return err
 	}
 
 	cfs := g2.NewOsCacheFS(*repoDir)
-	policy := g2.NewCachePolicy(g2.CacheMode(*modeStr))
+	policy, err := cachePolicy(*modeStr, *masters, *reposConf)
+	if err != nil {
+		return err
+	}
 	return doCacheReconcile(cfs, ".", policy)
+}
+
+func cachePolicy(mode, masters, reposConf string) (*g2.CachePolicy, error) {
+	policy := g2.NewCachePolicy(g2.CacheMode(mode))
+	if err := policy.Validate(); err != nil {
+		return nil, err
+	}
+	policy.ReposConfPath = reposConf
+	if masters == "" {
+		return policy, nil
+	}
+	for _, mapping := range strings.Split(masters, ",") {
+		name, location, ok := strings.Cut(mapping, "=")
+		if !ok || strings.TrimSpace(name) == "" || strings.TrimSpace(location) == "" {
+			return nil, fmt.Errorf("invalid --master-repo mapping %q (want name=path)", mapping)
+		}
+		policy.ExplicitRepos[strings.TrimSpace(name)] = strings.TrimSpace(location)
+	}
+	return policy, nil
 }
 
 func doCacheReconcile(cfs g2.CacheFS, repoDir string, policy *g2.CachePolicy) error {

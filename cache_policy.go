@@ -1,5 +1,7 @@
 package g2
 
+import "fmt"
+
 type CacheMode string
 
 const (
@@ -55,4 +57,15 @@ func NewCachePolicy(mode CacheMode) *CachePolicy {
 		Mode:          mode,
 		ExplicitRepos: make(map[string]string),
 	}
+}
+
+// Validate rejects modes that would otherwise accidentally get CI semantics.
+func (p *CachePolicy) Validate() error {
+	if p == nil {
+		return nil
+	}
+	if p.Mode != CacheModeCI && p.Mode != CacheModeStrict {
+		return fmt.Errorf("invalid cache mode %q (want ci or strict)", p.Mode)
+	}
+	return nil
 }

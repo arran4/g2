@@ -1,10 +1,13 @@
 package g2
 
 import (
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
+	"path"
 	"path/filepath"
+	"strings"
 )
 
 // MasterRepo represents a repository and its filesystem for eclass resolution.
@@ -17,7 +20,7 @@ type MasterRepo struct {
 // EclassResolver resolves eclasses across the current repository and its masters.
 type EclassResolver struct {
 	repos          []MasterRepo
-	MissingContext bool // True if one or more masters could not be resolved in CI mode
+	missingMasters []string
 }
 
 // NewEclassResolver initializes a resolver using the provided repos list.
@@ -26,37 +29,83 @@ func NewEclassResolver(repos []MasterRepo) *EclassResolver {
 	return &EclassResolver{repos: repos}
 }
 
+// MissingMasters reports the exact CI capabilities that are unavailable.
+func (r *EclassResolver) MissingMasters() []string {
+	return append([]string(nil), r.missingMasters...)
+}
+
 // Resolve searches for the eclass in the configured repositories.
 // Returns the file content, the repo name it was found in, and an error if not found.
 func (r *EclassResolver) Resolve(eclassName string) ([]byte, string, error) {
-	eclassFile := filepath.ToSlash(filepath.Join("eclass", eclassName+".eclass"))
+	content, repo, err := r.resolve(eclassName)
+	if err != nil {
+		return nil, "", err
+	}
+	return content, repo.Name, nil
+}
+
+func (r *EclassResolver) resolve(eclassName string) ([]byte, MasterRepo, error) {
+	if eclassName == "" || strings.Contains(eclassName, "/") || eclassName == "." || eclassName == ".." {
+		return nil, MasterRepo{}, fmt.Errorf("invalid eclass name %q", eclassName)
+	}
+	eclassFile := path.Join("eclass", eclassName+".eclass")
 	for _, repo := range r.repos {
 		content, err := fs.ReadFile(repo.FS, eclassFile)
 		if err == nil {
-			return content, repo.Name, nil
+			return content, repo, nil
+		}
+		if !errors.Is(err, fs.ErrNotExist) {
+			return nil, MasterRepo{}, fmt.Errorf("reading eclass %q from repository %q (%s): %w", eclassName, repo.Name, repo.Path, err)
 		}
 	}
-	return nil, "", fmt.Errorf("eclass %s not found in any repository", eclassName)
+	if len(r.missingMasters) > 0 {
+		return nil, MasterRepo{}, fmt.Errorf("eclass %q was not found in available repositories; unavailable masters: %s", eclassName, strings.Join(r.missingMasters, ", "))
+	}
+	names := make([]string, 0, len(r.repos))
+	for _, repo := range r.repos {
+		names = append(names, repo.Name)
+	}
+	return nil, MasterRepo{}, fmt.Errorf("eclass %q was not found in repository search path %s", eclassName, strings.Join(names, ", "))
 }
 
 // BuildEclassResolver constructs an EclassResolver from the given repository directory and CachePolicy.
 func BuildEclassResolver(cfs CacheFS, repoDir string, policy *CachePolicy) (*EclassResolver, error) {
+	if policy == nil {
+		policy = NewCachePolicy(CacheModeCI)
+	}
+	if err := policy.Validate(); err != nil {
+		return nil, err
+	}
+	if filepath.IsAbs(repoDir) {
+		return nil, fmt.Errorf("repository directory must be relative to CacheFS root: %q", repoDir)
+	}
+	root := filepath.ToSlash(filepath.Clean(repoDir))
+	primaryFS, err := fs.Sub(cfs, root)
+	if err != nil {
+		return nil, fmt.Errorf("opening primary repository %q: %w", repoDir, err)
+	}
 	resolver := &EclassResolver{}
 
 	// Primary repo always comes first
 	resolver.repos = append(resolver.repos, MasterRepo{
 		Name: "primary",
-		Path: repoDir,
-		FS:   cfs,
+		Path: root,
+		FS:   primaryFS,
 	})
 
 	var lc *LayoutConf
-	if f, err := cfs.Open("metadata/layout.conf"); err == nil {
-		lc, _ = ParseLayoutConfFromReader(f)
-		_ = f.Close()
-	} else if f, err := os.Open(filepath.ToSlash(filepath.Join(repoDir, "metadata", "layout.conf"))); err == nil {
-		lc, _ = ParseLayoutConfFromReader(f)
-		_ = f.Close()
+	if f, err := primaryFS.Open("metadata/layout.conf"); err == nil {
+		var parseErr error
+		lc, parseErr = ParseLayoutConfFromReader(f)
+		closeErr := f.Close()
+		if parseErr != nil {
+			return nil, fmt.Errorf("parsing layout.conf for repository %q: %w", root, parseErr)
+		}
+		if closeErr != nil {
+			return nil, fmt.Errorf("closing layout.conf for repository %q: %w", root, closeErr)
+		}
+	} else if !errors.Is(err, fs.ErrNotExist) {
+		return nil, fmt.Errorf("opening layout.conf for repository %q: %w", root, err)
 	}
 
 	if lc != nil {
@@ -99,9 +148,8 @@ func BuildEclassResolver(cfs CacheFS, repoDir string, policy *CachePolicy) (*Ecl
 			if !resolved {
 				if policy.Mode == CacheModeStrict {
 					return nil, fmt.Errorf("strict mode: required master repository %q could not be resolved", masterName)
-				} else {
-					resolver.MissingContext = true
 				}
+				resolver.missingMasters = append(resolver.missingMasters, masterName)
 			}
 		}
 	}

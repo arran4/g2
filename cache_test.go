@@ -2,11 +2,14 @@ package g2
 
 import (
 	"bytes"
+	"crypto/md5"
 	"embed"
+	"fmt"
 	"io"
 	"io/fs"
 	"os"
 	"path"
+	"path/filepath"
 	"sort"
 	"strings"
 	"testing"
@@ -207,5 +210,68 @@ func TestGetCacheIdentity(t *testing.T) {
 	}
 	if ident3.EbuildPath != "dev-libs/unrevised/unrevised-2.5.ebuild" {
 		t.Errorf("ident3.EbuildPath = %s, want dev-libs/unrevised/unrevised-2.5.ebuild", ident3.EbuildPath)
+	}
+}
+
+func TestGenerateCacheTransitiveEclassesFromConfiguredMaster(t *testing.T) {
+	root := t.TempDir()
+	repo := filepath.Join(root, "nested", "overlay")
+	master := filepath.Join(root, "master")
+	write := func(name, content string) {
+		t.Helper()
+		if err := os.MkdirAll(filepath.Dir(name), 0755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(name, []byte(content), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write(filepath.Join(repo, "metadata", "layout.conf"), "cache-formats = md5-dict\nmasters = master\n")
+	write(filepath.Join(repo, "sys-apps", "demo", "demo-1.ebuild"), "DESCRIPTION=\"demo\"\ninherit first\n")
+	write(filepath.Join(repo, "eclass", "first.eclass"), "inherit second\n")
+	write(filepath.Join(master, "eclass", "second.eclass"), "# master eclass\n")
+
+	policy := NewCachePolicy(CacheModeCI)
+	policy.ExplicitRepos["master"] = master
+	cfs := NewOsCacheFS(root)
+	if err := GenerateCacheFS(cfs, "nested/overlay", nil, policy); err != nil {
+		t.Fatalf("GenerateCacheFS: %v", err)
+	}
+	cache, err := os.ReadFile(filepath.Join(repo, "metadata", "md5-cache", "sys-apps", "demo-1"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	first, err := os.ReadFile(filepath.Join(repo, "eclass", "first.eclass"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := os.ReadFile(filepath.Join(master, "eclass", "second.eclass"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := fmt.Sprintf("_eclasses_=second\t%x\tfirst\t%x\n", md5.Sum(second), md5.Sum(first))
+	if !strings.Contains(string(cache), want) {
+		t.Fatalf("cache lacks complete transitive eclass metadata\nwant %q\ngot %s", want, cache)
+	}
+	if err := os.WriteFile(filepath.Join(master, "eclass", "second.eclass"), []byte("# changed\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	ebuild, err := ParseEbuild(cfs, "nested/overlay/sys-apps/demo/demo-1.ebuild", ParseFull)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resolver, err := BuildEclassResolver(cfs, "nested/overlay", policy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, status, err := GetExpectedCacheContent(cfs, "nested/overlay/sys-apps/demo/demo-1.ebuild", ebuild, policy, resolver)
+	if err != nil || status != CacheDrift {
+		t.Fatalf("changed master eclass should produce drift, status=%v err=%v", status, err)
+	}
+}
+
+func TestCachePolicyRejectsInvalidMode(t *testing.T) {
+	if err := NewCachePolicy(CacheMode("invalid")).Validate(); err == nil {
+		t.Fatal("invalid mode was accepted")
 	}
 }

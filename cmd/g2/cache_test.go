@@ -95,6 +95,22 @@ func setupTestRepo(t *testing.T) (string, g2.CacheFS) {
 	return dir, g2.NewOsCacheFS(dir)
 }
 
+func TestCachePolicyFlags(t *testing.T) {
+	policy, err := cachePolicy("ci", "master-a=/tmp/master-a,master-b=/tmp/master-b", "/tmp/repos.conf")
+	if err != nil {
+		t.Fatalf("cachePolicy: %v", err)
+	}
+	if policy.Mode != g2.CacheModeCI || policy.ReposConfPath != "/tmp/repos.conf" || policy.ExplicitRepos["master-a"] != "/tmp/master-a" || policy.ExplicitRepos["master-b"] != "/tmp/master-b" {
+		t.Fatalf("policy flags were not propagated: %#v", policy)
+	}
+	if _, err := cachePolicy("invalid", "", ""); err == nil {
+		t.Fatal("invalid cache mode accepted")
+	}
+	if _, err := cachePolicy("ci", "bad-mapping", ""); err == nil {
+		t.Fatal("invalid master mapping accepted")
+	}
+}
+
 func TestDoCacheReconcile(t *testing.T) {
 	dir, baseCfs := setupTestRepo(t)
 	cfs := &SpyCacheFS{CacheFS: baseCfs}
@@ -507,14 +523,26 @@ func TestDoCacheReconcile_EclassesIdempotency(t *testing.T) {
 	dir := t.TempDir()
 
 	// 1. Setup repository
-	os.MkdirAll(filepath.Join(dir, "metadata"), 0755)
-	os.WriteFile(filepath.Join(dir, "metadata", "layout.conf"), []byte("cache-formats = md5-dict\nmasters = gentoo\n"), 0644)
+	if err := os.MkdirAll(filepath.Join(dir, "metadata"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "metadata", "layout.conf"), []byte("cache-formats = md5-dict\nmasters = gentoo\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
 
-	os.MkdirAll(filepath.Join(dir, "eclass"), 0755)
-	os.WriteFile(filepath.Join(dir, "eclass", "test.eclass"), []byte("# test eclass\n"), 0644)
+	if err := os.MkdirAll(filepath.Join(dir, "eclass"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "eclass", "test.eclass"), []byte("# test eclass\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
 
-	os.MkdirAll(filepath.Join(dir, "sys-apps", "test"), 0755)
-	os.WriteFile(filepath.Join(dir, "sys-apps", "test", "test-1.0.ebuild"), []byte("DESCRIPTION=\"Test\"\nINHERITED=\"test\"\n"), 0644)
+	if err := os.MkdirAll(filepath.Join(dir, "sys-apps", "test"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "sys-apps", "test", "test-1.0.ebuild"), []byte("DESCRIPTION=\"Test\"\nINHERITED=\"test\"\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
 
 	baseCfs := g2.NewOsCacheFS(dir)
 	spy := &SpyCacheFS{CacheFS: baseCfs}
@@ -557,7 +585,9 @@ func TestDoCacheReconcile_EclassesIdempotency(t *testing.T) {
 	}
 
 	// Modify the eclass
-	os.WriteFile(filepath.Join(dir, "eclass", "test.eclass"), []byte("# test eclass MODIFIED\n"), 0644)
+	if err := os.WriteFile(filepath.Join(dir, "eclass", "test.eclass"), []byte("# test eclass MODIFIED\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
 
 	spy.creates = 0
 	spy.removes = 0

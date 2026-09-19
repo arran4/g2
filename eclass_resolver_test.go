@@ -1,30 +1,44 @@
 package g2
 
 import (
+	"io/fs"
 	"os"
 	"path/filepath"
 	"testing"
 )
 
+type denyingEclassFS struct{ fs.FS }
+
+func (f denyingEclassFS) Open(name string) (fs.File, error) {
+	if name == "eclass/shared.eclass" {
+		return nil, os.ErrPermission
+	}
+	return f.FS.Open(name)
+}
+
+func writeResolverFile(t *testing.T, name, content string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(name), 0755); err != nil {
+		t.Fatalf("creating %s: %v", filepath.Dir(name), err)
+	}
+	if err := os.WriteFile(name, []byte(content), 0644); err != nil {
+		t.Fatalf("writing %s: %v", name, err)
+	}
+}
+
 func TestEclassResolver(t *testing.T) {
 	// Setup mock filesystem for primary repo and masters
-	dir, err := os.MkdirTemp("", "g2-eclass-resolver-test-*")
-	if err != nil {
-		t.Fatalf("MkdirTemp failed: %v", err)
-	}
-	defer os.RemoveAll(dir)
+	dir := t.TempDir()
 
 	// Primary Repo
 	primaryDir := filepath.Join(dir, "primary")
-	os.MkdirAll(filepath.Join(primaryDir, "eclass"), 0755)
-	os.WriteFile(filepath.Join(primaryDir, "eclass", "primary-only.eclass"), []byte("primary"), 0644)
-	os.WriteFile(filepath.Join(primaryDir, "eclass", "override.eclass"), []byte("primary-override"), 0644)
+	writeResolverFile(t, filepath.Join(primaryDir, "eclass", "primary-only.eclass"), "primary")
+	writeResolverFile(t, filepath.Join(primaryDir, "eclass", "override.eclass"), "primary-override")
 
 	// Gentoo Master Repo
 	gentooDir := filepath.Join(dir, "gentoo")
-	os.MkdirAll(filepath.Join(gentooDir, "eclass"), 0755)
-	os.WriteFile(filepath.Join(gentooDir, "eclass", "gentoo-only.eclass"), []byte("gentoo"), 0644)
-	os.WriteFile(filepath.Join(gentooDir, "eclass", "override.eclass"), []byte("gentoo-override"), 0644)
+	writeResolverFile(t, filepath.Join(gentooDir, "eclass", "gentoo-only.eclass"), "gentoo")
+	writeResolverFile(t, filepath.Join(gentooDir, "eclass", "override.eclass"), "gentoo-override")
 
 	cfs := NewOsCacheFS(primaryDir)
 
@@ -69,16 +83,25 @@ func TestEclassResolver(t *testing.T) {
 	}
 }
 
-func TestBuildEclassResolverStrict(t *testing.T) {
-	dir, err := os.MkdirTemp("", "g2-eclass-resolver-strict-test-*")
-	if err != nil {
-		t.Fatalf("MkdirTemp failed: %v", err)
+func TestEclassResolverDoesNotFallThroughReadFailure(t *testing.T) {
+	primary := t.TempDir()
+	master := t.TempDir()
+	writeResolverFile(t, filepath.Join(primary, "eclass", "shared.eclass"), "primary")
+	writeResolverFile(t, filepath.Join(master, "eclass", "shared.eclass"), "master")
+	resolver := NewEclassResolver([]MasterRepo{
+		{Name: "primary", Path: primary, FS: denyingEclassFS{os.DirFS(primary)}},
+		{Name: "master", Path: master, FS: os.DirFS(master)},
+	})
+	if _, _, err := resolver.Resolve("shared"); err == nil {
+		t.Fatal("read failure in high-precedence repository fell through to master")
 	}
-	defer os.RemoveAll(dir)
+}
+
+func TestBuildEclassResolverStrict(t *testing.T) {
+	dir := t.TempDir()
 
 	primaryDir := filepath.Join(dir, "primary")
-	os.MkdirAll(filepath.Join(primaryDir, "metadata"), 0755)
-	os.WriteFile(filepath.Join(primaryDir, "metadata", "layout.conf"), []byte("masters = missing-master\n"), 0644)
+	writeResolverFile(t, filepath.Join(primaryDir, "metadata", "layout.conf"), "masters = missing-master\n")
 
 	cfs := NewOsCacheFS(primaryDir)
 
@@ -88,32 +111,27 @@ func TestBuildEclassResolverStrict(t *testing.T) {
 [some-other-repo]
 location = ` + primaryDir + `
 `
-	os.WriteFile(reposConfPath, []byte(reposConfContent), 0644)
+	writeResolverFile(t, reposConfPath, reposConfContent)
 	policy.ReposConfPath = reposConfPath
 
-	_, err = BuildEclassResolver(cfs, primaryDir, policy)
+	_, err := BuildEclassResolver(cfs, ".", policy)
 	if err == nil {
 		t.Fatalf("Expected strict mode to fail when missing-master cannot be resolved")
 	}
 }
 
 func TestBuildEclassResolverCI(t *testing.T) {
-	dir, err := os.MkdirTemp("", "g2-eclass-resolver-ci-test-*")
-	if err != nil {
-		t.Fatalf("MkdirTemp failed: %v", err)
-	}
-	defer os.RemoveAll(dir)
+	dir := t.TempDir()
 
 	primaryDir := filepath.Join(dir, "primary")
-	os.MkdirAll(filepath.Join(primaryDir, "metadata"), 0755)
-	os.WriteFile(filepath.Join(primaryDir, "metadata", "layout.conf"), []byte("masters = missing-master\n"), 0644)
+	writeResolverFile(t, filepath.Join(primaryDir, "metadata", "layout.conf"), "masters = missing-master\n")
 
 	cfs := NewOsCacheFS(primaryDir)
 
 	policy := NewCachePolicy(CacheModeCI)
 	policy.ReposConfPath = filepath.Join(dir, "repos.conf")
 
-	resolver, err := BuildEclassResolver(cfs, primaryDir, policy)
+	resolver, err := BuildEclassResolver(cfs, ".", policy)
 	if err != nil {
 		t.Fatalf("Expected CI mode to succeed even when master cannot be resolved, got %v", err)
 	}
@@ -123,25 +141,23 @@ func TestBuildEclassResolverCI(t *testing.T) {
 }
 
 func TestBuildEclassResolverStrictNoMasters(t *testing.T) {
-	dir, err := os.MkdirTemp("", "g2-eclass-resolver-strict-no-masters-*")
-	if err != nil {
-		t.Fatalf("MkdirTemp failed: %v", err)
-	}
-	defer os.RemoveAll(dir)
+	dir := t.TempDir()
 
 	primaryDir := filepath.Join(dir, "primary")
-	os.MkdirAll(filepath.Join(primaryDir, "metadata"), 0755)
+	if err := os.MkdirAll(filepath.Join(primaryDir, "metadata"), 0755); err != nil {
+		t.Fatal(err)
+	}
 	// Missing masters intentionally!
-	os.WriteFile(filepath.Join(primaryDir, "metadata", "layout.conf"), []byte(""), 0644)
+	writeResolverFile(t, filepath.Join(primaryDir, "metadata", "layout.conf"), "")
 
 	cfs := NewOsCacheFS(primaryDir)
 
 	policy := NewCachePolicy(CacheModeStrict)
 	reposConfPath := filepath.Join(dir, "repos.conf")
-	os.WriteFile(reposConfPath, []byte(""), 0644)
+	writeResolverFile(t, reposConfPath, "")
 	policy.ReposConfPath = reposConfPath
 
-	resolver, err := BuildEclassResolver(cfs, primaryDir, policy)
+	resolver, err := BuildEclassResolver(cfs, ".", policy)
 	if err != nil {
 		t.Fatalf("Expected strict mode to succeed when no masters are declared, got error: %v", err)
 	}
@@ -151,28 +167,25 @@ func TestBuildEclassResolverStrictNoMasters(t *testing.T) {
 }
 
 func TestBuildEclassResolverStrictExplicit(t *testing.T) {
-	dir, err := os.MkdirTemp("", "g2-eclass-resolver-strict-explicit-*")
-	if err != nil {
-		t.Fatalf("MkdirTemp failed: %v", err)
-	}
-	defer os.RemoveAll(dir)
+	dir := t.TempDir()
 
 	primaryDir := filepath.Join(dir, "primary")
-	os.MkdirAll(filepath.Join(primaryDir, "metadata"), 0755)
-	os.WriteFile(filepath.Join(primaryDir, "metadata", "layout.conf"), []byte("masters = my-master\n"), 0644)
+	writeResolverFile(t, filepath.Join(primaryDir, "metadata", "layout.conf"), "masters = my-master\n")
 
 	myMasterDir := filepath.Join(dir, "my-master")
-	os.MkdirAll(filepath.Join(myMasterDir, "eclass"), 0755)
+	if err := os.MkdirAll(filepath.Join(myMasterDir, "eclass"), 0755); err != nil {
+		t.Fatal(err)
+	}
 
 	cfs := NewOsCacheFS(primaryDir)
 
 	policy := NewCachePolicy(CacheModeStrict)
 	reposConfPath := filepath.Join(dir, "repos.conf")
-	os.WriteFile(reposConfPath, []byte(""), 0644)
+	writeResolverFile(t, reposConfPath, "")
 	policy.ReposConfPath = reposConfPath
 	policy.ExplicitRepos["my-master"] = myMasterDir
 
-	resolver, err := BuildEclassResolver(cfs, primaryDir, policy)
+	resolver, err := BuildEclassResolver(cfs, ".", policy)
 	if err != nil {
 		t.Fatalf("Expected strict mode to succeed when master is supplied via explicit repo, got error: %v", err)
 	}
@@ -182,18 +195,15 @@ func TestBuildEclassResolverStrictExplicit(t *testing.T) {
 }
 
 func TestBuildEclassResolverStrictReposConf(t *testing.T) {
-	dir, err := os.MkdirTemp("", "g2-eclass-resolver-strict-reposconf-*")
-	if err != nil {
-		t.Fatalf("MkdirTemp failed: %v", err)
-	}
-	defer os.RemoveAll(dir)
+	dir := t.TempDir()
 
 	primaryDir := filepath.Join(dir, "primary")
-	os.MkdirAll(filepath.Join(primaryDir, "metadata"), 0755)
-	os.WriteFile(filepath.Join(primaryDir, "metadata", "layout.conf"), []byte("masters = my-master\n"), 0644)
+	writeResolverFile(t, filepath.Join(primaryDir, "metadata", "layout.conf"), "masters = my-master\n")
 
 	myMasterDir := filepath.Join(dir, "my-master")
-	os.MkdirAll(filepath.Join(myMasterDir, "eclass"), 0755)
+	if err := os.MkdirAll(filepath.Join(myMasterDir, "eclass"), 0755); err != nil {
+		t.Fatal(err)
+	}
 
 	cfs := NewOsCacheFS(primaryDir)
 
@@ -203,10 +213,10 @@ func TestBuildEclassResolverStrictReposConf(t *testing.T) {
 [my-master]
 location = ` + myMasterDir + `
 `
-	os.WriteFile(reposConfPath, []byte(reposConfContent), 0644)
+	writeResolverFile(t, reposConfPath, reposConfContent)
 	policy.ReposConfPath = reposConfPath
 
-	resolver, err := BuildEclassResolver(cfs, primaryDir, policy)
+	resolver, err := BuildEclassResolver(cfs, ".", policy)
 	if err != nil {
 		t.Fatalf("Expected strict mode to succeed when master is supplied via repos.conf, got error: %v", err)
 	}
