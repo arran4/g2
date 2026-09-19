@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"io/fs"
@@ -308,12 +309,16 @@ func doCacheClean(cfs g2.CacheFS, repoDir string) error {
 	layoutConfPath := filepath.ToSlash(filepath.Join(repoDir, "metadata", "layout.conf"))
 	var lc *g2.LayoutConf
 	if f, err := cfs.Open(layoutConfPath); err == nil {
-		_ = f.Close()
-		lc, err = parseLayoutConfFromFS(cfs, layoutConfPath)
+		lc, err = g2.ParseLayoutConfFromReader(f)
+		closeErr := f.Close()
 		if err != nil {
-			log.Printf("Warning: failed to parse layout.conf: %v", err)
-			lc = nil
+			return fmt.Errorf("parsing layout.conf %s: %w", layoutConfPath, err)
 		}
+		if closeErr != nil {
+			return fmt.Errorf("closing layout.conf %s: %w", layoutConfPath, closeErr)
+		}
+	} else if !errors.Is(err, fs.ErrNotExist) {
+		return fmt.Errorf("opening layout.conf %s: %w", layoutConfPath, err)
 	}
 
 	cacheFormats := []string{"md5-dict", "pms"} // check common ones during clean

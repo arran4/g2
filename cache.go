@@ -229,6 +229,9 @@ func GenerateCacheFS(cfs CacheFS, repoDir string, targetPkgs []string, policy *C
 					if err == nil && string(existingContent) == expectedContentStr {
 						continue // Idempotent skip
 					}
+					if err != nil && !errors.Is(err, fs.ErrNotExist) {
+						return fmt.Errorf("reading existing cache file %s: %w", verCachePath, err)
+					}
 
 					f, err := cfs.Create(verCachePath)
 					if err != nil {

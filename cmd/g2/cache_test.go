@@ -63,6 +63,18 @@ type failingCacheEbuildFS struct {
 	path string
 }
 
+type denyingExistingCacheReadFS struct {
+	*SpyCacheFS
+	path string
+}
+
+func (f *denyingExistingCacheReadFS) Open(name string) (fs.File, error) {
+	if name == f.path {
+		return nil, os.ErrPermission
+	}
+	return f.SpyCacheFS.Open(name)
+}
+
 func (f failingCacheEbuildFS) Open(name string) (fs.File, error) {
 	if name == f.path {
 		return nil, os.ErrPermission
@@ -148,6 +160,69 @@ func TestCacheDiscoveryFailureFailsVerifyAndPreservesCacheDuringClean(t *testing
 	}
 	if _, err := os.Stat(cachePath); err != nil {
 		t.Fatalf("reconcile removed valid cache after discovery failure: %v", err)
+	}
+}
+
+func TestCacheCleanFailsClosedOnLayoutFailure(t *testing.T) {
+	for _, test := range []struct {
+		name        string
+		breakLayout func(t *testing.T, dir string, cfs g2.CacheFS) g2.CacheFS
+	}{
+		{name: "open", breakLayout: func(_ *testing.T, _ string, cfs g2.CacheFS) g2.CacheFS { return &failingOpenFS{CacheFS: cfs} }},
+		{name: "parse", breakLayout: func(t *testing.T, dir string, cfs g2.CacheFS) g2.CacheFS {
+			if err := os.WriteFile(filepath.Join(dir, "metadata", "layout.conf"), []byte("not valid layout syntax\n"), 0644); err != nil {
+				t.Fatal(err)
+			}
+			return cfs
+		}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			dir, cfs := setupTestRepo(t)
+			if err := g2.GenerateCacheFS(cfs, ".", nil, g2.NewCachePolicy(g2.CacheModeCI)); err != nil {
+				t.Fatal(err)
+			}
+			cachePath := filepath.Join(dir, "metadata", "md5-cache", "sys-apps", "test-1.0")
+			if err := doCacheClean(test.breakLayout(t, dir, cfs), "."); err == nil {
+				t.Fatal("cleanup proceeded after layout failure")
+			}
+			if _, err := os.Stat(cachePath); err != nil {
+				t.Fatalf("layout failure removed valid cache entry: %v", err)
+			}
+		})
+	}
+}
+
+func TestCacheReadFailureDoesNotOverwriteOrReconcile(t *testing.T) {
+	dir, base := setupTestRepo(t)
+	policy := g2.NewCachePolicy(g2.CacheModeCI)
+	if err := g2.GenerateCacheFS(base, ".", nil, policy); err != nil {
+		t.Fatal(err)
+	}
+	cachePath := filepath.Join(dir, "metadata", "md5-cache", "sys-apps", "test-1.0")
+	before, err := os.ReadFile(cachePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	spy := &SpyCacheFS{CacheFS: base}
+	failing := &denyingExistingCacheReadFS{SpyCacheFS: spy, path: "metadata/md5-cache/sys-apps/test-1.0"}
+	if err := g2.GenerateCacheFS(failing, ".", nil, policy); err == nil {
+		t.Fatal("generation overwrote unreadable cache entry")
+	}
+	if spy.creates != 0 || spy.removes != 0 || spy.removesAll != 0 {
+		t.Fatalf("generation mutated unreadable cache entry: %+v", spy)
+	}
+	if err := doCacheReconcile(failing, ".", policy); err == nil {
+		t.Fatal("reconcile proceeded after unreadable cache entry")
+	}
+	if spy.creates != 0 || spy.removes != 0 || spy.removesAll != 0 {
+		t.Fatalf("reconcile mutated unreadable cache entry: %+v", spy)
+	}
+	after, err := os.ReadFile(cachePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(after) != string(before) {
+		t.Fatal("unreadable cache entry was overwritten")
 	}
 }
 
