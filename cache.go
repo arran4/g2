@@ -437,6 +437,9 @@ func eclassClosure(resolver *EclassResolver, names []string, visiting, seen map[
 		if err != nil {
 			return fmt.Errorf("parsing eclass %q from repository %q: %w", name, repo.Name, err)
 		}
+		if parsed.SrcUriUncertain {
+			return fmt.Errorf("eclass %q from repository %q contains control flow or an unmodelled command; canonical cache metadata requires Portage evaluation", name, repo.Name)
+		}
 		for key := range parsed.UncertainVars {
 			if isCacheVariable(key) {
 				return fmt.Errorf("eclass %q from repository %q has unresolved %s; canonical cache metadata requires Portage evaluation", name, repo.Name, key)

@@ -374,6 +374,11 @@ accepted as canonical. In particular, eclasses which contribute cache variables
 or contain unresolved cache-variable expressions require Portage evaluation and
 are rejected by this static implementation.
 
+Strict mode currently resolves repository context but does not evaluate an
+active Portage profile or execute ebuild metadata. It fails closed when those
+inputs are needed, rather than presenting static cache reconstruction as a
+complete on-machine verification.
+
 **Example:**
 
 Generate the ebuild cache for the current overlay:

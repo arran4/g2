@@ -300,6 +300,7 @@ func TestGenerateCacheRejectsUnevaluatedEclassAndDynamicMetadata(t *testing.T) {
 		eclass string
 	}{
 		{name: "eclass metadata", ebuild: "inherit example\n", eclass: "IUSE=\"feature\"\n"},
+		{name: "opaque eclass command", ebuild: "inherit example\n", eclass: "eval 'inherit child'\n"},
 		{name: "dynamic dependency", ebuild: "DEPEND=\"${UNSET_DEPEND}\"\n"},
 	}
 	for _, tt := range tests {

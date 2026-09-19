@@ -58,6 +58,18 @@ type SpyCacheFS struct {
 	removesAll int
 }
 
+type failingCacheEbuildFS struct {
+	g2.CacheFS
+	path string
+}
+
+func (f failingCacheEbuildFS) Open(name string) (fs.File, error) {
+	if name == f.path {
+		return nil, os.ErrPermission
+	}
+	return f.CacheFS.Open(name)
+}
+
 func (s *SpyCacheFS) Create(name string) (io.WriteCloser, error) {
 	s.creates++
 	return s.CacheFS.Create(name)
@@ -108,6 +120,34 @@ func TestCachePolicyFlags(t *testing.T) {
 	}
 	if _, err := cachePolicy("ci", "bad-mapping", ""); err == nil {
 		t.Fatal("invalid master mapping accepted")
+	}
+}
+
+func TestCacheDiscoveryFailureFailsVerifyAndPreservesCacheDuringClean(t *testing.T) {
+	dir, base := setupTestRepo(t)
+	policy := g2.NewCachePolicy(g2.CacheModeCI)
+	if err := g2.GenerateCacheFS(base, ".", nil, policy); err != nil {
+		t.Fatalf("generating baseline cache: %v", err)
+	}
+	cachePath := filepath.Join(dir, "metadata", "md5-cache", "sys-apps", "test-1.0")
+	if _, err := os.Stat(cachePath); err != nil {
+		t.Fatalf("baseline cache missing: %v", err)
+	}
+	failing := failingCacheEbuildFS{CacheFS: base, path: "sys-apps/test/test-1.0.ebuild"}
+	if err := doCacheVerify(failing, ".", policy); err == nil {
+		t.Fatal("verification succeeded after ebuild discovery failed")
+	}
+	if err := doCacheClean(failing, "."); err == nil {
+		t.Fatal("cleanup succeeded with an incomplete ebuild inventory")
+	}
+	if _, err := os.Stat(cachePath); err != nil {
+		t.Fatalf("cleanup removed valid cache after discovery failure: %v", err)
+	}
+	if err := doCacheReconcile(failing, ".", policy); err == nil {
+		t.Fatal("reconcile succeeded after ebuild discovery failed")
+	}
+	if _, err := os.Stat(cachePath); err != nil {
+		t.Fatalf("reconcile removed valid cache after discovery failure: %v", err)
 	}
 }
 
