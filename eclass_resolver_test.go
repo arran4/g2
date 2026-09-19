@@ -129,14 +129,23 @@ func TestBuildEclassResolverCI(t *testing.T) {
 	cfs := NewOsCacheFS(primaryDir)
 
 	policy := NewCachePolicy(CacheModeCI)
-	policy.ReposConfPath = filepath.Join(dir, "repos.conf")
-
 	resolver, err := BuildEclassResolver(cfs, ".", policy)
 	if err != nil {
 		t.Fatalf("Expected CI mode to succeed even when master cannot be resolved, got %v", err)
 	}
 	if len(resolver.repos) != 1 {
 		t.Fatalf("Expected 1 repo, got %d", len(resolver.repos))
+	}
+}
+
+func TestBuildEclassResolverCIRejectsExplicitReposConfFailure(t *testing.T) {
+	dir := t.TempDir()
+	primaryDir := filepath.Join(dir, "primary")
+	writeResolverFile(t, filepath.Join(primaryDir, "metadata", "layout.conf"), "masters = missing-master\n")
+	policy := NewCachePolicy(CacheModeCI)
+	policy.ReposConfPath = filepath.Join(dir, "does-not-exist.conf")
+	if _, err := BuildEclassResolver(NewOsCacheFS(primaryDir), ".", policy); err == nil {
+		t.Fatal("explicit repos.conf failure was converted into a CI skip")
 	}
 }
 

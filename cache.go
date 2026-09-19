@@ -128,11 +128,12 @@ func GenerateCacheFS(cfs CacheFS, repoDir string, targetPkgs []string, policy *C
 		} else if errors.Is(err, fs.ErrNotExist) {
 			// fallback: scan directory for things that look like categories.
 			entries, err := fs.ReadDir(cfs, repoDir)
-			if err == nil {
-				for _, entry := range entries {
-					if entry.IsDir() && !strings.HasPrefix(entry.Name(), ".") && entry.Name() != "metadata" && entry.Name() != "profiles" && entry.Name() != "eclass" {
-						categories = append(categories, entry.Name())
-					}
+			if err != nil {
+				return fmt.Errorf("reading repository root %s while discovering categories: %w", repoDir, err)
+			}
+			for _, entry := range entries {
+				if entry.IsDir() && !strings.HasPrefix(entry.Name(), ".") && entry.Name() != "metadata" && entry.Name() != "profiles" && entry.Name() != "eclass" {
+					categories = append(categories, entry.Name())
 				}
 			}
 		} else {
@@ -354,6 +355,11 @@ func GetExpectedCacheContent(cfs CacheFS, ebuildPath string, ebuild *Ebuild, pol
 	if ebuild.SrcUriUncertain {
 		return "", CacheError, fmt.Errorf("ebuild %s contains control flow or unresolved values; canonical cache metadata requires Portage evaluation", ebuildPath)
 	}
+	for key := range ebuild.UncertainVars {
+		if isCacheVariable(key) {
+			return "", CacheError, fmt.Errorf("ebuild %s has unresolved %s; canonical cache metadata requires Portage evaluation", ebuildPath, key)
+		}
+	}
 	var keys []string
 	for k := range ebuild.Vars {
 		keys = append(keys, k)
@@ -430,6 +436,16 @@ func eclassClosure(resolver *EclassResolver, names []string, visiting, seen map[
 		parsed, err := ParseEbuild(repo.FS, path.Join("eclass", name+".eclass"), ParseFull)
 		if err != nil {
 			return fmt.Errorf("parsing eclass %q from repository %q: %w", name, repo.Name, err)
+		}
+		for key := range parsed.UncertainVars {
+			if isCacheVariable(key) {
+				return fmt.Errorf("eclass %q from repository %q has unresolved %s; canonical cache metadata requires Portage evaluation", name, repo.Name, key)
+			}
+		}
+		for key, value := range parsed.Vars {
+			if key != "INHERITED" && value != "" && isCacheVariable(key) {
+				return fmt.Errorf("eclass %q from repository %q contributes %s; canonical cache metadata requires Portage evaluation", name, repo.Name, key)
+			}
 		}
 		for _, child := range strings.Fields(parsed.Vars["INHERITED"]) {
 			if err := visit(child); err != nil {

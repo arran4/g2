@@ -111,43 +111,10 @@ func BuildEclassResolver(cfs CacheFS, repoDir string, policy *CachePolicy) (*Ecl
 	if lc != nil {
 		masters := lc.Masters()
 		for _, masterName := range masters {
-			resolved := false
-			// First check if it was provided explicitly
-			if loc, ok := policy.ExplicitRepos[masterName]; ok {
-				if _, statErr := os.Stat(loc); statErr == nil {
-					resolver.repos = append(resolver.repos, MasterRepo{
-						Name: masterName,
-						Path: loc,
-						FS:   os.DirFS(loc),
-					})
-					resolved = true
-				}
-			}
-
-			if !resolved {
-				// Try to resolve using repos.conf (either explicit path or system default)
-				reposConfPath := policy.ReposConfPath
-				if reposConfPath == "" {
-					reposConfPath = "/etc/portage/repos.conf"
-				}
-				repoInfo, err := ResolveRepo(masterName, reposConfPath)
-
-				if err == nil && repoInfo != nil && repoInfo.Location != "" {
-					if _, statErr := os.Stat(repoInfo.Location); statErr == nil {
-						resolver.repos = append(resolver.repos, MasterRepo{
-							Name: masterName,
-							Path: repoInfo.Location,
-							FS:   os.DirFS(repoInfo.Location),
-						})
-						resolved = true
-					}
-				}
-			}
-
-			// If we get here, we failed to resolve the master.
-			if !resolved {
-				if policy.Mode == CacheModeStrict {
-					return nil, fmt.Errorf("strict mode: required master repository %q could not be resolved", masterName)
+			if err := resolver.addMaster(masterName, policy); err != nil {
+				_, explicitlyConfigured := policy.ExplicitRepos[masterName]
+				if policy.Mode == CacheModeStrict || policy.ReposConfPath != "" || explicitlyConfigured {
+					return nil, err
 				}
 				resolver.missingMasters = append(resolver.missingMasters, masterName)
 			}
@@ -155,4 +122,34 @@ func BuildEclassResolver(cfs CacheFS, repoDir string, policy *CachePolicy) (*Ecl
 	}
 
 	return resolver, nil
+}
+
+func (r *EclassResolver) addMaster(masterName string, policy *CachePolicy) error {
+	if location, explicit := policy.ExplicitRepos[masterName]; explicit {
+		if _, err := os.Stat(location); err != nil {
+			return fmt.Errorf("accessing explicitly configured master repository %q at %q: %w", masterName, location, err)
+		}
+		r.repos = append(r.repos, MasterRepo{Name: masterName, Path: location, FS: os.DirFS(location)})
+		return nil
+	}
+
+	reposConfPath := policy.ReposConfPath
+	if reposConfPath == "" {
+		if policy.Mode == CacheModeCI {
+			return fmt.Errorf("master repository %q was not explicitly supplied in CI mode", masterName)
+		}
+		reposConfPath = "/etc/portage/repos.conf"
+	}
+	repoInfo, err := ResolveRepo(masterName, reposConfPath)
+	if err != nil {
+		return fmt.Errorf("resolving master repository %q from %q: %w", masterName, reposConfPath, err)
+	}
+	if repoInfo == nil || repoInfo.Location == "" {
+		return fmt.Errorf("configured master repository %q from %q has no location", masterName, reposConfPath)
+	}
+	if _, err := os.Stat(repoInfo.Location); err != nil {
+		return fmt.Errorf("accessing master repository %q at %q: %w", masterName, repoInfo.Location, err)
+	}
+	r.repos = append(r.repos, MasterRepo{Name: masterName, Path: repoInfo.Location, FS: os.DirFS(repoInfo.Location)})
+	return nil
 }

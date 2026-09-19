@@ -521,6 +521,7 @@ func TestCacheReconcileRevisionedIdempotency(t *testing.T) {
 
 func TestDoCacheReconcile_EclassesIdempotency(t *testing.T) {
 	dir := t.TempDir()
+	masterDir := t.TempDir()
 
 	// 1. Setup repository
 	if err := os.MkdirAll(filepath.Join(dir, "metadata"), 0755); err != nil {
@@ -533,7 +534,13 @@ func TestDoCacheReconcile_EclassesIdempotency(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(dir, "eclass"), 0755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, "eclass", "test.eclass"), []byte("# test eclass\n"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "eclass", "test.eclass"), []byte("inherit second\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(masterDir, "eclass"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(masterDir, "eclass", "second.eclass"), []byte("# master eclass\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -548,6 +555,7 @@ func TestDoCacheReconcile_EclassesIdempotency(t *testing.T) {
 	spy := &SpyCacheFS{CacheFS: baseCfs}
 
 	policy := g2.NewCachePolicy(g2.CacheModeCI)
+	policy.ExplicitRepos["gentoo"] = masterDir
 
 	// First reconcile
 	if err := doCacheReconcile(spy, ".", policy); err != nil {
@@ -584,8 +592,8 @@ func TestDoCacheReconcile_EclassesIdempotency(t *testing.T) {
 		t.Fatalf("Expected 0 mutations on idempotent run, got %d creates, %d removes, %d removesAll", spy.creates, spy.removes, spy.removesAll)
 	}
 
-	// Modify the eclass
-	if err := os.WriteFile(filepath.Join(dir, "eclass", "test.eclass"), []byte("# test eclass MODIFIED\n"), 0644); err != nil {
+	// Modify a master eclass and ensure reconciliation repairs the actual cache.
+	if err := os.WriteFile(filepath.Join(masterDir, "eclass", "second.eclass"), []byte("# master eclass MODIFIED\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -600,5 +608,22 @@ func TestDoCacheReconcile_EclassesIdempotency(t *testing.T) {
 
 	if spy.creates == 0 {
 		t.Fatalf("Expected cache to be recreated after eclass modification")
+	}
+	updated, err := os.ReadFile(cachePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(updated) == cacheContent {
+		t.Fatal("master eclass change did not update _eclasses_ cache metadata")
+	}
+
+	spy.creates = 0
+	spy.removes = 0
+	spy.removesAll = 0
+	if err := doCacheReconcile(spy, ".", policy); err != nil {
+		t.Fatalf("Fourth reconcile failed: %v", err)
+	}
+	if spy.creates > 0 || spy.removes > 0 || spy.removesAll > 0 {
+		t.Fatalf("expected no mutations after master eclass repair, got %d creates, %d removes, %d removesAll", spy.creates, spy.removes, spy.removesAll)
 	}
 }

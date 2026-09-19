@@ -264,14 +264,90 @@ func TestGenerateCacheTransitiveEclassesFromConfiguredMaster(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, status, err := GetExpectedCacheContent(cfs, "nested/overlay/sys-apps/demo/demo-1.ebuild", ebuild, policy, resolver)
+	expected, status, err := GetExpectedCacheContent(cfs, "nested/overlay/sys-apps/demo/demo-1.ebuild", ebuild, policy, resolver)
 	if err != nil || status != CacheDrift {
-		t.Fatalf("changed master eclass should produce drift, status=%v err=%v", status, err)
+		t.Fatalf("building changed metadata: status=%v err=%v", status, err)
+	}
+	cachePath := "nested/overlay/metadata/md5-cache/sys-apps/demo-1"
+	if result := CompareCacheEntry(cfs, cachePath, expected); result.Status != CacheDrift {
+		t.Fatalf("changed master eclass was not detected as drift: %#v", result)
+	}
+	if err := GenerateCacheFS(cfs, "nested/overlay", nil, policy); err != nil {
+		t.Fatalf("repairing eclass drift: %v", err)
+	}
+	if result := CompareCacheEntry(cfs, cachePath, expected); result.Status != CacheVerified {
+		t.Fatalf("repaired cache did not verify: %#v", result)
+	}
+	updated, err := os.ReadFile(filepath.Join(repo, "metadata", "md5-cache", "sys-apps", "demo-1"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(updated) == string(cache) {
+		t.Fatal("cache was not updated after master eclass changed")
 	}
 }
 
 func TestCachePolicyRejectsInvalidMode(t *testing.T) {
 	if err := NewCachePolicy(CacheMode("invalid")).Validate(); err == nil {
 		t.Fatal("invalid mode was accepted")
+	}
+}
+
+func TestGenerateCacheRejectsUnevaluatedEclassAndDynamicMetadata(t *testing.T) {
+	tests := []struct {
+		name   string
+		ebuild string
+		eclass string
+	}{
+		{name: "eclass metadata", ebuild: "inherit example\n", eclass: "IUSE=\"feature\"\n"},
+		{name: "dynamic dependency", ebuild: "DEPEND=\"${UNSET_DEPEND}\"\n"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			write := func(name, content string) {
+				t.Helper()
+				if err := os.MkdirAll(filepath.Dir(name), 0755); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(name, []byte(content), 0644); err != nil {
+					t.Fatal(err)
+				}
+			}
+			write(filepath.Join(dir, "metadata", "layout.conf"), "cache-formats = md5-dict\n")
+			write(filepath.Join(dir, "cat", "pkg", "pkg-1.ebuild"), tt.ebuild)
+			if tt.eclass != "" {
+				write(filepath.Join(dir, "eclass", "example.eclass"), tt.eclass)
+			}
+			if err := GenerateCacheFS(NewOsCacheFS(dir), ".", nil, NewCachePolicy(CacheModeCI)); err == nil {
+				t.Fatal("generation accepted metadata that requires ebuild evaluation")
+			}
+			if _, err := os.Stat(filepath.Join(dir, "metadata", "md5-cache", "cat", "pkg-1")); !os.IsNotExist(err) {
+				t.Fatal("generation wrote a cache entry despite unresolved metadata")
+			}
+		})
+	}
+}
+
+type rootReadErrorFS struct{ CacheFS }
+
+func (f rootReadErrorFS) Open(name string) (fs.File, error) {
+	if name == "." {
+		return nil, os.ErrPermission
+	}
+	return f.CacheFS.Open(name)
+}
+
+func TestGenerateCachePropagatesRootCategoryDiscoveryFailure(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "metadata"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "metadata", "layout.conf"), []byte("cache-formats = md5-dict\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	err := GenerateCacheFS(rootReadErrorFS{NewOsCacheFS(dir)}, ".", nil, NewCachePolicy(CacheModeCI))
+	if err == nil || !strings.Contains(err.Error(), "discovering categories") {
+		t.Fatalf("root discovery error was swallowed: %v", err)
 	}
 }

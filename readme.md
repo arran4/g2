@@ -370,7 +370,9 @@ successful verification has checked every required entry. “Completed with
 explicitly skipped checks” means CI could not establish the named master
 context; it is not full verification. The parser does not execute ebuilds, so
 metadata it cannot reliably derive is treated as an error rather than silently
-accepted as canonical.
+accepted as canonical. In particular, eclasses which contribute cache variables
+or contain unresolved cache-variable expressions require Portage evaluation and
+are rejected by this static implementation.
 
 **Example:**
 
