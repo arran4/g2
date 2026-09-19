@@ -70,7 +70,6 @@ func getGitModifiedPackagesChanged(repoDir string, explicitBase string) ([]strin
 		return nil, fmt.Errorf("not a git repository or git not installed")
 	}
 
-	pkgMap := make(map[string]bool)
 	var files []string
 
 	// Helper to extract zero-delimited outputs
@@ -125,6 +124,13 @@ func getGitModifiedPackagesChanged(repoDir string, explicitBase string) ([]strin
 		}
 	}
 
+	pkgs := filterModifiedPackages(repoDir, files)
+
+	return pkgs, nil
+}
+
+func filterModifiedPackages(repoDir string, files []string) []string {
+	pkgMap := make(map[string]bool)
 	for _, f := range files {
 		f = filepath.ToSlash(f)
 		parts := strings.Split(f, "/")
@@ -163,6 +169,5 @@ func getGitModifiedPackagesChanged(repoDir string, explicitBase string) ([]strin
 		pkgs = append(pkgs, p)
 	}
 	sort.Strings(pkgs)
-
-	return pkgs, nil
+	return pkgs
 }

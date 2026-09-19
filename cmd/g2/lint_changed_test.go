@@ -7,6 +7,54 @@ import (
 	"testing"
 )
 
+func TestFilterModifiedPackages(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create a valid package structure
+	err := os.MkdirAll(filepath.Join(tmpDir, "app-misc", "foo"), 0755)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = os.WriteFile(filepath.Join(tmpDir, "app-misc", "foo", "foo-1.ebuild"), []byte(""), 0644)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Create an invalid package structure (no ebuild)
+	err = os.MkdirAll(filepath.Join(tmpDir, "app-misc", "bar"), 0755)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = os.WriteFile(filepath.Join(tmpDir, "app-misc", "bar", "metadata.xml"), []byte(""), 0644)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Create an infra directory
+	err = os.MkdirAll(filepath.Join(tmpDir, "metadata"), 0755)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	files := []string{
+		"app-misc/foo/foo-1.ebuild",
+		"app-misc/foo/foo-2.ebuild",
+		"app-misc/bar/metadata.xml",
+		"metadata/layout.conf",
+		"invalid-top-level-file",
+		"scripts/some_script.sh",
+	}
+
+	pkgs := filterModifiedPackages(tmpDir, files)
+
+	if len(pkgs) != 1 {
+		t.Fatalf("Expected 1 package, got %d: %v", len(pkgs), pkgs)
+	}
+	if pkgs[0] != "app-misc/foo" {
+		t.Errorf("Expected app-misc/foo, got %s", pkgs[0])
+	}
+}
+
 func TestGetGitModifiedPackagesChanged(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "g2-git-test-*")
 	if err != nil {

@@ -1,10 +1,9 @@
-package pipeline_test
+package main
 
 import (
 	"bytes"
 	"net/http"
 	"net/http/httptest"
-	"os/exec"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -56,11 +55,6 @@ func TestCLI(t *testing.T) {
 		_, _ = w.Write([]byte(`["a", "", "c"]`))
 	}))
 	defer ts.Close()
-
-	binPath := t.TempDir() + "/g2-test-bin"
-	cmd := exec.Command("go", "build", "-o", binPath, "../cmd/g2")
-	err := cmd.Run()
-	assert.NoError(t, err, "failed to build g2")
 
 	tests := []struct {
 		name           string
@@ -191,17 +185,25 @@ func TestCLI(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			c := exec.Command(binPath, tt.args...)
 			var out bytes.Buffer
 			var stderr bytes.Buffer
-			c.Stdout = &out
-			c.Stderr = &stderr
-			err := c.Run()
+
+			// We skip "pipeline" if it's the first element, as runPipeline takes the remaining args
+			args := tt.args
+			if len(args) > 0 && args[0] == "pipeline" {
+				args = args[1:]
+			}
+
+			err := runPipeline(args, &out, &stderr)
 
 			if tt.expectError {
 				assert.Error(t, err)
 				if tt.expectedStderr != "" {
-					assert.Contains(t, stderr.String(), tt.expectedStderr)
+					errStr := ""
+					if err != nil {
+						errStr = err.Error()
+					}
+					assert.Contains(t, stderr.String()+errStr, tt.expectedStderr)
 				}
 			} else {
 				assert.NoError(t, err)
@@ -217,14 +219,15 @@ func TestCLI_UnknownOperatorFailure(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	cmd := exec.Command("go", "run", "../cmd/g2", "pipeline", "get("+ts.URL+") | unknown_operator")
 	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	err := cmd.Run()
+	err := runPipeline([]string{"get(" + ts.URL + ") | unknown_operator"}, &stdout, &stderr)
 
 	assert.Error(t, err)
-	assert.Contains(t, stderr.String(), "unknown command")
+	errStr := ""
+	if err != nil {
+		errStr = err.Error()
+	}
+	assert.Contains(t, stderr.String()+errStr, "unknown command")
 	assert.Empty(t, stdout.String())
 }
 
@@ -235,13 +238,14 @@ func TestCLI_TokenizerFailure(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	cmd := exec.Command("go", "run", "../cmd/g2", "pipeline", "get("+ts.URL+") | replace('a, 'b')")
 	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	err := cmd.Run()
+	err := runPipeline([]string{"get(" + ts.URL + ") | replace('a, 'b')"}, &stdout, &stderr)
 
 	assert.Error(t, err)
-	assert.Contains(t, stderr.String(), "unterminated quote")
+	errStr := ""
+	if err != nil {
+		errStr = err.Error()
+	}
+	assert.Contains(t, stderr.String()+errStr, "unterminated quote")
 	assert.Empty(t, stdout.String())
 }
