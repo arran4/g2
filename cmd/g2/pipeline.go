@@ -36,26 +36,31 @@ func (cfg *MainArgConfig) cmdPipeline(args []string) error {
 
 func runPipeline(args []string, stdout, stderr io.Writer) error {
 	fs := flag.NewFlagSet("pipeline", flag.ContinueOnError)
-	fs.SetOutput(stderr)
+	fs.SetOutput(io.Discard)
 	subs := make(stringStringMapFlag)
 	fs.Var(&subs, "s", "Variable substitutions in KEY=VALUE format (can be specified multiple times)")
 
-	fs.Usage = func() {
-		_, _ = fmt.Fprintf(stderr, "Usage: g2 pipeline [flags] <pipeline_string>\n\n")
-		_, _ = fmt.Fprintf(stderr, "Evaluates a data extraction pipeline expression.\n\n")
-		_, _ = fmt.Fprintf(stderr, "Flags:\n")
+	printUsage := func(w io.Writer) {
+		_, _ = fmt.Fprintf(w, "Usage: g2 pipeline [flags] <pipeline_string>\n\n")
+		_, _ = fmt.Fprintf(w, "Evaluates a data extraction pipeline expression.\n\n")
+		_, _ = fmt.Fprintf(w, "Flags:\n")
+		fs.SetOutput(w)
 		fs.PrintDefaults()
 	}
+	fs.Usage = func() {}
 
 	if err := fs.Parse(args); err != nil {
 		if err == flag.ErrHelp {
+			printUsage(stdout)
 			return nil
 		}
-		return err
+		_, _ = fmt.Fprintln(stderr, err)
+		printUsage(stderr)
+		return &ExitError{Code: 2, Err: nil}
 	}
 
 	if fs.NArg() != 1 {
-		fs.Usage()
+		printUsage(stderr)
 		return fmt.Errorf("pipeline command requires exactly one argument: the pipeline expression")
 	}
 

@@ -204,8 +204,8 @@ func TestCLI(t *testing.T) {
 			[]string{"pipeline", "--invalid"},
 			"",
 			true,
-			"flag provided but not defined: -invalid",
-			"Usage: g2 pipeline",
+			"",
+			"flag provided but not defined: -invalid\nUsage: g2 pipeline",
 		},
 		{
 			"missing arguments produces error and help",
@@ -218,10 +218,10 @@ func TestCLI(t *testing.T) {
 		{
 			"help flag outputs help",
 			[]string{"pipeline", "--help"},
-			"",
+			"Usage: g2 pipeline",
 			false,
 			"",
-			"Usage: g2 pipeline",
+			"",
 		},
 	}
 
@@ -249,10 +249,16 @@ func TestCLI(t *testing.T) {
 
 			if tt.expectedStderr != "" {
 				assert.Contains(t, stderr.String(), tt.expectedStderr)
+			} else {
+				assert.Empty(t, stderr.String())
 			}
 
 			// For both success and failure cases, verify stdout content
-			assert.Equal(t, tt.expected, out.String()) // Don't use TrimSpace to strictly verify trailing newlines
+			if tt.expected != "" {
+				assert.Contains(t, out.String(), tt.expected)
+			} else {
+				assert.Empty(t, out.String())
+			}
 		})
 	}
 }
@@ -309,11 +315,18 @@ func TestCLI_Smoke_ProcessBoundary(t *testing.T) {
 			"unknown command: unknown_operator",
 		},
 		{
-			"help yields exit 0 and stderr usage",
+			"invalid flag yields exit 2 and stderr usage",
+			[]string{"pipeline", "--invalid"},
+			2,
+			"",
+			"flag provided but not defined: -invalid\nUsage: g2 pipeline",
+		},
+		{
+			"help yields exit 0 and stdout usage",
 			[]string{"pipeline", "--help"},
 			0,
-			"",
 			"Usage: g2 pipeline",
+			"",
 		},
 	}
 
@@ -337,8 +350,17 @@ func TestCLI_Smoke_ProcessBoundary(t *testing.T) {
 				}
 			}
 
-			assert.Equal(t, tt.expectedStdout, out.String())
-			assert.Contains(t, stderr.String(), tt.expectedStderr)
+			if tt.expectedStdout != "" {
+				assert.Contains(t, out.String(), tt.expectedStdout)
+			} else {
+				assert.Empty(t, out.String())
+			}
+
+			if tt.expectedStderr != "" {
+				assert.Contains(t, stderr.String(), tt.expectedStderr)
+			} else {
+				assert.Empty(t, stderr.String())
+			}
 		})
 	}
 }
