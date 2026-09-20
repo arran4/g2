@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -124,12 +125,12 @@ func getGitModifiedPackagesChanged(repoDir string, explicitBase string) ([]strin
 		}
 	}
 
-	pkgs := filterModifiedPackages(repoDir, files)
+	pkgs := filterModifiedPackages(os.DirFS(repoDir), files)
 
 	return pkgs, nil
 }
 
-func filterModifiedPackages(repoDir string, files []string) []string {
+func filterModifiedPackages(sysFS fs.FS, files []string) []string {
 	pkgMap := make(map[string]bool)
 	for _, f := range files {
 		f = filepath.ToSlash(f)
@@ -141,14 +142,14 @@ func filterModifiedPackages(repoDir string, files []string) []string {
 			// Lightly validate package against the file system to avoid needing to do a full parseRepo
 			// A valid Gentoo package is in a category/package directory that actually exists and is a directory
 			// containing at least one .ebuild file.
-			pkgPath := filepath.Join(repoDir, cat, pkg)
-			if stat, err := os.Stat(pkgPath); err == nil && stat.IsDir() {
+			pkgPath := cat + "/" + pkg
+			if stat, err := fs.Stat(sysFS, pkgPath); err == nil && stat.IsDir() {
 				// To be a real package, it shouldn't just be an arbitrary directory.
 				// Although just being a directory under a valid category is a strong hint,
 				// let's ensure it's not a top-level infra directory masking as a category.
 				if cat != "metadata" && cat != "profiles" && cat != "eclass" && cat != "licenses" && cat != "scripts" && cat != ".github" {
 					// Require at least one .ebuild file for it to be considered a current package target
-					entries, _ := os.ReadDir(pkgPath)
+					entries, _ := fs.ReadDir(sysFS, pkgPath)
 					isPkg := false
 					for _, e := range entries {
 						if strings.HasSuffix(e.Name(), ".ebuild") {

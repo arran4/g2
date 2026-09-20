@@ -5,35 +5,16 @@ import (
 	"os/exec"
 	"path/filepath"
 	"testing"
+	"testing/fstest"
 )
 
 func TestFilterModifiedPackages(t *testing.T) {
-	tmpDir := t.TempDir()
-
-	// Create a valid package structure
-	err := os.MkdirAll(filepath.Join(tmpDir, "app-misc", "foo"), 0755)
-	if err != nil {
-		t.Fatal(err)
-	}
-	err = os.WriteFile(filepath.Join(tmpDir, "app-misc", "foo", "foo-1.ebuild"), []byte(""), 0644)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// Create an invalid package structure (no ebuild)
-	err = os.MkdirAll(filepath.Join(tmpDir, "app-misc", "bar"), 0755)
-	if err != nil {
-		t.Fatal(err)
-	}
-	err = os.WriteFile(filepath.Join(tmpDir, "app-misc", "bar", "metadata.xml"), []byte(""), 0644)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// Create an infra directory
-	err = os.MkdirAll(filepath.Join(tmpDir, "metadata"), 0755)
-	if err != nil {
-		t.Fatal(err)
+	mockFS := fstest.MapFS{
+		"app-misc/foo/foo-1.ebuild": &fstest.MapFile{Data: []byte("")},
+		"app-misc/bar/metadata.xml": &fstest.MapFile{Data: []byte("")},
+		"metadata/layout.conf":      &fstest.MapFile{Data: []byte("")},
+		"scripts/some_script.sh":    &fstest.MapFile{Data: []byte("")},
+		"invalid-top-level-file":    &fstest.MapFile{Data: []byte("")},
 	}
 
 	files := []string{
@@ -45,7 +26,7 @@ func TestFilterModifiedPackages(t *testing.T) {
 		"scripts/some_script.sh",
 	}
 
-	pkgs := filterModifiedPackages(tmpDir, files)
+	pkgs := filterModifiedPackages(mockFS, files)
 
 	if len(pkgs) != 1 {
 		t.Fatalf("Expected 1 package, got %d: %v", len(pkgs), pkgs)
