@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"net/http"
 	"net/http/httptest"
+	"os/exec"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -61,14 +62,16 @@ func TestCLI(t *testing.T) {
 		args           []string
 		expected       string
 		expectError    bool
+		expectedErrStr string
 		expectedStderr string
 	}{
 		{
-			"exactly_one failure on zero cardinality emits no stdout and writes to stderr",
+			"exactly_one failure on zero cardinality emits no stdout and returns error",
 			[]string{"pipeline", `get(http://127.0.0.1:0/fail) | exactly_one`},
 			"",
 			true,
 			"connection refused",
+			"",
 		},
 		{
 			"substitution missing fails clearly",
@@ -76,6 +79,7 @@ func TestCLI(t *testing.T) {
 			"",
 			true,
 			"missing required substitution: ${VAR}",
+			"",
 		},
 		{
 			"required substitutions all succeed via CLI flags",
@@ -89,12 +93,14 @@ func TestCLI(t *testing.T) {
 			"1.2.3-v1.2.3-pkg-1.2.3.tar.gz\n",
 			false,
 			"",
+			"",
 		},
 		{
 			"positive trim via CLI",
 			[]string{"pipeline", "get(" + ts.URL + "/whitespace) | trim"},
 			"padded string\n",
 			false,
+			"",
 			"",
 		},
 		{
@@ -103,6 +109,7 @@ func TestCLI(t *testing.T) {
 			"",
 			true,
 			"expected 1 item, got 0",
+			"",
 		},
 		{
 			"single multiple items fails via CLI",
@@ -110,12 +117,14 @@ func TestCLI(t *testing.T) {
 			"",
 			true,
 			"expected 1 item, got 3",
+			"",
 		},
 		{
 			"single scalar numeric 0 preserves value via CLI",
 			[]string{"pipeline", "get(" + ts.URL + "/json_zero) | json(num) | single"},
 			"0\n",
 			false,
+			"",
 			"",
 		},
 		{
@@ -124,12 +133,14 @@ func TestCLI(t *testing.T) {
 			"false\n",
 			false,
 			"",
+			"",
 		},
 		{
 			"single scalar string 0 preserves value via CLI",
 			[]string{"pipeline", "get(" + ts.URL + "/json_str_zero) | json(s) | single"},
 			"0\n",
 			false,
+			"",
 			"",
 		},
 		{
@@ -138,6 +149,7 @@ func TestCLI(t *testing.T) {
 			"false\n",
 			false,
 			"",
+			"",
 		},
 		{
 			"single empty scalar string fails via CLI",
@@ -145,6 +157,7 @@ func TestCLI(t *testing.T) {
 			"",
 			true,
 			"expected 1 item, got 0",
+			"",
 		},
 		{
 			"replace non-string argument fails via CLI",
@@ -152,6 +165,7 @@ func TestCLI(t *testing.T) {
 			"",
 			true,
 			"arguments must be strings",
+			"",
 		},
 		{
 			"replace trailing characters after quote fails via CLI",
@@ -159,12 +173,14 @@ func TestCLI(t *testing.T) {
 			"",
 			true,
 			"trailing characters after quote",
+			"",
 		},
 		{
 			"list printing empty strings as empty lines",
 			[]string{"pipeline", "get(" + ts.URL + ") | json()"},
 			"a\n\nc\n",
 			false,
+			"",
 			"",
 		},
 		{
@@ -173,6 +189,7 @@ func TestCLI(t *testing.T) {
 			"",
 			false,
 			"",
+			"",
 		},
 		{
 			"empty scalar string without cardinality check produces no output",
@@ -180,6 +197,31 @@ func TestCLI(t *testing.T) {
 			"",
 			false,
 			"",
+			"",
+		},
+		{
+			"invalid flag produces error and help",
+			[]string{"pipeline", "--invalid"},
+			"",
+			true,
+			"flag provided but not defined: -invalid",
+			"Usage: g2 pipeline",
+		},
+		{
+			"missing arguments produces error and help",
+			[]string{"pipeline"},
+			"",
+			true,
+			"pipeline command requires exactly one argument",
+			"Usage: g2 pipeline",
+		},
+		{
+			"help flag outputs help",
+			[]string{"pipeline", "--help"},
+			"",
+			false,
+			"",
+			"Usage: g2 pipeline",
 		},
 	}
 
@@ -198,17 +240,19 @@ func TestCLI(t *testing.T) {
 
 			if tt.expectError {
 				assert.Error(t, err)
-				if tt.expectedStderr != "" {
-					errStr := ""
-					if err != nil {
-						errStr = err.Error()
-					}
-					assert.Contains(t, stderr.String()+errStr, tt.expectedStderr)
+				if tt.expectedErrStr != "" && err != nil {
+					assert.Contains(t, err.Error(), tt.expectedErrStr)
 				}
 			} else {
 				assert.NoError(t, err)
-				assert.Equal(t, tt.expected, out.String()) // Don't use TrimSpace to strictly verify trailing newlines
 			}
+
+			if tt.expectedStderr != "" {
+				assert.Contains(t, stderr.String(), tt.expectedStderr)
+			}
+
+			// For both success and failure cases, verify stdout content
+			assert.Equal(t, tt.expected, out.String()) // Don't use TrimSpace to strictly verify trailing newlines
 		})
 	}
 }
@@ -223,12 +267,80 @@ func TestCLI_UnknownOperatorFailure(t *testing.T) {
 	err := runPipeline([]string{"get(" + ts.URL + ") | unknown_operator"}, &stdout, &stderr)
 
 	assert.Error(t, err)
-	errStr := ""
 	if err != nil {
-		errStr = err.Error()
+		assert.Contains(t, err.Error(), "unknown command")
 	}
-	assert.Contains(t, stderr.String()+errStr, "unknown command")
+	assert.Empty(t, stderr.String()) // stderr should be empty because err is returned
 	assert.Empty(t, stdout.String())
+}
+
+func TestCLI_Smoke_ProcessBoundary(t *testing.T) {
+	// Only run this test if requested to explicitly test the process boundary,
+	// or let it run normally as it provides the critical end-to-end guarantee.
+	// As per issue instructions, we retain a minimal spawned-binary smoke test.
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`ok`))
+	}))
+	defer ts.Close()
+
+	binPath := t.TempDir() + "/g2-test-bin"
+
+	// Ensure we only build once
+	buildCmd := exec.Command("go", "build", "-o", binPath, ".")
+	var buildErr bytes.Buffer
+	buildCmd.Stderr = &buildErr
+	err := buildCmd.Run()
+	assert.NoError(t, err, "failed to build g2: %s", buildErr.String())
+
+	tests := []struct {
+		name           string
+		args           []string
+		expectedExit   int
+		expectedStdout string
+		expectedStderr string
+	}{
+		{
+			"evaluation failure yields exit 1 and stderr message",
+			[]string{"pipeline", "get(" + ts.URL + ") | unknown_operator"},
+			1,
+			"",
+			"unknown command: unknown_operator",
+		},
+		{
+			"help yields exit 0 and stderr usage",
+			[]string{"pipeline", "--help"},
+			0,
+			"",
+			"Usage: g2 pipeline",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := exec.Command(binPath, tt.args...)
+			var out bytes.Buffer
+			var stderr bytes.Buffer
+			c.Stdout = &out
+			c.Stderr = &stderr
+			err := c.Run()
+
+			if tt.expectedExit == 0 {
+				assert.NoError(t, err)
+			} else {
+				assert.Error(t, err)
+				if exitError, ok := err.(*exec.ExitError); ok {
+					assert.Equal(t, tt.expectedExit, exitError.ExitCode())
+				} else {
+					t.Fatalf("expected ExitError, got %T: %v", err, err)
+				}
+			}
+
+			assert.Equal(t, tt.expectedStdout, out.String())
+			assert.Contains(t, stderr.String(), tt.expectedStderr)
+		})
+	}
 }
 
 func TestCLI_TokenizerFailure(t *testing.T) {
@@ -242,10 +354,9 @@ func TestCLI_TokenizerFailure(t *testing.T) {
 	err := runPipeline([]string{"get(" + ts.URL + ") | replace('a, 'b')"}, &stdout, &stderr)
 
 	assert.Error(t, err)
-	errStr := ""
 	if err != nil {
-		errStr = err.Error()
+		assert.Contains(t, err.Error(), "unterminated quote")
 	}
-	assert.Contains(t, stderr.String()+errStr, "unterminated quote")
+	assert.Empty(t, stderr.String()) // stderr should be empty because err is returned
 	assert.Empty(t, stdout.String())
 }

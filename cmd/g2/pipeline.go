@@ -48,6 +48,9 @@ func runPipeline(args []string, stdout, stderr io.Writer) error {
 	}
 
 	if err := fs.Parse(args); err != nil {
+		if err == flag.ErrHelp {
+			return nil
+		}
 		return err
 	}
 
