@@ -216,6 +216,14 @@ func TestCLI(t *testing.T) {
 			"Usage: g2 pipeline",
 		},
 		{
+			"multiple arguments produces error and help",
+			[]string{"pipeline", "expr1", "expr2"},
+			"",
+			true,
+			"pipeline command requires exactly one argument",
+			"Usage: g2 pipeline",
+		},
+		{
 			"help flag outputs help",
 			[]string{"pipeline", "--help"},
 			"Usage: g2 pipeline",
@@ -254,10 +262,10 @@ func TestCLI(t *testing.T) {
 			}
 
 			// For both success and failure cases, verify stdout content
-			if tt.expected != "" {
+			if tt.name == "help flag outputs help" {
 				assert.Contains(t, out.String(), tt.expected)
 			} else {
-				assert.Empty(t, out.String())
+				assert.Equal(t, tt.expected, out.String()) // Don't use TrimSpace to strictly verify trailing newlines
 			}
 		})
 	}
