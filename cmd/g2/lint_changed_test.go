@@ -5,7 +5,36 @@ import (
 	"os/exec"
 	"path/filepath"
 	"testing"
+	"testing/fstest"
 )
+
+func TestFilterModifiedPackages(t *testing.T) {
+	mockFS := fstest.MapFS{
+		"app-misc/foo/foo-1.ebuild": &fstest.MapFile{Data: []byte("")},
+		"app-misc/bar/metadata.xml": &fstest.MapFile{Data: []byte("")},
+		"metadata/layout.conf":      &fstest.MapFile{Data: []byte("")},
+		"scripts/some_script.sh":    &fstest.MapFile{Data: []byte("")},
+		"invalid-top-level-file":    &fstest.MapFile{Data: []byte("")},
+	}
+
+	files := []string{
+		"app-misc/foo/foo-1.ebuild",
+		"app-misc/foo/foo-2.ebuild",
+		"app-misc/bar/metadata.xml",
+		"metadata/layout.conf",
+		"invalid-top-level-file",
+		"scripts/some_script.sh",
+	}
+
+	pkgs := filterModifiedPackages(mockFS, files)
+
+	if len(pkgs) != 1 {
+		t.Fatalf("Expected 1 package, got %d: %v", len(pkgs), pkgs)
+	}
+	if pkgs[0] != "app-misc/foo" {
+		t.Errorf("Expected app-misc/foo, got %s", pkgs[0])
+	}
+}
 
 func TestGetGitModifiedPackagesChanged(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "g2-git-test-*")

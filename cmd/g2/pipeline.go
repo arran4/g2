@@ -3,6 +3,8 @@ package main
 import (
 	"flag"
 	"fmt"
+	"io"
+	"os"
 	"strings"
 
 	"github.com/arran4/g2/pipeline"
@@ -29,23 +31,36 @@ func (m stringStringMapFlag) Set(value string) error {
 }
 
 func (cfg *MainArgConfig) cmdPipeline(args []string) error {
-	fs := flag.NewFlagSet("pipeline", flag.ExitOnError)
+	return runPipeline(args, os.Stdout, os.Stderr)
+}
+
+func runPipeline(args []string, stdout, stderr io.Writer) error {
+	fs := flag.NewFlagSet("pipeline", flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
 	subs := make(stringStringMapFlag)
 	fs.Var(&subs, "s", "Variable substitutions in KEY=VALUE format (can be specified multiple times)")
 
-	fs.Usage = func() {
-		fmt.Printf("Usage: g2 pipeline [flags] <pipeline_string>\n\n")
-		fmt.Printf("Evaluates a data extraction pipeline expression.\n\n")
-		fmt.Printf("Flags:\n")
+	printUsage := func(w io.Writer) {
+		_, _ = fmt.Fprintf(w, "Usage: g2 pipeline [flags] <pipeline_string>\n\n")
+		_, _ = fmt.Fprintf(w, "Evaluates a data extraction pipeline expression.\n\n")
+		_, _ = fmt.Fprintf(w, "Flags:\n")
+		fs.SetOutput(w)
 		fs.PrintDefaults()
 	}
+	fs.Usage = func() {}
 
 	if err := fs.Parse(args); err != nil {
-		return err
+		if err == flag.ErrHelp {
+			printUsage(stdout)
+			return nil
+		}
+		_, _ = fmt.Fprintln(stderr, err)
+		printUsage(stderr)
+		return &ExitError{Code: 2, Err: nil}
 	}
 
 	if fs.NArg() != 1 {
-		fs.Usage()
+		printUsage(stderr)
 		return fmt.Errorf("pipeline command requires exactly one argument: the pipeline expression")
 	}
 
@@ -67,13 +82,13 @@ func (cfg *MainArgConfig) cmdPipeline(args []string) error {
 		if val.IsList() {
 			for _, item := range val.List {
 				if item != nil {
-					fmt.Println(item)
+					_, _ = fmt.Fprintln(stdout, item)
 				}
 			}
 		} else {
 			strVal := val.GetString()
 			if strVal != "" {
-				fmt.Println(strVal)
+				_, _ = fmt.Fprintln(stdout, strVal)
 			}
 		}
 	}
