@@ -382,6 +382,8 @@ complete on-machine verification.
 **Example:**
 
 Generate the ebuild cache for the current overlay:
+`g2 cache generate` parses and statically evaluates repository ebuilds into `md5-dict` entries. The process fails-closed for correctness: literal list multiline metadata is safely normalized to space-separated values, but unsupported multiline scalar metadata (e.g. multi-line `DESCRIPTION`) or dynamic ebuild execution (like unresolved shell or eclass function outputs) fails rather than generating malformed cache.
+
 ```bash
 g2 cache generate
 ```

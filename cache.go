@@ -350,6 +350,28 @@ func isCacheVariable(key string) bool {
 	return validKeys[key]
 }
 
+func isListVariable(key string) bool {
+	listKeys := map[string]bool{
+		"BDEPEND":        true,
+		"DEPEND":         true,
+		"HOMEPAGE":       true,
+		"INHERITED":      true,
+		"IUSE":           true,
+		"KEYWORDS":       true,
+		"LICENSE":        true,
+		"PDEPEND":        true,
+		"PROPERTIES":     true,
+		"PROVIDE":        true,
+		"RDEPEND":        true,
+		"REQUIRED_USE":   true,
+		"RESTRICT":       true,
+		"SRC_URI":        true,
+		"_eclasses_":     true,
+		"DEFINED_PHASES": true,
+	}
+	return listKeys[key]
+}
+
 // GetExpectedCacheContent returns the expected cache string for an ebuild, or a CacheResultStatus indicating why it couldn't.
 func GetExpectedCacheContent(cfs CacheFS, ebuildPath string, ebuild *Ebuild, policy *CachePolicy, eclassResolver *EclassResolver) (string, CacheResultStatus, error) {
 	if ebuild == nil || ebuild.Vars == nil {
@@ -374,7 +396,16 @@ func GetExpectedCacheContent(cfs CacheFS, ebuildPath string, ebuild *Ebuild, pol
 		v := ebuild.Vars[k]
 		if v != "" {
 			if isCacheVariable(k) {
-				fmt.Fprintf(&expectedContent, "%s=%s\n", k, v)
+				var vStr string
+				if isListVariable(k) {
+					vStr = strings.Join(strings.Fields(v), " ")
+				} else {
+					if strings.Contains(v, "\n") {
+						return "", CacheError, fmt.Errorf("ebuild %s contains unsupported multiline scalar value for %s", ebuildPath, k)
+					}
+					vStr = v
+				}
+				fmt.Fprintf(&expectedContent, "%s=%s\n", k, vStr)
 			}
 		}
 	}
