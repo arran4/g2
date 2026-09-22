@@ -234,7 +234,7 @@ func ParseEbuild(fsys fs.FS, path string, mode ParsingMode) (*Ebuild, error) {
 		for _, assignment := range parsedEbuild.Assignments {
 			isUncertain := false
 
-			if strings.Contains(assignment.Value, "`") || strings.Contains(assignment.Value, "$(") || strings.Contains(assignment.Value, "$( ") {
+			if strings.Contains(assignment.Value, "`") || strings.Contains(assignment.Value, "$(") {
 				isUncertain = true
 			} else {
 				matches := reVar.FindAllStringSubmatch(assignment.Value, -1)
