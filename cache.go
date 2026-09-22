@@ -400,6 +400,9 @@ func GetExpectedCacheContent(cfs CacheFS, ebuildPath string, ebuild *Ebuild, pol
 				if isListVariable(k) {
 					vStr = strings.Join(strings.Fields(v), " ")
 				} else {
+					if strings.Contains(v, "\n") {
+						return "", CacheError, fmt.Errorf("ebuild %s contains unsupported multiline scalar value for %s", ebuildPath, k)
+					}
 					vStr = v
 				}
 				fmt.Fprintf(&expectedContent, "%s=%s\n", k, vStr)
