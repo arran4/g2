@@ -90,6 +90,9 @@ DEPEND="
 	}
 	resolver, _ := g2.BuildEclassResolver(cfs, ".", policy)
 	expected, status, err := g2.GetExpectedCacheContent(cfs, filepath.Join("app-test", "test", "test-1.0.ebuild"), ebuild, policy, resolver)
+	if err != nil {
+		t.Fatalf("Failed to get expected cache content: %v", err)
+	}
 
 	if status != g2.CacheDrift {
 		t.Fatalf("Expected cache status drift (meaning we constructed it), got %v", status)
