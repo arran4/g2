@@ -39,6 +39,10 @@ DEPEND="
     virtual/pkgconfig
     app-arch/unzip
 "
+BDEPEND="
+    dev-build/cmake
+    dev-build/ninja
+"
 `
 	if err := os.WriteFile(filepath.Join(pkgDir, "test-1.0.ebuild"), []byte(ebuildContent), 0644); err != nil {
 		t.Fatal(err)
@@ -60,6 +64,13 @@ DEPEND="
 
 	if strings.Contains(string(cacheData), "\n    ") {
 		t.Fatalf("Cache contains raw multiline data: %q", string(cacheData))
+	}
+
+	if !strings.Contains(string(cacheData), "DEPEND=virtual/pkgconfig app-arch/unzip") {
+		t.Fatalf("Cache does not contain properly flattened DEPEND string: %q", string(cacheData))
+	}
+	if !strings.Contains(string(cacheData), "BDEPEND=dev-build/cmake dev-build/ninja") {
+		t.Fatalf("Cache does not contain properly flattened BDEPEND string: %q", string(cacheData))
 	}
 
 	// 2. Direct Lint Integration (verifying specifically MD5CacheInvalidLintRule)
@@ -86,6 +97,12 @@ DEPEND="
 
 	// 3. Verify Cache
 	policy := g2.NewCachePolicy(g2.CacheModeCI)
+	// Run user-facing verification workflow
+	err = doCacheVerify(cfs, ".", policy)
+	if err != nil {
+		t.Fatalf("Cache verification via doCacheVerify failed: %v", err)
+	}
+
 	ebuild, err := g2.ParseEbuild(cfs, filepath.Join("app-test", "test", "test-1.0.ebuild"), g2.ParseFull)
 	if err != nil {
 		t.Fatalf("Failed to parse ebuild for verification: %v", err)
