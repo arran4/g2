@@ -374,7 +374,8 @@ func GetExpectedCacheContent(cfs CacheFS, ebuildPath string, ebuild *Ebuild, pol
 		v := ebuild.Vars[k]
 		if v != "" {
 			if isCacheVariable(k) {
-				fmt.Fprintf(&expectedContent, "%s=%s\n", k, v)
+				vStr := strings.Join(strings.Fields(v), " ")
+				fmt.Fprintf(&expectedContent, "%s=%s\n", k, vStr)
 			}
 		}
 	}

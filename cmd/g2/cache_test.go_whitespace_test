@@ -1,0 +1,9 @@
+package main
+import (
+    "testing"
+    "github.com/arran4/g2"
+    "github.com/arran4/g2/lints/md5cache"
+)
+func TestMd5CacheInvalidWithWhitespace(t *testing.T) {
+    // We'll write a test soon
+}

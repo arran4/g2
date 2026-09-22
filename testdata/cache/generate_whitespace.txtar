@@ -1,0 +1,11 @@
+-- metadata/layout.conf --
+masters =
+cache-formats = md5-dict
+-- profiles/categories --
+sys-apps
+-- sys-apps/test/test-1.ebuild --
+EAPI=8
+DEPEND="
+    $(llvm_gen_dep 'llvm-core/clang:${LLVM_SLOT}')
+    app-arch/unzip
+"
