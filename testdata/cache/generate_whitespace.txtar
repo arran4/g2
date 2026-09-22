@@ -6,6 +6,11 @@ sys-apps
 -- sys-apps/test/test-1.ebuild --
 EAPI=8
 DEPEND="
-    $(llvm_gen_dep 'llvm-core/clang:${LLVM_SLOT}')
+    virtual/pkgconfig
     app-arch/unzip
 "
+-- EXPECTED --
+-- metadata/md5-cache/sys-apps/test-1 --
+DEPEND=virtual/pkgconfig app-arch/unzip
+EAPI=8
+_md5_=66567167664e10ce0905307b22a578f7

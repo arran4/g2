@@ -302,6 +302,8 @@ func TestGenerateCacheRejectsUnevaluatedEclassAndDynamicMetadata(t *testing.T) {
 		{name: "eclass metadata", ebuild: "inherit example\n", eclass: "IUSE=\"feature\"\n"},
 		{name: "opaque eclass command", ebuild: "inherit example\n", eclass: "eval 'inherit child'\n"},
 		{name: "dynamic dependency", ebuild: "DEPEND=\"${UNSET_DEPEND}\"\n"},
+		{name: "llvm_gen_dep", ebuild: "DEPEND=\"$(llvm_gen_dep 'llvm-core/clang:${LLVM_SLOT}')\"\n"},
+		{name: "llvm_gen_dep space", ebuild: "DEPEND=\"$( llvm_gen_dep 'llvm-core/clang:${LLVM_SLOT}' )\"\n"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

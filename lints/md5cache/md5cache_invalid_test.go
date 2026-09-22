@@ -446,12 +446,12 @@ func TestMD5CacheInvalidLintRule_Whitespace(t *testing.T) {
 	_ = os.MkdirAll(filepath.Join(tempDir, "metadata", "md5-cache", "app-test"), 0755)
 	_ = os.MkdirAll(filepath.Join(tempDir, "app-test", "test"), 0755)
 
-	ebuildContent := []byte("EAPI=8\nDEPEND=\"\n    $(llvm_gen_dep 'llvm-core/clang:${LLVM_SLOT}')\n    app-arch/unzip\n\"")
+	ebuildContent := []byte("EAPI=8\nDEPEND=\"\n    app-arch/unzip\n\"")
 	_ = os.WriteFile(filepath.Join(tempDir, "app-test", "test", "test-1.0.ebuild"), ebuildContent, 0644)
 
 	md5sum := fmt.Sprintf("%x", md5.Sum(ebuildContent))
 
-	cacheContent := fmt.Sprintf("DEPEND=$(llvm_gen_dep 'llvm-core/clang:${LLVM_SLOT}') app-arch/unzip\n_md5_=%s\n", md5sum)
+	cacheContent := fmt.Sprintf("DEPEND=app-arch/unzip\n_md5_=%s\n", md5sum)
 	_ = os.WriteFile(filepath.Join(tempDir, "metadata", "md5-cache", "app-test", "test-1.0"), []byte(cacheContent), 0644)
 
 	results := rule.Lint(tempDir, pkg)
