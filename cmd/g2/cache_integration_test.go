@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"os"
 	"path/filepath"
 	"strings"
@@ -65,21 +64,17 @@ DEPEND="
 	// 2. Run Lint (simulating g2 lint)
 	cfg := &MainArgConfig{}
 
-	// Capture output to inspect warnings
-	oldStdout := os.Stdout
-	r, w, _ := os.Pipe()
-	os.Stdout = w
+	// We will capture stdout
+	out, errLint := captureStdout(t, func() error {
+		return cfg.cmdLint([]string{"--fail-severity=warning", dir})
+	})
 
-	err = cfg.cmdLint([]string{"--fail-severity=warning", dir})
+	if errLint != nil {
+		t.Logf("cmdLint returned error (expected since mock repo fails validations): %v", errLint)
+	}
 
-	w.Close()
-	os.Stdout = oldStdout
-
-	var output bytes.Buffer
-	output.ReadFrom(r)
-
-	if strings.Contains(output.String(), "[Warning] Invalid format in md5-cache") {
-		t.Fatalf("g2 lint reported invalid format: %s", output.String())
+	if strings.Contains(out, "[Warning] Invalid format in md5-cache") {
+		t.Fatalf("g2 lint reported invalid format: %s", out)
 	}
 
 	// 3. Verify Cache
