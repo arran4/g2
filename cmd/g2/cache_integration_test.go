@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/arran4/g2"
+	"github.com/arran4/g2/lints/md5cache"
 )
 
 func TestCacheIntegration_MultilineLiteral(t *testing.T) {
@@ -61,20 +62,26 @@ DEPEND="
 		t.Fatalf("Cache contains raw multiline data: %q", string(cacheData))
 	}
 
-	// 2. Run Lint (simulating g2 lint)
-	cfg := &MainArgConfig{}
-
-	// We will capture stdout
-	out, errLint := captureStdout(t, func() error {
-		return cfg.cmdLint([]string{"--fail-severity=warning", dir})
-	})
-
-	if errLint != nil {
-		t.Logf("cmdLint returned error (expected since mock repo fails validations): %v", errLint)
+	// 2. Direct Lint Integration (verifying specifically MD5CacheInvalidLintRule)
+	rule := &md5cache.MD5CacheInvalidLintRule{}
+	pkg := &g2.PackageData{
+		Category: "app-test",
+		Name:     "test",
+		Versions: []g2.VersionData{
+			{
+				Version: "1.0",
+				PVR:     "1.0",
+				Ebuild:  &g2.Ebuild{Path: filepath.Join(pkgDir, "test-1.0.ebuild")},
+			},
+		},
 	}
 
-	if strings.Contains(out, "[Warning] Invalid format in md5-cache") {
-		t.Fatalf("g2 lint reported invalid format: %s", out)
+	results := rule.Lint(dir, pkg)
+	if len(results) > 0 {
+		for _, r := range results {
+			t.Logf("Unexpected Lint Result: %s", r.Message)
+		}
+		t.Fatalf("Expected md5cache rule to report 0 errors for properly formatted cache, got %d", len(results))
 	}
 
 	// 3. Verify Cache
@@ -99,26 +106,24 @@ DEPEND="
 	}
 
 	// 4. Reconcile
-	// To test zero-mutation, check modtime before and after GenerateCacheFS (which handles reconciliation)
-	statBefore, err := os.Stat(cachePath)
+	baseCfs := g2.NewOsCacheFS(dir)
+	spy := &SpyCacheFS{CacheFS: baseCfs}
+
+	err = doCacheReconcile(spy, ".", policy)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("First reconcile failed: %v", err)
 	}
 
-	err = g2.GenerateCacheFS(cfs, ".", nil, policy)
+	spy.creates = 0
+	spy.removes = 0
+	spy.removesAll = 0
+
+	err = doCacheReconcile(spy, ".", policy)
 	if err != nil {
-		t.Fatalf("Second cache generation failed: %v", err)
+		t.Fatalf("Second reconcile failed: %v", err)
 	}
 
-	statAfter, err := os.Stat(cachePath)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if !os.SameFile(statBefore, statAfter) {
-		t.Fatalf("Cache was mutated on second run (reconciliation failed zero-mutation check)")
-	}
-	if statBefore.ModTime() != statAfter.ModTime() {
-		t.Fatalf("Cache modification time changed on second run")
+	if spy.creates > 0 || spy.removes > 0 || spy.removesAll > 0 {
+		t.Fatalf("Cache was mutated on second run (reconciliation failed zero-mutation check): %d creates, %d removes, %d removesAll", spy.creates, spy.removes, spy.removesAll)
 	}
 }
