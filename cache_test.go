@@ -24,7 +24,9 @@ var cacheTestdataFS embed.FS
 // MemCacheFS implements CacheFS for testing
 type MemCacheFS struct {
 	fs.FS
-	Map fstest.MapFS
+	Map     fstest.MapFS
+	Creates []string
+	Removes []string
 }
 
 func NewMemCacheFS(m fstest.MapFS) *MemCacheFS {
@@ -78,6 +80,7 @@ func (m *MemCacheFS) Remove(name string) error {
 		return os.ErrNotExist
 	}
 	delete(m.Map, name)
+	m.Removes = append(m.Removes, name)
 	return nil
 }
 
@@ -114,6 +117,12 @@ func TestCacheGenerate(t *testing.T) {
 					if !strings.Contains(err.Error(), "has unresolved BDEPEND; canonical cache metadata requires Portage evaluation") {
 						t.Fatalf("expected unresolved dependency error, got %v", err)
 					}
+
+
+					if len(memFS.Creates) > 0 || len(memFS.Removes) > 0 {
+						t.Fatalf("expected no creates or removes during failed dynamic preservation generation, got creates: %v, removes: %v", memFS.Creates, memFS.Removes)
+					}
+
 				} else {
 					t.Fatalf("run cache generate: %v", err)
 				}
@@ -136,6 +145,26 @@ func TestCacheGenerate(t *testing.T) {
 				}
 				wantStr := strings.TrimSpace(string(want))
 				gotStr := strings.TrimSpace(string(got))
+
+				if fixture == "testdata/cache/generate_dynamic_preservation.txtar" {
+					// Compare strict byte-for-byte, but normalize \r\n to \n to avoid cross platform issues, and trim exact trailing new lines that txtar might inject on parsing
+					wantClean := bytes.ReplaceAll(want, []byte("\r\n"), []byte("\n"))
+					gotClean := bytes.ReplaceAll(got, []byte("\r\n"), []byte("\n"))
+					if len(gotClean) > 0 && gotClean[len(gotClean)-1] == '\n' && (len(wantClean) == 0 || wantClean[len(wantClean)-1] != '\n') {
+						gotClean = gotClean[:len(gotClean)-1]
+					}
+					if len(wantClean) > 0 && wantClean[len(wantClean)-1] == '\n' && (len(gotClean) == 0 || gotClean[len(gotClean)-1] != '\n') {
+						wantClean = wantClean[:len(wantClean)-1]
+					}
+					// Strip double new lines at the end injected by txtar parsing.
+					if len(gotClean) > 1 && gotClean[len(gotClean)-1] == '\n' && gotClean[len(gotClean)-2] == '\n' {
+						gotClean = gotClean[:len(gotClean)-1]
+					}
+					if !bytes.Equal(wantClean, gotClean) {
+						t.Errorf("file %s mismatch byte-for-byte in preservation test:\nwant:\n%q\n\ngot:\n%q", name, string(wantClean), string(gotClean))
+					}
+					continue
+				}
 
 				// for tests sort lines of md5-dict to prevent flaky order matching
 				if strings.Contains(name, "md5-dict") {

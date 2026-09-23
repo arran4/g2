@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -375,6 +376,72 @@ func TestMD5CacheInvalidLintRule_Lint_RejectsMultiline(t *testing.T) {
 	results := rule.lintFS(fsys, ".", pkg, nil, nil)
 	if len(results) == 0 {
 		t.Fatalf("Expected results for multiline cache, got 0")
+	}
+}
+
+func TestMD5CacheInvalidLintRule_Lint_InjectedEclassHash(t *testing.T) {
+	ebuildContent := "EAPI=8\n"
+	ebuildMd5 := fmt.Sprintf("%x", md5.Sum([]byte(ebuildContent)))
+	cacheContent := fmt.Sprintf("EAPI=8\n_eclasses_=shared\tknownhash\n_md5_=%s\n", ebuildMd5)
+
+	fsys := fstest.MapFS{
+		"metadata/md5-cache/app-misc/foo-1.0": &fstest.MapFile{
+			Data: []byte(cacheContent),
+		},
+		"app-misc/foo/foo-1.0.ebuild": &fstest.MapFile{
+			Data: []byte(ebuildContent),
+		},
+		"eclass/shared.eclass": &fstest.MapFile{
+			Data: []byte("content"),
+		},
+	}
+
+	pkg := &g2.PackageData{
+		Category: "app-misc",
+		Name:     "foo",
+		Versions: []g2.VersionData{
+			{
+				Version: "1.0",
+				PVR:     "1.0",
+				Ebuild:  &g2.Ebuild{Path: "app-misc/foo/foo-1.0.ebuild"},
+			},
+		},
+	}
+
+	// Test mismatch
+	rule := &MD5CacheInvalidLintRule{}
+	results := rule.lintFS(fsys, ".", pkg, nil, func(path string) (string, error) {
+		// Mock testing getEclassMD5 for injected fsys
+		if path == "eclass/shared.eclass" {
+			data, _ := fsys.ReadFile("eclass/shared.eclass")
+			return fmt.Sprintf("%x", md5.Sum(data)), nil
+		}
+		return "", nil
+	})
+	if len(results) != 1 {
+		t.Fatalf("Expected 1 result for mismatching eclass hash, got %d: %v", len(results), results)
+	}
+	if !strings.Contains(results[0].Message, "Incorrect eclass md5 for shared in md5-cache") {
+		t.Fatalf("Expected specific mismatch error, got %v", results[0].Message)
+	}
+
+	// Test matching eclass
+	realEclassMd5 := fmt.Sprintf("%x", md5.Sum([]byte("content")))
+	cacheContentValid := fmt.Sprintf("EAPI=8\n_eclasses_=shared\t%s\n_md5_=%s\n", realEclassMd5, ebuildMd5)
+	fsys["metadata/md5-cache/app-misc/foo-1.0"].Data = []byte(cacheContentValid)
+
+	// Reset cache for accurate testing
+	rule = &MD5CacheInvalidLintRule{}
+	results = rule.lintFS(fsys, ".", pkg, nil, func(path string) (string, error) {
+		// Mock testing getEclassMD5 for injected fsys
+		if path == "eclass/shared.eclass" {
+			data, _ := fsys.ReadFile("eclass/shared.eclass")
+			return fmt.Sprintf("%x", md5.Sum(data)), nil
+		}
+		return "", nil
+	})
+	if len(results) != 0 {
+		t.Fatalf("Expected 0 results for matching eclass hash, got %d: %v", len(results), results)
 	}
 }
 
