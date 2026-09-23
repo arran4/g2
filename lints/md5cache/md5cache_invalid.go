@@ -6,6 +6,7 @@ import (
 	"crypto/md5"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -209,6 +210,10 @@ func (r *MD5CacheInvalidLintRule) Lint(repoDir string, pkg *g2.PackageData) []li
 }
 
 func (r *MD5CacheInvalidLintRule) LintWithQA(repoDir string, pkg *g2.PackageData, qa *g2.QAPolicy) []lints.LintResult {
+	return r.lintFS(os.DirFS(repoDir), repoDir, pkg, qa, r.getEclassMD5)
+}
+
+func (r *MD5CacheInvalidLintRule) lintFS(fsys fs.FS, repoDir string, pkg *g2.PackageData, qa *g2.QAPolicy, hashEclass func(path string) (string, error)) []lints.LintResult {
 	var results []lints.LintResult
 	severity := lints.SeverityWarning
 
@@ -235,7 +240,13 @@ func (r *MD5CacheInvalidLintRule) LintWithQA(repoDir string, pkg *g2.PackageData
 			ident := g2.GetCacheIdentity(repoDir, "md5-dict", pkg.Category, pkg.Name, ver)
 			cachePath := ident.CachePath
 
-			f, err := os.Open(cachePath)
+			var f fs.File
+			var err error
+			relCachePath := filepath.ToSlash(strings.TrimPrefix(cachePath, repoDir))
+			if relCachePath != "" && relCachePath[0] == '/' {
+				relCachePath = relCachePath[1:]
+			}
+			f, err = fsys.Open(relCachePath)
 			if err != nil {
 				// Handled by missing md5-cache rule
 				continue
@@ -284,7 +295,11 @@ func (r *MD5CacheInvalidLintRule) LintWithQA(repoDir string, pkg *g2.PackageData
 				results = append(results, res)
 			} else {
 				ebuildPath := ident.EbuildPath
-				ebuildData, err := os.ReadFile(ebuildPath)
+				relEbuildPath := filepath.ToSlash(strings.TrimPrefix(ebuildPath, repoDir))
+				if relEbuildPath != "" && relEbuildPath[0] == '/' {
+					relEbuildPath = relEbuildPath[1:]
+				}
+				ebuildData, err := fs.ReadFile(fsys, relEbuildPath)
 				if err == nil {
 					actualMd5 := fmt.Sprintf("%x", md5.Sum(ebuildData))
 					if actualMd5 != ebuildMd5 {
@@ -315,7 +330,7 @@ func (r *MD5CacheInvalidLintRule) LintWithQA(repoDir string, pkg *g2.PackageData
 						eclassMd5 := eclassParts[i+1]
 
 						eclassPath := filepath.Join(repoDir, "eclass", eclassName+".eclass")
-						actualEclassMd5, err := r.getEclassMD5(eclassPath)
+						actualEclassMd5, err := hashEclass(eclassPath)
 
 						if err == nil && actualEclassMd5 != eclassMd5 {
 							res := lints.LintResult{

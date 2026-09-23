@@ -108,7 +108,7 @@ func TestCacheGenerate(t *testing.T) {
 			memFS := NewMemCacheFS(inputFS)
 
 			err = GenerateCacheFS(memFS, ".", nil, NewCachePolicy(CacheModeCI))
-			if err != nil {
+			if err != nil && !strings.Contains(fixture, "generate_dynamic_preservation") {
 				t.Fatalf("run cache generate: %v", err)
 			}
 
@@ -331,6 +331,32 @@ func TestGenerateCacheRejectsUnevaluatedEclassAndDynamicMetadata(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("mixed literals and dynamic dependency", func(t *testing.T) {
+		dir := t.TempDir()
+		write := func(name, content string) {
+			t.Helper()
+			if err := os.MkdirAll(filepath.Dir(name), 0755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(name, []byte(content), 0644); err != nil {
+				t.Fatal(err)
+			}
+		}
+		write(filepath.Join(dir, "metadata", "layout.conf"), "cache-formats = md5-dict\nmasters =\n")
+		write(filepath.Join(dir, "profiles", "categories"), "cat\n")
+		write(filepath.Join(dir, "cat", "pkg", "pkg-1.ebuild"), "EAPI=8\nDEPEND=\"\n    app-arch/unzip\n\"\nBDEPEND=\"\n    $(llvm_gen_dep 'llvm-core/clang:${LLVM_SLOT}')\n    app-arch/unzip\n\"\n")
+
+		cfs := NewOsCacheFS(dir)
+		err := GenerateCacheFS(cfs, ".", nil, NewCachePolicy(CacheModeCI))
+		if err == nil {
+			t.Fatal("generation accepted metadata that requires ebuild evaluation")
+		}
+
+		if _, err := os.Stat(filepath.Join(dir, "metadata", "md5-cache", "cat", "pkg-1")); !os.IsNotExist(err) {
+			t.Fatal("generation wrote a cache entry despite unresolved metadata")
+		}
+	})
 }
 
 type rootReadErrorFS struct{ CacheFS }

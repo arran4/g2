@@ -9,6 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"testing/fstest"
+
 	"github.com/arran4/g2"
 )
 
@@ -327,6 +329,81 @@ func TestMD5CacheInvalidLintRule_Replacement(t *testing.T) {
 	hash2, err := rule.getEclassMD5(eclassFile)
 	if err != nil || hash2 != fmt.Sprintf("%x", md5.Sum(content2)) {
 		t.Fatalf("Failed file replacement validation (SameFile check): expected %s, got %s", fmt.Sprintf("%x", md5.Sum(content2)), hash2)
+	}
+}
+
+func TestMD5CacheInvalidLintRule_Lint_IgnoresMissingCache(t *testing.T) {
+	fsys := fstest.MapFS{}
+
+	pkg := &g2.PackageData{
+		Category: "app-misc",
+		Name:     "foo",
+		Versions: []g2.VersionData{
+			{
+				Version: "1.0",
+				PVR:     "1.0",
+				Ebuild:  &g2.Ebuild{},
+			},
+		},
+	}
+	rule := &MD5CacheInvalidLintRule{}
+	results := rule.lintFS(fsys, ".", pkg, nil, nil)
+	if len(results) != 0 {
+		t.Errorf("Expected 0 results for missing cache, got %d", len(results))
+	}
+}
+
+func TestMD5CacheInvalidLintRule_Lint_RejectsMultiline(t *testing.T) {
+	fsys := fstest.MapFS{
+		"metadata/md5-cache/app-misc/foo-1.0": &fstest.MapFile{
+			Data: []byte("BDEPEND=\n    app-arch/unzip\n_md5_=d41d8cd98f00b204e9800998ecf8427e"),
+		},
+	}
+
+	pkg := &g2.PackageData{
+		Category: "app-misc",
+		Name:     "foo",
+		Versions: []g2.VersionData{
+			{
+				Version: "1.0",
+				PVR:     "1.0",
+				Ebuild:  &g2.Ebuild{},
+			},
+		},
+	}
+	rule := &MD5CacheInvalidLintRule{}
+	results := rule.lintFS(fsys, ".", pkg, nil, nil)
+	if len(results) == 0 {
+		t.Fatalf("Expected results for multiline cache, got 0")
+	}
+}
+
+func TestMD5CacheInvalidLintRule_Lint_ValidStaticMetadata(t *testing.T) {
+	fsys := fstest.MapFS{
+		"metadata/md5-cache/app-misc/foo-1.0": &fstest.MapFile{
+			Data: []byte("BDEPEND=app-arch/unzip dev-build/cmake\n_md5_=d41d8cd98f00b204e9800998ecf8427e"),
+		},
+		"app-misc/foo/foo-1.0.ebuild": &fstest.MapFile{
+			Data: []byte(""),
+		},
+	}
+
+	pkg := &g2.PackageData{
+		Category: "app-misc",
+		Name:     "foo",
+		Versions: []g2.VersionData{
+			{
+				Version: "1.0",
+				PVR:     "1.0",
+				Ebuild:  &g2.Ebuild{Path: "app-misc/foo/foo-1.0.ebuild"},
+			},
+		},
+	}
+
+	rule := &MD5CacheInvalidLintRule{}
+	results := rule.lintFS(fsys, ".", pkg, nil, nil)
+	if len(results) != 0 {
+		t.Fatalf("Expected 0 results for valid static metadata cache, got %d: %v", len(results), results)
 	}
 }
 
