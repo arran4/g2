@@ -117,12 +117,9 @@ func TestCacheGenerate(t *testing.T) {
 					if !strings.Contains(err.Error(), "has unresolved BDEPEND; canonical cache metadata requires Portage evaluation") {
 						t.Fatalf("expected unresolved dependency error, got %v", err)
 					}
-
-
 					if len(memFS.Creates) > 0 || len(memFS.Removes) > 0 {
 						t.Fatalf("expected no creates or removes during failed dynamic preservation generation, got creates: %v, removes: %v", memFS.Creates, memFS.Removes)
 					}
-
 				} else {
 					t.Fatalf("run cache generate: %v", err)
 				}
