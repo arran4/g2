@@ -41,9 +41,9 @@ func TestMD5CacheInvalidLintRule_InjectedEclassHashes(t *testing.T) {
 	ebuildMD5 := fmt.Sprintf("%x", md5.Sum([]byte(ebuild)))
 	const cachePath = "metadata/md5-cache/app-misc/foo-1.0"
 	fsys := fstest.MapFS{
-		cachePath:                    &fstest.MapFile{},
+		cachePath:                     &fstest.MapFile{},
 		"app-misc/foo/foo-1.0.ebuild": &fstest.MapFile{Data: []byte(ebuild)},
-		"eclass/shared.eclass":       &fstest.MapFile{Data: []byte(eclass)},
+		"eclass/shared.eclass":        &fstest.MapFile{Data: []byte(eclass)},
 	}
 
 	for _, tc := range []struct {
