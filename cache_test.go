@@ -24,9 +24,10 @@ var cacheTestdataFS embed.FS
 // MemCacheFS implements CacheFS for testing
 type MemCacheFS struct {
 	fs.FS
-	Map     fstest.MapFS
-	Creates []string
-	Removes []string
+	Map        fstest.MapFS
+	Creates    []string
+	Removes    []string
+	RemoveAlls []string
 }
 
 func NewMemCacheFS(m fstest.MapFS) *MemCacheFS {
@@ -76,11 +77,11 @@ func (m *MemCacheFS) RemoveAll(name string) error {
 }
 
 func (m *MemCacheFS) Remove(name string) error {
+	m.Removes = append(m.Removes, name)
 	if _, ok := m.Map[name]; !ok {
 		return os.ErrNotExist
 	}
 	delete(m.Map, name)
-	m.Removes = append(m.Removes, name)
 	return nil
 }
 
@@ -111,22 +112,8 @@ func TestCacheGenerate(t *testing.T) {
 			memFS := NewMemCacheFS(inputFS)
 
 			err = GenerateCacheFS(memFS, ".", nil, NewCachePolicy(CacheModeCI))
-			if err != nil {
-				// Assert specific expected error if dynamic preservation test is run
-				if fixture == "testdata/cache/generate_dynamic_preservation.txtar" {
-					if !strings.Contains(err.Error(), "has unresolved BDEPEND; canonical cache metadata requires Portage evaluation") {
-						t.Fatalf("expected unresolved dependency error, got %v", err)
-					}
-					if len(memFS.Creates) > 0 || len(memFS.Removes) > 0 {
-						t.Fatalf("expected no creates or removes during failed dynamic preservation generation, got creates: %v, removes: %v", memFS.Creates, memFS.Removes)
-					}
-				} else {
-					t.Fatalf("run cache generate: %v", err)
-				}
-			} else {
-				if fixture == "testdata/cache/generate_dynamic_preservation.txtar" {
-					t.Fatalf("generation unexpectedly succeeded despite unresolved metadata")
-				}
+			if err != nil && fixture != "testdata/cache/generate_dynamic_preservation.txtar" {
+				t.Fatalf("run cache generate: %v", err)
 			}
 
 			wantFiles, err := WalkFiles(expectedFS, ".")
@@ -142,26 +129,6 @@ func TestCacheGenerate(t *testing.T) {
 				}
 				wantStr := strings.TrimSpace(string(want))
 				gotStr := strings.TrimSpace(string(got))
-
-				if fixture == "testdata/cache/generate_dynamic_preservation.txtar" {
-					// Compare strict byte-for-byte, but normalize \r\n to \n to avoid cross platform issues, and trim exact trailing new lines that txtar might inject on parsing
-					wantClean := bytes.ReplaceAll(want, []byte("\r\n"), []byte("\n"))
-					gotClean := bytes.ReplaceAll(got, []byte("\r\n"), []byte("\n"))
-					if len(gotClean) > 0 && gotClean[len(gotClean)-1] == '\n' && (len(wantClean) == 0 || wantClean[len(wantClean)-1] != '\n') {
-						gotClean = gotClean[:len(gotClean)-1]
-					}
-					if len(wantClean) > 0 && wantClean[len(wantClean)-1] == '\n' && (len(gotClean) == 0 || gotClean[len(gotClean)-1] != '\n') {
-						wantClean = wantClean[:len(wantClean)-1]
-					}
-					// Strip double new lines at the end injected by txtar parsing.
-					if len(gotClean) > 1 && gotClean[len(gotClean)-1] == '\n' && gotClean[len(gotClean)-2] == '\n' {
-						gotClean = gotClean[:len(gotClean)-1]
-					}
-					if !bytes.Equal(wantClean, gotClean) {
-						t.Errorf("file %s mismatch byte-for-byte in preservation test:\nwant:\n%q\n\ngot:\n%q", name, string(wantClean), string(gotClean))
-					}
-					continue
-				}
 
 				// for tests sort lines of md5-dict to prevent flaky order matching
 				if strings.Contains(name, "md5-dict") {
@@ -391,5 +358,44 @@ func TestGenerateCachePropagatesRootCategoryDiscoveryFailure(t *testing.T) {
 	err := GenerateCacheFS(rootReadErrorFS{NewOsCacheFS(dir)}, ".", nil, NewCachePolicy(CacheModeCI))
 	if err == nil || !strings.Contains(err.Error(), "discovering categories") {
 		t.Fatalf("root discovery error was swallowed: %v", err)
+	}
+}
+
+func TestGenerateCachePreservesDynamicMetadata(t *testing.T) {
+	ar, err := cacheTestdataFS.ReadFile("testdata/cache/generate_dynamic_preservation.txtar")
+	if err != nil {
+		t.Fatalf("Failed to read fixture: %v", err)
+	}
+
+	inputFS, _ := SplitInputExpected(txtar.Parse(ar))
+
+	memFS := NewMemCacheFS(inputFS)
+
+	originalCacheData, err := fs.ReadFile(memFS, "metadata/md5-cache/sys-apps/test-1.0")
+	if err != nil {
+		t.Fatalf("Failed to read original cache: %v", err)
+	}
+
+	err = GenerateCacheFS(memFS, ".", nil, NewCachePolicy(CacheModeCI))
+	if err == nil {
+		t.Fatal("Expected GenerateCacheFS to fail on dynamic dependency but it returned nil")
+	}
+
+	if !strings.Contains(err.Error(), "has unresolved BDEPEND") {
+		t.Fatalf("Expected unresolved BDEPEND error, got: %v", err)
+	}
+
+	if len(memFS.Creates) > 0 || len(memFS.Removes) > 0 {
+		t.Fatalf("Expected zero Creates or Removes. Got Creates: %v, Removes: %v", memFS.Creates, memFS.Removes)
+	}
+
+	postCacheData, err := fs.ReadFile(memFS, "metadata/md5-cache/sys-apps/test-1.0")
+	if err != nil {
+		t.Fatalf("Failed to read post cache data: %v", err)
+	}
+
+	// We format input data by keeping it completely unmodified
+	if !bytes.Equal(originalCacheData, postCacheData) {
+		t.Fatalf("Expected existing cache bytes to be preserved byte-for-byte. Want:\n%q\nGot:\n%q", string(originalCacheData), string(postCacheData))
 	}
 }
