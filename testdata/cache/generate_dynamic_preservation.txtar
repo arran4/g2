@@ -1,0 +1,39 @@
+-- input/metadata/layout.conf --
+cache-formats = md5-dict
+masters =
+-- input/profiles/categories --
+sys-apps
+-- input/sys-apps/test/test-1.0.ebuild --
+DESCRIPTION="A test ebuild"
+SLOT="0"
+EAPI="8"
+BDEPEND="
+    $(llvm_gen_dep 'llvm-core/clang:${LLVM_SLOT}')
+    app-arch/unzip
+"
+-- input/metadata/md5-cache/sys-apps/test-1.0 --
+BDEPEND=$(llvm_gen_dep 'llvm-core/clang:${LLVM_SLOT}') app-arch/unzip
+DESCRIPTION=A test ebuild
+EAPI=8
+SLOT=0
+_md5_=existing_invalid_hash_to_be_preserved
+
+-- expected/metadata/layout.conf --
+cache-formats = md5-dict
+masters =
+-- expected/profiles/categories --
+sys-apps
+-- expected/sys-apps/test/test-1.0.ebuild --
+DESCRIPTION="A test ebuild"
+SLOT="0"
+EAPI="8"
+BDEPEND="
+    $(llvm_gen_dep 'llvm-core/clang:${LLVM_SLOT}')
+    app-arch/unzip
+"
+-- expected/metadata/md5-cache/sys-apps/test-1.0 --
+BDEPEND=$(llvm_gen_dep 'llvm-core/clang:${LLVM_SLOT}') app-arch/unzip
+DESCRIPTION=A test ebuild
+EAPI=8
+SLOT=0
+_md5_=existing_invalid_hash_to_be_preserved

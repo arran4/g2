@@ -24,7 +24,10 @@ var cacheTestdataFS embed.FS
 // MemCacheFS implements CacheFS for testing
 type MemCacheFS struct {
 	fs.FS
-	Map fstest.MapFS
+	Map        fstest.MapFS
+	Creates    []string
+	Removes    []string
+	RemoveAlls []string
 }
 
 func NewMemCacheFS(m fstest.MapFS) *MemCacheFS {
@@ -74,6 +77,7 @@ func (m *MemCacheFS) RemoveAll(name string) error {
 }
 
 func (m *MemCacheFS) Remove(name string) error {
+	m.Removes = append(m.Removes, name)
 	if _, ok := m.Map[name]; !ok {
 		return os.ErrNotExist
 	}
@@ -108,7 +112,7 @@ func TestCacheGenerate(t *testing.T) {
 			memFS := NewMemCacheFS(inputFS)
 
 			err = GenerateCacheFS(memFS, ".", nil, NewCachePolicy(CacheModeCI))
-			if err != nil {
+			if err != nil && fixture != "testdata/cache/generate_dynamic_preservation.txtar" {
 				t.Fatalf("run cache generate: %v", err)
 			}
 
@@ -331,6 +335,7 @@ func TestGenerateCacheRejectsUnevaluatedEclassAndDynamicMetadata(t *testing.T) {
 			}
 		})
 	}
+
 }
 
 type rootReadErrorFS struct{ CacheFS }
@@ -353,5 +358,44 @@ func TestGenerateCachePropagatesRootCategoryDiscoveryFailure(t *testing.T) {
 	err := GenerateCacheFS(rootReadErrorFS{NewOsCacheFS(dir)}, ".", nil, NewCachePolicy(CacheModeCI))
 	if err == nil || !strings.Contains(err.Error(), "discovering categories") {
 		t.Fatalf("root discovery error was swallowed: %v", err)
+	}
+}
+
+func TestGenerateCachePreservesDynamicMetadata(t *testing.T) {
+	ar, err := cacheTestdataFS.ReadFile("testdata/cache/generate_dynamic_preservation.txtar")
+	if err != nil {
+		t.Fatalf("Failed to read fixture: %v", err)
+	}
+
+	inputFS, _ := SplitInputExpected(txtar.Parse(ar))
+
+	memFS := NewMemCacheFS(inputFS)
+
+	originalCacheData, err := fs.ReadFile(memFS, "metadata/md5-cache/sys-apps/test-1.0")
+	if err != nil {
+		t.Fatalf("Failed to read original cache: %v", err)
+	}
+
+	err = GenerateCacheFS(memFS, ".", nil, NewCachePolicy(CacheModeCI))
+	if err == nil {
+		t.Fatal("Expected GenerateCacheFS to fail on dynamic dependency but it returned nil")
+	}
+
+	if !strings.Contains(err.Error(), "has unresolved BDEPEND") {
+		t.Fatalf("Expected unresolved BDEPEND error, got: %v", err)
+	}
+
+	if len(memFS.Creates) > 0 || len(memFS.Removes) > 0 || len(memFS.RemoveAlls) > 0 {
+		t.Fatalf("Expected zero Creates, Removes, or RemoveAlls. Got Creates: %v, Removes: %v, RemoveAlls: %v", memFS.Creates, memFS.Removes, memFS.RemoveAlls)
+	}
+
+	postCacheData, err := fs.ReadFile(memFS, "metadata/md5-cache/sys-apps/test-1.0")
+	if err != nil {
+		t.Fatalf("Failed to read post cache data: %v", err)
+	}
+
+	// We format input data by keeping it completely unmodified
+	if !bytes.Equal(originalCacheData, postCacheData) {
+		t.Fatalf("Expected existing cache bytes to be preserved byte-for-byte. Want:\n%q\nGot:\n%q", string(originalCacheData), string(postCacheData))
 	}
 }
