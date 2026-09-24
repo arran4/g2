@@ -385,8 +385,8 @@ func TestGenerateCachePreservesDynamicMetadata(t *testing.T) {
 		t.Fatalf("Expected unresolved BDEPEND error, got: %v", err)
 	}
 
-	if len(memFS.Creates) > 0 || len(memFS.Removes) > 0 {
-		t.Fatalf("Expected zero Creates or Removes. Got Creates: %v, Removes: %v", memFS.Creates, memFS.Removes)
+	if len(memFS.Creates) > 0 || len(memFS.Removes) > 0 || len(memFS.RemoveAlls) > 0 {
+		t.Fatalf("Expected zero Creates, Removes, or RemoveAlls. Got Creates: %v, Removes: %v, RemoveAlls: %v", memFS.Creates, memFS.Removes, memFS.RemoveAlls)
 	}
 
 	postCacheData, err := fs.ReadFile(memFS, "metadata/md5-cache/sys-apps/test-1.0")
