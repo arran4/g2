@@ -1,10 +1,14 @@
 package main
 
 import (
+	"bytes"
+	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"testing/fstest"
 
 	"github.com/arran4/g2"
 	"github.com/arran4/g2/lints/md5cache"
@@ -142,5 +146,131 @@ BDEPEND="
 
 	if spy.creates > 0 || spy.removes > 0 || spy.removesAll > 0 {
 		t.Fatalf("Cache was mutated on second run (reconciliation failed zero-mutation check): %d creates, %d removes, %d removesAll", spy.creates, spy.removes, spy.removesAll)
+	}
+}
+
+// MemCacheFS implements CacheFS for testing
+type MemCacheFS struct {
+	fs.FS
+	Map        fstest.MapFS
+	Creates    []string
+	Removes    []string
+	RemoveAlls []string
+}
+
+func NewMemCacheFS(m fstest.MapFS) *MemCacheFS {
+	return &MemCacheFS{
+		FS:  m,
+		Map: m,
+	}
+}
+
+func (m *MemCacheFS) MkdirAll(path string, perm os.FileMode) error {
+	m.Map[path] = &fstest.MapFile{Mode: perm | fs.ModeDir}
+	return nil
+}
+
+type memFile struct {
+	name string
+	buf  *bytes.Buffer
+	m    *MemCacheFS
+}
+
+func (f *memFile) Write(p []byte) (n int, err error) {
+	return f.buf.Write(p)
+}
+
+func (f *memFile) Close() error {
+	f.m.Map[f.name] = &fstest.MapFile{Data: f.buf.Bytes()}
+	return nil
+}
+
+func (m *MemCacheFS) Create(name string) (io.WriteCloser, error) {
+	return &memFile{
+		name: name,
+		buf:  new(bytes.Buffer),
+		m:    m,
+	}, nil
+}
+
+func (m *MemCacheFS) RemoveAll(name string) error {
+	for k := range m.Map {
+		if k == name || (len(k) > len(name) && k[:len(name)+1] == name+"/") {
+			delete(m.Map, k)
+		}
+	}
+	return nil
+}
+
+func (m *MemCacheFS) Remove(name string) error {
+	m.Removes = append(m.Removes, name)
+	if _, ok := m.Map[name]; !ok {
+		return os.ErrNotExist
+	}
+	delete(m.Map, name)
+	return nil
+}
+
+func (m *MemCacheFS) Walk(root string, fn fs.WalkDirFunc) error {
+	return fs.WalkDir(m.FS, root, fn)
+}
+
+func (m *MemCacheFS) Stat(name string) (fs.FileInfo, error) {
+	return fs.Stat(m.Map, name)
+}
+
+type errorReadFS struct {
+	g2.CacheFS
+	failPath string
+}
+
+func (e errorReadFS) Open(name string) (fs.File, error) {
+	if name == e.failPath {
+		return nil, fs.ErrPermission // Simulated unexpected read error
+	}
+	return e.CacheFS.(fs.FS).Open(name)
+}
+
+func TestCacheIntegration_ExistingValidCache_ReadFailure(t *testing.T) {
+	ebuildContent := `EAPI=8
+DESCRIPTION="Integration test"
+DEPEND="
+    virtual/pkgconfig
+    app-arch/unzip
+"
+BDEPEND="
+    dev-build/cmake
+    dev-build/ninja
+"
+`
+	validCacheContent := "DEPEND=virtual/pkgconfig app-arch/unzip\n_md5_=dummy"
+	inputFS := fstest.MapFS{
+		"metadata/layout.conf":                 &fstest.MapFile{Data: []byte("cache-formats = md5-dict\nmasters =\n")},
+		"profiles/categories":                  &fstest.MapFile{Data: []byte("app-test\n")},
+		"app-test/test/test-1.0.ebuild":        &fstest.MapFile{Data: []byte(ebuildContent)},
+		"metadata/md5-cache/app-test/test-1.0": &fstest.MapFile{Data: []byte(validCacheContent)},
+	}
+
+	baseFS := NewMemCacheFS(inputFS)
+	spyFS := &SpyCacheFS{CacheFS: baseFS}
+	errorFS := &errorReadFS{CacheFS: spyFS, failPath: "metadata/md5-cache/app-test/test-1.0"}
+
+	err := g2.GenerateCacheFS(errorFS, ".", nil, g2.NewCachePolicy(g2.CacheModeCI))
+	if err == nil {
+		t.Fatalf("Expected GenerateCacheFS to fail due to unexpected read error")
+	}
+
+	if !strings.Contains(err.Error(), "reading existing cache file") {
+		t.Fatalf("Expected error propagating read failure, got: %v", err)
+	}
+
+	// Verify the cache content was NOT changed and no writes were attempted
+	cachePath := filepath.ToSlash(filepath.Join("metadata", "md5-cache", "app-test", "test-1.0"))
+	cacheData, _ := fs.ReadFile(baseFS, cachePath)
+	if string(cacheData) != validCacheContent {
+		t.Fatalf("Existing valid cache was modified!")
+	}
+	if spyFS.creates > 0 || spyFS.removes > 0 || spyFS.removesAll > 0 {
+		t.Fatalf("Virtual filesystem mutated! creates: %d, removes: %d, removesAll: %d", spyFS.creates, spyFS.removes, spyFS.removesAll)
 	}
 }
