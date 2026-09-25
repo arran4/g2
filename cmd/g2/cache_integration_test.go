@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"io/fs"
 	"os"
@@ -52,11 +53,24 @@ BDEPEND="
 		t.Fatalf("Cache contains raw multiline data: %q", string(cacheData))
 	}
 
-	if !strings.Contains(string(cacheData), "DEPEND=virtual/pkgconfig app-arch/unzip") {
-		t.Fatalf("Cache does not contain properly flattened DEPEND string: %q", string(cacheData))
+	cacheStr := string(cacheData)
+	lines := strings.Split(cacheStr, "\n")
+	foundDepend := false
+	foundBdepend := false
+	for _, line := range lines {
+		if line == "DEPEND=virtual/pkgconfig app-arch/unzip" {
+			foundDepend = true
+		}
+		if line == "BDEPEND=dev-build/cmake dev-build/ninja" {
+			foundBdepend = true
+		}
 	}
-	if !strings.Contains(string(cacheData), "BDEPEND=dev-build/cmake dev-build/ninja") {
-		t.Fatalf("Cache does not contain properly flattened BDEPEND string: %q", string(cacheData))
+
+	if !foundDepend {
+		t.Fatalf("Cache does not contain exactly flattened DEPEND line: %q", cacheStr)
+	}
+	if !foundBdepend {
+		t.Fatalf("Cache does not contain exactly flattened BDEPEND line: %q", cacheStr)
 	}
 
 	// 2. Direct Lint Integration (verifying specifically MD5CacheInvalidLintRule)
