@@ -16,27 +16,6 @@ import (
 
 func TestCacheIntegration_MultilineLiteral(t *testing.T) {
 	// Setup repo
-	dir := t.TempDir()
-
-	if err := os.MkdirAll(filepath.Join(dir, "metadata"), 0755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(dir, "metadata", "layout.conf"), []byte("cache-formats = md5-dict\nmasters =\n"), 0644); err != nil {
-		t.Fatal(err)
-	}
-
-	if err := os.MkdirAll(filepath.Join(dir, "profiles"), 0755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(dir, "profiles", "categories"), []byte("app-test\n"), 0644); err != nil {
-		t.Fatal(err)
-	}
-
-	pkgDir := filepath.Join(dir, "app-test", "test")
-	if err := os.MkdirAll(pkgDir, 0755); err != nil {
-		t.Fatal(err)
-	}
-
 	ebuildContent := `EAPI=8
 DESCRIPTION="Integration test"
 DEPEND="
@@ -48,20 +27,23 @@ BDEPEND="
     dev-build/ninja
 "
 `
-	if err := os.WriteFile(filepath.Join(pkgDir, "test-1.0.ebuild"), []byte(ebuildContent), 0644); err != nil {
-		t.Fatal(err)
+	inputFS := fstest.MapFS{
+		"metadata/layout.conf":          &fstest.MapFile{Data: []byte("cache-formats = md5-dict\nmasters =\n")},
+		"profiles/categories":           &fstest.MapFile{Data: []byte("app-test\n")},
+		"app-test/test/test-1.0.ebuild": &fstest.MapFile{Data: []byte(ebuildContent)},
 	}
 
 	// 1. Generate Cache
-	cfs := g2.NewOsCacheFS(dir)
+	baseFS := NewMemCacheFS(inputFS)
+	cfs := &SpyCacheFS{CacheFS: baseFS}
 	err := g2.GenerateCacheFS(cfs, ".", nil, g2.NewCachePolicy(g2.CacheModeCI))
 	if err != nil {
 		t.Fatalf("Cache generation failed: %v", err)
 	}
 
 	// Ensure cache was generated
-	cachePath := filepath.Join(dir, "metadata", "md5-cache", "app-test", "test-1.0")
-	cacheData, err := os.ReadFile(cachePath)
+	cachePath := filepath.ToSlash(filepath.Join("metadata", "md5-cache", "app-test", "test-1.0"))
+	cacheData, err := fs.ReadFile(baseFS, cachePath)
 	if err != nil {
 		t.Fatalf("Cache file not created: %v", err)
 	}
@@ -86,12 +68,12 @@ BDEPEND="
 			{
 				Version: "1.0",
 				PVR:     "1.0",
-				Ebuild:  &g2.Ebuild{Path: filepath.Join(pkgDir, "test-1.0.ebuild")},
+				Ebuild:  &g2.Ebuild{Path: filepath.ToSlash(filepath.Join("app-test", "test", "test-1.0.ebuild"))},
 			},
 		},
 	}
 
-	results := rule.Lint(dir, pkg)
+	results := rule.LintFS(baseFS, ".", pkg, nil, nil)
 	if len(results) > 0 {
 		for _, r := range results {
 			t.Logf("Unexpected Lint Result: %s", r.Message)
@@ -127,8 +109,7 @@ BDEPEND="
 	}
 
 	// 4. Reconcile
-	baseCfs := g2.NewOsCacheFS(dir)
-	spy := &SpyCacheFS{CacheFS: baseCfs}
+	spy := &SpyCacheFS{CacheFS: cfs}
 
 	err = doCacheReconcile(spy, ".", policy)
 	if err != nil {

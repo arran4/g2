@@ -330,7 +330,13 @@ func (r *MD5CacheInvalidLintRule) LintFS(fsys fs.FS, repoDir string, pkg *g2.Pac
 						eclassMd5 := eclassParts[i+1]
 
 						eclassPath := filepath.Join(repoDir, "eclass", eclassName+".eclass")
-						actualEclassMd5, err := hashEclass(eclassPath)
+						var actualEclassMd5 string
+						var err error
+						if hashEclass != nil {
+							actualEclassMd5, err = hashEclass(eclassPath)
+						} else {
+							err = fmt.Errorf("no hash function provided")
+						}
 
 						if err == nil && actualEclassMd5 != eclassMd5 {
 							res := lints.LintResult{
