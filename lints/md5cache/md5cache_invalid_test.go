@@ -347,7 +347,7 @@ func TestMD5CacheInvalidLintRule_Lint_IgnoresMissingCache(t *testing.T) {
 		},
 	}
 	rule := &MD5CacheInvalidLintRule{}
-	results := rule.lintFS(fsys, ".", pkg, nil, nil)
+	results := rule.LintFS(fsys, ".", pkg, nil, nil)
 	if len(results) != 0 {
 		t.Errorf("Expected 0 results for missing cache, got %d", len(results))
 	}
@@ -372,7 +372,7 @@ func TestMD5CacheInvalidLintRule_Lint_RejectsMultiline(t *testing.T) {
 		},
 	}
 	rule := &MD5CacheInvalidLintRule{}
-	results := rule.lintFS(fsys, ".", pkg, nil, nil)
+	results := rule.LintFS(fsys, ".", pkg, nil, nil)
 	if len(results) == 0 {
 		t.Fatalf("Expected results for multiline cache, got 0")
 	}
@@ -401,7 +401,7 @@ func TestMD5CacheInvalidLintRule_Lint_ValidStaticMetadata(t *testing.T) {
 	}
 
 	rule := &MD5CacheInvalidLintRule{}
-	results := rule.lintFS(fsys, ".", pkg, nil, nil)
+	results := rule.LintFS(fsys, ".", pkg, nil, nil)
 	if len(results) != 0 {
 		t.Fatalf("Expected 0 results for valid static metadata cache, got %d: %v", len(results), results)
 	}
