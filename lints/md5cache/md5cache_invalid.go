@@ -335,7 +335,24 @@ func (r *MD5CacheInvalidLintRule) LintFS(fsys fs.FS, repoDir string, pkg *g2.Pac
 						if hashEclass != nil {
 							actualEclassMd5, err = hashEclass(eclassPath)
 						} else {
-							err = fmt.Errorf("no hash function provided")
+							// Natively read the eclass from the passed fsys to hash it!
+							// Eclasses might be in eclass/ or some other relative path.
+							// Use forward slashes.
+							ePath := filepath.ToSlash(eclassPath)
+							// Make relative if it starts with repoDir to be safe with fsys
+							relPath := ePath
+							if strings.HasPrefix(ePath, filepath.ToSlash(repoDir)+"/") {
+								relPath = strings.TrimPrefix(ePath, filepath.ToSlash(repoDir)+"/")
+							} else if repoDir == "." && strings.HasPrefix(ePath, "./") {
+								relPath = strings.TrimPrefix(ePath, "./")
+							}
+
+							eclassData, eErr := fs.ReadFile(fsys, relPath)
+							if eErr != nil {
+								err = fmt.Errorf("reading eclass natively: %w", eErr)
+							} else {
+								actualEclassMd5 = fmt.Sprintf("%x", md5.Sum(eclassData))
+							}
 						}
 
 						if err == nil && actualEclassMd5 != eclassMd5 {

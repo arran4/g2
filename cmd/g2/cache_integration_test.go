@@ -2,6 +2,8 @@ package main
 
 import (
 	"bytes"
+	"crypto/md5"
+	"fmt"
 	"io"
 	"io/fs"
 	"os"
@@ -132,14 +134,15 @@ BDEPEND="
 	spy.creates = 0
 	spy.removes = 0
 	spy.removesAll = 0
+	spy.MkdirAlls = 0
 
 	err = doCacheReconcile(spy, ".", policy)
 	if err != nil {
 		t.Fatalf("Second reconcile failed: %v", err)
 	}
 
-	if spy.creates > 0 || spy.removes > 0 || spy.removesAll > 0 {
-		t.Fatalf("Cache was mutated on second run (reconciliation failed zero-mutation check): %d creates, %d removes, %d removesAll", spy.creates, spy.removes, spy.removesAll)
+	if spy.creates > 0 || spy.removes > 0 || spy.removesAll > 0 || spy.MkdirAlls > 0 {
+		t.Fatalf("Cache was mutated on second run (reconciliation failed zero-mutation check): %d creates, %d removes, %d removesAll, %d mkdirAlls", spy.creates, spy.removes, spy.removesAll, spy.MkdirAlls)
 	}
 }
 
@@ -150,6 +153,8 @@ type MemCacheFS struct {
 	Creates    []string
 	Removes    []string
 	RemoveAlls []string
+	MkdirAlls  []string
+	Writes     []string
 }
 
 func NewMemCacheFS(m fstest.MapFS) *MemCacheFS {
@@ -160,7 +165,23 @@ func NewMemCacheFS(m fstest.MapFS) *MemCacheFS {
 }
 
 func (m *MemCacheFS) MkdirAll(path string, perm os.FileMode) error {
-	m.Map[path] = &fstest.MapFile{Mode: perm | fs.ModeDir}
+	m.MkdirAlls = append(m.MkdirAlls, path)
+	parts := strings.Split(filepath.ToSlash(path), "/")
+	var current string
+	for _, p := range parts {
+		if p == "" {
+			continue
+		}
+		if current == "" {
+			current = p
+		} else {
+			current = current + "/" + p
+		}
+		// If it does not exist, create it as a directory. Ignore if exists.
+		if _, ok := m.Map[current]; !ok {
+			m.Map[current] = &fstest.MapFile{Mode: perm | fs.ModeDir}
+		}
+	}
 	return nil
 }
 
@@ -171,6 +192,7 @@ type memFile struct {
 }
 
 func (f *memFile) Write(p []byte) (n int, err error) {
+	f.m.Writes = append(f.m.Writes, f.name)
 	return f.buf.Write(p)
 }
 
@@ -180,6 +202,7 @@ func (f *memFile) Close() error {
 }
 
 func (m *MemCacheFS) Create(name string) (io.WriteCloser, error) {
+	m.Creates = append(m.Creates, name)
 	return &memFile{
 		name: name,
 		buf:  new(bytes.Buffer),
@@ -188,6 +211,7 @@ func (m *MemCacheFS) Create(name string) (io.WriteCloser, error) {
 }
 
 func (m *MemCacheFS) RemoveAll(name string) error {
+	m.RemoveAlls = append(m.RemoveAlls, name)
 	for k := range m.Map {
 		if k == name || (len(k) > len(name) && k[:len(name)+1] == name+"/") {
 			delete(m.Map, k)
@@ -249,6 +273,7 @@ BDEPEND="
 	spyFS := &SpyCacheFS{CacheFS: baseFS}
 	errorFS := &errorReadFS{CacheFS: spyFS, failPath: "metadata/md5-cache/app-test/test-1.0"}
 
+	snapshotBefore := snapshotMapFS(baseFS.Map)
 	err := g2.GenerateCacheFS(errorFS, ".", nil, g2.NewCachePolicy(g2.CacheModeCI))
 	if err == nil {
 		t.Fatalf("Expected GenerateCacheFS to fail due to unexpected read error")
@@ -267,6 +292,9 @@ BDEPEND="
 	if spyFS.creates > 0 || spyFS.removes > 0 || spyFS.removesAll > 0 || spyFS.MkdirAlls > 0 {
 		t.Fatalf("Virtual filesystem mutated! creates: %d, removes: %d, removesAll: %d, mkdirAlls: %d", spyFS.creates, spyFS.removes, spyFS.removesAll, spyFS.MkdirAlls)
 	}
+
+	assertMapFSSnapshotEqual(t, snapshotBefore, snapshotMapFS(baseFS.Map))
+
 }
 
 func TestCacheIntegration_AbsentCacheDirectory_UnsupportedMetadata(t *testing.T) {
@@ -418,5 +446,48 @@ func assertMapFSSnapshotEqual(t *testing.T, before, after map[string]string) {
 		if _, ok := before[k]; !ok {
 			t.Errorf("File %s was newly added to snapshot", k)
 		}
+	}
+}
+
+func TestCacheIntegration_EclassHashFallback(t *testing.T) {
+	ebuildContent := `EAPI=8
+DESCRIPTION="Integration test eclass"
+DEPEND="virtual/pkgconfig"
+INHERITED="test-eclass"
+`
+	eclassContent := `# testing eclass`
+	validCacheContent := "DEPEND=virtual/pkgconfig\nINHERITED=test-eclass\n_eclasses_=test-eclass\t" + fmt.Sprintf("%x", md5.Sum([]byte(eclassContent))) + "\n_md5_=" + fmt.Sprintf("%x", md5.Sum([]byte(ebuildContent)))
+
+	inputFS := fstest.MapFS{
+		"metadata/layout.conf":                 &fstest.MapFile{Data: []byte("cache-formats = md5-dict\nmasters =\n")},
+		"profiles/categories":                  &fstest.MapFile{Data: []byte("app-test\n")},
+		"eclass/test-eclass.eclass":            &fstest.MapFile{Data: []byte(eclassContent)},
+		"app-test/test/test-1.0.ebuild":        &fstest.MapFile{Data: []byte(ebuildContent)},
+		"metadata/md5-cache/app-test/test-1.0": &fstest.MapFile{Data: []byte(validCacheContent)},
+	}
+
+	baseFS := NewMemCacheFS(inputFS)
+
+	// We pass nil for hashEclass to test the native fallback implementation
+	rule := &md5cache.MD5CacheInvalidLintRule{}
+	pkg := &g2.PackageData{
+		Category: "app-test",
+		Name:     "test",
+		Versions: []g2.VersionData{
+			{
+				Version: "1.0",
+				PVR:     "1.0",
+				Ebuild:  &g2.Ebuild{Path: filepath.ToSlash(filepath.Join("app-test", "test", "test-1.0.ebuild"))},
+			},
+		},
+	}
+
+	results := rule.LintFS(baseFS, ".", pkg, nil, nil)
+	if len(results) > 0 {
+		for _, r := range results {
+			t.Errorf("Unexpected Lint Result: %s", r.Message)
+		}
+		t.Fatalf("Expected 0 errors for eclass lint fallback, got %d", len(results))
+
 	}
 }
