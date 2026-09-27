@@ -264,7 +264,159 @@ BDEPEND="
 	if string(cacheData) != validCacheContent {
 		t.Fatalf("Existing valid cache was modified!")
 	}
-	if spyFS.creates > 0 || spyFS.removes > 0 || spyFS.removesAll > 0 {
-		t.Fatalf("Virtual filesystem mutated! creates: %d, removes: %d, removesAll: %d", spyFS.creates, spyFS.removes, spyFS.removesAll)
+	if spyFS.creates > 0 || spyFS.removes > 0 || spyFS.removesAll > 0 || spyFS.MkdirAlls > 0 {
+		t.Fatalf("Virtual filesystem mutated! creates: %d, removes: %d, removesAll: %d, mkdirAlls: %d", spyFS.creates, spyFS.removes, spyFS.removesAll, spyFS.MkdirAlls)
+	}
+}
+
+func TestCacheIntegration_AbsentCacheDirectory_UnsupportedMetadata(t *testing.T) {
+	ebuildContent := `EAPI=8
+DESCRIPTION="Integration test"
+DEPEND="
+    virtual/pkgconfig
+    app-arch/unzip
+"
+BDEPEND="
+    dev-build/cmake
+    $(some_dynamic_function)
+"
+`
+	inputFS := fstest.MapFS{
+		"metadata/layout.conf":          &fstest.MapFile{Data: []byte("cache-formats = md5-dict\nmasters =\n")},
+		"profiles/categories":           &fstest.MapFile{Data: []byte("app-test\n")},
+		"app-test/test/test-1.0.ebuild": &fstest.MapFile{Data: []byte(ebuildContent)},
+	}
+
+	baseFS := NewMemCacheFS(inputFS)
+	cfs := &SpyCacheFS{CacheFS: baseFS}
+	snapshotBefore := snapshotMapFS(baseFS.Map)
+	err := g2.GenerateCacheFS(cfs, ".", nil, g2.NewCachePolicy(g2.CacheModeCI))
+	if err == nil {
+		t.Fatalf("Expected GenerateCacheFS to fail due to unsupported metadata")
+	}
+
+	// Verify the cache directory was NOT created
+	cacheDir := filepath.ToSlash(filepath.Join("metadata", "md5-cache", "app-test"))
+	if _, ok := baseFS.Map[cacheDir]; ok {
+		t.Fatalf("Cache directory %s was created prematurely!", cacheDir)
+	}
+	if cfs.creates > 0 || cfs.removes > 0 || cfs.removesAll > 0 || cfs.MkdirAlls > 0 {
+		t.Fatalf("Virtual filesystem mutated! creates: %d, removes: %d, removesAll: %d, mkdirAlls: %d", cfs.creates, cfs.removes, cfs.removesAll, cfs.MkdirAlls)
+	}
+	assertMapFSSnapshotEqual(t, snapshotBefore, snapshotMapFS(baseFS.Map))
+}
+
+func TestCacheIntegration_ExistingValidCache_UnsupportedMetadata(t *testing.T) {
+	ebuildContent := `EAPI=8
+DESCRIPTION="Integration test"
+DEPEND="
+    virtual/pkgconfig
+    app-arch/unzip
+"
+BDEPEND="
+    dev-build/cmake
+    $(some_dynamic_function)
+"
+`
+	validCacheContent := "DEPEND=virtual/pkgconfig app-arch/unzip\n_md5_=dummy"
+	inputFS := fstest.MapFS{
+		"metadata/layout.conf":                 &fstest.MapFile{Data: []byte("cache-formats = md5-dict\nmasters =\n")},
+		"profiles/categories":                  &fstest.MapFile{Data: []byte("app-test\n")},
+		"app-test/test/test-1.0.ebuild":        &fstest.MapFile{Data: []byte(ebuildContent)},
+		"metadata/md5-cache/app-test/test-1.0": &fstest.MapFile{Data: []byte(validCacheContent)},
+	}
+
+	baseFS := NewMemCacheFS(inputFS)
+	cfs := &SpyCacheFS{CacheFS: baseFS}
+	snapshotBefore := snapshotMapFS(baseFS.Map)
+	err := g2.GenerateCacheFS(cfs, ".", nil, g2.NewCachePolicy(g2.CacheModeCI))
+	if err == nil {
+		t.Fatalf("Expected GenerateCacheFS to fail due to unsupported metadata")
+	}
+
+	// Verify the cache content was NOT changed
+	cachePath := filepath.ToSlash(filepath.Join("metadata", "md5-cache", "app-test", "test-1.0"))
+	cacheData, _ := fs.ReadFile(baseFS, cachePath)
+	if string(cacheData) != validCacheContent {
+		t.Fatalf("Existing valid cache was modified!")
+	}
+	if cfs.creates > 0 || cfs.removes > 0 || cfs.removesAll > 0 || cfs.MkdirAlls > 0 {
+		t.Fatalf("Virtual filesystem mutated! creates: %d, removes: %d, removesAll: %d, mkdirAlls: %d", cfs.creates, cfs.removes, cfs.removesAll, cfs.MkdirAlls)
+	}
+	assertMapFSSnapshotEqual(t, snapshotBefore, snapshotMapFS(baseFS.Map))
+}
+
+func TestCacheIntegration_UnchangedValidEntry_RepeatedReconciliation(t *testing.T) {
+	ebuildContent := `EAPI=8
+DESCRIPTION="Integration test"
+DEPEND="
+    virtual/pkgconfig
+    app-arch/unzip
+"
+BDEPEND="
+    dev-build/cmake
+    dev-build/ninja
+"
+`
+	inputFS := fstest.MapFS{
+		"metadata/layout.conf":          &fstest.MapFile{Data: []byte("cache-formats = md5-dict\nmasters =\n")},
+		"profiles/categories":           &fstest.MapFile{Data: []byte("app-test\n")},
+		"app-test/test/test-1.0.ebuild": &fstest.MapFile{Data: []byte(ebuildContent)},
+	}
+
+	baseFS := NewMemCacheFS(inputFS)
+	cfs := &SpyCacheFS{CacheFS: baseFS}
+	// Initial Generation
+	err := g2.GenerateCacheFS(cfs, ".", nil, g2.NewCachePolicy(g2.CacheModeCI))
+	if err != nil {
+		t.Fatalf("Cache generation failed: %v", err)
+	}
+
+	policy := g2.NewCachePolicy(g2.CacheModeCI)
+
+	// First Reconcile
+	spy := &SpyCacheFS{CacheFS: cfs}
+	err = doCacheReconcile(spy, ".", policy)
+	if err != nil {
+		t.Fatalf("First reconcile failed: %v", err)
+	}
+
+	// Second Reconcile
+	spy.creates = 0
+	spy.removes = 0
+	spy.removesAll = 0
+	spy.MkdirAlls = 0
+	snapshotBefore := snapshotMapFS(baseFS.Map)
+	err = doCacheReconcile(spy, ".", policy)
+	if err != nil {
+		t.Fatalf("Second reconcile failed: %v", err)
+	}
+
+	if spy.creates > 0 || spy.removes > 0 || spy.removesAll > 0 || spy.MkdirAlls > 0 {
+		t.Fatalf("Repeated reconciliation mutated cache: %d creates, %d removes, %d removesAll, %d mkdirAlls", spy.creates, spy.removes, spy.removesAll, spy.MkdirAlls)
+	}
+	assertMapFSSnapshotEqual(t, snapshotBefore, snapshotMapFS(baseFS.Map))
+}
+
+func snapshotMapFS(m fstest.MapFS) map[string]string {
+	snap := make(map[string]string)
+	for k, v := range m {
+		snap[k] = string(v.Data) + "|" + string(rune(v.Mode))
+	}
+	return snap
+}
+
+func assertMapFSSnapshotEqual(t *testing.T, before, after map[string]string) {
+	for k, vBefore := range before {
+		if vAfter, ok := after[k]; !ok {
+			t.Errorf("File %s was deleted from snapshot", k)
+		} else if vBefore != vAfter {
+			t.Errorf("File %s content/mode changed: %q -> %q", k, vBefore, vAfter)
+		}
+	}
+	for k := range after {
+		if _, ok := before[k]; !ok {
+			t.Errorf("File %s was newly added to snapshot", k)
+		}
 	}
 }
