@@ -210,10 +210,6 @@ func GenerateCacheFS(cfs CacheFS, repoDir string, targetPkgs []string, policy *C
 					if ident.CachePath == "" {
 						continue // unsupported format
 					}
-					cacheDir := filepath.ToSlash(filepath.Dir(ident.CachePath))
-					if err := cfs.MkdirAll(cacheDir, 0755); err != nil {
-						return fmt.Errorf("creating cache directory %s: %w", cacheDir, err)
-					}
 
 					verCachePath := ident.CachePath
 
@@ -231,6 +227,11 @@ func GenerateCacheFS(cfs CacheFS, repoDir string, targetPkgs []string, policy *C
 					}
 					if err != nil && !errors.Is(err, fs.ErrNotExist) {
 						return fmt.Errorf("reading existing cache file %s: %w", verCachePath, err)
+					}
+
+					cacheDir := filepath.ToSlash(filepath.Dir(ident.CachePath))
+					if err := cfs.MkdirAll(cacheDir, 0755); err != nil {
+						return fmt.Errorf("creating cache directory %s: %w", cacheDir, err)
 					}
 
 					f, err := cfs.Create(verCachePath)

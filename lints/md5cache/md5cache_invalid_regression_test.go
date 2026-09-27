@@ -27,7 +27,7 @@ func TestMD5CacheInvalidLintRule_MultilineReportsContinuation(t *testing.T) {
 		"metadata/md5-cache/app-misc/foo-1.0": &fstest.MapFile{Data: []byte(cache)},
 		"app-misc/foo/foo-1.0.ebuild":         &fstest.MapFile{Data: []byte(ebuild)},
 	}
-	results := (&MD5CacheInvalidLintRule{}).lintFS(fsys, ".", regressionPackage(), nil, nil)
+	results := (&MD5CacheInvalidLintRule{}).LintFS(fsys, ".", regressionPackage(), nil, nil)
 	const want = "Invalid format in md5-cache for foo-1.0:     app-arch/unzip"
 	if len(results) != 1 || !strings.Contains(results[0].Message, want) {
 		t.Fatalf("expected exactly the malformed continuation diagnostic %q; got %#v", want, results)
@@ -63,7 +63,7 @@ func TestMD5CacheInvalidLintRule_InjectedEclassHashes(t *testing.T) {
 				}
 				return eclassMD5, nil
 			}
-			results := (&MD5CacheInvalidLintRule{}).lintFS(fsys, ".", regressionPackage(), nil, hashEclass)
+			results := (&MD5CacheInvalidLintRule{}).LintFS(fsys, ".", regressionPackage(), nil, hashEclass)
 			if calls != 1 {
 				t.Fatalf("expected one eclass hash callback, got %d", calls)
 			}

@@ -56,6 +56,7 @@ type SpyCacheFS struct {
 	creates    int
 	removes    int
 	removesAll int
+	MkdirAlls  int
 }
 
 type failingCacheEbuildFS struct {
@@ -85,6 +86,11 @@ func (f failingCacheEbuildFS) Open(name string) (fs.File, error) {
 func (s *SpyCacheFS) Create(name string) (io.WriteCloser, error) {
 	s.creates++
 	return s.CacheFS.Create(name)
+}
+
+func (s *SpyCacheFS) MkdirAll(path string, perm os.FileMode) error {
+	s.MkdirAlls++
+	return s.CacheFS.MkdirAll(path, perm)
 }
 
 func (s *SpyCacheFS) Remove(name string) error {

@@ -210,10 +210,10 @@ func (r *MD5CacheInvalidLintRule) Lint(repoDir string, pkg *g2.PackageData) []li
 }
 
 func (r *MD5CacheInvalidLintRule) LintWithQA(repoDir string, pkg *g2.PackageData, qa *g2.QAPolicy) []lints.LintResult {
-	return r.lintFS(os.DirFS(repoDir), repoDir, pkg, qa, r.getEclassMD5)
+	return r.LintFS(os.DirFS(repoDir), repoDir, pkg, qa, r.getEclassMD5)
 }
 
-func (r *MD5CacheInvalidLintRule) lintFS(fsys fs.FS, repoDir string, pkg *g2.PackageData, qa *g2.QAPolicy, hashEclass func(path string) (string, error)) []lints.LintResult {
+func (r *MD5CacheInvalidLintRule) LintFS(fsys fs.FS, repoDir string, pkg *g2.PackageData, qa *g2.QAPolicy, hashEclass func(path string) (string, error)) []lints.LintResult {
 	var results []lints.LintResult
 	severity := lints.SeverityWarning
 
@@ -330,7 +330,30 @@ func (r *MD5CacheInvalidLintRule) lintFS(fsys fs.FS, repoDir string, pkg *g2.Pac
 						eclassMd5 := eclassParts[i+1]
 
 						eclassPath := filepath.Join(repoDir, "eclass", eclassName+".eclass")
-						actualEclassMd5, err := hashEclass(eclassPath)
+						var actualEclassMd5 string
+						var err error
+						if hashEclass != nil {
+							actualEclassMd5, err = hashEclass(eclassPath)
+						} else {
+							// Natively read the eclass from the passed fsys to hash it!
+							// Eclasses might be in eclass/ or some other relative path.
+							// Use forward slashes.
+							ePath := filepath.ToSlash(eclassPath)
+							// Make relative if it starts with repoDir to be safe with fsys
+							relPath := ePath
+							if strings.HasPrefix(ePath, filepath.ToSlash(repoDir)+"/") {
+								relPath = strings.TrimPrefix(ePath, filepath.ToSlash(repoDir)+"/")
+							} else if repoDir == "." && strings.HasPrefix(ePath, "./") {
+								relPath = strings.TrimPrefix(ePath, "./")
+							}
+
+							eclassData, eErr := fs.ReadFile(fsys, relPath)
+							if eErr != nil {
+								err = fmt.Errorf("reading eclass natively: %w", eErr)
+							} else {
+								actualEclassMd5 = fmt.Sprintf("%x", md5.Sum(eclassData))
+							}
+						}
 
 						if err == nil && actualEclassMd5 != eclassMd5 {
 							res := lints.LintResult{
