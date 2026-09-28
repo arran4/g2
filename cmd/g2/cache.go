@@ -448,6 +448,7 @@ func cachePolicy(mode, masters, reposConf string) (*g2.CachePolicy, error) {
 		return nil, err
 	}
 	policy.ReposConfPath = reposConf
+	policy.PortageContext = &g2.OSExecPortageContext{}
 	if masters == "" {
 		return policy, nil
 	}
