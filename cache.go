@@ -486,7 +486,13 @@ func GetExpectedCacheContent(cfs CacheFS, ident CacheIdentity, ebuild *Ebuild, p
 	fmt.Fprintf(&expectedContent, "_md5_=%s\n", md5sum)
 
 	if inherited := metadataVars["INHERITED"]; inherited != "" {
-		eclassParts, err := eclassClosure(eclassResolver, strings.Fields(inherited), map[string]bool{}, map[string]bool{})
+		var eclassParts []string
+		var err error
+		if needsPortage {
+			eclassParts, err = eclassClosureAuthoritative(eclassResolver, strings.Fields(inherited), map[string]bool{}, map[string]bool{})
+		} else {
+			eclassParts, err = eclassClosure(eclassResolver, strings.Fields(inherited), map[string]bool{}, map[string]bool{})
+		}
 		if err != nil {
 			if policy.Mode == CacheModeCI && len(eclassResolver.MissingMasters()) > 0 && strings.Contains(err.Error(), "unavailable masters") {
 				return "", CacheSkipped, nil
@@ -555,6 +561,43 @@ func eclassClosure(resolver *EclassResolver, names []string, visiting, seen map[
 				return err
 			}
 		}
+		parts[name] = fmt.Sprintf("%s\t%x", name, md5.Sum(content))
+		ordered = append(ordered, name)
+		visiting[name] = false
+		seen[name] = true
+		return nil
+	}
+	for _, name := range names {
+		if err := visit(name); err != nil {
+			return nil, err
+		}
+	}
+	result := make([]string, 0, len(ordered))
+	for _, name := range ordered {
+		result = append(result, parts[name])
+	}
+	return result, nil
+}
+
+// eclassClosureAuthoritative relies entirely on the already-provided
+// INHERITED list (from Portage) and avoids parsing eclasses again since their
+// dynamic semantics were evaluated.
+func eclassClosureAuthoritative(resolver *EclassResolver, names []string, visiting, seen map[string]bool) ([]string, error) {
+	parts := make(map[string]string)
+	ordered := make([]string, 0)
+	var visit func(string) error
+	visit = func(name string) error {
+		if seen[name] || visiting[name] {
+			return nil
+		}
+		visiting[name] = true
+		content, _, err := resolver.resolve(name)
+		if err != nil {
+			return err
+		}
+		// NOTE: In authoritative mode, we do NOT recursively parse the eclass here
+		// nor do we process INHERITED recursively. Portage has already flattened
+		// the entire transitive closure of INHERITED in its answer.
 		parts[name] = fmt.Sprintf("%s\t%x", name, md5.Sum(content))
 		ordered = append(ordered, name)
 		visiting[name] = false

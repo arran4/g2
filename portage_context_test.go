@@ -26,13 +26,8 @@ func (m *mockPortageContext) QueryMetadata(category, pkg, pvr string, keys []str
 	return nil, fmt.Errorf("unexpected package query %q", key)
 }
 
-func TestOSExecPortageContext(t *testing.T) {
-	// A simple test ensuring the interface is satisfied.
-	var ctx PortageContext = &OSExecPortageContext{}
-	if ctx == nil {
-		t.Fatal("OSExecPortageContext does not implement PortageContext")
-	}
-}
+// OSExecPortageContext uses os/exec to run portageq metadata. Test that it compiles by assigning it.
+var _ PortageContext = (*OSExecPortageContext)(nil)
 
 func TestMockPortageContext(t *testing.T) {
 	mock := &mockPortageContext{
