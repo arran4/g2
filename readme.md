@@ -382,7 +382,7 @@ complete on-machine verification.
 **Example:**
 
 Generate the ebuild cache for the current overlay:
-`g2 cache generate` parses and statically evaluates repository ebuilds into `md5-dict` entries. The process fails-closed for correctness: literal list multiline metadata is safely normalized to space-separated values, but unsupported multiline scalar metadata (e.g. multi-line `DESCRIPTION`) or dynamic ebuild execution (like unresolved shell or eclass function outputs) fails rather than generating malformed cache.
+`g2 cache generate` parses and statically evaluates repository ebuilds into `md5-dict` entries. The process fails-closed for correctness: literal list multiline metadata is safely normalized to space-separated values. Unsupported multiline scalar metadata (e.g. multi-line `DESCRIPTION`) or dynamic ebuild execution (like unresolved shell or eclass function outputs) requires an active Portage (`portageq`) environment. In CI mode, missing Portage context is reported explicitly as an authorized skip rather than an error or false verification, leaving existing cache entries intact. Strict mode enforces hermetic availability and fails if the required evaluation context is missing.
 
 ```bash
 g2 cache generate

@@ -213,12 +213,15 @@ func GenerateCacheFS(cfs CacheFS, repoDir string, targetPkgs []string, policy *C
 
 					verCachePath := ident.CachePath
 
-					expectedContentStr, status, err := GetExpectedCacheContent(cfs, ebuildPath, ebuild, policy, eclassResolver)
+					expectedContentStr, status, err := GetExpectedCacheContent(cfs, ident, ebuild, policy, eclassResolver)
 					if err != nil {
 						return fmt.Errorf("getting expected cache for %s: %w", ident.CachePath, err)
 					}
 					if status == CacheSkipped {
-						return fmt.Errorf("cannot generate authoritative cache for %s: %s", ident.EbuildPath, strings.Join(eclassResolver.MissingMasters(), ", "))
+						if len(eclassResolver.MissingMasters()) > 0 {
+							return fmt.Errorf("cannot generate authoritative cache for %s: unavailable masters permitted by CI policy: %s", ident.EbuildPath, strings.Join(eclassResolver.MissingMasters(), ", "))
+						}
+						return fmt.Errorf("cannot generate authoritative cache for %s: Portage metadata evaluation unavailable in ci mode", ident.EbuildPath)
 					}
 
 					existingContent, err := fs.ReadFile(cfs, verCachePath)
@@ -373,28 +376,90 @@ func isListVariable(key string) bool {
 	return listKeys[key]
 }
 
-// GetExpectedCacheContent returns the expected cache string for an ebuild, or a CacheResultStatus indicating why it couldn't.
-func GetExpectedCacheContent(cfs CacheFS, ebuildPath string, ebuild *Ebuild, policy *CachePolicy, eclassResolver *EclassResolver) (string, CacheResultStatus, error) {
-	if ebuild == nil || ebuild.Vars == nil {
-		return "", CacheError, fmt.Errorf("ebuild %s has no parsed metadata", ebuildPath)
-	}
+func needsPortageEvaluation(ebuild *Ebuild) bool {
 	if ebuild.SrcUriUncertain {
-		return "", CacheError, fmt.Errorf("ebuild %s contains control flow or unresolved values; canonical cache metadata requires Portage evaluation", ebuildPath)
+		return true
 	}
 	for key := range ebuild.UncertainVars {
 		if isCacheVariable(key) {
-			return "", CacheError, fmt.Errorf("ebuild %s has unresolved %s; canonical cache metadata requires Portage evaluation", ebuildPath, key)
+			return true
 		}
 	}
+	for k, v := range ebuild.Vars {
+		if v != "" && isCacheVariable(k) && !isListVariable(k) && strings.Contains(v, "\n") {
+			return true
+		}
+	}
+	return false
+}
+
+// GetExpectedCacheContent returns the expected cache string for an ebuild, or a CacheResultStatus indicating why it couldn't.
+func GetExpectedCacheContent(cfs CacheFS, ident CacheIdentity, ebuild *Ebuild, policy *CachePolicy, eclassResolver *EclassResolver) (string, CacheResultStatus, error) {
+	if ebuild == nil || ebuild.Vars == nil {
+		return "", CacheError, fmt.Errorf("ebuild %s has no parsed metadata", ident.EbuildPath)
+	}
+
+	needsPortage := needsPortageEvaluation(ebuild)
+
+	metadataVars := make(map[string]string)
+	for k, v := range ebuild.Vars {
+		metadataVars[k] = v
+	}
+
+	if needsPortage {
+		if policy == nil || policy.PortageContext == nil {
+			if policy != nil && policy.Mode == CacheModeStrict {
+				// To preserve existing behavior in strict mode tests:
+				if ebuild.SrcUriUncertain {
+					return "", CacheError, fmt.Errorf("ebuild %s contains control flow or unresolved values; canonical cache metadata requires Portage evaluation", ident.EbuildPath)
+				}
+				for key := range ebuild.UncertainVars {
+					if isCacheVariable(key) {
+						return "", CacheError, fmt.Errorf("ebuild %s has unresolved %s; canonical cache metadata requires Portage evaluation", ident.EbuildPath, key)
+					}
+				}
+				for k, v := range ebuild.Vars {
+					if v != "" && isCacheVariable(k) && !isListVariable(k) && strings.Contains(v, "\n") {
+						return "", CacheError, fmt.Errorf("ebuild %s contains unsupported multiline scalar value for %s", ident.EbuildPath, k)
+					}
+				}
+				return "", CacheError, fmt.Errorf("ebuild %s requires Portage evaluation but Portage context is unavailable in strict mode", ident.EbuildPath)
+			}
+			return "", CacheSkipped, nil
+		}
+
+		queryKeys := []string{
+			"BDEPEND", "DEPEND", "DESCRIPTION", "EAPI", "HOMEPAGE",
+			"INHERITED", "IUSE", "KEYWORDS", "LICENSE", "PDEPEND",
+			"PROPERTIES", "PROVIDE", "RDEPEND", "REQUIRED_USE",
+			"RESTRICT", "SLOT", "SRC_URI", "_eclasses_", "DEFINED_PHASES",
+		}
+
+		resolvedVars, err := policy.PortageContext.QueryMetadata(ident.Category, ident.Package, ident.PVR, queryKeys)
+		if err != nil {
+			return "", CacheError, fmt.Errorf("evaluating ebuild %s with portage: %w", ident.EbuildPath, err)
+		}
+
+		// If query succeeds but we are missing keys, report error rather than silent fallback
+		for _, requiredKey := range queryKeys {
+			if val, ok := resolvedVars[requiredKey]; ok {
+				metadataVars[requiredKey] = val
+			} else if ebuild.UncertainVars[requiredKey] {
+				// Incomplete authoritative result
+				return "", CacheError, fmt.Errorf("ebuild %s authoritative evaluation missing required key %s", ident.EbuildPath, requiredKey)
+			}
+		}
+	}
+
 	var keys []string
-	for k := range ebuild.Vars {
+	for k := range metadataVars {
 		keys = append(keys, k)
 	}
 	sort.Strings(keys)
 
 	var expectedContent strings.Builder
 	for _, k := range keys {
-		v := ebuild.Vars[k]
+		v := metadataVars[k]
 		if v != "" {
 			if isCacheVariable(k) {
 				var vStr string
@@ -402,7 +467,7 @@ func GetExpectedCacheContent(cfs CacheFS, ebuildPath string, ebuild *Ebuild, pol
 					vStr = strings.Join(strings.Fields(v), " ")
 				} else {
 					if strings.Contains(v, "\n") {
-						return "", CacheError, fmt.Errorf("ebuild %s contains unsupported multiline scalar value for %s", ebuildPath, k)
+						return "", CacheError, fmt.Errorf("ebuild %s contains unsupported multiline scalar value for %s", ident.EbuildPath, k)
 					}
 					vStr = v
 				}
@@ -411,22 +476,22 @@ func GetExpectedCacheContent(cfs CacheFS, ebuildPath string, ebuild *Ebuild, pol
 		}
 	}
 
-	ebuildContent, err := fs.ReadFile(cfs, filepath.ToSlash(ebuildPath))
+	ebuildContent, err := fs.ReadFile(cfs, filepath.ToSlash(ident.EbuildPath))
 	if err != nil {
 		// ebuild read failure => CacheError and operation failure
-		return "", CacheError, fmt.Errorf("failed to read ebuild file %s: %w", ebuildPath, err)
+		return "", CacheError, fmt.Errorf("failed to read ebuild file %s: %w", ident.EbuildPath, err)
 	}
 
 	md5sum := fmt.Sprintf("%x", md5.Sum(ebuildContent))
 	fmt.Fprintf(&expectedContent, "_md5_=%s\n", md5sum)
 
-	if inherited := ebuild.Vars["INHERITED"]; inherited != "" {
+	if inherited := metadataVars["INHERITED"]; inherited != "" {
 		eclassParts, err := eclassClosure(eclassResolver, strings.Fields(inherited), map[string]bool{}, map[string]bool{})
 		if err != nil {
 			if policy.Mode == CacheModeCI && len(eclassResolver.MissingMasters()) > 0 && strings.Contains(err.Error(), "unavailable masters") {
 				return "", CacheSkipped, nil
 			}
-			return "", CacheError, fmt.Errorf("resolving required eclass metadata for %s: %w", ebuildPath, err)
+			return "", CacheError, fmt.Errorf("resolving required eclass metadata for %s: %w", ident.EbuildPath, err)
 		}
 		fmt.Fprintf(&expectedContent, "_eclasses_=%s\n", strings.Join(eclassParts, "\t"))
 	}

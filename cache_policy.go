@@ -43,9 +43,10 @@ type CacheResult struct {
 
 // CachePolicy defines the execution policy for cache operations.
 type CachePolicy struct {
-	Mode          CacheMode
-	ExplicitRepos map[string]string // map from repo name to path
-	ReposConfPath string            // Path to repos.conf for resolving masters
+	Mode           CacheMode
+	ExplicitRepos  map[string]string // map from repo name to path
+	ReposConfPath  string            // Path to repos.conf for resolving masters
+	PortageContext PortageContext    // Interface for portageq metadata resolution
 }
 
 // NewCachePolicy creates a new CachePolicy with the specified mode.

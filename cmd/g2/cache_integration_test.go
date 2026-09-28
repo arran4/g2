@@ -109,7 +109,11 @@ BDEPEND="
 		t.Fatalf("Failed to parse ebuild for verification: %v", err)
 	}
 	resolver, _ := g2.BuildEclassResolver(cfs, ".", policy)
-	expected, status, err := g2.GetExpectedCacheContent(cfs, filepath.Join("app-test", "test", "test-1.0.ebuild"), ebuild, policy, resolver)
+
+	vars := g2.ParseEbuildVariables("test-1.0.ebuild")
+	ident := g2.GetCacheIdentity(".", "md5-dict", "app-test", "test", g2.VersionData{Version: vars["PV"], PVR: vars["PVR"], Ebuild: ebuild})
+
+	expected, status, err := g2.GetExpectedCacheContent(cfs, ident, ebuild, policy, resolver)
 	if err != nil {
 		t.Fatalf("Failed to get expected cache content: %v", err)
 	}

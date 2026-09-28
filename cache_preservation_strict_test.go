@@ -49,7 +49,7 @@ func TestGenerateCacheDynamicFailureDoesNotAttemptWrites(t *testing.T) {
 	}
 
 	err = GenerateCacheFS(fsys, ".", nil, NewCachePolicy(CacheModeCI))
-	if err == nil || !strings.Contains(err.Error(), "has unresolved BDEPEND") {
+	if err == nil || !strings.Contains(err.Error(), "Portage metadata evaluation unavailable in ci mode") {
 		t.Fatalf("expected unresolved BDEPEND generation failure; got %v", err)
 	}
 	if len(fsys.creates) != 0 || len(fsys.removes) != 0 || len(fsys.removeAlls) != 0 {

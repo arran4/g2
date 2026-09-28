@@ -139,7 +139,7 @@ func doCacheVerify(cfs g2.CacheFS, repoDir string, policy *g2.CachePolicy) error
 			ident := g2.GetCacheIdentity(repoDir, format, ebuild.Category, ebuild.Package, ebuild.Version)
 			validCacheEntries[filepath.Clean(ident.CachePath)] = true
 
-			expectedContentStr, status, err := g2.GetExpectedCacheContent(cfs, ident.EbuildPath, ebuild.Version.Ebuild, policy, eclassResolver)
+			expectedContentStr, status, err := g2.GetExpectedCacheContent(cfs, ident, ebuild.Version.Ebuild, policy, eclassResolver)
 			if err != nil {
 				fmt.Printf("Error generating expected cache content for %s: %v\n", ident.CachePath, err)
 				hasErrors = true
@@ -147,7 +147,11 @@ func doCacheVerify(cfs g2.CacheFS, repoDir string, policy *g2.CachePolicy) error
 			}
 
 			if status == g2.CacheSkipped {
-				fmt.Printf("Skipped %s cache for %s/%s-%s: unavailable masters permitted by CI policy: %s\n", format, ident.Category, ident.Package, ident.PVR, strings.Join(eclassResolver.MissingMasters(), ", "))
+				if len(eclassResolver.MissingMasters()) > 0 {
+					fmt.Printf("Skipped %s cache for %s/%s-%s: unavailable masters permitted by CI policy: %s\n", format, ident.Category, ident.Package, ident.PVR, strings.Join(eclassResolver.MissingMasters(), ", "))
+				} else {
+					fmt.Printf("Skipped %s cache for %s/%s-%s: Portage metadata evaluation unavailable in ci mode\n", format, ident.Category, ident.Package, ident.PVR)
+				}
 				hasSkipped = true
 				continue
 			}
