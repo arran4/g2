@@ -1,9 +1,7 @@
 package g2
 
 import (
-	"bytes"
 	"fmt"
-	"os/exec"
 	"strings"
 )
 
@@ -11,31 +9,42 @@ import (
 // to resolve evaluated ebuild metadata on a live Gentoo system.
 type PortageContext interface {
 	// QueryMetadata runs portageq metadata and returns the authoritative string values for the given keys.
-	QueryMetadata(category, pkg, pvr string, keys []string) (map[string]string, error)
+	// The repo context can be supplied to form a repo-qualified package specifier (e.g. cat/pkg::repo).
+	QueryMetadata(repo, category, pkg, pvr string, keys []string) (map[string]string, error)
 }
 
 // OSExecPortageContext uses os/exec to run portageq metadata.
-type OSExecPortageContext struct{}
+type OSExecPortageContext struct {
+	Runner CmdRunner
+}
 
-func (c *OSExecPortageContext) QueryMetadata(category, pkg, pvr string, keys []string) (map[string]string, error) {
+func NewOSExecPortageContext() *OSExecPortageContext {
+	return &OSExecPortageContext{Runner: &OSExecRunner{}}
+}
+
+func (c *OSExecPortageContext) QueryMetadata(repo, category, pkg, pvr string, keys []string) (map[string]string, error) {
 	if len(keys) == 0 {
 		return nil, nil
 	}
 
-	// portageq metadata / ebuild sys-devel/gcc-13.2.1_p20231216 HOMEPAGE
-	args := []string{"metadata", "/", "ebuild", fmt.Sprintf("%s/%s-%s", category, pkg, pvr)}
-	args = append(args, keys...)
-
-	cmd := exec.Command("portageq", args...)
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-
-	if err := cmd.Run(); err != nil {
-		return nil, fmt.Errorf("portageq failed: %w (stderr: %s)", err, stderr.String())
+	cpv := fmt.Sprintf("%s/%s-%s", category, pkg, pvr)
+	if repo != "" {
+		cpv += "::" + repo
 	}
 
-	output := stdout.String()
+	// portageq metadata / ebuild sys-devel/gcc-13.2.1_p20231216 HOMEPAGE
+	args := []string{"metadata", "/", "ebuild", cpv}
+	args = append(args, keys...)
+
+	stdout, stderr, err := c.Runner.Run("portageq", args...)
+	if err != nil {
+		if err == ErrPortageUnavailable {
+			return nil, err
+		}
+		return nil, fmt.Errorf("portageq failed: %w (stderr: %s)", err, string(stderr))
+	}
+
+	output := string(stdout)
 	lines := strings.Split(strings.TrimSuffix(output, "\n"), "\n")
 
 	if len(lines) != len(keys) {

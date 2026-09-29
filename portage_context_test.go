@@ -11,8 +11,11 @@ type mockPortageContext struct {
 	calls     []string
 }
 
-func (m *mockPortageContext) QueryMetadata(category, pkg, pvr string, keys []string) (map[string]string, error) {
+func (m *mockPortageContext) QueryMetadata(repo, category, pkg, pvr string, keys []string) (map[string]string, error) {
 	key := category + "/" + pkg + "-" + pvr
+	if repo != "" {
+		key += "::" + repo
+	}
 	m.calls = append(m.calls, key)
 	if resp, ok := m.responses[key]; ok {
 		result := make(map[string]string)
@@ -38,7 +41,7 @@ func TestMockPortageContext(t *testing.T) {
 		},
 	}
 
-	res, err := mock.QueryMetadata("sys-apps", "test", "1.0", []string{"BDEPEND"})
+	res, err := mock.QueryMetadata("", "sys-apps", "test", "1.0", []string{"BDEPEND"})
 	if err != nil {
 		t.Fatal(err)
 	}

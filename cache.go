@@ -435,7 +435,7 @@ func GetExpectedCacheContent(cfs CacheFS, ident CacheIdentity, ebuild *Ebuild, p
 			"RESTRICT", "SLOT", "SRC_URI", "DEFINED_PHASES",
 		}
 
-		resolvedVars, err := policy.PortageContext.QueryMetadata(ident.Category, ident.Package, ident.PVR, queryKeys)
+		resolvedVars, err := policy.PortageContext.QueryMetadata("", ident.Category, ident.Package, ident.PVR, queryKeys)
 		if err != nil {
 			return "", CacheError, fmt.Errorf("evaluating ebuild %s with portage: %w", ident.EbuildPath, err)
 		}
