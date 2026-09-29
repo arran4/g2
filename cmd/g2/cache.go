@@ -135,8 +135,18 @@ func doCacheVerify(cfs g2.CacheFS, repoDir string, policy *g2.CachePolicy) error
 		validCacheEntries := make(map[string]bool)
 
 		// 2. Check for missing entries and MD5 mismatches
+		repoName := repoDir
+		if lc != nil && lc.RepoName() != "" {
+			repoName = lc.RepoName()
+		} else {
+			profileRepoNamePath := filepath.ToSlash(filepath.Join(repoDir, "profiles", "repo_name"))
+			if rnf, err := fs.ReadFile(cfs, profileRepoNamePath); err == nil {
+				repoName = strings.TrimSpace(string(rnf))
+			}
+		}
+
 		for _, ebuild := range ebuilds {
-			ident := g2.GetCacheIdentity(repoDir, format, ebuild.Category, ebuild.Package, ebuild.Version)
+			ident := g2.GetCacheIdentity(repoDir, repoName, format, ebuild.Category, ebuild.Package, ebuild.Version)
 			validCacheEntries[filepath.Clean(ident.CachePath)] = true
 
 			expectedContentStr, status, err := g2.GetExpectedCacheContent(cfs, ident, ebuild.Version.Ebuild, policy, eclassResolver)
@@ -340,9 +350,19 @@ func doCacheClean(cfs g2.CacheFS, repoDir string) error {
 	// build a set of valid ebuild cache paths
 	validCacheEntries := make(map[string]bool)
 
+	repoName := repoDir
+	if lc != nil && lc.RepoName() != "" {
+		repoName = lc.RepoName()
+	} else {
+		profileRepoNamePath := filepath.ToSlash(filepath.Join(repoDir, "profiles", "repo_name"))
+		if rnf, err := fs.ReadFile(cfs, profileRepoNamePath); err == nil {
+			repoName = strings.TrimSpace(string(rnf))
+		}
+	}
+
 	for _, format := range cacheFormats {
 		for _, ebuild := range ebuilds {
-			ident := g2.GetCacheIdentity(repoDir, format, ebuild.Category, ebuild.Package, ebuild.Version)
+			ident := g2.GetCacheIdentity(repoDir, repoName, format, ebuild.Category, ebuild.Package, ebuild.Version)
 			validCacheEntries[filepath.Clean(ident.CachePath)] = true
 		}
 	}

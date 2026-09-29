@@ -185,9 +185,12 @@ func TestVersionDataGetPVR(t *testing.T) {
 func TestGetCacheIdentity(t *testing.T) {
 	// Relative repoDir
 	v := VersionData{Version: "0", PVR: "0-r1"}
-	ident := GetCacheIdentity(".", "md5-dict", "acct-group", "ollama", v)
+	ident := GetCacheIdentity(".", "test-repo", "md5-dict", "acct-group", "ollama", v)
 	if ident.Category != "acct-group" || ident.Package != "ollama" || ident.PVR != "0-r1" {
 		t.Errorf("Unexpected ident basic fields: %+v", ident)
+	}
+	if ident.RepoName != "test-repo" {
+		t.Errorf("ident.RepoName = %s, want test-repo", ident.RepoName)
 	}
 	if ident.CachePath != "metadata/md5-cache/acct-group/ollama-0-r1" {
 		t.Errorf("ident.CachePath = %s, want metadata/md5-cache/acct-group/ollama-0-r1", ident.CachePath)
@@ -198,7 +201,7 @@ func TestGetCacheIdentity(t *testing.T) {
 
 	// Absolute repoDir
 	v2 := VersionData{Version: "1.0", PVR: "1.0-r1"}
-	ident2 := GetCacheIdentity("/var/db/repos/foo", "md5-dict", "sys-apps", "test", v2)
+	ident2 := GetCacheIdentity("/var/db/repos/foo", "foo", "md5-dict", "sys-apps", "test", v2)
 	if ident2.CachePath != "/var/db/repos/foo/metadata/md5-cache/sys-apps/test-1.0-r1" {
 		t.Errorf("ident2.CachePath = %s, want /var/db/repos/foo/metadata/md5-cache/sys-apps/test-1.0-r1", ident2.CachePath)
 	}
@@ -208,7 +211,7 @@ func TestGetCacheIdentity(t *testing.T) {
 
 	// Unrevised version has no synthetic -r0
 	v3 := VersionData{Version: "2.5", PVR: "2.5"}
-	ident3 := GetCacheIdentity(".", "md5-dict", "dev-libs", "unrevised", v3)
+	ident3 := GetCacheIdentity(".", "unrevised-repo", "md5-dict", "dev-libs", "unrevised", v3)
 	if ident3.CachePath != "metadata/md5-cache/dev-libs/unrevised-2.5" {
 		t.Errorf("ident3.CachePath = %s, want metadata/md5-cache/dev-libs/unrevised-2.5", ident3.CachePath)
 	}
@@ -270,7 +273,7 @@ func TestGenerateCacheTransitiveEclassesFromConfiguredMaster(t *testing.T) {
 	}
 
 	vars := ParseEbuildVariables("demo-1.ebuild")
-	ident := GetCacheIdentity("nested/overlay", "md5-dict", "sys-apps", "demo", VersionData{Version: vars["PV"], PVR: vars["PVR"], Ebuild: ebuild})
+	ident := GetCacheIdentity("nested/overlay", "nested/overlay", "md5-dict", "sys-apps", "demo", VersionData{Version: vars["PV"], PVR: vars["PVR"], Ebuild: ebuild})
 
 	expected, status, err := GetExpectedCacheContent(cfs, ident, ebuild, policy, resolver)
 	if err != nil || status != CacheDrift {
@@ -368,7 +371,7 @@ func TestGenerateCacheWithPortageContext(t *testing.T) {
 
 	mockPortage := &mockPortageContext{
 		responses: map[string]map[string]string{
-			"cat/pkg-1": {
+			"cat/pkg-1::.": {
 				"DEPEND": "llvm-core/clang:15",
 				"EAPI":   "8",
 			},
@@ -387,8 +390,8 @@ func TestGenerateCacheWithPortageContext(t *testing.T) {
 		t.Fatalf("expected PortageContext to be called exactly 1 time, got %d. calls: %v", len(mockPortage.calls), mockPortage.calls)
 	}
 
-	if mockPortage.calls[0] != "cat/pkg-1" {
-		t.Fatalf("expected PortageContext to be called with exact CPV cat/pkg-1, got: %s", mockPortage.calls[0])
+	if mockPortage.calls[0] != "cat/pkg-1::." {
+		t.Fatalf("expected PortageContext to be called with exact CPV cat/pkg-1::., got: %s", mockPortage.calls[0])
 	}
 
 	content, err := os.ReadFile(filepath.Join(dir, "metadata", "md5-cache", "cat", "pkg-1"))
@@ -458,7 +461,7 @@ func TestGenerateCacheWithPortageContext_IncompleteResult(t *testing.T) {
 
 	mockPortage := &mockPortageContext{
 		responses: map[string]map[string]string{
-			"cat/pkg-1": {
+			"cat/pkg-1::.": {
 				"EAPI": "8", // Missing DEPEND in response
 			},
 		},
@@ -497,7 +500,7 @@ func TestGenerateCacheWithPortageContext_Revision(t *testing.T) {
 
 	mockPortage := &mockPortageContext{
 		responses: map[string]map[string]string{
-			"cat/pkg-1-r2": {
+			"cat/pkg-1-r2::.": {
 				"DEPEND": "llvm-core/clang:15",
 				"EAPI":   "8",
 			},
@@ -516,8 +519,8 @@ func TestGenerateCacheWithPortageContext_Revision(t *testing.T) {
 		t.Fatalf("expected PortageContext to be called exactly 1 time, got %d. calls: %v", len(mockPortage.calls), mockPortage.calls)
 	}
 
-	if mockPortage.calls[0] != "cat/pkg-1-r2" {
-		t.Fatalf("expected PortageContext to be called with exact CPV cat/pkg-1-r2, got: %s", mockPortage.calls[0])
+	if mockPortage.calls[0] != "cat/pkg-1-r2::." {
+		t.Fatalf("expected PortageContext to be called with exact CPV cat/pkg-1-r2::., got: %s", mockPortage.calls[0])
 	}
 }
 

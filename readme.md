@@ -371,13 +371,18 @@ explicitly skipped checks” means CI could not establish the named master
 context; it is not full verification. The parser does not execute ebuilds, so
 metadata it cannot reliably derive is treated as an error rather than silently
 accepted as canonical. In particular, eclasses which contribute cache variables
-or contain unresolved cache-variable expressions require Portage evaluation and
-are rejected by this static implementation.
+or contain unresolved cache-variable expressions require Portage evaluation.
+When authoritative `INHERITED` evaluation is available, it drives local
+repository/master eclass hashing without static semantic interpretation.
 
-Strict mode currently resolves repository context but does not evaluate an
-active Portage profile or execute ebuild metadata. It fails closed when those
-inputs are needed, rather than presenting static cache reconstruction as a
-complete on-machine verification.
+Dynamic evaluation is achieved by invoking `portageq metadata / ebuild <repo-name> <keys...>`,
+which requires the repository to be properly qualified and an active Portage profile
+to be configured on the host. In CI mode, missing evaluation context yields an
+explicit skipped/unverified behavior, while in strict mode it causes a failure.
+Actual evaluation, configuration, or repository failures result in errors across
+both modes.
+
+IDEPEND is fully supported.
 
 **Example:**
 

@@ -76,7 +76,7 @@ func (r *MD5CacheLintRule) LintWithQA(repoDir string, pkg *g2.PackageData, qa *g
 
 	for _, ver := range pkg.Versions {
 		if ver.Ebuild != nil {
-			ident := g2.GetCacheIdentity(repoDir, "md5-dict", pkg.Category, pkg.Name, ver)
+			ident := g2.GetCacheIdentity(repoDir, repoDir, "md5-dict", pkg.Category, pkg.Name, ver)
 			if _, err := r.fs.Stat(ident.CachePath); os.IsNotExist(err) {
 				sevStr := string(severity)
 				sevTitle := strings.ToUpper(sevStr[:1]) + sevStr[1:]

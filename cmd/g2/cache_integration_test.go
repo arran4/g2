@@ -111,7 +111,7 @@ BDEPEND="
 	resolver, _ := g2.BuildEclassResolver(cfs, ".", policy)
 
 	vars := g2.ParseEbuildVariables("test-1.0.ebuild")
-	ident := g2.GetCacheIdentity(".", "md5-dict", "app-test", "test", g2.VersionData{Version: vars["PV"], PVR: vars["PVR"], Ebuild: ebuild})
+	ident := g2.GetCacheIdentity(".", "test-overlay", "md5-dict", "app-test", "test", g2.VersionData{Version: vars["PV"], PVR: vars["PVR"], Ebuild: ebuild})
 
 	expected, status, err := g2.GetExpectedCacheContent(cfs, ident, ebuild, policy, resolver)
 	if err != nil {
@@ -324,12 +324,22 @@ BDEPEND="
     dev-build/cmake
     $(llvm_gen_dep 'llvm-core/clang:${LLVM_SLOT}')
 "
+IDEPEND="
+    app-admin/eselect
+"
 `
+	eclassContent := []byte(`ECLASS=llvm-r1
+llvm_gen_dep() {
+	echo "$1"
+}
+`)
+	eclassHash := fmt.Sprintf("%x", md5.Sum(eclassContent))
+
 	inputFS := fstest.MapFS{
 		"metadata/layout.conf":          &fstest.MapFile{Data: []byte("cache-formats = md5-dict\nmasters =\n")},
 		"profiles/categories":           &fstest.MapFile{Data: []byte("app-test\n")},
 		"app-test/test/test-1.0.ebuild": &fstest.MapFile{Data: []byte(ebuildContent)},
-		"eclass/llvm-r1.eclass":         &fstest.MapFile{Data: []byte("ECLASS=llvm-r1\n")},
+		"eclass/llvm-r1.eclass":         &fstest.MapFile{Data: eclassContent},
 	}
 
 	baseFS := NewMemCacheFS(inputFS)
@@ -337,11 +347,11 @@ BDEPEND="
 
 	// mockCmdRunner must output one line for every element in queryKeys:
 	// "BDEPEND", "DEPEND", "DESCRIPTION", "EAPI", "HOMEPAGE",
-	// "INHERITED", "IUSE", "KEYWORDS", "LICENSE", "PDEPEND",
+	// "IDEPEND", "INHERITED", "IUSE", "KEYWORDS", "LICENSE", "PDEPEND",
 	// "PROPERTIES", "RDEPEND", "REQUIRED_USE",
 	// "RESTRICT", "SLOT", "SRC_URI", "DEFINED_PHASES"
 	runner := &mockCmdRunner{
-		stdout: []byte("dev-build/cmake llvm-core/clang:15\nvirtual/pkgconfig app-arch/unzip\nIntegration test\n8\n\nllvm-r1\n\n\n\n\n\n\n\n\n0\n\n\n"),
+		stdout: []byte("dev-build/cmake llvm-core/clang:15\nvirtual/pkgconfig app-arch/unzip\nIntegration test\n8\n\napp-admin/eselect\nllvm-r1\n\n\n\n\n\n\n\n\n0\n\n\n"),
 	}
 
 	policy := g2.NewCachePolicy(g2.CacheModeCI)
@@ -365,8 +375,14 @@ BDEPEND="
 	if strings.Contains(cacheStr, "llvm_gen_dep") {
 		t.Fatalf("Cache erroneously contains raw shell substitution: %q", cacheStr)
 	}
-	if !strings.Contains(cacheStr, "_eclasses_=llvm-r1\t") {
-		t.Fatalf("Cache does not contain properly mapped eclass closure line: %q", cacheStr)
+	expectedEclassLine := fmt.Sprintf("_eclasses_=llvm-r1\t%s\n", eclassHash)
+	if !strings.Contains(cacheStr, expectedEclassLine) {
+		t.Fatalf("Cache does not contain properly mapped eclass closure line %q: %q", expectedEclassLine, cacheStr)
+	}
+
+	eclassLineCount := strings.Count(cacheStr, "_eclasses_=")
+	if eclassLineCount != 1 {
+		t.Fatalf("Expected exactly 1 _eclasses_= line, got %d", eclassLineCount)
 	}
 
 	// Verify we can parse generated metadata seamlessly
@@ -386,7 +402,7 @@ BDEPEND="
 
 	// Pass a dummy function for hashEclass to avoid physical system lookups during hermetic testing
 	results := linter.LintFS(baseFS, ".", pkg, nil, func(path string) (string, error) {
-		return "93677d2abc9efe957695ed175e140e68", nil
+		return eclassHash, nil
 	})
 	if len(results) > 0 {
 		t.Fatalf("Lint generated failure on output cache: %v", results)
@@ -396,11 +412,14 @@ BDEPEND="
 	resolver, _ := g2.BuildEclassResolver(cfs, ".", policy)
 
 	vars := g2.ParseEbuildVariables("test-1.0.ebuild")
-	ident := g2.GetCacheIdentity(".", "md5-dict", "app-test", "test", g2.VersionData{Version: vars["PV"], PVR: vars["PVR"], Ebuild: ebuild})
+	ident := g2.GetCacheIdentity(".", "test-overlay", "md5-dict", "app-test", "test", g2.VersionData{Version: vars["PV"], PVR: vars["PVR"], Ebuild: ebuild})
 
 	expected, status, err := g2.GetExpectedCacheContent(cfs, ident, ebuild, policy, resolver)
-	if status != g2.CacheVerified && status != g2.CacheDrift {
-		t.Fatalf("Expected expected CacheDrift/Verified resolution on valid dynamic ebuild cache generation")
+	if err != nil {
+		t.Fatalf("GetExpectedCacheContent failed: %v", err)
+	}
+	if status != g2.CacheDrift {
+		t.Fatalf("expected CacheDrift, got %v", status)
 	}
 
 	verifyRes := g2.CompareCacheEntry(cfs, cachePath, expected)

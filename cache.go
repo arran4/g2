@@ -206,7 +206,18 @@ func GenerateCacheFS(cfs CacheFS, repoDir string, targetPkgs []string, policy *C
 						PVR:     pvr,
 						Ebuild:  ebuild,
 					}
-					ident := GetCacheIdentity(repoDir, format, cat, pkgName, verData)
+
+					repoName := repoDir
+					if lc != nil && lc.RepoName() != "" {
+						repoName = lc.RepoName()
+					} else {
+						profileRepoNamePath := filepath.ToSlash(filepath.Join(repoDir, "profiles", "repo_name"))
+						if rnf, err := fs.ReadFile(cfs, profileRepoNamePath); err == nil {
+							repoName = strings.TrimSpace(string(rnf))
+						}
+					}
+
+					ident := GetCacheIdentity(repoDir, repoName, format, cat, pkgName, verData)
 					if ident.CachePath == "" {
 						continue // unsupported format
 					}
@@ -279,6 +290,7 @@ func GetCachePath(repoDir string, format string, category string, name string, v
 
 // CacheIdentity represents the resolved identity of a package version for caching purposes.
 type CacheIdentity struct {
+	RepoName   string
 	Category   string
 	Package    string
 	PVR        string
@@ -297,9 +309,10 @@ func GetEbuildPath(repoDir, category, name string, ver VersionData) string {
 }
 
 // GetCacheIdentity returns the resolved CacheIdentity for a given package and version.
-func GetCacheIdentity(repoDir, format, category, pkgName string, ver VersionData) CacheIdentity {
+func GetCacheIdentity(repoDir, repoName, format, category, pkgName string, ver VersionData) CacheIdentity {
 	pvr := ver.GetPVR()
 	return CacheIdentity{
+		RepoName:   repoName,
 		Category:   category,
 		Package:    pkgName,
 		PVR:        pvr,
@@ -336,6 +349,7 @@ func isCacheVariable(key string) bool {
 		"DESCRIPTION":    true,
 		"EAPI":           true,
 		"HOMEPAGE":       true,
+		"IDEPEND":        true,
 		"INHERITED":      true,
 		"IUSE":           true,
 		"KEYWORDS":       true,
@@ -359,6 +373,7 @@ func isListVariable(key string) bool {
 		"BDEPEND":        true,
 		"DEPEND":         true,
 		"HOMEPAGE":       true,
+		"IDEPEND":        true,
 		"INHERITED":      true,
 		"IUSE":           true,
 		"KEYWORDS":       true,
@@ -430,12 +445,12 @@ func GetExpectedCacheContent(cfs CacheFS, ident CacheIdentity, ebuild *Ebuild, p
 
 		queryKeys := []string{
 			"BDEPEND", "DEPEND", "DESCRIPTION", "EAPI", "HOMEPAGE",
-			"INHERITED", "IUSE", "KEYWORDS", "LICENSE", "PDEPEND",
+			"IDEPEND", "INHERITED", "IUSE", "KEYWORDS", "LICENSE", "PDEPEND",
 			"PROPERTIES", "RDEPEND", "REQUIRED_USE",
 			"RESTRICT", "SLOT", "SRC_URI", "DEFINED_PHASES",
 		}
 
-		resolvedVars, err := policy.PortageContext.QueryMetadata("", ident.Category, ident.Package, ident.PVR, queryKeys)
+		resolvedVars, err := policy.PortageContext.QueryMetadata(ident.RepoName, ident.Category, ident.Package, ident.PVR, queryKeys)
 		if err != nil {
 			if errors.Is(err, ErrPortageUnavailable) {
 				if policy.Mode == CacheModeCI {
