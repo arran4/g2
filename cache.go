@@ -308,6 +308,26 @@ func GetEbuildPath(repoDir, category, name string, ver VersionData) string {
 	return filepath.ToSlash(filepath.Join(repoDir, category, name, ebuildFile))
 }
 
+// ResolveRepoName resolves the canonical repository name from layout.conf or profiles/repo_name.
+func ResolveRepoName(cfs CacheFS, repoDir string, lc *LayoutConf) (string, error) {
+	if lc != nil && lc.RepoName() != "" {
+		return lc.RepoName(), nil
+	}
+	profileRepoNamePath := filepath.ToSlash(filepath.Join(repoDir, "profiles", "repo_name"))
+	rnf, err := fs.ReadFile(cfs, profileRepoNamePath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return "", fs.ErrNotExist
+		}
+		return "", fmt.Errorf("reading profiles/repo_name: %w", err)
+	}
+	name := strings.TrimSpace(string(rnf))
+	if name == "" {
+		return "", fs.ErrNotExist
+	}
+	return name, nil
+}
+
 // GetCacheIdentity returns the resolved CacheIdentity for a given package and version.
 func GetCacheIdentity(repoDir, repoName, format, category, pkgName string, ver VersionData) CacheIdentity {
 	pvr := ver.GetPVR()

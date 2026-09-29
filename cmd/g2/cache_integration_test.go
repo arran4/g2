@@ -316,6 +316,7 @@ func (m *mockCmdRunner) Run(cmdName string, args ...string) ([]byte, []byte, err
 func TestCacheIntegration_DynamicPortageGeneration(t *testing.T) {
 	ebuildContent := `EAPI=8
 DESCRIPTION="Integration test"
+inherit llvm-r1
 DEPEND="
     virtual/pkgconfig
     app-arch/unzip
@@ -459,6 +460,47 @@ BDEPEND="
 	if _, ok := baseFS.Map[cacheDir]; ok {
 		t.Fatalf("Cache directory %s was created prematurely!", cacheDir)
 	}
+	if cfs.creates > 0 || cfs.removes > 0 || cfs.removesAll > 0 || cfs.MkdirAlls > 0 {
+		t.Fatalf("Virtual filesystem mutated! creates: %d, removes: %d, removesAll: %d, mkdirAlls: %d", cfs.creates, cfs.removes, cfs.removesAll, cfs.MkdirAlls)
+	}
+	assertMapFSSnapshotEqual(t, snapshotBefore, snapshotMapFS(baseFS.Map))
+}
+
+func TestCacheIntegration_CI_PortageUnavailable(t *testing.T) {
+	ebuildContent := `EAPI=8
+DESCRIPTION="Integration test"
+DEPEND="
+    virtual/pkgconfig
+    app-arch/unzip
+"
+BDEPEND="
+    dev-build/cmake
+    $(some_dynamic_function)
+"
+`
+	inputFS := fstest.MapFS{
+		"metadata/layout.conf":                 &fstest.MapFile{Data: []byte("cache-formats = md5-dict\nmasters =\n")},
+		"profiles/categories":                  &fstest.MapFile{Data: []byte("app-test\n")},
+		"app-test/test/test-1.0.ebuild":        &fstest.MapFile{Data: []byte(ebuildContent)},
+		"metadata/md5-cache/app-test/test-1.0": &fstest.MapFile{Data: []byte("EAPI=8\n_md5_=dummy\n")},
+	}
+
+	baseFS := NewMemCacheFS(inputFS)
+	cfs := &SpyCacheFS{CacheFS: baseFS}
+	snapshotBefore := snapshotMapFS(baseFS.Map)
+
+	runner := &mockCmdRunner{err: g2.ErrPortageUnavailable}
+	policy := g2.NewCachePolicy(g2.CacheModeCI)
+	policy.PortageContext = &g2.OSExecPortageContext{Runner: runner}
+
+	err := g2.GenerateCacheFS(cfs, ".", nil, policy)
+	if err == nil {
+		t.Fatalf("Expected GenerateCacheFS to fail with authoritative cache unavailable")
+	}
+	if !strings.Contains(err.Error(), "authoritative cache") && !strings.Contains(err.Error(), "Portage metadata evaluation unavailable") {
+		t.Fatalf("Expected unavailable error, got: %v", err)
+	}
+
 	if cfs.creates > 0 || cfs.removes > 0 || cfs.removesAll > 0 || cfs.MkdirAlls > 0 {
 		t.Fatalf("Virtual filesystem mutated! creates: %d, removes: %d, removesAll: %d, mkdirAlls: %d", cfs.creates, cfs.removes, cfs.removesAll, cfs.MkdirAlls)
 	}

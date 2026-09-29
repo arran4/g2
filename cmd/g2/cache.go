@@ -135,14 +135,11 @@ func doCacheVerify(cfs g2.CacheFS, repoDir string, policy *g2.CachePolicy) error
 		validCacheEntries := make(map[string]bool)
 
 		// 2. Check for missing entries and MD5 mismatches
-		repoName := repoDir
-		if lc != nil && lc.RepoName() != "" {
-			repoName = lc.RepoName()
-		} else {
-			profileRepoNamePath := filepath.ToSlash(filepath.Join(repoDir, "profiles", "repo_name"))
-			if rnf, err := fs.ReadFile(cfs, profileRepoNamePath); err == nil {
-				repoName = strings.TrimSpace(string(rnf))
-			}
+		repoName, err := g2.ResolveRepoName(cfs, repoDir, lc)
+		if err != nil && !os.IsNotExist(err) {
+			log.Printf("Failed to resolve repository name: %v\n", err)
+			hasErrors = true
+			continue
 		}
 
 		for _, ebuild := range ebuilds {
@@ -350,14 +347,9 @@ func doCacheClean(cfs g2.CacheFS, repoDir string) error {
 	// build a set of valid ebuild cache paths
 	validCacheEntries := make(map[string]bool)
 
-	repoName := repoDir
-	if lc != nil && lc.RepoName() != "" {
-		repoName = lc.RepoName()
-	} else {
-		profileRepoNamePath := filepath.ToSlash(filepath.Join(repoDir, "profiles", "repo_name"))
-		if rnf, err := fs.ReadFile(cfs, profileRepoNamePath); err == nil {
-			repoName = strings.TrimSpace(string(rnf))
-		}
+	repoName, err := g2.ResolveRepoName(cfs, repoDir, lc)
+	if err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("resolving repository name: %w", err)
 	}
 
 	for _, format := range cacheFormats {
