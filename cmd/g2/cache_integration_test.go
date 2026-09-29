@@ -301,6 +301,114 @@ BDEPEND="
 
 }
 
+type mockCmdRunner struct {
+	stdout []byte
+	stderr []byte
+	err    error
+	calls  []string
+}
+
+func (m *mockCmdRunner) Run(cmdName string, args ...string) ([]byte, []byte, error) {
+	m.calls = append(m.calls, cmdName+" "+strings.Join(args, " "))
+	return m.stdout, m.stderr, m.err
+}
+
+func TestCacheIntegration_DynamicPortageGeneration(t *testing.T) {
+	ebuildContent := `EAPI=8
+DESCRIPTION="Integration test"
+DEPEND="
+    virtual/pkgconfig
+    app-arch/unzip
+"
+BDEPEND="
+    dev-build/cmake
+    $(llvm_gen_dep 'llvm-core/clang:${LLVM_SLOT}')
+"
+`
+	inputFS := fstest.MapFS{
+		"metadata/layout.conf":          &fstest.MapFile{Data: []byte("cache-formats = md5-dict\nmasters =\n")},
+		"profiles/categories":           &fstest.MapFile{Data: []byte("app-test\n")},
+		"app-test/test/test-1.0.ebuild": &fstest.MapFile{Data: []byte(ebuildContent)},
+		"eclass/llvm-r1.eclass":         &fstest.MapFile{Data: []byte("ECLASS=llvm-r1\n")},
+	}
+
+	baseFS := NewMemCacheFS(inputFS)
+	cfs := &SpyCacheFS{CacheFS: baseFS}
+
+	// mockCmdRunner must output one line for every element in queryKeys:
+	// "BDEPEND", "DEPEND", "DESCRIPTION", "EAPI", "HOMEPAGE",
+	// "INHERITED", "IUSE", "KEYWORDS", "LICENSE", "PDEPEND",
+	// "PROPERTIES", "RDEPEND", "REQUIRED_USE",
+	// "RESTRICT", "SLOT", "SRC_URI", "DEFINED_PHASES"
+	runner := &mockCmdRunner{
+		stdout: []byte("dev-build/cmake llvm-core/clang:15\nvirtual/pkgconfig app-arch/unzip\nIntegration test\n8\n\nllvm-r1\n\n\n\n\n\n\n\n\n0\n\n\n"),
+	}
+
+	policy := g2.NewCachePolicy(g2.CacheModeCI)
+	policy.PortageContext = &g2.OSExecPortageContext{Runner: runner}
+
+	err := g2.GenerateCacheFS(cfs, ".", nil, policy)
+	if err != nil {
+		t.Fatalf("Expected GenerateCacheFS to succeed, got: %v", err)
+	}
+
+	cachePath := filepath.ToSlash(filepath.Join("metadata", "md5-cache", "app-test", "test-1.0"))
+	cacheData, err := fs.ReadFile(baseFS, cachePath)
+	if err != nil {
+		t.Fatalf("Cache file not created: %v", err)
+	}
+
+	cacheStr := string(cacheData)
+	if !strings.Contains(cacheStr, "BDEPEND=dev-build/cmake llvm-core/clang:15") {
+		t.Fatalf("Cache does not contain exactly flattened materialized BDEPEND line: %q", cacheStr)
+	}
+	if strings.Contains(cacheStr, "llvm_gen_dep") {
+		t.Fatalf("Cache erroneously contains raw shell substitution: %q", cacheStr)
+	}
+	if !strings.Contains(cacheStr, "_eclasses_=llvm-r1\t") {
+		t.Fatalf("Cache does not contain properly mapped eclass closure line: %q", cacheStr)
+	}
+
+	// Verify we can parse generated metadata seamlessly
+	linter := md5cache.MD5CacheInvalidLintRule{}
+
+	pkg := &g2.PackageData{
+		Category: "app-test",
+		Name:     "test",
+		Versions: []g2.VersionData{
+			{
+				Version: "1.0",
+				PVR:     "1.0",
+				Ebuild:  &g2.Ebuild{Path: filepath.ToSlash(filepath.Join("app-test", "test", "test-1.0.ebuild"))},
+			},
+		},
+	}
+
+	// Pass a dummy function for hashEclass to avoid physical system lookups during hermetic testing
+	results := linter.LintFS(baseFS, ".", pkg, nil, func(path string) (string, error) {
+		return "93677d2abc9efe957695ed175e140e68", nil
+	})
+	if len(results) > 0 {
+		t.Fatalf("Lint generated failure on output cache: %v", results)
+	}
+
+	ebuild, _ := g2.ParseEbuild(cfs, filepath.Join("app-test", "test", "test-1.0.ebuild"), g2.ParseFull)
+	resolver, _ := g2.BuildEclassResolver(cfs, ".", policy)
+
+	vars := g2.ParseEbuildVariables("test-1.0.ebuild")
+	ident := g2.GetCacheIdentity(".", "md5-dict", "app-test", "test", g2.VersionData{Version: vars["PV"], PVR: vars["PVR"], Ebuild: ebuild})
+
+	expected, status, err := g2.GetExpectedCacheContent(cfs, ident, ebuild, policy, resolver)
+	if status != g2.CacheVerified && status != g2.CacheDrift {
+		t.Fatalf("Expected expected CacheDrift/Verified resolution on valid dynamic ebuild cache generation")
+	}
+
+	verifyRes := g2.CompareCacheEntry(cfs, cachePath, expected)
+	if verifyRes.Status != g2.CacheVerified {
+		t.Fatalf("Cache verification failed for valid dynamic cache output: %v", verifyRes.Message)
+	}
+}
+
 func TestCacheIntegration_AbsentCacheDirectory_UnsupportedMetadata(t *testing.T) {
 	ebuildContent := `EAPI=8
 DESCRIPTION="Integration test"
