@@ -437,6 +437,12 @@ func GetExpectedCacheContent(cfs CacheFS, ident CacheIdentity, ebuild *Ebuild, p
 
 		resolvedVars, err := policy.PortageContext.QueryMetadata("", ident.Category, ident.Package, ident.PVR, queryKeys)
 		if err != nil {
+			if errors.Is(err, ErrPortageUnavailable) {
+				if policy.Mode == CacheModeCI {
+					return "", CacheSkipped, nil
+				}
+				return "", CacheError, fmt.Errorf("ebuild %s requires Portage evaluation but Portage capability unavailable in strict mode: %w", ident.EbuildPath, err)
+			}
 			return "", CacheError, fmt.Errorf("evaluating ebuild %s with portage: %w", ident.EbuildPath, err)
 		}
 

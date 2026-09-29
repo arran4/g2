@@ -419,14 +419,15 @@ func TestGenerateCacheWithPortageContext_StrictMissingContext(t *testing.T) {
 	write("profiles/categories", "cat\n")
 	write("cat/pkg/pkg-1.ebuild", "EAPI=8\nDEPEND=\"$(llvm_gen_dep 'llvm-core/clang:${LLVM_SLOT}')\"\n")
 
-	policy := NewCachePolicy(CacheModeStrict) // PortageContext is nil
+	policy := NewCachePolicy(CacheModeStrict)
+	policy.PortageContext = &OSExecPortageContext{Runner: &MockCmdRunner{err: ErrPortageUnavailable}}
 
 	err := GenerateCacheFS(NewOsCacheFS(dir), ".", nil, policy)
 	if err == nil {
 		t.Fatalf("expected generation to fail in strict mode without context, but it succeeded")
 	}
 
-	if !strings.Contains(err.Error(), "requires Portage evaluation") {
+	if !strings.Contains(err.Error(), "requires Portage evaluation but Portage capability unavailable in strict mode") {
 		t.Fatalf("expected strict mode missing context error, got: %v", err)
 	}
 }
