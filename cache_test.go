@@ -317,7 +317,7 @@ func TestGenerateCacheRejectsUnevaluatedEclassAndDynamicMetadata(t *testing.T) {
 		{name: "dynamic dependency", ebuild: "DEPEND=\"${UNSET_DEPEND}\"\n", eclassName: "example"},
 		{name: "llvm_gen_dep", ebuild: "DEPEND=\"$(llvm_gen_dep 'llvm-core/clang:${LLVM_SLOT}')\"\n", eclassName: "example"},
 		{name: "llvm_gen_dep space", ebuild: "DEPEND=\"$( llvm_gen_dep 'llvm-core/clang:${LLVM_SLOT}' )\"\n", eclassName: "example"},
-		{name: "llvm-r1 static semantic rejection", ebuild: "inherit llvm-r1\nDEPEND=\"$(llvm_gen_dep 'llvm-core/clang:${LLVM_SLOT}')\"\n", eclass: "ECLASS=llvm-r1\nllvm_gen_dep() {\n    echo \"$1\"\n}\n", eclassName: "llvm-r1"},
+		{name: "llvm-r1 static semantic rejection", ebuild: "inherit llvm-r1\n", eclass: "ECLASS=llvm-r1\nIUSE=\"clang\"\nllvm_gen_dep() {\n\techo \"$1\"\n}\n", eclassName: "llvm-r1"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

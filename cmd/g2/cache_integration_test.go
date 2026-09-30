@@ -340,6 +340,7 @@ IDEPEND="
 "
 `
 	eclassContent := []byte(`ECLASS=llvm-r1
+IUSE="clang"
 llvm_gen_dep() {
 	echo "$1"
 }
