@@ -599,8 +599,8 @@ func TestGenerateCachePreservesDynamicMetadata(t *testing.T) {
 	}
 
 	err = GenerateCacheFS(memFS, ".", nil, NewCachePolicy(CacheModeCI))
-	if err != nil {
-		t.Fatalf("Expected GenerateCacheFS to succeed and skip mutation silently, got: %v", err)
+	if err == nil || !strings.Contains(err.Error(), "Portage metadata evaluation unavailable in ci mode") {
+		t.Fatalf("expected unresolved BDEPEND generation failure; got %v", err)
 	}
 
 	if len(memFS.Creates) > 0 || len(memFS.Removes) > 0 || len(memFS.RemoveAlls) > 0 {

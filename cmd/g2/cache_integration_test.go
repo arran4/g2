@@ -461,8 +461,11 @@ BDEPEND="
 	cfs := &SpyCacheFS{CacheFS: baseFS}
 	snapshotBefore := snapshotMapFS(baseFS.Map)
 	err := g2.GenerateCacheFS(cfs, ".", nil, g2.NewCachePolicy(g2.CacheModeCI))
-	if err != nil {
-		t.Fatalf("Expected GenerateCacheFS to succeed and silently skip cache file creation, got %v", err)
+	if err == nil {
+		t.Fatalf("Expected GenerateCacheFS to fail with authoritative cache unavailable")
+	}
+	if !strings.Contains(err.Error(), "Portage metadata evaluation unavailable") && !strings.Contains(err.Error(), "authoritative cache") {
+			t.Fatalf("Expected unavailable error, got: %v", err)
 	}
 
 	// Verify the cache directory was NOT created
@@ -504,8 +507,11 @@ BDEPEND="
 	policy.PortageContext = &g2.OSExecPortageContext{Runner: runner}
 
 	err := g2.GenerateCacheFS(cfs, ".", nil, policy)
-	if err != nil {
-		t.Fatalf("Expected GenerateCacheFS to succeed and skip cache writing, got: %v", err)
+	if err == nil {
+		t.Fatalf("Expected GenerateCacheFS to fail with authoritative cache unavailable")
+	}
+	if !strings.Contains(err.Error(), "Portage metadata evaluation unavailable") {
+		t.Fatalf("Expected unavailable error, got: %v", err)
 	}
 
 	if cfs.creates > 0 || cfs.removes > 0 || cfs.removesAll > 0 || cfs.MkdirAlls > 0 {
@@ -538,8 +544,11 @@ BDEPEND="
 	cfs := &SpyCacheFS{CacheFS: baseFS}
 	snapshotBefore := snapshotMapFS(baseFS.Map)
 	err := g2.GenerateCacheFS(cfs, ".", nil, g2.NewCachePolicy(g2.CacheModeCI))
-	if err != nil {
-		t.Fatalf("Expected GenerateCacheFS to succeed and silently skip cache file creation, got %v", err)
+	if err == nil {
+		t.Fatalf("Expected GenerateCacheFS to fail with authoritative cache unavailable")
+	}
+	if !strings.Contains(err.Error(), "Portage metadata evaluation unavailable") && !strings.Contains(err.Error(), "authoritative cache") {
+		t.Fatalf("Expected unavailable error, got: %v", err)
 	}
 
 	// Verify the cache content was NOT changed

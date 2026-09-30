@@ -224,7 +224,10 @@ func GenerateCacheFS(cfs CacheFS, repoDir string, targetPkgs []string, policy *C
 						return fmt.Errorf("getting expected cache for %s: %w", ident.CachePath, err)
 					}
 					if status == CacheSkipped {
-						continue // skip silently in CI
+						if len(eclassResolver.MissingMasters()) > 0 {
+							return fmt.Errorf("cannot generate authoritative cache for %s: unavailable masters permitted by CI policy: %s", ident.EbuildPath, strings.Join(eclassResolver.MissingMasters(), ", "))
+						}
+						return fmt.Errorf("cannot generate authoritative cache for %s: Portage metadata evaluation unavailable in ci mode", ident.EbuildPath)
 					}
 
 					existingContent, err := fs.ReadFile(cfs, verCachePath)
