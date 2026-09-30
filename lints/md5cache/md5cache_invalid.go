@@ -237,7 +237,7 @@ func (r *MD5CacheInvalidLintRule) LintFS(fsys fs.FS, repoDir string, pkg *g2.Pac
 
 	for _, ver := range pkg.Versions {
 		if ver.Ebuild != nil {
-			ident := g2.GetCacheIdentity(repoDir, "md5-dict", pkg.Category, pkg.Name, ver)
+			ident := g2.GetCacheIdentity(repoDir, repoDir, "md5-dict", pkg.Category, pkg.Name, ver)
 			cachePath := ident.CachePath
 
 			var f fs.File

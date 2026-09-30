@@ -185,9 +185,12 @@ func TestVersionDataGetPVR(t *testing.T) {
 func TestGetCacheIdentity(t *testing.T) {
 	// Relative repoDir
 	v := VersionData{Version: "0", PVR: "0-r1"}
-	ident := GetCacheIdentity(".", "md5-dict", "acct-group", "ollama", v)
+	ident := GetCacheIdentity(".", "test-repo", "md5-dict", "acct-group", "ollama", v)
 	if ident.Category != "acct-group" || ident.Package != "ollama" || ident.PVR != "0-r1" {
 		t.Errorf("Unexpected ident basic fields: %+v", ident)
+	}
+	if ident.RepoName != "test-repo" {
+		t.Errorf("ident.RepoName = %s, want test-repo", ident.RepoName)
 	}
 	if ident.CachePath != "metadata/md5-cache/acct-group/ollama-0-r1" {
 		t.Errorf("ident.CachePath = %s, want metadata/md5-cache/acct-group/ollama-0-r1", ident.CachePath)
@@ -198,7 +201,7 @@ func TestGetCacheIdentity(t *testing.T) {
 
 	// Absolute repoDir
 	v2 := VersionData{Version: "1.0", PVR: "1.0-r1"}
-	ident2 := GetCacheIdentity("/var/db/repos/foo", "md5-dict", "sys-apps", "test", v2)
+	ident2 := GetCacheIdentity("/var/db/repos/foo", "foo", "md5-dict", "sys-apps", "test", v2)
 	if ident2.CachePath != "/var/db/repos/foo/metadata/md5-cache/sys-apps/test-1.0-r1" {
 		t.Errorf("ident2.CachePath = %s, want /var/db/repos/foo/metadata/md5-cache/sys-apps/test-1.0-r1", ident2.CachePath)
 	}
@@ -208,7 +211,7 @@ func TestGetCacheIdentity(t *testing.T) {
 
 	// Unrevised version has no synthetic -r0
 	v3 := VersionData{Version: "2.5", PVR: "2.5"}
-	ident3 := GetCacheIdentity(".", "md5-dict", "dev-libs", "unrevised", v3)
+	ident3 := GetCacheIdentity(".", "unrevised-repo", "md5-dict", "dev-libs", "unrevised", v3)
 	if ident3.CachePath != "metadata/md5-cache/dev-libs/unrevised-2.5" {
 		t.Errorf("ident3.CachePath = %s, want metadata/md5-cache/dev-libs/unrevised-2.5", ident3.CachePath)
 	}
@@ -268,7 +271,11 @@ func TestGenerateCacheTransitiveEclassesFromConfiguredMaster(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	expected, status, err := GetExpectedCacheContent(cfs, "nested/overlay/sys-apps/demo/demo-1.ebuild", ebuild, policy, resolver)
+
+	vars := ParseEbuildVariables("demo-1.ebuild")
+	ident := GetCacheIdentity("nested/overlay", "nested/overlay", "md5-dict", "sys-apps", "demo", VersionData{Version: vars["PV"], PVR: vars["PVR"], Ebuild: ebuild})
+
+	expected, status, err := GetExpectedCacheContent(cfs, ident, ebuild, policy, resolver)
 	if err != nil || status != CacheDrift {
 		t.Fatalf("building changed metadata: status=%v err=%v", status, err)
 	}
@@ -299,16 +306,18 @@ func TestCachePolicyRejectsInvalidMode(t *testing.T) {
 
 func TestGenerateCacheRejectsUnevaluatedEclassAndDynamicMetadata(t *testing.T) {
 	tests := []struct {
-		name   string
-		ebuild string
-		eclass string
+		name       string
+		ebuild     string
+		eclass     string
+		eclassName string
 	}{
-		{name: "eclass metadata", ebuild: "inherit example\n", eclass: "IUSE=\"feature\"\n"},
-		{name: "opaque eclass command", ebuild: "inherit example\n", eclass: "eval 'inherit child'\n"},
-		{name: "multiline scalar", ebuild: "DESCRIPTION=\"Multi\nline\"\n"},
-		{name: "dynamic dependency", ebuild: "DEPEND=\"${UNSET_DEPEND}\"\n"},
-		{name: "llvm_gen_dep", ebuild: "DEPEND=\"$(llvm_gen_dep 'llvm-core/clang:${LLVM_SLOT}')\"\n"},
-		{name: "llvm_gen_dep space", ebuild: "DEPEND=\"$( llvm_gen_dep 'llvm-core/clang:${LLVM_SLOT}' )\"\n"},
+		{name: "eclass metadata", ebuild: "inherit example\n", eclass: "IUSE=\"feature\"\n", eclassName: "example"},
+		{name: "opaque eclass command", ebuild: "inherit example\n", eclass: "eval 'inherit child'\n", eclassName: "example"},
+		{name: "multiline scalar", ebuild: "DESCRIPTION=\"Multi\nline\"\n", eclassName: "example"},
+		{name: "dynamic dependency", ebuild: "DEPEND=\"${UNSET_DEPEND}\"\n", eclassName: "example"},
+		{name: "llvm_gen_dep", ebuild: "DEPEND=\"$(llvm_gen_dep 'llvm-core/clang:${LLVM_SLOT}')\"\n", eclassName: "example"},
+		{name: "llvm_gen_dep space", ebuild: "DEPEND=\"$( llvm_gen_dep 'llvm-core/clang:${LLVM_SLOT}' )\"\n", eclassName: "example"},
+		{name: "llvm-r1 static semantic rejection", ebuild: "inherit llvm-r1\n", eclass: "ECLASS=llvm-r1\nIUSE=\"clang\"\nllvm_gen_dep() {\n\techo \"$1\"\n}\n", eclassName: "llvm-r1"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -325,10 +334,14 @@ func TestGenerateCacheRejectsUnevaluatedEclassAndDynamicMetadata(t *testing.T) {
 			write(filepath.Join(dir, "metadata", "layout.conf"), "cache-formats = md5-dict\n")
 			write(filepath.Join(dir, "cat", "pkg", "pkg-1.ebuild"), tt.ebuild)
 			if tt.eclass != "" {
-				write(filepath.Join(dir, "eclass", "example.eclass"), tt.eclass)
+				write(filepath.Join(dir, "eclass", tt.eclassName+".eclass"), tt.eclass)
 			}
-			if err := GenerateCacheFS(NewOsCacheFS(dir), ".", nil, NewCachePolicy(CacheModeCI)); err == nil {
+			err := GenerateCacheFS(NewOsCacheFS(dir), ".", nil, NewCachePolicy(CacheModeStrict))
+			if err == nil {
 				t.Fatal("generation accepted metadata that requires ebuild evaluation")
+			}
+			if !strings.Contains(err.Error(), "requires Portage evaluation") && !strings.Contains(err.Error(), "contains unsupported multiline scalar value") {
+				t.Fatalf("expected Portage evaluation error, got: %v", err)
 			}
 			if _, err := os.Stat(filepath.Join(dir, "metadata", "md5-cache", "cat", "pkg-1")); !os.IsNotExist(err) {
 				t.Fatal("generation wrote a cache entry despite unresolved metadata")
@@ -338,7 +351,225 @@ func TestGenerateCacheRejectsUnevaluatedEclassAndDynamicMetadata(t *testing.T) {
 
 }
 
+func TestGenerateCacheWithPortageContext(t *testing.T) {
+	dir := t.TempDir()
+	write := func(name, content string) {
+		t.Helper()
+		if err := os.MkdirAll(filepath.Dir(filepath.Join(dir, name)), 0755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("metadata/layout.conf", "repo-name = test-overlay\nmasters =\n")
+	write("profiles/categories", "cat\n")
+	write("cat/pkg/pkg-1.ebuild", "EAPI=8\nDEPEND=\"$(llvm_gen_dep 'llvm-core/clang:${LLVM_SLOT}')\"\n")
+
+	// Ensure the static parser correctly identifies this dynamic dependency as uncertain.
+	ebuild, err := ParseEbuild(os.DirFS(dir), "cat/pkg/pkg-1.ebuild", ParseFull)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !ebuild.UncertainVars["DEPEND"] {
+		t.Fatalf("expected DEPEND to be marked uncertain in static parser, got uncertainVars=%v", ebuild.UncertainVars)
+	}
+
+	mockPortage := &mockPortageContext{
+		responses: map[string]map[string]string{
+			"cat/pkg-1::test-overlay": {
+				"BDEPEND":        "",
+				"DEPEND":         "llvm-core/clang:15",
+				"DESCRIPTION":    "",
+				"EAPI":           "8",
+				"HOMEPAGE":       "",
+				"IDEPEND":        "",
+				"INHERITED":      "",
+				"IUSE":           "",
+				"KEYWORDS":       "",
+				"LICENSE":        "",
+				"PDEPEND":        "",
+				"PROPERTIES":     "",
+				"RDEPEND":        "",
+				"REQUIRED_USE":   "",
+				"RESTRICT":       "",
+				"SLOT":           "",
+				"SRC_URI":        "",
+				"DEFINED_PHASES": "",
+			},
+		},
+	}
+
+	policy := NewCachePolicy(CacheModeCI)
+	policy.PortageContext = mockPortage
+
+	err = GenerateCacheFS(NewOsCacheFS(dir), ".", nil, policy)
+	if err != nil {
+		t.Fatalf("generation failed: %v", err)
+	}
+
+	if len(mockPortage.calls) != 1 {
+		t.Fatalf("expected PortageContext to be called exactly 1 time, got %d. calls: %v", len(mockPortage.calls), mockPortage.calls)
+	}
+
+	if mockPortage.calls[0] != "cat/pkg-1::test-overlay" {
+		t.Fatalf("expected PortageContext to be called with exact CPV cat/pkg-1::test-overlay, got: %s", mockPortage.calls[0])
+	}
+
+	content, err := os.ReadFile(filepath.Join(dir, "metadata", "md5-cache", "cat", "pkg-1"))
+	if err != nil {
+		t.Fatalf("failed to read generated cache: %v", err)
+	}
+
+	if !strings.Contains(string(content), "DEPEND=llvm-core/clang:15") {
+		t.Fatalf("expected DEPEND to be resolved, got:\n%s", string(content))
+	}
+	if strings.Contains(string(content), "llvm_gen_dep") {
+		t.Fatalf("expected DEPEND to NOT contain llvm_gen_dep, got:\n%s", string(content))
+	}
+}
+
+func TestGenerateCacheWithPortageContext_StrictMissingContext(t *testing.T) {
+	dir := t.TempDir()
+	write := func(name, content string) {
+		t.Helper()
+		if err := os.MkdirAll(filepath.Dir(filepath.Join(dir, name)), 0755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("metadata/layout.conf", "repo-name = test-overlay\nmasters =\n")
+	write("profiles/categories", "cat\n")
+	write("cat/pkg/pkg-1.ebuild", "EAPI=8\nDEPEND=\"$(llvm_gen_dep 'llvm-core/clang:${LLVM_SLOT}')\"\n")
+
+	policy := NewCachePolicy(CacheModeStrict)
+	policy.PortageContext = &OSExecPortageContext{Runner: &MockCmdRunner{err: ErrPortageUnavailable}}
+
+	err := GenerateCacheFS(NewOsCacheFS(dir), ".", nil, policy)
+	if err == nil {
+		t.Fatalf("expected generation to fail in strict mode without context, but it succeeded")
+	}
+
+	if !strings.Contains(err.Error(), "requires Portage evaluation but Portage capability unavailable in strict mode") {
+		t.Fatalf("expected strict mode missing context error, got: %v", err)
+	}
+}
+
+func TestGenerateCacheWithPortageContext_IncompleteResult(t *testing.T) {
+	dir := t.TempDir()
+	write := func(name, content string) {
+		t.Helper()
+		if err := os.MkdirAll(filepath.Dir(filepath.Join(dir, name)), 0755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("metadata/layout.conf", "repo-name = test-overlay\nmasters = gentoo\n")
+	write("profiles/categories", "cat\n")
+	write("cat/pkg/pkg-1.ebuild", "EAPI=8\nDEPEND=\"$(llvm_gen_dep 'llvm-core/clang:${LLVM_SLOT}')\"\n")
+
+	// Ensure the static parser correctly identifies this dynamic dependency as uncertain.
+	ebuild, err := ParseEbuild(os.DirFS(dir), "cat/pkg/pkg-1.ebuild", ParseFull)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !ebuild.UncertainVars["DEPEND"] {
+		t.Fatalf("expected DEPEND to be marked uncertain in static parser, got uncertainVars=%v", ebuild.UncertainVars)
+	}
+
+	mockPortage := &mockPortageContext{
+		responses: map[string]map[string]string{
+			"cat/pkg-1::test-overlay": {
+				"EAPI": "8", // Missing DEPEND in response
+			},
+		},
+	}
+
+	policy := NewCachePolicy(CacheModeCI)
+	policy.PortageContext = mockPortage
+
+	err = GenerateCacheFS(NewOsCacheFS(dir), ".", nil, policy)
+	if err == nil {
+		t.Fatalf("expected generation to fail due to incomplete result, but it succeeded")
+	}
+	if !strings.Contains(err.Error(), "authoritative evaluation missing requested key BDEPEND") {
+		t.Fatalf("expected missing requested key BDEPEND error, got: %v", err)
+	}
+
+	if _, err := os.Stat(filepath.Join(dir, "metadata", "md5-cache", "cat", "pkg-1")); !os.IsNotExist(err) {
+		t.Fatalf("expected generation to fail without mutating cache, but a cache entry was written")
+	}
+}
+
+func TestGenerateCacheWithPortageContext_Revision(t *testing.T) {
+	dir := t.TempDir()
+	write := func(name, content string) {
+		t.Helper()
+		if err := os.MkdirAll(filepath.Dir(filepath.Join(dir, name)), 0755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("metadata/layout.conf", "repo-name = test-overlay\nmasters = gentoo\n")
+	write("profiles/categories", "cat\n")
+	write("cat/pkg/pkg-1-r2.ebuild", "EAPI=8\nDEPEND=\"$(llvm_gen_dep 'llvm-core/clang:${LLVM_SLOT}')\"\n")
+
+	mockPortage := &mockPortageContext{
+		responses: map[string]map[string]string{
+			"cat/pkg-1-r2::test-overlay": {
+				"BDEPEND":        "",
+				"DEPEND":         "llvm-core/clang:15",
+				"DESCRIPTION":    "",
+				"EAPI":           "8",
+				"HOMEPAGE":       "",
+				"IDEPEND":        "",
+				"INHERITED":      "",
+				"IUSE":           "",
+				"KEYWORDS":       "",
+				"LICENSE":        "",
+				"PDEPEND":        "",
+				"PROPERTIES":     "",
+				"RDEPEND":        "",
+				"REQUIRED_USE":   "",
+				"RESTRICT":       "",
+				"SLOT":           "",
+				"SRC_URI":        "",
+				"DEFINED_PHASES": "",
+			},
+		},
+	}
+
+	policy := NewCachePolicy(CacheModeCI)
+	policy.PortageContext = mockPortage
+
+	err := GenerateCacheFS(NewOsCacheFS(dir), ".", nil, policy)
+	if err != nil {
+		t.Fatalf("generation failed: %v", err)
+	}
+
+	if len(mockPortage.calls) != 1 {
+		t.Fatalf("expected PortageContext to be called exactly 1 time, got %d. calls: %v", len(mockPortage.calls), mockPortage.calls)
+	}
+
+	if mockPortage.calls[0] != "cat/pkg-1-r2::test-overlay" {
+		t.Fatalf("expected PortageContext to be called with exact CPV cat/pkg-1-r2::test-overlay, got: %s", mockPortage.calls[0])
+	}
+}
+
 type rootReadErrorFS struct{ CacheFS }
+
+func (f rootReadErrorFS) ReadFile(name string) ([]byte, error) {
+	if name == "profiles/repo_name" {
+		return nil, os.ErrPermission
+	}
+	return fs.ReadFile(f.CacheFS, name)
+}
 
 func (f rootReadErrorFS) Open(name string) (fs.File, error) {
 	if name == "." {
@@ -377,12 +608,8 @@ func TestGenerateCachePreservesDynamicMetadata(t *testing.T) {
 	}
 
 	err = GenerateCacheFS(memFS, ".", nil, NewCachePolicy(CacheModeCI))
-	if err == nil {
-		t.Fatal("Expected GenerateCacheFS to fail on dynamic dependency but it returned nil")
-	}
-
-	if !strings.Contains(err.Error(), "has unresolved BDEPEND") {
-		t.Fatalf("Expected unresolved BDEPEND error, got: %v", err)
+	if err == nil || !strings.Contains(err.Error(), "Portage metadata evaluation unavailable in ci mode") {
+		t.Fatalf("expected unresolved BDEPEND generation failure; got %v", err)
 	}
 
 	if len(memFS.Creates) > 0 || len(memFS.Removes) > 0 || len(memFS.RemoveAlls) > 0 {
@@ -397,5 +624,145 @@ func TestGenerateCachePreservesDynamicMetadata(t *testing.T) {
 	// We format input data by keeping it completely unmodified
 	if !bytes.Equal(originalCacheData, postCacheData) {
 		t.Fatalf("Expected existing cache bytes to be preserved byte-for-byte. Want:\n%q\nGot:\n%q", string(originalCacheData), string(postCacheData))
+	}
+}
+
+func TestGenerateCacheWithPortageContext_MissingRepoName(t *testing.T) {
+	dir := t.TempDir()
+	write := func(name, content string) {
+		t.Helper()
+		if err := os.MkdirAll(filepath.Dir(filepath.Join(dir, name)), 0755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// Missing repo-name
+	write("metadata/layout.conf", "masters =\n")
+	write("profiles/categories", "cat\n")
+	write("cat/pkg/pkg-1.ebuild", "EAPI=8\nDEPEND=\"$(llvm_gen_dep 'llvm-core/clang:${LLVM_SLOT}')\"\n")
+
+	mockPortage := &mockPortageContext{
+		responses: map[string]map[string]string{},
+	}
+
+	t.Run("CI skips with no portage calls", func(t *testing.T) {
+		policy := NewCachePolicy(CacheModeCI)
+		policy.PortageContext = mockPortage
+		err := GenerateCacheFS(NewOsCacheFS(dir), ".", nil, policy)
+		if err == nil {
+			t.Fatalf("expected CI skip to return error, got nil")
+		}
+		if !strings.Contains(err.Error(), "Portage metadata evaluation unavailable in ci mode") {
+			t.Fatalf("expected skip error, got: %v", err)
+		}
+		if len(mockPortage.calls) != 0 {
+			t.Fatalf("expected 0 portage calls, got %d", len(mockPortage.calls))
+		}
+	})
+
+	t.Run("Strict fails with no portage calls", func(t *testing.T) {
+		policy := NewCachePolicy(CacheModeStrict)
+		policy.PortageContext = mockPortage
+		err := GenerateCacheFS(NewOsCacheFS(dir), ".", nil, policy)
+		if err == nil {
+			t.Fatalf("expected strict failure, got nil")
+		}
+		if !strings.Contains(err.Error(), "repository name is not defined in layout.conf or profiles/repo_name") {
+			t.Fatalf("expected strict repo name error, got: %v", err)
+		}
+		if len(mockPortage.calls) != 0 {
+			t.Fatalf("expected 0 portage calls, got %d", len(mockPortage.calls))
+		}
+	})
+}
+
+func TestGenerateCacheWithPortageContext_ProfilesRepoName(t *testing.T) {
+	dir := t.TempDir()
+	write := func(name, content string) {
+		t.Helper()
+		if err := os.MkdirAll(filepath.Dir(filepath.Join(dir, name)), 0755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("metadata/layout.conf", "masters =\n")
+	write("profiles/repo_name", "fallback-overlay\n")
+	write("profiles/categories", "cat\n")
+	write("cat/pkg/pkg-1.ebuild", "EAPI=8\nDEPEND=\"$(llvm_gen_dep 'llvm-core/clang:${LLVM_SLOT}')\"\n")
+
+	mockPortage := &mockPortageContext{
+		responses: map[string]map[string]string{
+			"cat/pkg-1::fallback-overlay": {
+				"BDEPEND":        "",
+				"DEPEND":         "llvm-core/clang:15",
+				"DESCRIPTION":    "",
+				"EAPI":           "8",
+				"HOMEPAGE":       "",
+				"IDEPEND":        "",
+				"INHERITED":      "",
+				"IUSE":           "",
+				"KEYWORDS":       "",
+				"LICENSE":        "",
+				"PDEPEND":        "",
+				"PROPERTIES":     "",
+				"RDEPEND":        "",
+				"REQUIRED_USE":   "",
+				"RESTRICT":       "",
+				"SLOT":           "",
+				"SRC_URI":        "",
+				"DEFINED_PHASES": "",
+			},
+		},
+	}
+
+	policy := NewCachePolicy(CacheModeCI)
+	policy.PortageContext = mockPortage
+	err := GenerateCacheFS(NewOsCacheFS(dir), ".", nil, policy)
+	if err != nil {
+		t.Fatalf("generation failed: %v", err)
+	}
+
+	if len(mockPortage.calls) != 1 {
+		t.Fatalf("expected 1 portage call, got %d", len(mockPortage.calls))
+	}
+	if mockPortage.calls[0] != "cat/pkg-1::fallback-overlay" {
+		t.Fatalf("expected call with fallback-overlay, got: %s", mockPortage.calls[0])
+	}
+}
+
+func TestGenerateCacheWithPortageContext_ReadError(t *testing.T) {
+	dir := t.TempDir()
+	write := func(name, content string) {
+		t.Helper()
+		if err := os.MkdirAll(filepath.Dir(filepath.Join(dir, name)), 0755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("metadata/layout.conf", "masters =\n")
+	write("profiles/categories", "cat\n")
+	write("cat/pkg/pkg-1.ebuild", "EAPI=8\nDEPEND=\"$(llvm_gen_dep 'llvm-core/clang:${LLVM_SLOT}')\"\n")
+
+	mockPortage := &mockPortageContext{
+		responses: map[string]map[string]string{},
+	}
+
+	policy := NewCachePolicy(CacheModeCI)
+	policy.PortageContext = mockPortage
+
+	errFS := rootReadErrorFS{NewOsCacheFS(dir)}
+
+	err := GenerateCacheFS(errFS, ".", nil, policy)
+	if err == nil {
+		t.Fatalf("expected read error to fail generation")
+	}
+	if !strings.Contains(err.Error(), "permission denied") {
+		t.Fatalf("expected permission denied error, got: %v", err)
 	}
 }

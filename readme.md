@@ -371,18 +371,57 @@ explicitly skipped checks” means CI could not establish the named master
 context; it is not full verification. The parser does not execute ebuilds, so
 metadata it cannot reliably derive is treated as an error rather than silently
 accepted as canonical. In particular, eclasses which contribute cache variables
-or contain unresolved cache-variable expressions require Portage evaluation and
-are rejected by this static implementation.
+or contain unresolved cache-variable expressions require Portage evaluation.
+When authoritative `INHERITED` evaluation is available, it drives local
+repository/master eclass hashing without static semantic interpretation.
 
-Strict mode currently resolves repository context but does not evaluate an
-active Portage profile or execute ebuild metadata. It fails closed when those
-inputs are needed, rather than presenting static cache reconstruction as a
-complete on-machine verification.
+Dynamic evaluation is achieved by invoking `portageq metadata / ebuild <category/package-pvr::repo-name> <keys...>`,
+which requires the repository to be properly qualified and an active Portage profile
+to be configured on the host. In CI mode, missing evaluation context yields an
+explicit skipped/unverified behavior, while in strict mode it causes a failure.
+Actual evaluation, configuration, or repository failures result in errors across
+both modes.
+
+IDEPEND is fully supported.
+
+## Optional real-Gentoo acceptance procedure
+
+A manual validation procedure is supported for executing on an authentic Gentoo host:
+
+1.  Ensure the target repository is registered in Portage under its declared `repo-name`, with masters available.
+2.  Select an active profile.
+3.  Choose a representative dynamic ebuild, e.g. using `llvm_gen_dep`.
+4.  Optionally run `portageq metadata / ebuild <category/package-pvr::repo-name> BDEPEND IDEPEND INHERITED ...` and confirm materialized values natively.
+5.  Execute `g2 cache generate --mode=strict` for the specific repository/package context.
+6.  Run `g2 lint`.
+7.  Run strict cache verification against the same context (`g2 cache verify --mode=strict`).
+8.  Re-run generation/verification unchanged to verify idempotency.
+
+**Pass Criteria:**
+*   No raw `$(...)` survives within canonical dependency metadata.
+*   Dynamic `BDEPEND`/`IDEPEND` values are appropriately materialized.
+*   Authoritative `INHERITED` yields the correct eclass hashes.
+*   Lint successfully accepts the generated cache.
+*   Verify accurately reports the generated entry as matching.
+*   Repeated execution performs no cache mutations.
+
+## Limitations and Future Scope (Issue #564)
+
+The initial phase of Portage-backed cache evaluation currently implements the isolated
+generation boundaries. The following features remain scoped for future implementation:
+
+*   **Active-profile applicability**, including broader master/eclass precedence and transitive inheritance coverage.
+*   **Full metadata drift and reconcile coverage**.
+*   **Automation of the optional real-Gentoo acceptance procedure** (if acceptance automation replaces the manual process).
+*   **Propagation across all CLI boundaries**: Integrating the evaluation boundary beyond
+    only the initial cache metadata layer (see #557).
+*   **`INHERIT` canonical serialization**: Depending on design, `INHERIT` serialization
+    behavior (currently intentionally ignored in serialization output) might require adjustments.
 
 **Example:**
 
 Generate the ebuild cache for the current overlay:
-`g2 cache generate` parses and statically evaluates repository ebuilds into `md5-dict` entries. The process fails-closed for correctness: literal list multiline metadata is safely normalized to space-separated values, but unsupported multiline scalar metadata (e.g. multi-line `DESCRIPTION`) or dynamic ebuild execution (like unresolved shell or eclass function outputs) fails rather than generating malformed cache.
+`g2 cache generate` parses and statically evaluates repository ebuilds into `md5-dict` entries. The process fails-closed for correctness: literal list multiline metadata is safely normalized to space-separated values. Unsupported multiline scalar metadata (e.g. multi-line `DESCRIPTION`) or dynamic ebuild execution (like unresolved shell or eclass function outputs) requires an active Portage (`portageq`) environment. In CI mode, missing Portage context is reported explicitly as an authorized skip rather than an error or false verification, leaving existing cache entries intact. Strict mode enforces hermetic availability and fails if the required evaluation context is missing.
 
 ```bash
 g2 cache generate

@@ -135,11 +135,18 @@ func doCacheVerify(cfs g2.CacheFS, repoDir string, policy *g2.CachePolicy) error
 		validCacheEntries := make(map[string]bool)
 
 		// 2. Check for missing entries and MD5 mismatches
+		repoName, err := g2.ResolveRepoName(cfs, repoDir, lc)
+		if err != nil && !errors.Is(err, fs.ErrNotExist) {
+			log.Printf("Failed to resolve repository name: %v\n", err)
+			hasErrors = true
+			continue
+		}
+
 		for _, ebuild := range ebuilds {
-			ident := g2.GetCacheIdentity(repoDir, format, ebuild.Category, ebuild.Package, ebuild.Version)
+			ident := g2.GetCacheIdentity(repoDir, repoName, format, ebuild.Category, ebuild.Package, ebuild.Version)
 			validCacheEntries[filepath.Clean(ident.CachePath)] = true
 
-			expectedContentStr, status, err := g2.GetExpectedCacheContent(cfs, ident.EbuildPath, ebuild.Version.Ebuild, policy, eclassResolver)
+			expectedContentStr, status, err := g2.GetExpectedCacheContent(cfs, ident, ebuild.Version.Ebuild, policy, eclassResolver)
 			if err != nil {
 				fmt.Printf("Error generating expected cache content for %s: %v\n", ident.CachePath, err)
 				hasErrors = true
@@ -147,7 +154,11 @@ func doCacheVerify(cfs g2.CacheFS, repoDir string, policy *g2.CachePolicy) error
 			}
 
 			if status == g2.CacheSkipped {
-				fmt.Printf("Skipped %s cache for %s/%s-%s: unavailable masters permitted by CI policy: %s\n", format, ident.Category, ident.Package, ident.PVR, strings.Join(eclassResolver.MissingMasters(), ", "))
+				if len(eclassResolver.MissingMasters()) > 0 {
+					fmt.Printf("Skipped %s cache for %s/%s-%s: unavailable masters permitted by CI policy: %s\n", format, ident.Category, ident.Package, ident.PVR, strings.Join(eclassResolver.MissingMasters(), ", "))
+				} else {
+					fmt.Printf("Skipped %s cache for %s/%s-%s: Portage metadata evaluation unavailable in ci mode\n", format, ident.Category, ident.Package, ident.PVR)
+				}
 				hasSkipped = true
 				continue
 			}
@@ -336,9 +347,14 @@ func doCacheClean(cfs g2.CacheFS, repoDir string) error {
 	// build a set of valid ebuild cache paths
 	validCacheEntries := make(map[string]bool)
 
+	repoName, err := g2.ResolveRepoName(cfs, repoDir, lc)
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return fmt.Errorf("resolving repository name: %w", err)
+	}
+
 	for _, format := range cacheFormats {
 		for _, ebuild := range ebuilds {
-			ident := g2.GetCacheIdentity(repoDir, format, ebuild.Category, ebuild.Package, ebuild.Version)
+			ident := g2.GetCacheIdentity(repoDir, repoName, format, ebuild.Category, ebuild.Package, ebuild.Version)
 			validCacheEntries[filepath.Clean(ident.CachePath)] = true
 		}
 	}
@@ -444,6 +460,7 @@ func cachePolicy(mode, masters, reposConf string) (*g2.CachePolicy, error) {
 		return nil, err
 	}
 	policy.ReposConfPath = reposConf
+	policy.PortageContext = g2.NewOSExecPortageContext()
 	if masters == "" {
 		return policy, nil
 	}

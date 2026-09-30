@@ -28,6 +28,9 @@ BDEPEND="
     dev-build/cmake
     dev-build/ninja
 "
+IDEPEND="
+    sys-apps/coreutils
+"
 `
 	inputFS := fstest.MapFS{
 		"metadata/layout.conf":          &fstest.MapFile{Data: []byte("cache-formats = md5-dict\nmasters =\n")},
@@ -58,12 +61,16 @@ BDEPEND="
 	lines := strings.Split(cacheStr, "\n")
 	foundDepend := false
 	foundBdepend := false
+	foundIdepend := false
 	for _, line := range lines {
 		if line == "DEPEND=virtual/pkgconfig app-arch/unzip" {
 			foundDepend = true
 		}
 		if line == "BDEPEND=dev-build/cmake dev-build/ninja" {
 			foundBdepend = true
+		}
+		if line == "IDEPEND=sys-apps/coreutils" {
+			foundIdepend = true
 		}
 	}
 
@@ -72,6 +79,9 @@ BDEPEND="
 	}
 	if !foundBdepend {
 		t.Fatalf("Cache does not contain exactly flattened BDEPEND line: %q", cacheStr)
+	}
+	if !foundIdepend {
+		t.Fatalf("Cache does not contain exactly flattened IDEPEND line: %q", cacheStr)
 	}
 
 	// 2. Direct Lint Integration (verifying specifically MD5CacheInvalidLintRule)
@@ -109,7 +119,11 @@ BDEPEND="
 		t.Fatalf("Failed to parse ebuild for verification: %v", err)
 	}
 	resolver, _ := g2.BuildEclassResolver(cfs, ".", policy)
-	expected, status, err := g2.GetExpectedCacheContent(cfs, filepath.Join("app-test", "test", "test-1.0.ebuild"), ebuild, policy, resolver)
+
+	vars := g2.ParseEbuildVariables("test-1.0.ebuild")
+	ident := g2.GetCacheIdentity(".", "test-overlay", "md5-dict", "app-test", "test", g2.VersionData{Version: vars["PV"], PVR: vars["PVR"], Ebuild: ebuild})
+
+	expected, status, err := g2.GetExpectedCacheContent(cfs, ident, ebuild, policy, resolver)
 	if err != nil {
 		t.Fatalf("Failed to get expected cache content: %v", err)
 	}
@@ -297,6 +311,135 @@ BDEPEND="
 
 }
 
+type mockCmdRunner struct {
+	stdout []byte
+	stderr []byte
+	err    error
+	calls  []string
+}
+
+func (m *mockCmdRunner) Run(cmdName string, args ...string) ([]byte, []byte, error) {
+	m.calls = append(m.calls, cmdName+" "+strings.Join(args, " "))
+	return m.stdout, m.stderr, m.err
+}
+
+func TestCacheIntegration_DynamicPortageGeneration(t *testing.T) {
+	ebuildContent := `EAPI=8
+DESCRIPTION="Integration test"
+inherit llvm-r1
+DEPEND="
+    virtual/pkgconfig
+    app-arch/unzip
+"
+BDEPEND="
+    dev-build/cmake
+    $(llvm_gen_dep 'llvm-core/clang:${LLVM_SLOT}')
+"
+IDEPEND="
+    app-admin/eselect
+"
+`
+	eclassContent := []byte(`ECLASS=llvm-r1
+IUSE="clang"
+llvm_gen_dep() {
+	echo "$1"
+}
+`)
+	eclassHash := fmt.Sprintf("%x", md5.Sum(eclassContent))
+
+	inputFS := fstest.MapFS{
+		"metadata/layout.conf":          &fstest.MapFile{Data: []byte("repo-name = test-overlay\ncache-formats = md5-dict\nmasters =\n")},
+		"profiles/categories":           &fstest.MapFile{Data: []byte("app-test\n")},
+		"app-test/test/test-1.0.ebuild": &fstest.MapFile{Data: []byte(ebuildContent)},
+		"eclass/llvm-r1.eclass":         &fstest.MapFile{Data: eclassContent},
+	}
+
+	baseFS := NewMemCacheFS(inputFS)
+	cfs := &SpyCacheFS{CacheFS: baseFS}
+
+	// mockCmdRunner must output one line for every element in queryKeys:
+	// "BDEPEND", "DEPEND", "DESCRIPTION", "EAPI", "HOMEPAGE",
+	// "IDEPEND", "INHERITED", "IUSE", "KEYWORDS", "LICENSE", "PDEPEND",
+	// "PROPERTIES", "RDEPEND", "REQUIRED_USE",
+	// "RESTRICT", "SLOT", "SRC_URI", "DEFINED_PHASES"
+	runner := &mockCmdRunner{
+		stdout: []byte("dev-build/cmake llvm-core/clang:15\nvirtual/pkgconfig app-arch/unzip\nIntegration test\n8\n\napp-admin/eselect\nllvm-r1\n\n\n\n\n\n\n\n\n0\n\n\n"),
+	}
+
+	policy := g2.NewCachePolicy(g2.CacheModeCI)
+	policy.PortageContext = &g2.OSExecPortageContext{Runner: runner}
+
+	err := g2.GenerateCacheFS(cfs, ".", nil, policy)
+	if err != nil {
+		t.Fatalf("Expected GenerateCacheFS to succeed, got: %v", err)
+	}
+
+	cachePath := filepath.ToSlash(filepath.Join("metadata", "md5-cache", "app-test", "test-1.0"))
+	cacheData, err := fs.ReadFile(baseFS, cachePath)
+	if err != nil {
+		t.Fatalf("Cache file not created: %v", err)
+	}
+
+	cacheStr := string(cacheData)
+	if !strings.Contains(cacheStr, "BDEPEND=dev-build/cmake llvm-core/clang:15") {
+		t.Fatalf("Cache does not contain exactly flattened materialized BDEPEND line: %q", cacheStr)
+	}
+	if strings.Contains(cacheStr, "llvm_gen_dep") {
+		t.Fatalf("Cache erroneously contains raw shell substitution: %q", cacheStr)
+	}
+	expectedEclassLine := fmt.Sprintf("_eclasses_=llvm-r1\t%s\n", eclassHash)
+	if !strings.Contains(cacheStr, expectedEclassLine) {
+		t.Fatalf("Cache does not contain properly mapped eclass closure line %q: %q", expectedEclassLine, cacheStr)
+	}
+
+	eclassLineCount := strings.Count(cacheStr, "_eclasses_=")
+	if eclassLineCount != 1 {
+		t.Fatalf("Expected exactly 1 _eclasses_= line, got %d", eclassLineCount)
+	}
+
+	// Verify we can parse generated metadata seamlessly
+	linter := md5cache.MD5CacheInvalidLintRule{}
+
+	pkg := &g2.PackageData{
+		Category: "app-test",
+		Name:     "test",
+		Versions: []g2.VersionData{
+			{
+				Version: "1.0",
+				PVR:     "1.0",
+				Ebuild:  &g2.Ebuild{Path: filepath.ToSlash(filepath.Join("app-test", "test", "test-1.0.ebuild"))},
+			},
+		},
+	}
+
+	// Pass a dummy function for hashEclass to avoid physical system lookups during hermetic testing
+	results := linter.LintFS(baseFS, ".", pkg, nil, func(path string) (string, error) {
+		return eclassHash, nil
+	})
+	if len(results) > 0 {
+		t.Fatalf("Lint generated failure on output cache: %v", results)
+	}
+
+	ebuild, _ := g2.ParseEbuild(cfs, filepath.Join("app-test", "test", "test-1.0.ebuild"), g2.ParseFull)
+	resolver, _ := g2.BuildEclassResolver(cfs, ".", policy)
+
+	vars := g2.ParseEbuildVariables("test-1.0.ebuild")
+	ident := g2.GetCacheIdentity(".", "test-overlay", "md5-dict", "app-test", "test", g2.VersionData{Version: vars["PV"], PVR: vars["PVR"], Ebuild: ebuild})
+
+	expected, status, err := g2.GetExpectedCacheContent(cfs, ident, ebuild, policy, resolver)
+	if err != nil {
+		t.Fatalf("GetExpectedCacheContent failed: %v", err)
+	}
+	if status != g2.CacheDrift {
+		t.Fatalf("expected CacheDrift, got %v", status)
+	}
+
+	verifyRes := g2.CompareCacheEntry(cfs, cachePath, expected)
+	if verifyRes.Status != g2.CacheVerified {
+		t.Fatalf("Cache verification failed for valid dynamic cache output: %v", verifyRes.Message)
+	}
+}
+
 func TestCacheIntegration_AbsentCacheDirectory_UnsupportedMetadata(t *testing.T) {
 	ebuildContent := `EAPI=8
 DESCRIPTION="Integration test"
@@ -320,7 +463,10 @@ BDEPEND="
 	snapshotBefore := snapshotMapFS(baseFS.Map)
 	err := g2.GenerateCacheFS(cfs, ".", nil, g2.NewCachePolicy(g2.CacheModeCI))
 	if err == nil {
-		t.Fatalf("Expected GenerateCacheFS to fail due to unsupported metadata")
+		t.Fatalf("Expected GenerateCacheFS to fail with authoritative cache unavailable")
+	}
+	if !strings.Contains(err.Error(), "Portage metadata evaluation unavailable") && !strings.Contains(err.Error(), "authoritative cache") {
+			t.Fatalf("Expected unavailable error, got: %v", err)
 	}
 
 	// Verify the cache directory was NOT created
@@ -328,6 +474,47 @@ BDEPEND="
 	if _, ok := baseFS.Map[cacheDir]; ok {
 		t.Fatalf("Cache directory %s was created prematurely!", cacheDir)
 	}
+	if cfs.creates > 0 || cfs.removes > 0 || cfs.removesAll > 0 || cfs.MkdirAlls > 0 {
+		t.Fatalf("Virtual filesystem mutated! creates: %d, removes: %d, removesAll: %d, mkdirAlls: %d", cfs.creates, cfs.removes, cfs.removesAll, cfs.MkdirAlls)
+	}
+	assertMapFSSnapshotEqual(t, snapshotBefore, snapshotMapFS(baseFS.Map))
+}
+
+func TestCacheIntegration_CI_PortageUnavailable(t *testing.T) {
+	ebuildContent := `EAPI=8
+DESCRIPTION="Integration test"
+DEPEND="
+    virtual/pkgconfig
+    app-arch/unzip
+"
+BDEPEND="
+    dev-build/cmake
+    $(some_dynamic_function)
+"
+`
+	inputFS := fstest.MapFS{
+		"metadata/layout.conf":                 &fstest.MapFile{Data: []byte("repo-name = test-overlay\ncache-formats = md5-dict\nmasters =\n")},
+		"profiles/categories":                  &fstest.MapFile{Data: []byte("app-test\n")},
+		"app-test/test/test-1.0.ebuild":        &fstest.MapFile{Data: []byte(ebuildContent)},
+		"metadata/md5-cache/app-test/test-1.0": &fstest.MapFile{Data: []byte("EAPI=8\n_md5_=dummy\n")},
+	}
+
+	baseFS := NewMemCacheFS(inputFS)
+	cfs := &SpyCacheFS{CacheFS: baseFS}
+	snapshotBefore := snapshotMapFS(baseFS.Map)
+
+	runner := &mockCmdRunner{err: g2.ErrPortageUnavailable}
+	policy := g2.NewCachePolicy(g2.CacheModeCI)
+	policy.PortageContext = &g2.OSExecPortageContext{Runner: runner}
+
+	err := g2.GenerateCacheFS(cfs, ".", nil, policy)
+	if err == nil {
+		t.Fatalf("Expected GenerateCacheFS to fail with authoritative cache unavailable")
+	}
+	if !strings.Contains(err.Error(), "Portage metadata evaluation unavailable") {
+		t.Fatalf("Expected unavailable error, got: %v", err)
+	}
+
 	if cfs.creates > 0 || cfs.removes > 0 || cfs.removesAll > 0 || cfs.MkdirAlls > 0 {
 		t.Fatalf("Virtual filesystem mutated! creates: %d, removes: %d, removesAll: %d, mkdirAlls: %d", cfs.creates, cfs.removes, cfs.removesAll, cfs.MkdirAlls)
 	}
@@ -359,7 +546,10 @@ BDEPEND="
 	snapshotBefore := snapshotMapFS(baseFS.Map)
 	err := g2.GenerateCacheFS(cfs, ".", nil, g2.NewCachePolicy(g2.CacheModeCI))
 	if err == nil {
-		t.Fatalf("Expected GenerateCacheFS to fail due to unsupported metadata")
+		t.Fatalf("Expected GenerateCacheFS to fail with authoritative cache unavailable")
+	}
+	if !strings.Contains(err.Error(), "Portage metadata evaluation unavailable") && !strings.Contains(err.Error(), "authoritative cache") {
+		t.Fatalf("Expected unavailable error, got: %v", err)
 	}
 
 	// Verify the cache content was NOT changed

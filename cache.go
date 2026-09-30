@@ -206,19 +206,28 @@ func GenerateCacheFS(cfs CacheFS, repoDir string, targetPkgs []string, policy *C
 						PVR:     pvr,
 						Ebuild:  ebuild,
 					}
-					ident := GetCacheIdentity(repoDir, format, cat, pkgName, verData)
+
+					repoName, err := ResolveRepoName(cfs, repoDir, lc)
+					if err != nil && !errors.Is(err, fs.ErrNotExist) {
+						return fmt.Errorf("resolving repository name for %s: %w", ebuildPath, err)
+					}
+
+					ident := GetCacheIdentity(repoDir, repoName, format, cat, pkgName, verData)
 					if ident.CachePath == "" {
 						continue // unsupported format
 					}
 
 					verCachePath := ident.CachePath
 
-					expectedContentStr, status, err := GetExpectedCacheContent(cfs, ebuildPath, ebuild, policy, eclassResolver)
+					expectedContentStr, status, err := GetExpectedCacheContent(cfs, ident, ebuild, policy, eclassResolver)
 					if err != nil {
 						return fmt.Errorf("getting expected cache for %s: %w", ident.CachePath, err)
 					}
 					if status == CacheSkipped {
-						return fmt.Errorf("cannot generate authoritative cache for %s: %s", ident.EbuildPath, strings.Join(eclassResolver.MissingMasters(), ", "))
+						if len(eclassResolver.MissingMasters()) > 0 {
+							return fmt.Errorf("cannot generate authoritative cache for %s: unavailable masters permitted by CI policy: %s", ident.EbuildPath, strings.Join(eclassResolver.MissingMasters(), ", "))
+						}
+						return fmt.Errorf("cannot generate authoritative cache for %s: Portage metadata evaluation unavailable in ci mode", ident.EbuildPath)
 					}
 
 					existingContent, err := fs.ReadFile(cfs, verCachePath)
@@ -276,6 +285,7 @@ func GetCachePath(repoDir string, format string, category string, name string, v
 
 // CacheIdentity represents the resolved identity of a package version for caching purposes.
 type CacheIdentity struct {
+	RepoName   string
 	Category   string
 	Package    string
 	PVR        string
@@ -293,10 +303,31 @@ func GetEbuildPath(repoDir, category, name string, ver VersionData) string {
 	return filepath.ToSlash(filepath.Join(repoDir, category, name, ebuildFile))
 }
 
+// ResolveRepoName resolves the canonical repository name from layout.conf or profiles/repo_name.
+func ResolveRepoName(cfs CacheFS, repoDir string, lc *LayoutConf) (string, error) {
+	if lc != nil && lc.RepoName() != "" {
+		return lc.RepoName(), nil
+	}
+	profileRepoNamePath := filepath.ToSlash(filepath.Join(repoDir, "profiles", "repo_name"))
+	rnf, err := fs.ReadFile(cfs, profileRepoNamePath)
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return "", fs.ErrNotExist
+		}
+		return "", fmt.Errorf("reading profiles/repo_name: %w", err)
+	}
+	name := strings.TrimSpace(string(rnf))
+	if name == "" {
+		return "", fs.ErrNotExist
+	}
+	return name, nil
+}
+
 // GetCacheIdentity returns the resolved CacheIdentity for a given package and version.
-func GetCacheIdentity(repoDir, format, category, pkgName string, ver VersionData) CacheIdentity {
+func GetCacheIdentity(repoDir, repoName, format, category, pkgName string, ver VersionData) CacheIdentity {
 	pvr := ver.GetPVR()
 	return CacheIdentity{
+		RepoName:   repoName,
 		Category:   category,
 		Package:    pkgName,
 		PVR:        pvr,
@@ -333,6 +364,7 @@ func isCacheVariable(key string) bool {
 		"DESCRIPTION":    true,
 		"EAPI":           true,
 		"HOMEPAGE":       true,
+		"IDEPEND":        true,
 		"INHERITED":      true,
 		"IUSE":           true,
 		"KEYWORDS":       true,
@@ -356,6 +388,7 @@ func isListVariable(key string) bool {
 		"BDEPEND":        true,
 		"DEPEND":         true,
 		"HOMEPAGE":       true,
+		"IDEPEND":        true,
 		"INHERITED":      true,
 		"IUSE":           true,
 		"KEYWORDS":       true,
@@ -373,28 +406,99 @@ func isListVariable(key string) bool {
 	return listKeys[key]
 }
 
-// GetExpectedCacheContent returns the expected cache string for an ebuild, or a CacheResultStatus indicating why it couldn't.
-func GetExpectedCacheContent(cfs CacheFS, ebuildPath string, ebuild *Ebuild, policy *CachePolicy, eclassResolver *EclassResolver) (string, CacheResultStatus, error) {
-	if ebuild == nil || ebuild.Vars == nil {
-		return "", CacheError, fmt.Errorf("ebuild %s has no parsed metadata", ebuildPath)
-	}
+func needsPortageEvaluation(ebuild *Ebuild) bool {
 	if ebuild.SrcUriUncertain {
-		return "", CacheError, fmt.Errorf("ebuild %s contains control flow or unresolved values; canonical cache metadata requires Portage evaluation", ebuildPath)
+		return true
 	}
 	for key := range ebuild.UncertainVars {
 		if isCacheVariable(key) {
-			return "", CacheError, fmt.Errorf("ebuild %s has unresolved %s; canonical cache metadata requires Portage evaluation", ebuildPath, key)
+			return true
 		}
 	}
+	for k, v := range ebuild.Vars {
+		if v != "" && isCacheVariable(k) && !isListVariable(k) && strings.Contains(v, "\n") {
+			return true
+		}
+	}
+	return false
+}
+
+// GetExpectedCacheContent returns the expected cache string for an ebuild, or a CacheResultStatus indicating why it couldn't.
+func GetExpectedCacheContent(cfs CacheFS, ident CacheIdentity, ebuild *Ebuild, policy *CachePolicy, eclassResolver *EclassResolver) (string, CacheResultStatus, error) {
+	if ebuild == nil || ebuild.Vars == nil {
+		return "", CacheError, fmt.Errorf("ebuild %s has no parsed metadata", ident.EbuildPath)
+	}
+
+	needsPortage := needsPortageEvaluation(ebuild)
+
+	metadataVars := make(map[string]string)
+	for k, v := range ebuild.Vars {
+		metadataVars[k] = v
+	}
+
+	if needsPortage {
+		if policy == nil || policy.PortageContext == nil || ident.RepoName == "" {
+			if policy != nil && policy.Mode == CacheModeStrict {
+				if ident.RepoName == "" {
+					return "", CacheError, fmt.Errorf("ebuild %s requires Portage evaluation but repository name is not defined in layout.conf or profiles/repo_name", ident.EbuildPath)
+				}
+				// To preserve existing behavior in strict mode tests:
+				if ebuild.SrcUriUncertain {
+					return "", CacheError, fmt.Errorf("ebuild %s contains control flow or unresolved values; canonical cache metadata requires Portage evaluation", ident.EbuildPath)
+				}
+				for key := range ebuild.UncertainVars {
+					if isCacheVariable(key) {
+						return "", CacheError, fmt.Errorf("ebuild %s has unresolved %s; canonical cache metadata requires Portage evaluation", ident.EbuildPath, key)
+					}
+				}
+				for k, v := range ebuild.Vars {
+					if v != "" && isCacheVariable(k) && !isListVariable(k) && strings.Contains(v, "\n") {
+						return "", CacheError, fmt.Errorf("ebuild %s contains unsupported multiline scalar value for %s", ident.EbuildPath, k)
+					}
+				}
+				return "", CacheError, fmt.Errorf("ebuild %s requires Portage evaluation but Portage context is unavailable in strict mode", ident.EbuildPath)
+			}
+			return "", CacheSkipped, nil
+		}
+
+		queryKeys := []string{
+			"BDEPEND", "DEPEND", "DESCRIPTION", "EAPI", "HOMEPAGE",
+			"IDEPEND", "INHERITED", "IUSE", "KEYWORDS", "LICENSE", "PDEPEND",
+			"PROPERTIES", "RDEPEND", "REQUIRED_USE",
+			"RESTRICT", "SLOT", "SRC_URI", "DEFINED_PHASES",
+		}
+
+		resolvedVars, err := policy.PortageContext.QueryMetadata(ident.RepoName, ident.Category, ident.Package, ident.PVR, queryKeys)
+		if err != nil {
+			if errors.Is(err, ErrPortageUnavailable) {
+				if policy.Mode == CacheModeCI {
+					return "", CacheSkipped, nil
+				}
+				return "", CacheError, fmt.Errorf("ebuild %s requires Portage evaluation but Portage capability unavailable in strict mode: %w", ident.EbuildPath, err)
+			}
+			return "", CacheError, fmt.Errorf("evaluating ebuild %s with portage: %w", ident.EbuildPath, err)
+		}
+
+		// If query succeeds but we are missing keys, report error rather than silent fallback
+		for _, key := range queryKeys {
+			val, ok := resolvedVars[key]
+			if !ok {
+				// Incomplete authoritative result
+				return "", CacheError, fmt.Errorf("ebuild %s authoritative evaluation missing requested key %s", ident.EbuildPath, key)
+			}
+			metadataVars[key] = val
+		}
+	}
+
 	var keys []string
-	for k := range ebuild.Vars {
+	for k := range metadataVars {
 		keys = append(keys, k)
 	}
 	sort.Strings(keys)
 
 	var expectedContent strings.Builder
 	for _, k := range keys {
-		v := ebuild.Vars[k]
+		v := metadataVars[k]
 		if v != "" {
 			if isCacheVariable(k) {
 				var vStr string
@@ -402,7 +506,7 @@ func GetExpectedCacheContent(cfs CacheFS, ebuildPath string, ebuild *Ebuild, pol
 					vStr = strings.Join(strings.Fields(v), " ")
 				} else {
 					if strings.Contains(v, "\n") {
-						return "", CacheError, fmt.Errorf("ebuild %s contains unsupported multiline scalar value for %s", ebuildPath, k)
+						return "", CacheError, fmt.Errorf("ebuild %s contains unsupported multiline scalar value for %s", ident.EbuildPath, k)
 					}
 					vStr = v
 				}
@@ -411,22 +515,28 @@ func GetExpectedCacheContent(cfs CacheFS, ebuildPath string, ebuild *Ebuild, pol
 		}
 	}
 
-	ebuildContent, err := fs.ReadFile(cfs, filepath.ToSlash(ebuildPath))
+	ebuildContent, err := fs.ReadFile(cfs, filepath.ToSlash(ident.EbuildPath))
 	if err != nil {
 		// ebuild read failure => CacheError and operation failure
-		return "", CacheError, fmt.Errorf("failed to read ebuild file %s: %w", ebuildPath, err)
+		return "", CacheError, fmt.Errorf("failed to read ebuild file %s: %w", ident.EbuildPath, err)
 	}
 
 	md5sum := fmt.Sprintf("%x", md5.Sum(ebuildContent))
 	fmt.Fprintf(&expectedContent, "_md5_=%s\n", md5sum)
 
-	if inherited := ebuild.Vars["INHERITED"]; inherited != "" {
-		eclassParts, err := eclassClosure(eclassResolver, strings.Fields(inherited), map[string]bool{}, map[string]bool{})
+	if inherited := metadataVars["INHERITED"]; inherited != "" {
+		var eclassParts []string
+		var err error
+		if needsPortage {
+			eclassParts, err = eclassClosureAuthoritative(eclassResolver, strings.Fields(inherited))
+		} else {
+			eclassParts, err = eclassClosure(eclassResolver, strings.Fields(inherited), map[string]bool{}, map[string]bool{})
+		}
 		if err != nil {
 			if policy.Mode == CacheModeCI && len(eclassResolver.MissingMasters()) > 0 && strings.Contains(err.Error(), "unavailable masters") {
 				return "", CacheSkipped, nil
 			}
-			return "", CacheError, fmt.Errorf("resolving required eclass metadata for %s: %w", ebuildPath, err)
+			return "", CacheError, fmt.Errorf("resolving required eclass metadata for %s: %w", ident.EbuildPath, err)
 		}
 		fmt.Fprintf(&expectedContent, "_eclasses_=%s\n", strings.Join(eclassParts, "\t"))
 	}
@@ -504,6 +614,26 @@ func eclassClosure(resolver *EclassResolver, names []string, visiting, seen map[
 	result := make([]string, 0, len(ordered))
 	for _, name := range ordered {
 		result = append(result, parts[name])
+	}
+	return result, nil
+}
+
+// eclassClosureAuthoritative relies entirely on the already-provided
+// INHERITED list (from Portage) and avoids parsing eclasses again since their
+// dynamic semantics were evaluated.
+func eclassClosureAuthoritative(resolver *EclassResolver, names []string) ([]string, error) {
+	var result []string
+	seen := make(map[string]bool)
+	for _, name := range names {
+		if seen[name] {
+			continue
+		}
+		content, _, err := resolver.resolve(name)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, fmt.Sprintf("%s\t%x", name, md5.Sum(content)))
+		seen[name] = true
 	}
 	return result, nil
 }
