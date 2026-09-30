@@ -136,7 +136,7 @@ func doCacheVerify(cfs g2.CacheFS, repoDir string, policy *g2.CachePolicy) error
 
 		// 2. Check for missing entries and MD5 mismatches
 		repoName, err := g2.ResolveRepoName(cfs, repoDir, lc)
-		if err != nil && !os.IsNotExist(err) {
+		if err != nil && !errors.Is(err, fs.ErrNotExist) {
 			log.Printf("Failed to resolve repository name: %v\n", err)
 			hasErrors = true
 			continue
@@ -348,7 +348,7 @@ func doCacheClean(cfs g2.CacheFS, repoDir string) error {
 	validCacheEntries := make(map[string]bool)
 
 	repoName, err := g2.ResolveRepoName(cfs, repoDir, lc)
-	if err != nil && !os.IsNotExist(err) {
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return fmt.Errorf("resolving repository name: %w", err)
 	}
 

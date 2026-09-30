@@ -347,7 +347,7 @@ llvm_gen_dep() {
 	eclassHash := fmt.Sprintf("%x", md5.Sum(eclassContent))
 
 	inputFS := fstest.MapFS{
-		"metadata/layout.conf":          &fstest.MapFile{Data: []byte("cache-formats = md5-dict\nmasters =\n")},
+		"metadata/layout.conf":          &fstest.MapFile{Data: []byte("repo-name = test-overlay\ncache-formats = md5-dict\nmasters =\n")},
 		"profiles/categories":           &fstest.MapFile{Data: []byte("app-test\n")},
 		"app-test/test/test-1.0.ebuild": &fstest.MapFile{Data: []byte(ebuildContent)},
 		"eclass/llvm-r1.eclass":         &fstest.MapFile{Data: eclassContent},

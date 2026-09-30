@@ -207,14 +207,9 @@ func GenerateCacheFS(cfs CacheFS, repoDir string, targetPkgs []string, policy *C
 						Ebuild:  ebuild,
 					}
 
-					repoName := repoDir
-					if lc != nil && lc.RepoName() != "" {
-						repoName = lc.RepoName()
-					} else {
-						profileRepoNamePath := filepath.ToSlash(filepath.Join(repoDir, "profiles", "repo_name"))
-						if rnf, err := fs.ReadFile(cfs, profileRepoNamePath); err == nil {
-							repoName = strings.TrimSpace(string(rnf))
-						}
+					repoName, err := ResolveRepoName(cfs, repoDir, lc)
+					if err != nil && !errors.Is(err, fs.ErrNotExist) {
+						return fmt.Errorf("resolving repository name for %s: %w", ebuildPath, err)
 					}
 
 					ident := GetCacheIdentity(repoDir, repoName, format, cat, pkgName, verData)
