@@ -334,8 +334,12 @@ func TestGenerateCacheRejectsUnevaluatedEclassAndDynamicMetadata(t *testing.T) {
 			if tt.eclass != "" {
 				write(filepath.Join(dir, "eclass", "example.eclass"), tt.eclass)
 			}
-			if err := GenerateCacheFS(NewOsCacheFS(dir), ".", nil, NewCachePolicy(CacheModeCI)); err == nil {
+			err := GenerateCacheFS(NewOsCacheFS(dir), ".", nil, NewCachePolicy(CacheModeStrict))
+			if err == nil {
 				t.Fatal("generation accepted metadata that requires ebuild evaluation")
+			}
+			if !strings.Contains(err.Error(), "requires Portage evaluation") && !strings.Contains(err.Error(), "contains unsupported multiline scalar value") {
+				t.Fatalf("expected Portage evaluation error, got: %v", err)
 			}
 			if _, err := os.Stat(filepath.Join(dir, "metadata", "md5-cache", "cat", "pkg-1")); !os.IsNotExist(err) {
 				t.Fatal("generation wrote a cache entry despite unresolved metadata")
@@ -356,7 +360,7 @@ func TestGenerateCacheWithPortageContext(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	write("metadata/layout.conf", "masters =\n")
+	write("metadata/layout.conf", "repo-name = test-overlay\nmasters =\n")
 	write("profiles/categories", "cat\n")
 	write("cat/pkg/pkg-1.ebuild", "EAPI=8\nDEPEND=\"$(llvm_gen_dep 'llvm-core/clang:${LLVM_SLOT}')\"\n")
 
@@ -371,9 +375,25 @@ func TestGenerateCacheWithPortageContext(t *testing.T) {
 
 	mockPortage := &mockPortageContext{
 		responses: map[string]map[string]string{
-			"cat/pkg-1::.": {
-				"DEPEND": "llvm-core/clang:15",
-				"EAPI":   "8",
+			"cat/pkg-1::test-overlay": {
+				"BDEPEND":        "",
+				"DEPEND":         "llvm-core/clang:15",
+				"DESCRIPTION":    "",
+				"EAPI":           "8",
+				"HOMEPAGE":       "",
+				"IDEPEND":        "",
+				"INHERITED":      "",
+				"IUSE":           "",
+				"KEYWORDS":       "",
+				"LICENSE":        "",
+				"PDEPEND":        "",
+				"PROPERTIES":     "",
+				"RDEPEND":        "",
+				"REQUIRED_USE":   "",
+				"RESTRICT":       "",
+				"SLOT":           "",
+				"SRC_URI":        "",
+				"DEFINED_PHASES": "",
 			},
 		},
 	}
@@ -390,8 +410,8 @@ func TestGenerateCacheWithPortageContext(t *testing.T) {
 		t.Fatalf("expected PortageContext to be called exactly 1 time, got %d. calls: %v", len(mockPortage.calls), mockPortage.calls)
 	}
 
-	if mockPortage.calls[0] != "cat/pkg-1::." {
-		t.Fatalf("expected PortageContext to be called with exact CPV cat/pkg-1::., got: %s", mockPortage.calls[0])
+	if mockPortage.calls[0] != "cat/pkg-1::test-overlay" {
+		t.Fatalf("expected PortageContext to be called with exact CPV cat/pkg-1::test-overlay, got: %s", mockPortage.calls[0])
 	}
 
 	content, err := os.ReadFile(filepath.Join(dir, "metadata", "md5-cache", "cat", "pkg-1"))
@@ -418,7 +438,7 @@ func TestGenerateCacheWithPortageContext_StrictMissingContext(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	write("metadata/layout.conf", "masters =\n")
+	write("metadata/layout.conf", "repo-name = test-overlay\nmasters =\n")
 	write("profiles/categories", "cat\n")
 	write("cat/pkg/pkg-1.ebuild", "EAPI=8\nDEPEND=\"$(llvm_gen_dep 'llvm-core/clang:${LLVM_SLOT}')\"\n")
 
@@ -446,7 +466,7 @@ func TestGenerateCacheWithPortageContext_IncompleteResult(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	write("metadata/layout.conf", "masters = gentoo\n")
+	write("metadata/layout.conf", "repo-name = test-overlay\nmasters = gentoo\n")
 	write("profiles/categories", "cat\n")
 	write("cat/pkg/pkg-1.ebuild", "EAPI=8\nDEPEND=\"$(llvm_gen_dep 'llvm-core/clang:${LLVM_SLOT}')\"\n")
 
@@ -461,7 +481,7 @@ func TestGenerateCacheWithPortageContext_IncompleteResult(t *testing.T) {
 
 	mockPortage := &mockPortageContext{
 		responses: map[string]map[string]string{
-			"cat/pkg-1::.": {
+			"cat/pkg-1::test-overlay": {
 				"EAPI": "8", // Missing DEPEND in response
 			},
 		},
@@ -474,8 +494,8 @@ func TestGenerateCacheWithPortageContext_IncompleteResult(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected generation to fail due to incomplete result, but it succeeded")
 	}
-	if !strings.Contains(err.Error(), "authoritative evaluation missing required key DEPEND") {
-		t.Fatalf("expected missing required key DEPEND error, got: %v", err)
+	if !strings.Contains(err.Error(), "authoritative evaluation missing requested key BDEPEND") {
+		t.Fatalf("expected missing requested key BDEPEND error, got: %v", err)
 	}
 
 	if _, err := os.Stat(filepath.Join(dir, "metadata", "md5-cache", "cat", "pkg-1")); !os.IsNotExist(err) {
@@ -494,15 +514,31 @@ func TestGenerateCacheWithPortageContext_Revision(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	write("metadata/layout.conf", "masters = gentoo\n")
+	write("metadata/layout.conf", "repo-name = test-overlay\nmasters = gentoo\n")
 	write("profiles/categories", "cat\n")
 	write("cat/pkg/pkg-1-r2.ebuild", "EAPI=8\nDEPEND=\"$(llvm_gen_dep 'llvm-core/clang:${LLVM_SLOT}')\"\n")
 
 	mockPortage := &mockPortageContext{
 		responses: map[string]map[string]string{
-			"cat/pkg-1-r2::.": {
-				"DEPEND": "llvm-core/clang:15",
-				"EAPI":   "8",
+			"cat/pkg-1-r2::test-overlay": {
+				"BDEPEND":        "",
+				"DEPEND":         "llvm-core/clang:15",
+				"DESCRIPTION":    "",
+				"EAPI":           "8",
+				"HOMEPAGE":       "",
+				"IDEPEND":        "",
+				"INHERITED":      "",
+				"IUSE":           "",
+				"KEYWORDS":       "",
+				"LICENSE":        "",
+				"PDEPEND":        "",
+				"PROPERTIES":     "",
+				"RDEPEND":        "",
+				"REQUIRED_USE":   "",
+				"RESTRICT":       "",
+				"SLOT":           "",
+				"SRC_URI":        "",
+				"DEFINED_PHASES": "",
 			},
 		},
 	}
@@ -519,8 +555,8 @@ func TestGenerateCacheWithPortageContext_Revision(t *testing.T) {
 		t.Fatalf("expected PortageContext to be called exactly 1 time, got %d. calls: %v", len(mockPortage.calls), mockPortage.calls)
 	}
 
-	if mockPortage.calls[0] != "cat/pkg-1-r2::." {
-		t.Fatalf("expected PortageContext to be called with exact CPV cat/pkg-1-r2::., got: %s", mockPortage.calls[0])
+	if mockPortage.calls[0] != "cat/pkg-1-r2::test-overlay" {
+		t.Fatalf("expected PortageContext to be called with exact CPV cat/pkg-1-r2::test-overlay, got: %s", mockPortage.calls[0])
 	}
 }
 
@@ -563,12 +599,8 @@ func TestGenerateCachePreservesDynamicMetadata(t *testing.T) {
 	}
 
 	err = GenerateCacheFS(memFS, ".", nil, NewCachePolicy(CacheModeCI))
-	if err == nil {
-		t.Fatal("Expected GenerateCacheFS to fail on dynamic dependency but it returned nil")
-	}
-
-	if !strings.Contains(err.Error(), "Portage metadata evaluation unavailable in ci mode") {
-		t.Fatalf("Expected unresolved BDEPEND error, got: %v", err)
+	if err != nil {
+		t.Fatalf("Expected GenerateCacheFS to succeed and skip mutation silently, got: %v", err)
 	}
 
 	if len(memFS.Creates) > 0 || len(memFS.Removes) > 0 || len(memFS.RemoveAlls) > 0 {

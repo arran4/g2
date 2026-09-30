@@ -28,6 +28,9 @@ BDEPEND="
     dev-build/cmake
     dev-build/ninja
 "
+IDEPEND="
+    sys-apps/coreutils
+"
 `
 	inputFS := fstest.MapFS{
 		"metadata/layout.conf":          &fstest.MapFile{Data: []byte("cache-formats = md5-dict\nmasters =\n")},
@@ -58,12 +61,16 @@ BDEPEND="
 	lines := strings.Split(cacheStr, "\n")
 	foundDepend := false
 	foundBdepend := false
+	foundIdepend := false
 	for _, line := range lines {
 		if line == "DEPEND=virtual/pkgconfig app-arch/unzip" {
 			foundDepend = true
 		}
 		if line == "BDEPEND=dev-build/cmake dev-build/ninja" {
 			foundBdepend = true
+		}
+		if line == "IDEPEND=sys-apps/coreutils" {
+			foundIdepend = true
 		}
 	}
 
@@ -72,6 +79,9 @@ BDEPEND="
 	}
 	if !foundBdepend {
 		t.Fatalf("Cache does not contain exactly flattened BDEPEND line: %q", cacheStr)
+	}
+	if !foundIdepend {
+		t.Fatalf("Cache does not contain exactly flattened IDEPEND line: %q", cacheStr)
 	}
 
 	// 2. Direct Lint Integration (verifying specifically MD5CacheInvalidLintRule)
@@ -451,8 +461,8 @@ BDEPEND="
 	cfs := &SpyCacheFS{CacheFS: baseFS}
 	snapshotBefore := snapshotMapFS(baseFS.Map)
 	err := g2.GenerateCacheFS(cfs, ".", nil, g2.NewCachePolicy(g2.CacheModeCI))
-	if err == nil {
-		t.Fatalf("Expected GenerateCacheFS to fail due to unsupported metadata")
+	if err != nil {
+		t.Fatalf("Expected GenerateCacheFS to succeed and silently skip cache file creation, got %v", err)
 	}
 
 	// Verify the cache directory was NOT created
@@ -479,7 +489,7 @@ BDEPEND="
 "
 `
 	inputFS := fstest.MapFS{
-		"metadata/layout.conf":                 &fstest.MapFile{Data: []byte("cache-formats = md5-dict\nmasters =\n")},
+		"metadata/layout.conf":                 &fstest.MapFile{Data: []byte("repo-name = test-overlay\ncache-formats = md5-dict\nmasters =\n")},
 		"profiles/categories":                  &fstest.MapFile{Data: []byte("app-test\n")},
 		"app-test/test/test-1.0.ebuild":        &fstest.MapFile{Data: []byte(ebuildContent)},
 		"metadata/md5-cache/app-test/test-1.0": &fstest.MapFile{Data: []byte("EAPI=8\n_md5_=dummy\n")},
@@ -494,11 +504,8 @@ BDEPEND="
 	policy.PortageContext = &g2.OSExecPortageContext{Runner: runner}
 
 	err := g2.GenerateCacheFS(cfs, ".", nil, policy)
-	if err == nil {
-		t.Fatalf("Expected GenerateCacheFS to fail with authoritative cache unavailable")
-	}
-	if !strings.Contains(err.Error(), "authoritative cache") && !strings.Contains(err.Error(), "Portage metadata evaluation unavailable") {
-		t.Fatalf("Expected unavailable error, got: %v", err)
+	if err != nil {
+		t.Fatalf("Expected GenerateCacheFS to succeed and skip cache writing, got: %v", err)
 	}
 
 	if cfs.creates > 0 || cfs.removes > 0 || cfs.removesAll > 0 || cfs.MkdirAlls > 0 {
@@ -531,8 +538,8 @@ BDEPEND="
 	cfs := &SpyCacheFS{CacheFS: baseFS}
 	snapshotBefore := snapshotMapFS(baseFS.Map)
 	err := g2.GenerateCacheFS(cfs, ".", nil, g2.NewCachePolicy(g2.CacheModeCI))
-	if err == nil {
-		t.Fatalf("Expected GenerateCacheFS to fail due to unsupported metadata")
+	if err != nil {
+		t.Fatalf("Expected GenerateCacheFS to succeed and silently skip cache file creation, got %v", err)
 	}
 
 	// Verify the cache content was NOT changed

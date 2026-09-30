@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"io"
 	"io/fs"
-	"strings"
 	"testing"
 
 	"golang.org/x/tools/txtar"
@@ -49,8 +48,8 @@ func TestGenerateCacheDynamicFailureDoesNotAttemptWrites(t *testing.T) {
 	}
 
 	err = GenerateCacheFS(fsys, ".", nil, NewCachePolicy(CacheModeCI))
-	if err == nil || !strings.Contains(err.Error(), "Portage metadata evaluation unavailable in ci mode") {
-		t.Fatalf("expected unresolved BDEPEND generation failure; got %v", err)
+	if err != nil {
+		t.Fatalf("expected skipped cache generation to succeed; got %v", err)
 	}
 	if len(fsys.creates) != 0 || len(fsys.removes) != 0 || len(fsys.removeAlls) != 0 {
 		t.Fatalf("generation attempted writes: creates=%v removes=%v removeAlls=%v", fsys.creates, fsys.removes, fsys.removeAlls)
