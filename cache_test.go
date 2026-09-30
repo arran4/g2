@@ -564,6 +564,13 @@ func TestGenerateCacheWithPortageContext_Revision(t *testing.T) {
 
 type rootReadErrorFS struct{ CacheFS }
 
+func (f rootReadErrorFS) ReadFile(name string) ([]byte, error) {
+	if name == "profiles/repo_name" {
+		return nil, os.ErrPermission
+	}
+	return fs.ReadFile(f.CacheFS, name)
+}
+
 func (f rootReadErrorFS) Open(name string) (fs.File, error) {
 	if name == "." {
 		return nil, os.ErrPermission
@@ -724,5 +731,38 @@ func TestGenerateCacheWithPortageContext_ProfilesRepoName(t *testing.T) {
 	}
 	if mockPortage.calls[0] != "cat/pkg-1::fallback-overlay" {
 		t.Fatalf("expected call with fallback-overlay, got: %s", mockPortage.calls[0])
+	}
+}
+
+func TestGenerateCacheWithPortageContext_ReadError(t *testing.T) {
+	dir := t.TempDir()
+	write := func(name, content string) {
+		t.Helper()
+		if err := os.MkdirAll(filepath.Dir(filepath.Join(dir, name)), 0755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("metadata/layout.conf", "masters =\n")
+	write("profiles/categories", "cat\n")
+	write("cat/pkg/pkg-1.ebuild", "EAPI=8\nDEPEND=\"$(llvm_gen_dep 'llvm-core/clang:${LLVM_SLOT}')\"\n")
+
+	mockPortage := &mockPortageContext{
+		responses: map[string]map[string]string{},
+	}
+
+	policy := NewCachePolicy(CacheModeCI)
+	policy.PortageContext = mockPortage
+
+	errFS := rootReadErrorFS{NewOsCacheFS(dir)}
+
+	err := GenerateCacheFS(errFS, ".", nil, policy)
+	if err == nil {
+		t.Fatalf("expected read error to fail generation")
+	}
+	if !strings.Contains(err.Error(), "permission denied") {
+		t.Fatalf("expected permission denied error, got: %v", err)
 	}
 }

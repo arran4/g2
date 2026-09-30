@@ -311,7 +311,7 @@ func ResolveRepoName(cfs CacheFS, repoDir string, lc *LayoutConf) (string, error
 	profileRepoNamePath := filepath.ToSlash(filepath.Join(repoDir, "profiles", "repo_name"))
 	rnf, err := fs.ReadFile(cfs, profileRepoNamePath)
 	if err != nil {
-		if os.IsNotExist(err) {
+		if errors.Is(err, fs.ErrNotExist) {
 			return "", fs.ErrNotExist
 		}
 		return "", fmt.Errorf("reading profiles/repo_name: %w", err)
