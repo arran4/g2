@@ -306,16 +306,18 @@ func TestCachePolicyRejectsInvalidMode(t *testing.T) {
 
 func TestGenerateCacheRejectsUnevaluatedEclassAndDynamicMetadata(t *testing.T) {
 	tests := []struct {
-		name   string
-		ebuild string
-		eclass string
+		name       string
+		ebuild     string
+		eclass     string
+		eclassName string
 	}{
-		{name: "eclass metadata", ebuild: "inherit example\n", eclass: "IUSE=\"feature\"\n"},
-		{name: "opaque eclass command", ebuild: "inherit example\n", eclass: "eval 'inherit child'\n"},
-		{name: "multiline scalar", ebuild: "DESCRIPTION=\"Multi\nline\"\n"},
-		{name: "dynamic dependency", ebuild: "DEPEND=\"${UNSET_DEPEND}\"\n"},
-		{name: "llvm_gen_dep", ebuild: "DEPEND=\"$(llvm_gen_dep 'llvm-core/clang:${LLVM_SLOT}')\"\n"},
-		{name: "llvm_gen_dep space", ebuild: "DEPEND=\"$( llvm_gen_dep 'llvm-core/clang:${LLVM_SLOT}' )\"\n"},
+		{name: "eclass metadata", ebuild: "inherit example\n", eclass: "IUSE=\"feature\"\n", eclassName: "example"},
+		{name: "opaque eclass command", ebuild: "inherit example\n", eclass: "eval 'inherit child'\n", eclassName: "example"},
+		{name: "multiline scalar", ebuild: "DESCRIPTION=\"Multi\nline\"\n", eclassName: "example"},
+		{name: "dynamic dependency", ebuild: "DEPEND=\"${UNSET_DEPEND}\"\n", eclassName: "example"},
+		{name: "llvm_gen_dep", ebuild: "DEPEND=\"$(llvm_gen_dep 'llvm-core/clang:${LLVM_SLOT}')\"\n", eclassName: "example"},
+		{name: "llvm_gen_dep space", ebuild: "DEPEND=\"$( llvm_gen_dep 'llvm-core/clang:${LLVM_SLOT}' )\"\n", eclassName: "example"},
+		{name: "llvm-r1 static semantic rejection", ebuild: "inherit llvm-r1\nDEPEND=\"$(llvm_gen_dep 'llvm-core/clang:${LLVM_SLOT}')\"\n", eclass: "ECLASS=llvm-r1\nllvm_gen_dep() {\n    echo \"$1\"\n}\n", eclassName: "llvm-r1"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -332,7 +334,7 @@ func TestGenerateCacheRejectsUnevaluatedEclassAndDynamicMetadata(t *testing.T) {
 			write(filepath.Join(dir, "metadata", "layout.conf"), "cache-formats = md5-dict\n")
 			write(filepath.Join(dir, "cat", "pkg", "pkg-1.ebuild"), tt.ebuild)
 			if tt.eclass != "" {
-				write(filepath.Join(dir, "eclass", "example.eclass"), tt.eclass)
+				write(filepath.Join(dir, "eclass", tt.eclassName+".eclass"), tt.eclass)
 			}
 			err := GenerateCacheFS(NewOsCacheFS(dir), ".", nil, NewCachePolicy(CacheModeStrict))
 			if err == nil {
@@ -615,5 +617,112 @@ func TestGenerateCachePreservesDynamicMetadata(t *testing.T) {
 	// We format input data by keeping it completely unmodified
 	if !bytes.Equal(originalCacheData, postCacheData) {
 		t.Fatalf("Expected existing cache bytes to be preserved byte-for-byte. Want:\n%q\nGot:\n%q", string(originalCacheData), string(postCacheData))
+	}
+}
+
+func TestGenerateCacheWithPortageContext_MissingRepoName(t *testing.T) {
+	dir := t.TempDir()
+	write := func(name, content string) {
+		t.Helper()
+		if err := os.MkdirAll(filepath.Dir(filepath.Join(dir, name)), 0755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// Missing repo-name
+	write("metadata/layout.conf", "masters =\n")
+	write("profiles/categories", "cat\n")
+	write("cat/pkg/pkg-1.ebuild", "EAPI=8\nDEPEND=\"$(llvm_gen_dep 'llvm-core/clang:${LLVM_SLOT}')\"\n")
+
+	mockPortage := &mockPortageContext{
+		responses: map[string]map[string]string{},
+	}
+
+	t.Run("CI skips with no portage calls", func(t *testing.T) {
+		policy := NewCachePolicy(CacheModeCI)
+		policy.PortageContext = mockPortage
+		err := GenerateCacheFS(NewOsCacheFS(dir), ".", nil, policy)
+		if err == nil {
+			t.Fatalf("expected CI skip to return error, got nil")
+		}
+		if !strings.Contains(err.Error(), "Portage metadata evaluation unavailable in ci mode") {
+			t.Fatalf("expected skip error, got: %v", err)
+		}
+		if len(mockPortage.calls) != 0 {
+			t.Fatalf("expected 0 portage calls, got %d", len(mockPortage.calls))
+		}
+	})
+
+	t.Run("Strict fails with no portage calls", func(t *testing.T) {
+		policy := NewCachePolicy(CacheModeStrict)
+		policy.PortageContext = mockPortage
+		err := GenerateCacheFS(NewOsCacheFS(dir), ".", nil, policy)
+		if err == nil {
+			t.Fatalf("expected strict failure, got nil")
+		}
+		if !strings.Contains(err.Error(), "repository name is not defined in layout.conf or profiles/repo_name") {
+			t.Fatalf("expected strict repo name error, got: %v", err)
+		}
+		if len(mockPortage.calls) != 0 {
+			t.Fatalf("expected 0 portage calls, got %d", len(mockPortage.calls))
+		}
+	})
+}
+
+func TestGenerateCacheWithPortageContext_ProfilesRepoName(t *testing.T) {
+	dir := t.TempDir()
+	write := func(name, content string) {
+		t.Helper()
+		if err := os.MkdirAll(filepath.Dir(filepath.Join(dir, name)), 0755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("metadata/layout.conf", "masters =\n")
+	write("profiles/repo_name", "fallback-overlay\n")
+	write("profiles/categories", "cat\n")
+	write("cat/pkg/pkg-1.ebuild", "EAPI=8\nDEPEND=\"$(llvm_gen_dep 'llvm-core/clang:${LLVM_SLOT}')\"\n")
+
+	mockPortage := &mockPortageContext{
+		responses: map[string]map[string]string{
+			"cat/pkg-1::fallback-overlay": {
+				"BDEPEND":        "",
+				"DEPEND":         "llvm-core/clang:15",
+				"DESCRIPTION":    "",
+				"EAPI":           "8",
+				"HOMEPAGE":       "",
+				"IDEPEND":        "",
+				"INHERITED":      "",
+				"IUSE":           "",
+				"KEYWORDS":       "",
+				"LICENSE":        "",
+				"PDEPEND":        "",
+				"PROPERTIES":     "",
+				"RDEPEND":        "",
+				"REQUIRED_USE":   "",
+				"RESTRICT":       "",
+				"SLOT":           "",
+				"SRC_URI":        "",
+				"DEFINED_PHASES": "",
+			},
+		},
+	}
+
+	policy := NewCachePolicy(CacheModeCI)
+	policy.PortageContext = mockPortage
+	err := GenerateCacheFS(NewOsCacheFS(dir), ".", nil, policy)
+	if err != nil {
+		t.Fatalf("generation failed: %v", err)
+	}
+
+	if len(mockPortage.calls) != 1 {
+		t.Fatalf("expected 1 portage call, got %d", len(mockPortage.calls))
+	}
+	if mockPortage.calls[0] != "cat/pkg-1::fallback-overlay" {
+		t.Fatalf("expected call with fallback-overlay, got: %s", mockPortage.calls[0])
 	}
 }
