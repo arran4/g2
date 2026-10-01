@@ -606,13 +606,13 @@ func eclassClosure(resolver *EclassResolver, names []string, visiting, seen map[
 				return fmt.Errorf("eclass %q from repository %q contributes %s; canonical cache metadata requires Portage evaluation", name, repo.Name, key)
 			}
 		}
-		ordered = append(ordered, name)
 		for _, child := range strings.Fields(parsed.Vars["INHERITED"]) {
 			if err := visit(child); err != nil {
 				return err
 			}
 		}
 		parts[name] = fmt.Sprintf("%s\t%x", name, md5.Sum(content))
+		ordered = append(ordered, name)
 		visiting[name] = false
 		seen[name] = true
 		return nil
