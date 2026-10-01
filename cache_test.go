@@ -59,6 +59,7 @@ func (f *memFile) Close() error {
 }
 
 func (m *MemCacheFS) Create(name string) (io.WriteCloser, error) {
+	m.Creates = append(m.Creates, name)
 	return &memFile{
 		name: name,
 		buf:  new(bytes.Buffer),
@@ -256,7 +257,7 @@ func TestGenerateCacheTransitiveEclassesFromConfiguredMaster(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := fmt.Sprintf("_eclasses_=second\t%x\tfirst\t%x\n", md5.Sum(second), md5.Sum(first))
+	want := fmt.Sprintf("_eclasses_=first\t%x\tsecond\t%x\n", md5.Sum(first), md5.Sum(second))
 	if !strings.Contains(string(cache), want) {
 		t.Fatalf("cache lacks complete transitive eclass metadata\nwant %q\ngot %s", want, cache)
 	}
@@ -764,5 +765,286 @@ func TestGenerateCacheWithPortageContext_ReadError(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "permission denied") {
 		t.Fatalf("expected permission denied error, got: %v", err)
+	}
+}
+
+func TestCacheTransitiveInheritance(t *testing.T) {
+	fsys := fstest.MapFS{
+		"metadata/layout.conf":      &fstest.MapFile{Data: []byte("repo-name = testrepo\nmasters = \n")},
+		"profiles/repo_name":        &fstest.MapFile{Data: []byte("testrepo\n")},
+		"eclass/A.eclass":           &fstest.MapFile{Data: []byte("INHERITED=\"B\"\n")},
+		"eclass/B.eclass":           &fstest.MapFile{Data: []byte("INHERITED=\"C\"\n")},
+		"eclass/C.eclass":           &fstest.MapFile{Data: []byte("")},
+		"app-misc/foo/foo-1.ebuild": &fstest.MapFile{Data: []byte("INHERITED=\"A\"\n")},
+	}
+	cfs := NewMemCacheFS(fsys)
+	policy := NewCachePolicy(CacheModeStrict)
+	resolver, _ := BuildEclassResolver(cfs, ".", policy)
+	ident := CacheIdentity{RepoName: "testrepo", Category: "app-misc", Package: "foo", PVR: "1", EbuildPath: "app-misc/foo/foo-1.ebuild"}
+
+	parsed := &Ebuild{Vars: map[string]string{"INHERITED": "A"}}
+	content, status, err := GetExpectedCacheContent(cfs, ident, parsed, policy, resolver)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if status != CacheDrift {
+		t.Fatalf("expected CacheDrift, got %v", status)
+	}
+
+	if !strings.Contains(content, "INHERITED=A B C\n") {
+		t.Errorf("expected INHERITED=A B C, got %q", content)
+	}
+	if !strings.Contains(content, "_eclasses_=") {
+		t.Errorf("expected _eclasses_ output, got %q", content)
+	}
+
+	eclassesLine := ""
+	for _, line := range strings.Split(content, "\n") {
+		if strings.HasPrefix(line, "_eclasses_=") {
+			eclassesLine = strings.TrimPrefix(line, "_eclasses_=")
+		}
+	}
+	parts := strings.Split(eclassesLine, "\t")
+	if len(parts) != 6 {
+		t.Fatalf("expected 6 parts for 3 eclasses (name and md5 each), got %d: %q", len(parts), eclassesLine)
+	}
+	if parts[0] != "A" || parts[2] != "B" || parts[4] != "C" {
+		t.Errorf("expected order A B C, got %q", eclassesLine)
+	}
+}
+
+func TestCacheDuplicateInheritance(t *testing.T) {
+	fsys := fstest.MapFS{
+		"metadata/layout.conf":      &fstest.MapFile{Data: []byte("repo-name = testrepo\nmasters = \n")},
+		"profiles/repo_name":        &fstest.MapFile{Data: []byte("testrepo\n")},
+		"eclass/A.eclass":           &fstest.MapFile{Data: []byte("INHERITED=\"C\"\n")},
+		"eclass/B.eclass":           &fstest.MapFile{Data: []byte("INHERITED=\"C\"\n")},
+		"eclass/C.eclass":           &fstest.MapFile{Data: []byte("")},
+		"app-misc/foo/foo-1.ebuild": &fstest.MapFile{Data: []byte("INHERITED=\"A B\"\n")},
+	}
+	cfs := NewMemCacheFS(fsys)
+	policy := NewCachePolicy(CacheModeStrict)
+	resolver, _ := BuildEclassResolver(cfs, ".", policy)
+	ident := CacheIdentity{RepoName: "testrepo", Category: "app-misc", Package: "foo", PVR: "1", EbuildPath: "app-misc/foo/foo-1.ebuild"}
+
+	parsed := &Ebuild{Vars: map[string]string{"INHERITED": "A B"}}
+	content, _, _ := GetExpectedCacheContent(cfs, ident, parsed, policy, resolver)
+	if !strings.Contains(content, "INHERITED=A C B\n") { // A pulls C, then B is seen, then B's C is already seen
+		t.Errorf("expected INHERITED=A C B, got %q", content)
+	}
+}
+
+func TestCacheCyclicInheritance(t *testing.T) {
+	fsys := fstest.MapFS{
+		"metadata/layout.conf":      &fstest.MapFile{Data: []byte("repo-name = testrepo\nmasters = \n")},
+		"profiles/repo_name":        &fstest.MapFile{Data: []byte("testrepo\n")},
+		"eclass/A.eclass":           &fstest.MapFile{Data: []byte("INHERITED=\"B\"\n")},
+		"eclass/B.eclass":           &fstest.MapFile{Data: []byte("INHERITED=\"A\"\n")},
+		"app-misc/foo/foo-1.ebuild": &fstest.MapFile{Data: []byte("INHERITED=\"A\"\n")},
+	}
+	cfs := NewMemCacheFS(fsys)
+	policy := NewCachePolicy(CacheModeStrict)
+	resolver, _ := BuildEclassResolver(cfs, ".", policy)
+	ident := CacheIdentity{RepoName: "testrepo", Category: "app-misc", Package: "foo", PVR: "1", EbuildPath: "app-misc/foo/foo-1.ebuild"}
+
+	parsed := &Ebuild{Vars: map[string]string{"INHERITED": "A"}}
+	content, _, err := GetExpectedCacheContent(cfs, ident, parsed, policy, resolver)
+	if err != nil {
+		t.Fatalf("unexpected error on cyclic inheritance: %v", err)
+	}
+	if !strings.Contains(content, "INHERITED=A B\n") {
+		t.Errorf("expected INHERITED=A B, got %q", content)
+	}
+}
+
+func TestCacheMasterRepositoryInheritance(t *testing.T) {
+	fsys := fstest.MapFS{
+		"metadata/layout.conf":                &fstest.MapFile{Data: []byte("repo-name = testrepo\nmasters = baserepo\n")},
+		"profiles/repo_name":                  &fstest.MapFile{Data: []byte("testrepo\n")},
+		"baserepo/eclass/mastereclass.eclass": &fstest.MapFile{Data: []byte("")},
+		"eclass/overlayeclass.eclass":         &fstest.MapFile{Data: []byte("INHERITED=\"mastereclass\"\n")},
+		"app-misc/foo/foo-1.ebuild":           &fstest.MapFile{Data: []byte("INHERITED=\"overlayeclass\"\n")},
+	}
+	cfs := NewMemCacheFS(fsys)
+	policy := NewCachePolicy(CacheModeStrict)
+	baserepoFS, _ := fs.Sub(cfs, "baserepo")
+	resolver := NewEclassResolver([]MasterRepo{{Name: "testrepo", Path: ".", FS: cfs}, {Name: "baserepo", Path: "baserepo", FS: baserepoFS}})
+
+	ident := CacheIdentity{RepoName: "testrepo", Category: "app-misc", Package: "foo", PVR: "1", EbuildPath: "app-misc/foo/foo-1.ebuild"}
+	parsed := &Ebuild{Vars: map[string]string{"INHERITED": "overlayeclass"}}
+
+	content, _, err := GetExpectedCacheContent(cfs, ident, parsed, policy, resolver)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !strings.Contains(content, "INHERITED=overlayeclass mastereclass\n") {
+		t.Errorf("expected INHERITED=overlayeclass mastereclass, got %q", content)
+	}
+}
+
+func TestCacheRepositoryPrecedence(t *testing.T) {
+	fsys := fstest.MapFS{
+		"metadata/layout.conf":          &fstest.MapFile{Data: []byte("repo-name = testrepo\nmasters = baserepo\n")},
+		"profiles/repo_name":            &fstest.MapFile{Data: []byte("testrepo\n")},
+		"baserepo/eclass/shared.eclass": &fstest.MapFile{Data: []byte("")},
+		"eclass/shared.eclass":          &fstest.MapFile{Data: []byte("")}, // shadow!
+		"app-misc/foo/foo-1.ebuild":     &fstest.MapFile{Data: []byte("INHERITED=\"shared\"\n")},
+	}
+	cfs := NewMemCacheFS(fsys)
+	policy := NewCachePolicy(CacheModeStrict)
+	baserepoFS, _ := fs.Sub(cfs, "baserepo")
+	resolver := NewEclassResolver([]MasterRepo{{Name: "testrepo", Path: ".", FS: cfs}, {Name: "baserepo", Path: "baserepo", FS: baserepoFS}})
+
+	ident := CacheIdentity{RepoName: "testrepo", Category: "app-misc", Package: "foo", PVR: "1", EbuildPath: "app-misc/foo/foo-1.ebuild"}
+	parsed := &Ebuild{Vars: map[string]string{"INHERITED": "shared"}}
+
+	content, _, err := GetExpectedCacheContent(cfs, ident, parsed, policy, resolver)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// md5 for empty string is d41d8cd98f00b204e9800998ecf8427e
+	if !strings.Contains(content, "shared\td41d8cd98f00b204e9800998ecf8427e") {
+		t.Errorf("expected shadowed eclass md5 from overlay, got %q", content)
+	}
+}
+
+func TestCacheDriftStaleInherited(t *testing.T) {
+	fsys := fstest.MapFS{
+		"metadata/layout.conf":              &fstest.MapFile{Data: []byte("repo-name = testrepo\nmasters = \n")},
+		"profiles/repo_name":                &fstest.MapFile{Data: []byte("testrepo\n")},
+		"eclass/A.eclass":                   &fstest.MapFile{Data: []byte("INHERITED=\"B\"\n")},
+		"eclass/B.eclass":                   &fstest.MapFile{Data: []byte("")},
+		"app-misc/foo/foo-1.ebuild":         &fstest.MapFile{Data: []byte("INHERITED=\"A\"\n")},
+		"metadata/md5-cache/app-misc/foo-1": &fstest.MapFile{Data: []byte("INHERITED=A\n_md5_=d41d8cd98f00b204e9800998ecf8427e\n_eclasses_=A\t...\n")}, // stale!
+	}
+	cfs := NewMemCacheFS(fsys)
+	policy := NewCachePolicy(CacheModeStrict)
+	resolver, _ := BuildEclassResolver(cfs, ".", policy)
+	ident := CacheIdentity{RepoName: "testrepo", Category: "app-misc", Package: "foo", PVR: "1", EbuildPath: "app-misc/foo/foo-1.ebuild"}
+
+	parsed := &Ebuild{Vars: map[string]string{"INHERITED": "A"}}
+	content, _, _ := GetExpectedCacheContent(cfs, ident, parsed, policy, resolver)
+
+	// Ensure that actual cache diff recognizes it as drift
+	result := CompareCacheEntry(cfs, "metadata/md5-cache/app-misc/foo-1", content)
+	if result.Status != CacheDrift {
+		t.Errorf("expected CacheDrift, got %v", result.Status)
+	}
+}
+
+func TestCacheReconciliation(t *testing.T) {
+	fsys := fstest.MapFS{
+		"metadata/layout.conf":              &fstest.MapFile{Data: []byte("repo-name = testrepo\nmasters = \n")},
+		"profiles/repo_name":                &fstest.MapFile{Data: []byte("testrepo\n")},
+		"profiles/categories":               &fstest.MapFile{Data: []byte("app-misc\n")},
+		"eclass/A.eclass":                   &fstest.MapFile{Data: []byte("INHERITED=\"B\"\n")},
+		"eclass/B.eclass":                   &fstest.MapFile{Data: []byte("")},
+		"app-misc/foo/foo-1.ebuild":         &fstest.MapFile{Data: []byte("INHERITED=\"A\"\nEAPI=\"8\"\n")},
+		"metadata/md5-cache/app-misc/foo-1": &fstest.MapFile{Data: []byte("INHERITED=A\n_md5_=24d5ea478546de5ad0615560ff72ce53\n_eclasses_=A\td41d8cd98f00b204e9800998ecf8427e\n")},
+	}
+	cfs := NewMemCacheFS(fsys)
+	policy := NewCachePolicy(CacheModeStrict)
+	policy.PortageContext = &mockPortageContext{
+		calls: make([]string, 0),
+		responses: map[string]map[string]string{
+			"app-misc/foo-1::testrepo": {
+				"BDEPEND":        "",
+				"DEPEND":         "",
+				"DESCRIPTION":    "",
+				"EAPI":           "8",
+				"HOMEPAGE":       "",
+				"IDEPEND":        "",
+				"INHERITED":      "A",
+				"IUSE":           "",
+				"KEYWORDS":       "",
+				"LICENSE":        "",
+				"PDEPEND":        "",
+				"PROPERTIES":     "",
+				"PROVIDE":        "",
+				"RDEPEND":        "",
+				"REQUIRED_USE":   "",
+				"RESTRICT":       "",
+				"SLOT":           "0",
+				"SRC_URI":        "",
+				"DEFINED_PHASES": "",
+			},
+		},
+	}
+
+	err := GenerateCacheFS(cfs, ".", []string{}, policy)
+	if err != nil {
+		t.Fatalf("first generation failed: %v", err)
+	}
+	if len(cfs.Creates) == 0 {
+		t.Fatalf("expected writes during first generation")
+	}
+
+	content, err := fs.ReadFile(cfs, "metadata/md5-cache/app-misc/foo-1")
+	if err != nil {
+		t.Fatalf("reading cache failed: %v", err)
+	}
+	if !strings.Contains(string(content), "INHERITED=A B") {
+		t.Fatalf("expected INHERITED=A B, got %q", content)
+	}
+
+	cfs.Creates = []string{} // clear writes
+
+	// Second run should write nothing
+	err = GenerateCacheFS(cfs, ".", []string{}, policy)
+	if err != nil {
+		t.Fatalf("second generation failed: %v", err)
+	}
+	if len(cfs.Creates) > 0 {
+		t.Fatalf("expected 0 writes during second generation, got %v", cfs.Creates)
+	}
+}
+
+func TestCacheDeterminism(t *testing.T) {
+	fsys := fstest.MapFS{
+		"metadata/layout.conf":      &fstest.MapFile{Data: []byte("repo-name = testrepo\nmasters = \n")},
+		"profiles/repo_name":        &fstest.MapFile{Data: []byte("testrepo\n")},
+		"eclass/A.eclass":           &fstest.MapFile{Data: []byte("INHERITED=\"B\"\n")},
+		"eclass/B.eclass":           &fstest.MapFile{Data: []byte("")},
+		"app-misc/foo/foo-1.ebuild": &fstest.MapFile{Data: []byte("INHERITED=\"A\"\n")},
+	}
+	cfs := NewMemCacheFS(fsys)
+	policy := NewCachePolicy(CacheModeStrict)
+	resolver, _ := BuildEclassResolver(cfs, ".", policy)
+	ident := CacheIdentity{RepoName: "testrepo", Category: "app-misc", Package: "foo", PVR: "1", EbuildPath: "app-misc/foo/foo-1.ebuild"}
+
+	parsed := &Ebuild{Vars: map[string]string{"INHERITED": "A"}}
+
+	content1, _, _ := GetExpectedCacheContent(cfs, ident, parsed, policy, resolver)
+	content2, _, _ := GetExpectedCacheContent(cfs, ident, parsed, policy, resolver)
+
+	if content1 != content2 {
+		t.Errorf("expected deterministic repeated output, got diffs:\n%s\n---\n%s", content1, content2)
+	}
+}
+
+func TestCacheKmagmuxFixture(t *testing.T) {
+	fsys := fstest.MapFS{
+		"metadata/layout.conf":              &fstest.MapFile{Data: []byte("repo-name = testrepo\nmasters = \n")},
+		"profiles/repo_name":                &fstest.MapFile{Data: []byte("testrepo\n")},
+		"eclass/ecm.eclass":                 &fstest.MapFile{Data: []byte("INHERITED=\"cmake\"\n")},
+		"eclass/cmake.eclass":               &fstest.MapFile{Data: []byte("INHERITED=\"flag-o-matic toolchain-funcs multiprocessing\"\n")},
+		"eclass/flag-o-matic.eclass":        &fstest.MapFile{Data: []byte("INHERITED=\"toolchain-funcs\"\n")},
+		"eclass/toolchain-funcs.eclass":     &fstest.MapFile{Data: []byte("INHERITED=\"multiprocessing\"\n")},
+		"eclass/multiprocessing.eclass":     &fstest.MapFile{Data: []byte("")},
+		"app-misc/kmagmux/kmagmux-1.ebuild": &fstest.MapFile{Data: []byte("INHERITED=\"ecm\"\n")},
+	}
+	cfs := NewMemCacheFS(fsys)
+	policy := NewCachePolicy(CacheModeStrict)
+	resolver, _ := BuildEclassResolver(cfs, ".", policy)
+	ident := CacheIdentity{RepoName: "testrepo", Category: "app-misc", Package: "kmagmux", PVR: "1", EbuildPath: "app-misc/kmagmux/kmagmux-1.ebuild"}
+
+	parsed := &Ebuild{Vars: map[string]string{"INHERITED": "ecm"}}
+	content, _, _ := GetExpectedCacheContent(cfs, ident, parsed, policy, resolver)
+
+	// ecm -> cmake -> flag-o-matic -> toolchain-funcs -> multiprocessing
+	if !strings.Contains(content, "INHERITED=ecm cmake flag-o-matic toolchain-funcs multiprocessing\n") {
+		t.Errorf("expected complete kmagmux inheritance, got %q", content)
 	}
 }
