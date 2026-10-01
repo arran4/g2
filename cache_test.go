@@ -792,7 +792,7 @@ func TestCacheTransitiveInheritance(t *testing.T) {
 	}
 
 	if !strings.Contains(content, "INHERITED=C B A\n") {
-		t.Errorf("expected INHERITED=C A B, got %q", content)
+		t.Errorf("expected INHERITED=C B A, got %q", content)
 	}
 	if !strings.Contains(content, "_eclasses_=") {
 		t.Errorf("expected _eclasses_ output, got %q", content)
@@ -829,8 +829,8 @@ func TestCacheDuplicateInheritance(t *testing.T) {
 
 	parsed := &Ebuild{Vars: map[string]string{"INHERITED": "A B"}}
 	content, _, _ := GetExpectedCacheContent(cfs, ident, parsed, policy, resolver)
-	if !strings.Contains(content, "INHERITED=C A B\n") { // A pulls C, then B is seen, then B's C is already seen
-		t.Errorf("expected INHERITED=C A B, got %q", content)
+	if !strings.Contains(content, "INHERITED=C A B\n") || !strings.Contains(content, "_eclasses_=C\td41d8cd98f00b204e9800998ecf8427e\tA\t863b8369a53cfdfcb3b846dd9e807166\tB\t863b8369a53cfdfcb3b846dd9e807166\n") { // A pulls C, then B is seen, then B's C is already seen
+		t.Errorf("expected INHERITED=C B A, got %q", content)
 	}
 }
 
@@ -852,7 +852,7 @@ func TestCacheCyclicInheritance(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error on cyclic inheritance: %v", err)
 	}
-	if !strings.Contains(content, "INHERITED=B A\n") {
+	if !strings.Contains(content, "INHERITED=B A\n") || !strings.Contains(content, "_eclasses_=B\tceec541abc49e2d320a369dc60fa2d7a\tA\t447cd7aa586090bdf63e5ac731140c61\n") {
 		t.Errorf("expected INHERITED=B A, got %q", content)
 	}
 }
@@ -878,7 +878,7 @@ func TestCacheMasterRepositoryInheritance(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if !strings.Contains(content, "INHERITED=mastereclass overlayeclass\n") {
+	if !strings.Contains(content, "INHERITED=mastereclass overlayeclass\n") || !strings.Contains(content, "_eclasses_=mastereclass\td41d8cd98f00b204e9800998ecf8427e\toverlayeclass\t42a3b896131b0d54c213efc1dad722e8\n") {
 		t.Errorf("expected INHERITED=mastereclass overlayeclass, got %q", content)
 	}
 }
@@ -904,7 +904,6 @@ func TestCacheRepositoryPrecedence(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	// md5 for empty string is d41d8cd98f00b204e9800998ecf8427e
 	if !strings.Contains(content, "shared\ta71c1f812e0bb7b40c19c1aa0dadf1ee") {
 		t.Errorf("expected shadowed eclass md5 from overlay, got %q", content)
 	}
@@ -1047,7 +1046,7 @@ func TestCacheKmagmuxFixture(t *testing.T) {
 	content, _, _ := GetExpectedCacheContent(cfs, ident, parsed, policy, resolver)
 
 	// ecm -> cmake -> flag-o-matic -> toolchain-funcs -> multiprocessing
-	if !strings.Contains(content, "INHERITED=multiprocessing toolchain-funcs flag-o-matic cmake ecm\n") {
+	if !strings.Contains(content, "INHERITED=multiprocessing toolchain-funcs flag-o-matic cmake ecm\n") || !strings.Contains(content, "_eclasses_=multiprocessing\td41d8cd98f00b204e9800998ecf8427e\ttoolchain-funcs\t293c927b03f82a01fc023078e267cd38\tflag-o-matic\t2da6953b095430e74035c0f8d2ed0454\tcmake\t341f5277ef0b7deb2cf45633516ca770\tecm\tbb44bf488ad7ed2825ee177af5f6a4df\n") {
 		t.Errorf("expected complete kmagmux inheritance, got %q", content)
 	}
 }
@@ -1072,5 +1071,36 @@ func assertMapFSSnapshotEqual(t *testing.T, before, after map[string]string) {
 		if _, ok := before[k]; !ok {
 			t.Errorf("File %s was newly added to snapshot", k)
 		}
+	}
+}
+
+func TestCacheTransitiveContentDrift(t *testing.T) {
+	fsys := fstest.MapFS{
+		"metadata/layout.conf":      &fstest.MapFile{Data: []byte("repo-name = testrepo\nmasters = \n")},
+		"profiles/repo_name":        &fstest.MapFile{Data: []byte("testrepo\n")},
+		"eclass/A.eclass":           &fstest.MapFile{Data: []byte("INHERITED=\"B\"\n")},
+		"eclass/B.eclass":           &fstest.MapFile{Data: []byte("")},
+		"app-misc/foo/foo-1.ebuild": &fstest.MapFile{Data: []byte("INHERITED=\"A\"\n")},
+	}
+	cfs := NewMemCacheFS(fsys)
+	policy := NewCachePolicy(CacheModeStrict)
+	resolver, _ := BuildEclassResolver(cfs, ".", policy)
+	ident := CacheIdentity{RepoName: "testrepo", Category: "app-misc", Package: "foo", PVR: "1", EbuildPath: "app-misc/foo/foo-1.ebuild"}
+
+	parsed := &Ebuild{Vars: map[string]string{"INHERITED": "A"}}
+	contentBefore, _, err := GetExpectedCacheContent(cfs, ident, parsed, policy, resolver)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Change transitive content
+	cfs.Map["eclass/B.eclass"] = &fstest.MapFile{Data: []byte("# changed\n")}
+	contentAfter, _, err := GetExpectedCacheContent(cfs, ident, parsed, policy, resolver)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if contentBefore == contentAfter {
+		t.Fatalf("expected cache content to change when transitive eclass content changed, but it stayed identical:\n%s", contentBefore)
 	}
 }
