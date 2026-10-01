@@ -466,7 +466,7 @@ BDEPEND="
 		t.Fatalf("Expected GenerateCacheFS to fail with authoritative cache unavailable")
 	}
 	if !strings.Contains(err.Error(), "Portage metadata evaluation unavailable") && !strings.Contains(err.Error(), "authoritative cache") {
-			t.Fatalf("Expected unavailable error, got: %v", err)
+		t.Fatalf("Expected unavailable error, got: %v", err)
 	}
 
 	// Verify the cache directory was NOT created
