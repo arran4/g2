@@ -792,7 +792,7 @@ func TestCacheTransitiveInheritance(t *testing.T) {
 	}
 
 	if !strings.Contains(content, "INHERITED=C B A\n") {
-		t.Errorf("expected INHERITED=C A B, got %q", content)
+		t.Errorf("expected INHERITED=C B A, got %q", content)
 	}
 	if !strings.Contains(content, "_eclasses_=") {
 		t.Errorf("expected _eclasses_ output, got %q", content)
