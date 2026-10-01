@@ -792,7 +792,7 @@ func TestCacheTransitiveInheritance(t *testing.T) {
 	}
 
 	if !strings.Contains(content, "INHERITED=C B A\n") {
-		t.Errorf("expected INHERITED=C B A, got %q", content)
+		t.Errorf("expected INHERITED=C A B, got %q", content)
 	}
 	if !strings.Contains(content, "_eclasses_=") {
 		t.Errorf("expected _eclasses_ output, got %q", content)
@@ -830,7 +830,7 @@ func TestCacheDuplicateInheritance(t *testing.T) {
 	parsed := &Ebuild{Vars: map[string]string{"INHERITED": "A B"}}
 	content, _, _ := GetExpectedCacheContent(cfs, ident, parsed, policy, resolver)
 	if !strings.Contains(content, "INHERITED=C A B\n") || !strings.Contains(content, "_eclasses_=C\td41d8cd98f00b204e9800998ecf8427e\tA\t863b8369a53cfdfcb3b846dd9e807166\tB\t863b8369a53cfdfcb3b846dd9e807166\n") { // A pulls C, then B is seen, then B's C is already seen
-		t.Errorf("expected INHERITED=C B A, got %q", content)
+		t.Errorf("expected INHERITED=C A B, got %q", content)
 	}
 }
 
@@ -924,7 +924,13 @@ func TestCacheDriftStaleInherited(t *testing.T) {
 	ident := CacheIdentity{RepoName: "testrepo", Category: "app-misc", Package: "foo", PVR: "1", EbuildPath: "app-misc/foo/foo-1.ebuild"}
 
 	parsed := &Ebuild{Vars: map[string]string{"INHERITED": "A"}}
-	content, _, _ := GetExpectedCacheContent(cfs, ident, parsed, policy, resolver)
+	content, status, err := GetExpectedCacheContent(cfs, ident, parsed, policy, resolver)
+	if err != nil || status != CacheDrift {
+		t.Fatalf("unexpected err %v or status %v", err, status)
+	}
+	if !strings.Contains(content, "INHERITED=B A\n") || !strings.Contains(content, "_eclasses_=B\td41d8cd98f00b204e9800998ecf8427e\tA\t447cd7aa586090bdf63e5ac731140c61\n") {
+		t.Fatalf("expected canonical transitive metadata before comparing, got %q", content)
+	}
 
 	// Ensure that actual cache diff recognizes it as drift
 	result := CompareCacheEntry(cfs, "metadata/md5-cache/app-misc/foo-1", content)
@@ -1093,11 +1099,22 @@ func TestCacheTransitiveContentDrift(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
+	if !strings.Contains(contentBefore, "B\td41d8cd98f00b204e9800998ecf8427e") {
+		t.Fatalf("expected empty B hash before mutation, got %q", contentBefore)
+	}
+
 	// Change transitive content
 	cfs.Map["eclass/B.eclass"] = &fstest.MapFile{Data: []byte("# changed\n")}
 	contentAfter, _, err := GetExpectedCacheContent(cfs, ident, parsed, policy, resolver)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !strings.Contains(contentAfter, "B\t22887df8a885189b711e53ba22697682") {
+		t.Fatalf("expected updated B hash after mutation, got %q", contentAfter)
+	}
+	if !strings.Contains(contentAfter, "INHERITED=B A") || !strings.Contains(contentBefore, "INHERITED=B A") {
+		t.Fatalf("INHERITED=B A should be unchanged")
 	}
 
 	if contentBefore == contentAfter {
