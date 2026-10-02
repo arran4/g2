@@ -1,6 +1,6 @@
 # g2 Agents Instructions
 
-* When verifying the static site generation output (e.g., using Playwright or headless Chrome), be aware that the `file://` protocol does not automatically resolve directory paths to `index.html`. You can either start a local HTTP server (e.g., `python3 -m http.server -d <output_dir>`) or use the built-in testing server `go run ./cmd/g2 site serve -port 8080` before attempting to navigate through the generated site.
+* When verifying the static site generation output (e.g., using Playwright or headless Chrome), be aware that the `file://` protocol does not automatically resolve directory paths to `index.html`. You can either start a local HTTP server (e.g. `python3 -m http.server -d <output_dir>`) or use the built-in testing server `go run ./cmd/g2 site serve -port 8080` before attempting to navigate through the generated site.
 * Ensure most return err are wrapped with a meaningful addition to where the error is occurring and/or the context it's occurring in.
 * Increase logging output.
 * For testing compile and run steps, use `go run ./cmd/g2 ...` rather than building a `g2` binary and executing it.
@@ -9,13 +9,13 @@
 * Ensure generated site features remain repository neutral (e.g. do not hardcode links to Gentoo's GitHub or policy guide) as this tool supports importing multiple independent overlay repositories.
 
 - `doc/g2.1.md` is the canonical maintained man-page source. The generated `md2man` output is build/test output and should not be committed to the repository.
-- Man page updates should aim for actual man-page conventions (e.g., concise, declarative, no marketing bloat, using standard sections like NAME, SYNOPSIS, DESCRIPTION), not README-style feature dumping.
+- Man page updates should follow Unix manual-page conventions and be reference-oriented. Length should be driven by what users need to look up, not by an artificial brevity target: comprehensive, long manual pages are acceptable, as in mature Unix tools such as Perl and Zsh. Use conventional sections such as NAME, SYNOPSIS, DESCRIPTION, OPTIONS, FILES, ENVIRONMENT, EXAMPLES, EXIT STATUS, and SEE ALSO where applicable. Keep the prose precise and factual rather than marketing-oriented, and split material into additional manual pages only when that improves navigation, topical separation, or maintainability—not merely because the page is large.
 - When adding or changing commands/features (like touching subcommands), agents must update:
   - `doc/g2.1.md` to reflect the new functionality.
   - `readme.md` where appropriate.
 - Agents should inspect the real command tree using `go run ./cmd/g2 ...` to document commands accurately, rather than relying on stale markdown docs.
 
-- When creating or modifying test data, **always anonymize individuals and strip real email addresses**. Use generic names (e.g., "Jane Doe") and example domains (e.g., "example.com").
+- When creating or modifying test data, **always anonymize individuals and strip real email addresses**. Use generic names (e.g. "Jane Doe") and example domains (e.g. "example.com").
 
 - When adding new commands or features to the `g2` application, ensure that you update the `readme.md` file to reflect these additions. The `readme.md` should be considered the central reference for available commands, usage instructions, and examples.
 
