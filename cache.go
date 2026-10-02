@@ -514,8 +514,14 @@ func GetExpectedCacheContent(cfs CacheFS, ident CacheIdentity, ebuild *Ebuild, p
 			var needsPortageErr *NeedsPortageError
 			if errors.As(err, &needsPortageErr) {
 				_, status, portageErr := evaluateWithPortage(needsPortageErr.Err)
-				if portageErr != nil || status == CacheSkipped {
+				if portageErr != nil {
+					if policy != nil && policy.Mode == CacheModeStrict && errors.Is(portageErr, needsPortageErr.Err) {
+						return "", CacheError, fmt.Errorf("ebuild %s requires Portage evaluation but Portage context is unavailable in strict mode: %w", ident.EbuildPath, needsPortageErr.Err)
+					}
 					return "", status, portageErr
+				}
+				if status == CacheSkipped {
+					return "", status, nil
 				}
 				// Retry with authoritative Portage metadata
 				inherited = metadataVars["INHERITED"]

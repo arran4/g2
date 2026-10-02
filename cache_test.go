@@ -1203,7 +1203,7 @@ func TestCachePromotionEclassTransitiveDynamic(t *testing.T) {
 				"EAPI":           "8",
 				"HOMEPAGE":       "",
 				"IDEPEND":        "",
-				"INHERITED":      "B A",
+				"INHERITED":      "C B A",
 				"IUSE":           "",
 				"KEYWORDS":       "",
 				"LICENSE":        "",
@@ -1227,19 +1227,12 @@ func TestCachePromotionEclassTransitiveDynamic(t *testing.T) {
 		Vars: map[string]string{"INHERITED": "A", "EAPI": "8"},
 	}
 
-	content, status, err := GetExpectedCacheContent(cfs, ident, parsed, policy, resolver)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	_, status, err := GetExpectedCacheContent(cfs, ident, parsed, policy, resolver)
+	if err == nil || !strings.Contains(err.Error(), "eclass \"C\" was not found in repository search path") {
+		t.Fatalf("expected promotion to fetch authoritative INHERITED=C B A and fail finding C, got err: %v", err)
 	}
-	if status != CacheDrift {
-		t.Fatalf("unexpected status: %v", status)
-	}
-
-	if !strings.Contains(content, "DEPEND=app-misc/bar\n") {
-		t.Errorf("expected promoted authoritative DEPEND in cache content, got: %q", content)
-	}
-	if !strings.Contains(content, "_eclasses_=B\t45d9f57f06494d0ca380eb3aa54e8a19\tA\t447cd7aa586090bdf63e5ac731140c61\n") {
-		t.Errorf("expected correctly evaluated _eclasses_ after promotion, got: %q", content)
+	if status != CacheError {
+		t.Fatalf("expected CacheError, got: %v", status)
 	}
 }
 
@@ -1268,8 +1261,9 @@ func TestCachePromotionStrictFailure(t *testing.T) {
 	if status != CacheError {
 		t.Fatalf("expected CacheError, got: %v", status)
 	}
-	if !strings.Contains(err.Error(), "canonical cache metadata requires Portage evaluation") {
-		t.Errorf("unexpected error message: %v", err)
+	expectedMsg := "ebuild app-misc/foo/foo-1.ebuild requires Portage evaluation but Portage context is unavailable in strict mode: eclass \"A\" from repository \"primary\" contributes DEPEND; canonical cache metadata requires Portage evaluation"
+	if !strings.Contains(err.Error(), expectedMsg) {
+		t.Errorf("unexpected error message: expected %q to be in %q", expectedMsg, err.Error())
 	}
 }
 
