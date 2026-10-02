@@ -24,6 +24,15 @@ type PackageUpdate struct {
 	SlotMoves []PackageSlotMove
 }
 
+func ParseUpdatesFileFS(sysFS fs.FS, path string) (*PackageUpdate, error) {
+	update := &PackageUpdate{}
+	err := parseUpdateFileFS(sysFS, path, update)
+	if err != nil {
+		return nil, err
+	}
+	return update, nil
+}
+
 func ParseUpdatesDirFS(sysFS fs.FS, dir string) (*PackageUpdate, error) {
 	entries, err := fs.ReadDir(sysFS, dir)
 	if err != nil {
@@ -76,6 +85,15 @@ func parseUpdateFileFS(sysFS fs.FS, path string, update *PackageUpdate) error {
 		}
 	}
 	return scanner.Err()
+}
+
+func ParseUpdatesFile(path string) (*PackageUpdate, error) {
+	update := &PackageUpdate{}
+	err := parseUpdateFile(path, update)
+	if err != nil {
+		return nil, err
+	}
+	return update, nil
 }
 
 func ParseUpdatesDir(dir string) (*PackageUpdate, error) {
