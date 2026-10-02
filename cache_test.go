@@ -1188,6 +1188,7 @@ func TestCachePromotionEclassTransitiveDynamic(t *testing.T) {
 		"profiles/repo_name":        &fstest.MapFile{Data: []byte("testrepo\n")},
 		"eclass/A.eclass":           &fstest.MapFile{Data: []byte("INHERITED=\"B\"\n")},
 		"eclass/B.eclass":           &fstest.MapFile{Data: []byte("DEPEND=\"app-misc/bar\"\n")}, // Contributes DEPEND, requires Portage
+		"eclass/C.eclass":           &fstest.MapFile{Data: []byte("# Extra eclass added by Portage\n")},
 		"app-misc/foo/foo-1.ebuild": &fstest.MapFile{Data: []byte("INHERITED=\"A\"\nEAPI=\"8\"\n")},
 	}
 	cfs := NewMemCacheFS(fsys)
@@ -1227,12 +1228,24 @@ func TestCachePromotionEclassTransitiveDynamic(t *testing.T) {
 		Vars: map[string]string{"INHERITED": "A", "EAPI": "8"},
 	}
 
-	_, status, err := GetExpectedCacheContent(cfs, ident, parsed, policy, resolver)
-	if err == nil || !strings.Contains(err.Error(), "eclass \"C\" was not found in repository search path") {
-		t.Fatalf("expected promotion to fetch authoritative INHERITED=C B A and fail finding C, got err: %v", err)
+	content, status, err := GetExpectedCacheContent(cfs, ident, parsed, policy, resolver)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
 	}
-	if status != CacheError {
-		t.Fatalf("expected CacheError, got: %v", status)
+	if status != CacheDrift {
+		t.Fatalf("expected CacheDrift, got: %v", status)
+	}
+	if !strings.Contains(content, "INHERITED=C B A\n") {
+		t.Errorf("expected INHERITED=C B A in cache content, got: %q", content)
+	}
+	if !strings.Contains(content, "DEPEND=app-misc/bar\n") {
+		t.Errorf("expected promoted authoritative DEPEND in cache content, got: %q", content)
+	}
+	if !strings.Contains(content, "_eclasses_=C\t3610cc7ceb9bc55f9fa49e2f7efc2f30\tB\t45d9f57f06494d0ca380eb3aa54e8a19\tA\t447cd7aa586090bdf63e5ac731140c61\n") {
+		t.Errorf("expected correctly evaluated _eclasses_ after promotion, got: %q", content)
+	}
+	if len(portageCtx.calls) != 1 || portageCtx.calls[0] != "app-misc/foo-1::testrepo" {
+		t.Errorf("expected exactly 1 Portage evaluation for app-misc/foo-1::testrepo, got calls: %v", portageCtx.calls)
 	}
 }
 
