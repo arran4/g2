@@ -436,13 +436,16 @@ func GetExpectedCacheContent(cfs CacheFS, ident CacheIdentity, ebuild *Ebuild, p
 		metadataVars[k] = v
 	}
 
-	if needsPortage {
+	evaluateWithPortage := func(reason error) (string, CacheResultStatus, error) {
 		if policy == nil || policy.PortageContext == nil || ident.RepoName == "" {
 			if policy != nil && policy.Mode == CacheModeStrict {
 				if ident.RepoName == "" {
 					return "", CacheError, fmt.Errorf("ebuild %s requires Portage evaluation but repository name is not defined in layout.conf or profiles/repo_name", ident.EbuildPath)
 				}
-				// To preserve existing behavior in strict mode tests:
+				if reason != nil {
+					return "", CacheError, reason
+				}
+				// To preserve existing behavior in strict mode tests for ebuilds directly requiring portage:
 				if ebuild.SrcUriUncertain {
 					return "", CacheError, fmt.Errorf("ebuild %s contains control flow or unresolved values; canonical cache metadata requires Portage evaluation", ident.EbuildPath)
 				}
@@ -488,6 +491,15 @@ func GetExpectedCacheContent(cfs CacheFS, ident CacheIdentity, ebuild *Ebuild, p
 			}
 			metadataVars[key] = val
 		}
+
+		return "", CacheVerified, nil
+	}
+
+	if needsPortage {
+		_, status, err := evaluateWithPortage(nil)
+		if err != nil || status == CacheSkipped {
+			return "", status, err
+		}
 	}
 
 	var eclassParts []string
@@ -498,6 +510,21 @@ func GetExpectedCacheContent(cfs CacheFS, ident CacheIdentity, ebuild *Ebuild, p
 			closureResult, err = eclassClosureAuthoritative(eclassResolver, strings.Fields(inherited))
 		} else {
 			closureResult, err = eclassClosure(eclassResolver, strings.Fields(inherited), map[string]bool{}, map[string]bool{})
+
+			var needsPortageErr *NeedsPortageError
+			if errors.As(err, &needsPortageErr) {
+				_, status, portageErr := evaluateWithPortage(needsPortageErr.Err)
+				if portageErr != nil || status == CacheSkipped {
+					return "", status, portageErr
+				}
+				// Retry with authoritative Portage metadata
+				inherited = metadataVars["INHERITED"]
+				if inherited != "" {
+					closureResult, err = eclassClosureAuthoritative(eclassResolver, strings.Fields(inherited))
+				} else {
+					err = nil
+				}
+			}
 		}
 		if err != nil {
 			if policy.Mode == CacheModeCI && len(eclassResolver.MissingMasters()) > 0 && strings.Contains(err.Error(), "unavailable masters") {
@@ -505,8 +532,10 @@ func GetExpectedCacheContent(cfs CacheFS, ident CacheIdentity, ebuild *Ebuild, p
 			}
 			return "", CacheError, fmt.Errorf("resolving required eclass metadata for %s: %w", ident.EbuildPath, err)
 		}
-		metadataVars["INHERITED"] = strings.Join(closureResult.Inherited, " ")
-		eclassParts = closureResult.Eclasses
+		if inherited != "" {
+			metadataVars["INHERITED"] = strings.Join(closureResult.Inherited, " ")
+			eclassParts = closureResult.Eclasses
+		}
 	}
 
 	var keys []string
@@ -568,6 +597,18 @@ func CompareCacheEntry(cfs CacheFS, cachePath, expected string) CacheResult {
 	return CacheResult{Status: CacheVerified, Path: cachePath, Message: "cache entry matches canonical metadata"}
 }
 
+type NeedsPortageError struct {
+	Err error
+}
+
+func (e *NeedsPortageError) Error() string {
+	return e.Err.Error()
+}
+
+func (e *NeedsPortageError) Unwrap() error {
+	return e.Err
+}
+
 type EclassClosureResult struct {
 	Inherited []string
 	Eclasses  []string
@@ -594,16 +635,16 @@ func eclassClosure(resolver *EclassResolver, names []string, visiting, seen map[
 			return fmt.Errorf("parsing eclass %q from repository %q: %w", name, repo.Name, err)
 		}
 		if parsed.SrcUriUncertain {
-			return fmt.Errorf("eclass %q from repository %q contains control flow or an unmodelled command; canonical cache metadata requires Portage evaluation", name, repo.Name)
+			return &NeedsPortageError{Err: fmt.Errorf("eclass %q from repository %q contains control flow or an unmodelled command; canonical cache metadata requires Portage evaluation", name, repo.Name)}
 		}
 		for key := range parsed.UncertainVars {
 			if isCacheVariable(key) {
-				return fmt.Errorf("eclass %q from repository %q has unresolved %s; canonical cache metadata requires Portage evaluation", name, repo.Name, key)
+				return &NeedsPortageError{Err: fmt.Errorf("eclass %q from repository %q has unresolved %s; canonical cache metadata requires Portage evaluation", name, repo.Name, key)}
 			}
 		}
 		for key, value := range parsed.Vars {
 			if key != "INHERITED" && value != "" && isCacheVariable(key) {
-				return fmt.Errorf("eclass %q from repository %q contributes %s; canonical cache metadata requires Portage evaluation", name, repo.Name, key)
+				return &NeedsPortageError{Err: fmt.Errorf("eclass %q from repository %q contributes %s; canonical cache metadata requires Portage evaluation", name, repo.Name, key)}
 			}
 		}
 		for _, child := range strings.Fields(parsed.Vars["INHERITED"]) {

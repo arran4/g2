@@ -1121,3 +1121,181 @@ func TestCacheTransitiveContentDrift(t *testing.T) {
 		t.Fatalf("expected cache content to change when transitive eclass content changed, but it stayed identical:\n%s", contentBefore)
 	}
 }
+
+func TestCachePromotionEclassDynamic(t *testing.T) {
+	fsys := fstest.MapFS{
+		"metadata/layout.conf":      &fstest.MapFile{Data: []byte("repo-name = testrepo\nmasters = \n")},
+		"profiles/repo_name":        &fstest.MapFile{Data: []byte("testrepo\n")},
+		"eclass/A.eclass":           &fstest.MapFile{Data: []byte("DEPEND=\"app-misc/foo\"\n")}, // Contributes DEPEND, requires Portage
+		"app-misc/foo/foo-1.ebuild": &fstest.MapFile{Data: []byte("INHERITED=\"A\"\nEAPI=\"8\"\n")},
+	}
+	cfs := NewMemCacheFS(fsys)
+	policy := NewCachePolicy(CacheModeStrict)
+
+	portageCtx := &mockPortageContext{
+		calls: make([]string, 0),
+		responses: map[string]map[string]string{
+			"app-misc/foo-1::testrepo": {
+				"BDEPEND":        "",
+				"DEPEND":         "app-misc/foo",
+				"DESCRIPTION":    "",
+				"EAPI":           "8",
+				"HOMEPAGE":       "",
+				"IDEPEND":        "",
+				"INHERITED":      "A",
+				"IUSE":           "",
+				"KEYWORDS":       "",
+				"LICENSE":        "",
+				"PDEPEND":        "",
+				"PROPERTIES":     "",
+				"RDEPEND":        "",
+				"REQUIRED_USE":   "",
+				"RESTRICT":       "",
+				"SLOT":           "",
+				"SRC_URI":        "",
+				"DEFINED_PHASES": "",
+			},
+		},
+	}
+	policy.PortageContext = portageCtx
+
+	resolver, _ := BuildEclassResolver(cfs, ".", policy)
+	ident := CacheIdentity{RepoName: "testrepo", Category: "app-misc", Package: "foo", PVR: "1", EbuildPath: "app-misc/foo/foo-1.ebuild"}
+
+	parsed := &Ebuild{
+		Vars: map[string]string{"INHERITED": "A", "EAPI": "8"},
+	}
+
+	content, status, err := GetExpectedCacheContent(cfs, ident, parsed, policy, resolver)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if status != CacheDrift {
+		t.Fatalf("unexpected status: %v", status)
+	}
+
+	if !strings.Contains(content, "DEPEND=app-misc/foo\n") {
+		t.Errorf("expected promoted authoritative DEPEND in cache content, got: %q", content)
+	}
+	if !strings.Contains(content, "_eclasses_=A\tca8fbbb4ea7e628644fae196583c2528\n") {
+		t.Errorf("expected correctly evaluated _eclasses_ after promotion, got: %q", content)
+	}
+}
+
+func TestCachePromotionEclassTransitiveDynamic(t *testing.T) {
+	fsys := fstest.MapFS{
+		"metadata/layout.conf":      &fstest.MapFile{Data: []byte("repo-name = testrepo\nmasters = \n")},
+		"profiles/repo_name":        &fstest.MapFile{Data: []byte("testrepo\n")},
+		"eclass/A.eclass":           &fstest.MapFile{Data: []byte("INHERITED=\"B\"\n")},
+		"eclass/B.eclass":           &fstest.MapFile{Data: []byte("DEPEND=\"app-misc/bar\"\n")}, // Contributes DEPEND, requires Portage
+		"app-misc/foo/foo-1.ebuild": &fstest.MapFile{Data: []byte("INHERITED=\"A\"\nEAPI=\"8\"\n")},
+	}
+	cfs := NewMemCacheFS(fsys)
+	policy := NewCachePolicy(CacheModeStrict)
+
+	portageCtx := &mockPortageContext{
+		calls: make([]string, 0),
+		responses: map[string]map[string]string{
+			"app-misc/foo-1::testrepo": {
+				"BDEPEND":        "",
+				"DEPEND":         "app-misc/bar",
+				"DESCRIPTION":    "",
+				"EAPI":           "8",
+				"HOMEPAGE":       "",
+				"IDEPEND":        "",
+				"INHERITED":      "B A",
+				"IUSE":           "",
+				"KEYWORDS":       "",
+				"LICENSE":        "",
+				"PDEPEND":        "",
+				"PROPERTIES":     "",
+				"RDEPEND":        "",
+				"REQUIRED_USE":   "",
+				"RESTRICT":       "",
+				"SLOT":           "",
+				"SRC_URI":        "",
+				"DEFINED_PHASES": "",
+			},
+		},
+	}
+	policy.PortageContext = portageCtx
+
+	resolver, _ := BuildEclassResolver(cfs, ".", policy)
+	ident := CacheIdentity{RepoName: "testrepo", Category: "app-misc", Package: "foo", PVR: "1", EbuildPath: "app-misc/foo/foo-1.ebuild"}
+
+	parsed := &Ebuild{
+		Vars: map[string]string{"INHERITED": "A", "EAPI": "8"},
+	}
+
+	content, status, err := GetExpectedCacheContent(cfs, ident, parsed, policy, resolver)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if status != CacheDrift {
+		t.Fatalf("unexpected status: %v", status)
+	}
+
+	if !strings.Contains(content, "DEPEND=app-misc/bar\n") {
+		t.Errorf("expected promoted authoritative DEPEND in cache content, got: %q", content)
+	}
+	if !strings.Contains(content, "_eclasses_=B\t45d9f57f06494d0ca380eb3aa54e8a19\tA\t447cd7aa586090bdf63e5ac731140c61\n") {
+		t.Errorf("expected correctly evaluated _eclasses_ after promotion, got: %q", content)
+	}
+}
+
+func TestCachePromotionStrictFailure(t *testing.T) {
+	fsys := fstest.MapFS{
+		"metadata/layout.conf":      &fstest.MapFile{Data: []byte("repo-name = testrepo\nmasters = \n")},
+		"profiles/repo_name":        &fstest.MapFile{Data: []byte("testrepo\n")},
+		"eclass/A.eclass":           &fstest.MapFile{Data: []byte("DEPEND=\"app-misc/foo\"\n")}, // Contributes DEPEND, requires Portage
+		"app-misc/foo/foo-1.ebuild": &fstest.MapFile{Data: []byte("INHERITED=\"A\"\nEAPI=\"8\"\n")},
+	}
+	cfs := NewMemCacheFS(fsys)
+	policy := NewCachePolicy(CacheModeStrict)
+	// Deliberately no PortageContext
+
+	resolver, _ := BuildEclassResolver(cfs, ".", policy)
+	ident := CacheIdentity{RepoName: "testrepo", Category: "app-misc", Package: "foo", PVR: "1", EbuildPath: "app-misc/foo/foo-1.ebuild"}
+
+	parsed := &Ebuild{
+		Vars: map[string]string{"INHERITED": "A", "EAPI": "8"},
+	}
+
+	_, status, err := GetExpectedCacheContent(cfs, ident, parsed, policy, resolver)
+	if err == nil {
+		t.Fatalf("expected error due to strict mode without PortageContext")
+	}
+	if status != CacheError {
+		t.Fatalf("expected CacheError, got: %v", status)
+	}
+	if !strings.Contains(err.Error(), "canonical cache metadata requires Portage evaluation") {
+		t.Errorf("unexpected error message: %v", err)
+	}
+}
+
+func TestCachePromotionCISkipped(t *testing.T) {
+	fsys := fstest.MapFS{
+		"metadata/layout.conf":      &fstest.MapFile{Data: []byte("repo-name = testrepo\nmasters = \n")},
+		"profiles/repo_name":        &fstest.MapFile{Data: []byte("testrepo\n")},
+		"eclass/A.eclass":           &fstest.MapFile{Data: []byte("DEPEND=\"app-misc/foo\"\n")}, // Contributes DEPEND, requires Portage
+		"app-misc/foo/foo-1.ebuild": &fstest.MapFile{Data: []byte("INHERITED=\"A\"\nEAPI=\"8\"\n")},
+	}
+	cfs := NewMemCacheFS(fsys)
+	policy := NewCachePolicy(CacheModeCI)
+	// Deliberately no PortageContext
+
+	resolver, _ := BuildEclassResolver(cfs, ".", policy)
+	ident := CacheIdentity{RepoName: "testrepo", Category: "app-misc", Package: "foo", PVR: "1", EbuildPath: "app-misc/foo/foo-1.ebuild"}
+
+	parsed := &Ebuild{
+		Vars: map[string]string{"INHERITED": "A", "EAPI": "8"},
+	}
+
+	_, status, err := GetExpectedCacheContent(cfs, ident, parsed, policy, resolver)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if status != CacheSkipped {
+		t.Fatalf("expected CacheSkipped due to CI mode without PortageContext, got: %v", status)
+	}
+}
