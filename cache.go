@@ -490,6 +490,25 @@ func GetExpectedCacheContent(cfs CacheFS, ident CacheIdentity, ebuild *Ebuild, p
 		}
 	}
 
+	var eclassParts []string
+	if inherited := metadataVars["INHERITED"]; inherited != "" {
+		var closureResult EclassClosureResult
+		var err error
+		if needsPortage {
+			closureResult, err = eclassClosureAuthoritative(eclassResolver, strings.Fields(inherited))
+		} else {
+			closureResult, err = eclassClosure(eclassResolver, strings.Fields(inherited), map[string]bool{}, map[string]bool{})
+		}
+		if err != nil {
+			if policy.Mode == CacheModeCI && len(eclassResolver.MissingMasters()) > 0 && strings.Contains(err.Error(), "unavailable masters") {
+				return "", CacheSkipped, nil
+			}
+			return "", CacheError, fmt.Errorf("resolving required eclass metadata for %s: %w", ident.EbuildPath, err)
+		}
+		metadataVars["INHERITED"] = strings.Join(closureResult.Inherited, " ")
+		eclassParts = closureResult.Eclasses
+	}
+
 	var keys []string
 	for k := range metadataVars {
 		keys = append(keys, k)
@@ -524,20 +543,7 @@ func GetExpectedCacheContent(cfs CacheFS, ident CacheIdentity, ebuild *Ebuild, p
 	md5sum := fmt.Sprintf("%x", md5.Sum(ebuildContent))
 	fmt.Fprintf(&expectedContent, "_md5_=%s\n", md5sum)
 
-	if inherited := metadataVars["INHERITED"]; inherited != "" {
-		var eclassParts []string
-		var err error
-		if needsPortage {
-			eclassParts, err = eclassClosureAuthoritative(eclassResolver, strings.Fields(inherited))
-		} else {
-			eclassParts, err = eclassClosure(eclassResolver, strings.Fields(inherited), map[string]bool{}, map[string]bool{})
-		}
-		if err != nil {
-			if policy.Mode == CacheModeCI && len(eclassResolver.MissingMasters()) > 0 && strings.Contains(err.Error(), "unavailable masters") {
-				return "", CacheSkipped, nil
-			}
-			return "", CacheError, fmt.Errorf("resolving required eclass metadata for %s: %w", ident.EbuildPath, err)
-		}
+	if len(eclassParts) > 0 {
 		fmt.Fprintf(&expectedContent, "_eclasses_=%s\n", strings.Join(eclassParts, "\t"))
 	}
 
@@ -562,10 +568,15 @@ func CompareCacheEntry(cfs CacheFS, cachePath, expected string) CacheResult {
 	return CacheResult{Status: CacheVerified, Path: cachePath, Message: "cache entry matches canonical metadata"}
 }
 
+type EclassClosureResult struct {
+	Inherited []string
+	Eclasses  []string
+}
+
 // eclassClosure produces the complete, deterministic transitive inheritance
 // closure. Eclass content is hashed exactly as resolved; cycles are harmless
 // because Portage does not need duplicate _eclasses_ records.
-func eclassClosure(resolver *EclassResolver, names []string, visiting, seen map[string]bool) ([]string, error) {
+func eclassClosure(resolver *EclassResolver, names []string, visiting, seen map[string]bool) (EclassClosureResult, error) {
 	parts := make(map[string]string)
 	ordered := make([]string, 0)
 	var visit func(string) error
@@ -608,21 +619,22 @@ func eclassClosure(resolver *EclassResolver, names []string, visiting, seen map[
 	}
 	for _, name := range names {
 		if err := visit(name); err != nil {
-			return nil, err
+			return EclassClosureResult{}, err
 		}
 	}
-	result := make([]string, 0, len(ordered))
+	eclasses := make([]string, 0, len(ordered))
 	for _, name := range ordered {
-		result = append(result, parts[name])
+		eclasses = append(eclasses, parts[name])
 	}
-	return result, nil
+	return EclassClosureResult{Inherited: ordered, Eclasses: eclasses}, nil
 }
 
 // eclassClosureAuthoritative relies entirely on the already-provided
 // INHERITED list (from Portage) and avoids parsing eclasses again since their
 // dynamic semantics were evaluated.
-func eclassClosureAuthoritative(resolver *EclassResolver, names []string) ([]string, error) {
-	var result []string
+func eclassClosureAuthoritative(resolver *EclassResolver, names []string) (EclassClosureResult, error) {
+	var ordered []string
+	var eclasses []string
 	seen := make(map[string]bool)
 	for _, name := range names {
 		if seen[name] {
@@ -630,10 +642,11 @@ func eclassClosureAuthoritative(resolver *EclassResolver, names []string) ([]str
 		}
 		content, _, err := resolver.resolve(name)
 		if err != nil {
-			return nil, err
+			return EclassClosureResult{}, err
 		}
-		result = append(result, fmt.Sprintf("%s\t%x", name, md5.Sum(content)))
+		ordered = append(ordered, name)
+		eclasses = append(eclasses, fmt.Sprintf("%s\t%x", name, md5.Sum(content)))
 		seen[name] = true
 	}
-	return result, nil
+	return EclassClosureResult{Inherited: ordered, Eclasses: eclasses}, nil
 }
