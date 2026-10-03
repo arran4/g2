@@ -98,13 +98,13 @@ func appendUpdateFile(date time.Time, newMove *g2.PackageMove, newSlotMove *g2.P
 				if err == nil {
 					buf := make([]byte, 1)
 					_, err = f.ReadAt(buf, stat.Size()-1)
-					f.Close()
+					_ = f.Close()
 					if err == nil && buf[0] != '\n' {
 						// We need to prepend a newline
 						f, err := os.OpenFile(updatesPath, os.O_WRONLY|os.O_APPEND, 0644)
 						if err == nil {
 							_, _ = f.WriteString("\n")
-							f.Close()
+							_ = f.Close()
 						}
 					}
 				}
@@ -120,17 +120,17 @@ func appendUpdateFile(date time.Time, newMove *g2.PackageMove, newSlotMove *g2.P
 	if err != nil {
 		return fmt.Errorf("opening updates file %s: %w", updatesPath, err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	if newMove != nil && !skipMove {
-		if _, err := f.WriteString(fmt.Sprintf("move %s %s\n", newMove.Old, newMove.New)); err != nil {
+		if _, err := fmt.Fprintf(f, "move %s %s\n", newMove.Old, newMove.New); err != nil {
 			return err
 		}
 		log.Printf("Recorded move %s -> %s for effective date %s in %s", newMove.Old, newMove.New, date.Format(time.DateOnly), updatesPath)
 	}
 
 	if newSlotMove != nil && !skipSlotMove {
-		if _, err := f.WriteString(fmt.Sprintf("slotmove %s %s %s\n", newSlotMove.Package, newSlotMove.Old, newSlotMove.New)); err != nil {
+		if _, err := fmt.Fprintf(f, "slotmove %s %s %s\n", newSlotMove.Package, newSlotMove.Old, newSlotMove.New); err != nil {
 			return err
 		}
 		log.Printf("Recorded slotmove for %s: %s -> %s for effective date %s in %s", newSlotMove.Package, newSlotMove.Old, newSlotMove.New, date.Format(time.DateOnly), updatesPath)

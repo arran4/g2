@@ -147,11 +147,11 @@ func TestGetQuarterFileForDate(t *testing.T) {
 func TestAppendUpdateFile_ConservativeAppend(t *testing.T) {
 	tmpDir := t.TempDir()
 	originalDir, _ := os.Getwd()
-	defer os.Chdir(originalDir)
-	os.Chdir(tmpDir)
+	defer func() { _ = os.Chdir(originalDir) }()
+	_ = os.Chdir(tmpDir)
 
 	updatesDir := filepath.Join("profiles", "updates")
-	os.MkdirAll(updatesDir, 0755)
+	_ = os.MkdirAll(updatesDir, 0755)
 
 	// Create a file with missing newline at the end and comments
 	content := `# historical move
