@@ -221,8 +221,8 @@ g2 overlay ebuild <subcommand>
 
 **Subcommands:**
 
-* `move <from> <to>`: Record a package move in profiles/updates.
-* `slotmove <package> <from> <to>`: Record a slot move in profiles/updates.
+* `move [--date YYYY-MM-DD] <from> <to>`: Record a package move in profiles/updates.
+* `slotmove [--date YYYY-MM-DD] <package> <from> <to>`: Record a slot move in profiles/updates.
 * `install [-category <string>] <ebuild.ebuild> [overlay_path] [-- <files...>]`: Install an ebuild into the overlay, optionally providing a specific category or additional files for the `files/` directory. Automatically triggers manifest, cache, use desc, and pkg_desc_index generation.
 
 **Example:**

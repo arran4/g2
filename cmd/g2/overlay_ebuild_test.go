@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/arran4/g2"
 )
@@ -47,7 +48,7 @@ func TestOverlayEbuildMove_Regression_Issue478(t *testing.T) {
 	}
 
 	// Determine the current quarter file name
-	quarterFile := getQuarterFile()
+	quarterFile := getQuarterFileForDate(time.Now())
 
 	// Ensure the current quarter file does not match historical names
 	if quarterFile == hist1 || quarterFile == hist2 {
@@ -61,13 +62,13 @@ func TestOverlayEbuildMove_Regression_Issue478(t *testing.T) {
 	}
 
 	// Append a new move
-	err = appendUpdateFile(&g2.PackageMove{Old: "new/old", New: "new/new"}, nil)
+	err = appendUpdateFile(time.Now(), &g2.PackageMove{Old: "new/old", New: "new/new"}, nil)
 	if err != nil {
 		t.Fatalf("appendUpdateFile move failed: %v", err)
 	}
 
 	// Append a new slotmove
-	err = appendUpdateFile(nil, &g2.PackageSlotMove{Package: "new/pkg", Old: "1", New: "2"})
+	err = appendUpdateFile(time.Now(), nil, &g2.PackageSlotMove{Package: "new/pkg", Old: "1", New: "2"})
 	if err != nil {
 		t.Fatalf("appendUpdateFile slotmove failed: %v", err)
 	}
@@ -111,5 +112,119 @@ func TestOverlayEbuildMove_Regression_Issue478(t *testing.T) {
 	}
 	if string(content) != hist2Content {
 		t.Errorf("historical file 2 changed! expected %q, got %q", hist2Content, string(content))
+	}
+}
+
+func TestGetQuarterFileForDate(t *testing.T) {
+	tests := []struct {
+		dateStr string
+		want    string
+	}{
+		{"2024-03-31", "1Q-2024"},
+		{"2024-04-01", "2Q-2024"},
+		{"2024-06-30", "2Q-2024"},
+		{"2024-07-01", "3Q-2024"},
+		{"2024-09-30", "3Q-2024"},
+		{"2024-10-01", "4Q-2024"},
+		{"2024-12-31", "4Q-2024"},
+		{"2025-01-01", "1Q-2025"},
+		// leap year
+		{"2024-02-29", "1Q-2024"},
+	}
+
+	for _, tc := range tests {
+		date, err := time.Parse(time.DateOnly, tc.dateStr)
+		if err != nil {
+			t.Fatalf("failed to parse date %s: %v", tc.dateStr, err)
+		}
+		got := getQuarterFileForDate(date)
+		if got != tc.want {
+			t.Errorf("getQuarterFileForDate(%s) = %s, want %s", tc.dateStr, got, tc.want)
+		}
+	}
+}
+
+func TestAppendUpdateFile_ConservativeAppend(t *testing.T) {
+	tmpDir := t.TempDir()
+	originalDir, _ := os.Getwd()
+	defer func() { _ = os.Chdir(originalDir) }()
+	_ = os.Chdir(tmpDir)
+
+	updatesDir := filepath.Join("profiles", "updates")
+	_ = os.MkdirAll(updatesDir, 0755)
+
+	// Create a file with missing newline at the end and comments
+	content := `# historical move
+move old/1 new/1
+
+# no newline next`
+	date, _ := time.Parse(time.DateOnly, "2024-09-21")
+	quarterFile := getQuarterFileForDate(date)
+	err := os.WriteFile(filepath.Join(updatesDir, quarterFile), []byte(content), 0644)
+	if err != nil {
+		t.Fatalf("failed to write initial file: %v", err)
+	}
+
+	// Append a new move
+	err = appendUpdateFile(date, &g2.PackageMove{Old: "old/2", New: "new/2"}, nil)
+	if err != nil {
+		t.Fatalf("appendUpdateFile failed: %v", err)
+	}
+
+	// Append duplicate move (should be ignored)
+	err = appendUpdateFile(date, &g2.PackageMove{Old: "old/2", New: "new/2"}, nil)
+	if err != nil {
+		t.Fatalf("appendUpdateFile duplicate move failed: %v", err)
+	}
+
+	// Append new slotmove
+	err = appendUpdateFile(date, nil, &g2.PackageSlotMove{Package: "pkg/1", Old: "1", New: "2"})
+	if err != nil {
+		t.Fatalf("appendUpdateFile failed: %v", err)
+	}
+
+	// Append duplicate slotmove (should be ignored)
+	err = appendUpdateFile(date, nil, &g2.PackageSlotMove{Package: "pkg/1", Old: "1", New: "2"})
+	if err != nil {
+		t.Fatalf("appendUpdateFile duplicate slotmove failed: %v", err)
+	}
+
+	finalContent, _ := os.ReadFile(filepath.Join(updatesDir, quarterFile))
+	expected := `# historical move
+move old/1 new/1
+
+# no newline next
+move old/2 new/2
+slotmove pkg/1 1 2
+`
+	if string(finalContent) != expected {
+		t.Errorf("File content mismatch.\nExpected:\n%s\nGot:\n%s", expected, string(finalContent))
+	}
+}
+
+func TestCmdOverlayEbuildMove_InvalidDate(t *testing.T) {
+	cfg := &MainArgConfig{}
+	err := cfg.cmdOverlayEbuildMove([]string{"--date", "not-a-date", "old/pkg", "new/pkg"})
+	if err == nil {
+		t.Errorf("Expected error for invalid date, got nil")
+	} else if err.Error() != "invalid date format \"not-a-date\", expected YYYY-MM-DD: parsing time \"not-a-date\" as \"2006-01-02\": cannot parse \"not-a-date\" as \"2006\"" {
+		t.Errorf("Unexpected error: %v", err)
+	}
+}
+
+func TestCmdOverlayEbuildSlotmove_InvalidDate(t *testing.T) {
+	cfg := &MainArgConfig{}
+	err := cfg.cmdOverlayEbuildSlotmove([]string{"--date", "2024/09/21", "pkg/a", "1", "2"})
+	if err == nil {
+		t.Errorf("Expected error for invalid date, got nil")
+	}
+}
+
+func TestCmdOverlayEbuild_Help(t *testing.T) {
+	cfg := &MainArgConfig{}
+	// ensure no error is returned when help is requested
+	err := cfg.cmdOverlayEbuildMove([]string{"-h"})
+	if err != nil {
+		t.Errorf("Expected nil error for -h, got %v", err)
 	}
 }
