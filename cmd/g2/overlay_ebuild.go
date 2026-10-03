@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -44,15 +45,14 @@ func (cfg *MainArgConfig) cmdOverlayEbuild(args []string) error {
 	}
 }
 
-func getQuarterFile() string {
-	now := time.Now()
-	quarter := (now.Month()-1)/3 + 1
-	year := now.Year()
+func getQuarterFileForDate(date time.Time) string {
+	quarter := (date.Month()-1)/3 + 1
+	year := date.Year()
 	return fmt.Sprintf("%dQ-%d", quarter, year)
 }
 
-func appendUpdateFile(newMove *g2.PackageMove, newSlotMove *g2.PackageSlotMove) error {
-	quarterFile := getQuarterFile()
+func appendUpdateFile(date time.Time, newMove *g2.PackageMove, newSlotMove *g2.PackageSlotMove) error {
+	quarterFile := getQuarterFileForDate(date)
 	updatesDir := filepath.Join("profiles", "updates")
 
 	if err := os.MkdirAll(updatesDir, 0755); err != nil {
@@ -61,54 +61,147 @@ func appendUpdateFile(newMove *g2.PackageMove, newSlotMove *g2.PackageSlotMove) 
 
 	updatesPath := filepath.Join(updatesDir, quarterFile)
 
-	update := &g2.PackageUpdate{}
+	skipMove := false
+	skipSlotMove := false
 
-	if _, err := os.Stat(updatesPath); err == nil {
-		// Parse existing updates in the current quarter file
+	if stat, err := os.Stat(updatesPath); err == nil {
+		// Parse existing updates in the current quarter file to check for duplicates
 		parsed, err := g2.ParseUpdatesFile(updatesPath)
 		if err != nil {
 			return fmt.Errorf("reading existing quarter file %s: %w", updatesPath, err)
 		}
 		if parsed != nil {
-			update.Moves = parsed.Moves
-			update.SlotMoves = parsed.SlotMoves
+			if newMove != nil {
+				for _, m := range parsed.Moves {
+					if m.Old == newMove.Old && m.New == newMove.New {
+						log.Printf("Update already exists, skipping: move %s -> %s in %s", newMove.Old, newMove.New, updatesPath)
+						skipMove = true
+						break
+					}
+				}
+			}
+			if newSlotMove != nil {
+				for _, m := range parsed.SlotMoves {
+					if m.Package == newSlotMove.Package && m.Old == newSlotMove.Old && m.New == newSlotMove.New {
+						log.Printf("Update already exists, skipping: slotmove %s %s -> %s in %s", newSlotMove.Package, newSlotMove.Old, newSlotMove.New, updatesPath)
+						skipSlotMove = true
+						break
+					}
+				}
+			}
+		}
+
+		if (!skipMove && newMove != nil) || (!skipSlotMove && newSlotMove != nil) {
+			// Check if file ends with newline
+			if stat.Size() > 0 {
+				f, err := os.Open(updatesPath)
+				if err == nil {
+					buf := make([]byte, 1)
+					_, err = f.ReadAt(buf, stat.Size()-1)
+					f.Close()
+					if err == nil && buf[0] != '\n' {
+						// We need to prepend a newline
+						f, err := os.OpenFile(updatesPath, os.O_WRONLY|os.O_APPEND, 0644)
+						if err == nil {
+							_, _ = f.WriteString("\n")
+							f.Close()
+						}
+					}
+				}
+			}
 		}
 	}
 
-	if newMove != nil {
-		update.Moves = append(update.Moves, *newMove)
-		log.Printf("Recorded move %s -> %s in %s", newMove.Old, newMove.New, updatesPath)
+	if (newMove == nil || skipMove) && (newSlotMove == nil || skipSlotMove) {
+		return nil
 	}
 
-	if newSlotMove != nil {
-		update.SlotMoves = append(update.SlotMoves, *newSlotMove)
-		log.Printf("Recorded slotmove for %s: %s -> %s in %s", newSlotMove.Package, newSlotMove.Old, newSlotMove.New, updatesPath)
+	f, err := os.OpenFile(updatesPath, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)
+	if err != nil {
+		return fmt.Errorf("opening updates file %s: %w", updatesPath, err)
+	}
+	defer f.Close()
+
+	if newMove != nil && !skipMove {
+		if _, err := f.WriteString(fmt.Sprintf("move %s %s\n", newMove.Old, newMove.New)); err != nil {
+			return err
+		}
+		log.Printf("Recorded move %s -> %s for effective date %s in %s", newMove.Old, newMove.New, date.Format(time.DateOnly), updatesPath)
 	}
 
-	return g2.WriteUpdatesFile(updatesPath, update)
+	if newSlotMove != nil && !skipSlotMove {
+		if _, err := f.WriteString(fmt.Sprintf("slotmove %s %s %s\n", newSlotMove.Package, newSlotMove.Old, newSlotMove.New)); err != nil {
+			return err
+		}
+		log.Printf("Recorded slotmove for %s: %s -> %s for effective date %s in %s", newSlotMove.Package, newSlotMove.Old, newSlotMove.New, date.Format(time.DateOnly), updatesPath)
+	}
+
+	return nil
 }
 
 func (cfg *MainArgConfig) cmdOverlayEbuildMove(args []string) error {
-	if len(args) != 2 {
+	fs := flag.NewFlagSet("overlay ebuild move", flag.ContinueOnError)
+	fs.SetOutput(os.Stderr)
+	dateStr := fs.String("date", "", "Effective date of the move in YYYY-MM-DD format (defaults to current date)")
+
+	if err := fs.Parse(args); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return nil
+		}
+		return &ExitError{Code: 2, Err: err}
+	}
+
+	positional := fs.Args()
+	if len(positional) != 2 {
 		return fmt.Errorf("usage: g2 overlay ebuild move <from> <to>")
 	}
 
-	oldPkg := args[0]
-	newPkg := args[1]
+	date := time.Now()
+	if *dateStr != "" {
+		var err error
+		date, err = time.Parse(time.DateOnly, *dateStr)
+		if err != nil {
+			return fmt.Errorf("invalid date format %q, expected YYYY-MM-DD: %w", *dateStr, err)
+		}
+	}
 
-	return appendUpdateFile(&g2.PackageMove{Old: oldPkg, New: newPkg}, nil)
+	oldPkg := positional[0]
+	newPkg := positional[1]
+
+	return appendUpdateFile(date, &g2.PackageMove{Old: oldPkg, New: newPkg}, nil)
 }
 
 func (cfg *MainArgConfig) cmdOverlayEbuildSlotmove(args []string) error {
-	if len(args) != 3 {
+	fs := flag.NewFlagSet("overlay ebuild slotmove", flag.ContinueOnError)
+	fs.SetOutput(os.Stderr)
+	dateStr := fs.String("date", "", "Effective date of the move in YYYY-MM-DD format (defaults to current date)")
+
+	if err := fs.Parse(args); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return nil
+		}
+		return &ExitError{Code: 2, Err: err}
+	}
+
+	positional := fs.Args()
+	if len(positional) != 3 {
 		return fmt.Errorf("usage: g2 overlay ebuild slotmove <package> <from> <to>")
 	}
 
-	pkg := args[0]
-	oldSlot := args[1]
-	newSlot := args[2]
+	date := time.Now()
+	if *dateStr != "" {
+		var err error
+		date, err = time.Parse(time.DateOnly, *dateStr)
+		if err != nil {
+			return fmt.Errorf("invalid date format %q, expected YYYY-MM-DD: %w", *dateStr, err)
+		}
+	}
 
-	return appendUpdateFile(nil, &g2.PackageSlotMove{Package: pkg, Old: oldSlot, New: newSlot})
+	pkg := positional[0]
+	oldSlot := positional[1]
+	newSlot := positional[2]
+
+	return appendUpdateFile(date, nil, &g2.PackageSlotMove{Package: pkg, Old: oldSlot, New: newSlot})
 }
 
 func (cfg *MainArgConfig) cmdOverlayEbuildInstall(args []string) error {
