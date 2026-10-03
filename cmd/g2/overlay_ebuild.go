@@ -65,8 +65,11 @@ func appendUpdateFile(newMove *g2.PackageMove, newSlotMove *g2.PackageSlotMove) 
 
 	if _, err := os.Stat(updatesPath); err == nil {
 		// Parse existing updates in the current quarter file
-		parsed, err := g2.ParseUpdatesDir(updatesDir)
-		if err == nil && parsed != nil {
+		parsed, err := g2.ParseUpdatesFile(updatesPath)
+		if err != nil {
+			return fmt.Errorf("reading existing quarter file %s: %w", updatesPath, err)
+		}
+		if parsed != nil {
 			update.Moves = parsed.Moves
 			update.SlotMoves = parsed.SlotMoves
 		}

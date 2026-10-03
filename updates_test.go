@@ -50,6 +50,49 @@ func TestParseUpdatesDirFS(t *testing.T) {
 	}
 }
 
+func TestParseUpdatesFileFS(t *testing.T) {
+	mockFS := fstest.MapFS{
+		"updates/file": &fstest.MapFile{
+			Data: []byte("move old/a new/a\nslotmove my/b 1 2\n"),
+		},
+	}
+
+	update, err := ParseUpdatesFileFS(mockFS, "updates/file")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(update.Moves) != 1 || update.Moves[0].Old != "old/a" || update.Moves[0].New != "new/a" {
+		t.Fatalf("unexpected moves: %+v", update.Moves)
+	}
+	if len(update.SlotMoves) != 1 || update.SlotMoves[0].Package != "my/b" || update.SlotMoves[0].Old != "1" || update.SlotMoves[0].New != "2" {
+		t.Fatalf("unexpected slotmoves: %+v", update.SlotMoves)
+	}
+}
+
+func TestParseUpdatesFile(t *testing.T) {
+	tmpDir := t.TempDir()
+	path := filepath.Join(tmpDir, "file")
+
+	content := "move old/c new/c\nslotmove my/d 3 4\n"
+	err := os.WriteFile(path, []byte(content), 0644)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	update, err := ParseUpdatesFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(update.Moves) != 1 || update.Moves[0].Old != "old/c" || update.Moves[0].New != "new/c" {
+		t.Fatalf("unexpected moves: %+v", update.Moves)
+	}
+	if len(update.SlotMoves) != 1 || update.SlotMoves[0].Package != "my/d" || update.SlotMoves[0].Old != "3" || update.SlotMoves[0].New != "4" {
+		t.Fatalf("unexpected slotmoves: %+v", update.SlotMoves)
+	}
+}
+
 func TestParseUpdatesDir(t *testing.T) {
 	tmpDir := t.TempDir()
 
