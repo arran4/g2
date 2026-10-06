@@ -228,3 +228,35 @@ func TestCmdOverlayEbuild_Help(t *testing.T) {
 		t.Errorf("Expected nil error for -h, got %v", err)
 	}
 }
+
+// trackingFS wraps an fs.FS to track directory reads. This is an example from AGENTS.md, but here we can just test the error handling by providing a directory where a file should be.
+func TestAppendUpdateFile_NewlineCheckFailsClosed(t *testing.T) {
+	tmpDir := t.TempDir()
+	originalDir, _ := os.Getwd()
+	defer func() { _ = os.Chdir(originalDir) }()
+	_ = os.Chdir(tmpDir)
+
+	updatesDir := filepath.Join("profiles", "updates")
+	_ = os.MkdirAll(updatesDir, 0755)
+
+	date, _ := time.Parse(time.DateOnly, "2024-09-21")
+	quarterFile := getQuarterFileForDate(date)
+	updatesPath := filepath.Join(updatesDir, quarterFile)
+
+	// Create a regular file so stat works
+	err := os.WriteFile(updatesPath, []byte("some content"), 0644)
+	if err != nil {
+		t.Fatalf("failed to write initial file: %v", err)
+	}
+
+	// Make it unreadable to simulate a failure during newline check
+	_ = os.Chmod(updatesPath, 0000)
+	defer func() { _ = os.Chmod(updatesPath, 0644) }() // Restore for cleanup
+
+	err = appendUpdateFile(date, &g2.PackageMove{Old: "old/2", New: "new/2"}, nil)
+	if err == nil {
+		t.Errorf("expected error from unreadable file during duplicate check or newline check, got nil")
+	} else if err.Error() != "reading existing quarter file profiles/updates/3Q-2024: open profiles/updates/3Q-2024: permission denied" {
+		t.Errorf("Unexpected error message: %v", err)
+	}
+}

@@ -95,17 +95,27 @@ func appendUpdateFile(date time.Time, newMove *g2.PackageMove, newSlotMove *g2.P
 			// Check if file ends with newline
 			if stat.Size() > 0 {
 				f, err := os.Open(updatesPath)
-				if err == nil {
-					buf := make([]byte, 1)
-					_, err = f.ReadAt(buf, stat.Size()-1)
-					_ = f.Close()
-					if err == nil && buf[0] != '\n' {
-						// We need to prepend a newline
-						f, err := os.OpenFile(updatesPath, os.O_WRONLY|os.O_APPEND, 0644)
-						if err == nil {
-							_, _ = f.WriteString("\n")
-							_ = f.Close()
-						}
+				if err != nil {
+					return fmt.Errorf("opening updates file for newline check %s: %w", updatesPath, err)
+				}
+				buf := make([]byte, 1)
+				_, err = f.ReadAt(buf, stat.Size()-1)
+				_ = f.Close()
+				if err != nil {
+					return fmt.Errorf("reading final byte of updates file %s: %w", updatesPath, err)
+				}
+				if buf[0] != '\n' {
+					// We need to prepend a newline
+					f, err := os.OpenFile(updatesPath, os.O_WRONLY|os.O_APPEND, 0644)
+					if err != nil {
+						return fmt.Errorf("opening updates file to append newline %s: %w", updatesPath, err)
+					}
+					if _, err := f.WriteString("\n"); err != nil {
+						_ = f.Close()
+						return fmt.Errorf("writing newline separator to updates file %s: %w", updatesPath, err)
+					}
+					if err := f.Close(); err != nil {
+						return fmt.Errorf("closing updates file after appending newline %s: %w", updatesPath, err)
 					}
 				}
 			}
