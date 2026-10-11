@@ -1,25 +1,19 @@
 # g2 Agents Instructions
 
-* When verifying the static site generation output (e.g., using Playwright or headless Chrome), be aware that the `file://` protocol does not automatically resolve directory paths to `index.html`. You can either start a local HTTP server (e.g., `python3 -m http.server -d <output_dir>`) or use the built-in testing server `go run ./cmd/g2 site serve -port 8080` before attempting to navigate through the generated site.
-* Ensure most return err are wrapped with a meaningful addition to where the error is occurring and/or the context it's occurring in.
-* Increase logging output.
-* For testing compile and run steps, use `go run ./cmd/g2 ...` rather than building a `g2` binary and executing it.
-* All test data should be in `/testdata` if it is required for tests. Otherwise, test generated data must be git ignored and not added to the repo.
-* Do not hardcode specific remote URLs (e.g. `https://github.com/gentoo-mirror/gentoo/blob/stable/` etc) in generic generation templates since the application is used against many different overlays. Ensure variables or configuration dictate correct URLs dynamically.
-* Ensure generated site features remain repository neutral (e.g. do not hardcode links to Gentoo's GitHub or policy guide) as this tool supports importing multiple independent overlay repositories.
+## Engineering & Coding Standards
 
-- `doc/g2.1.md` is the canonical maintained man-page source. The generated `md2man` output is build/test output and should not be committed to the repository.
-- Man page updates should aim for actual man-page conventions (e.g., concise, declarative, no marketing bloat, using standard sections like NAME, SYNOPSIS, DESCRIPTION), not README-style feature dumping.
-- When adding or changing commands/features (like touching subcommands), agents must update:
-  - `doc/g2.1.md` to reflect the new functionality.
-  - `readme.md` where appropriate.
-- Agents should inspect the real command tree using `go run ./cmd/g2 ...` to document commands accurately, rather than relying on stale markdown docs.
+* **Deliberate Error Wrapping**: Wrap Go errors deliberately when it adds diagnostic context or preserves a caller-relevant error identity (e.g., `fmt.Errorf("reading category %s: %w", cat, err)` or `errors.Is`/`errors.As` sentinels), rather than mechanically wrapping at every stack frame or returning bare, uncontextualized errors.
+* **Environment & Filesystem Boundaries**: Treat environment variables, process globals, and filesystem dependencies as application boundary concerns. For logic and unit tests, prefer explicit values, typed options, `io.Reader`/`io.Writer`, `fs.FS`, or `fstest.MapFS`. Reserve `t.TempDir()` and `t.Setenv()` for tests explicitly verifying OS/process boundary behavior (e.g., atomic file creation, permissions, or process environment lookups). Preserve real boundary integration coverage where required.
+* **Test Fixtures & Anonymization**: Keep test fixtures small, named, deterministic, and readable. Place required static test data in `/testdata` or in-memory embedded fixtures (`fstest.MapFS`/`txtar`). All generated test data must be git-ignored. **Always anonymize individuals and strip real email addresses** in test fixtures (use generic names like "Jane Doe" and example domains like "example.com").
+* **Repository Neutrality**: Do not hardcode specific remote URLs (e.g., `https://github.com/gentoo-mirror/...`) or Gentoo-specific links in generic templates or site generation features. `g2` supports multiple independent overlay repositories; ensure URLs and links are dynamic or configurable.
+* **CLI & Documentation Ownership**:
+  * `doc/g2.1.md` is the canonical maintained man-page source. Generated `md2man` output is build/test output and must not be committed to the repository.
+  * Updates to man pages must follow conventional man-page standards (concise, declarative, using standard sections like NAME, SYNOPSIS, DESCRIPTION).
+  * When adding or changing commands/features, agents must inspect the actual command tree using `go run ./cmd/g2 ...` and update both `doc/g2.1.md` and `readme.md`.
+  * `readme.md` is the central user reference for available commands, flags, and usage examples. (Do not hand-edit generated README files if any exist.)
+  * The `g2 dev` subcommand tree contains ephemeral local developer utilities (e.g. `g2 dev update-txtar-tests`) and does not need documentation in `readme.md`.
+* **Testing & Verification Execution**:
+  * For testing compile and run steps, use `go run ./cmd/g2 ...` rather than building a standalone `g2` binary.
+  * When verifying static site generation output (e.g., Playwright/headless Chrome), note that `file://` does not automatically resolve directory paths to `index.html`. Use `go run ./cmd/g2 site serve -port 8080` or `python3 -m http.server` before navigation.
 
-- When creating or modifying test data, **always anonymize individuals and strip real email addresses**. Use generic names (e.g., "Jane Doe") and example domains (e.g., "example.com").
-
-- When adding new commands or features to the `g2` application, ensure that you update the `readme.md` file to reflect these additions. The `readme.md` should be considered the central reference for available commands, usage instructions, and examples.
-
-- There is a `g2 dev` subcommand tree specifically for ephemeral tools used by developers and agents (e.g. `g2 dev update-txtar-tests`). These commands do not need to be documented in `readme.md` and are for local utility purposes.
-
-## Adding or Changing Commands
-When adding or changing g2 commands, agents must inspect the actual command tree via the CLI (e.g., `go run ./cmd/g2 ...`) instead of relying on stale docs, and update both `readme.md` and the canonical man page source `doc/g2.1.md` using conventional man-page sections.
+Further rationale: https://arran4.github.io/blog/post/2026/055-suggested-coding-standards-for-repositories-and-agents/
