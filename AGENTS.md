@@ -1,7 +1,7 @@
 # g2 Agents Instructions
 
 * When verifying the static site generation output (e.g., using Playwright or headless Chrome), be aware that the `file://` protocol does not automatically resolve directory paths to `index.html`. You can either start a local HTTP server (e.g., `python3 -m http.server -d <output_dir>`) or use the built-in testing server `go run ./cmd/g2 site serve -port 8080` before attempting to navigate through the generated site.
-* Ensure most return err are wrapped with a meaningful addition to where the error is occurring and/or the context it's occurring in.
+* Wrap returned errors only when a new layer contributes useful operation context or preserves a caller-relevant classification; avoid boilerplate wrapping in every helper. Use `%w` when errors.Is/errors.As identity is part of the contract, and do not log then return the same error repeatedly.
 * Increase logging output.
 * For testing compile and run steps, use `go run ./cmd/g2 ...` rather than building a `g2` binary and executing it.
 * All test data should be in `/testdata` if it is required for tests. Otherwise, test generated data must be git ignored and not added to the repo.
@@ -23,3 +23,13 @@
 
 ## Adding or Changing Commands
 When adding or changing g2 commands, agents must inspect the actual command tree via the CLI (e.g., `go run ./cmd/g2 ...`) instead of relying on stale docs, and update both `readme.md` and the canonical man page source `doc/g2.1.md` using conventional man-page sections.
+
+## Side effects and test fixtures
+
+- A dry-run or validation path must not change a destination overlay, tracked templates or user state. Render candidate changes separately and apply only in the explicit write mode; use temporary storage for any necessary file comparison.
+- Prefer named, in-memory parser fixtures when the OS is not under test. Keep focused real Gentoo/Portage/filesystem integration tests for behaviour that depends on those tools, permissions or on-disk semantics. Existing issue #572 owns broader fixture cleanup.
+- Treat committed/generated output as a reproducible artifact. Verify changes against the source template and inspect exact output before applying or committing.
+
+## Engineering guidance and agent audit
+
+Use https://arran4.github.io/blog/post/2026/055-suggested-coding-standards-for-repositories-and-agents/ selectively, without superseding the more specific rules above. A coding agent must inspect implementation/tests, distinguish verified gaps from hypotheses, and record results and existing issue overlap at https://github.com/arran4/g2/issues/577. Do not equate adding instructions with completing the implementation audit; do not merge automatically.
