@@ -149,3 +149,20 @@ func TestResolveBash_ParameterExpansions(t *testing.T) {
 		})
 	}
 }
+
+
+// Regression for the bracket-expression panic seen during the Gentoo
+// overlays static-site generation: mvdan/sh v3.12.0 could produce an invalid
+// regexp when a negated POSIX character class included an escaped backslash.
+// The pattern is legal Bash and must expand without panicking or changing the
+// meaning of the escaped backslash.
+func TestResolveBashBracketPatternWithEscapedBackslash(t *testing.T) {
+	got := resolveBash(context.Background(),
+		`${VAR//[^[:alnum:]\\]/_}`,
+		map[string]string{"VAR": `a\!b:`},
+	)
+	const want = `a\_b_`
+	if got != want {
+		t.Fatalf("resolveBash() = %q, want %q", got, want)
+	}
+}
