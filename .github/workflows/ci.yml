@@ -212,12 +212,12 @@ jobs:
           mode: install
       - name: Verify Exact Origin/Main
         env:
-          GITHUB_REF_NAME: ${{ github.ref }}
+          RELEASE_REF: ${{ github.ref }}
           GITHUB_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
-          if [[ "$GITHUB_REF_NAME" != "refs/heads/main" ]]; then
-            echo "Error: Manual release preparation must run on refs/heads/main, got $GITHUB_REF_NAME"
+          if [[ "$RELEASE_REF" != "refs/heads/main" ]]; then
+            echo "Error: Manual release preparation must run on refs/heads/main, got $RELEASE_REF"
             exit 1
           fi
           git fetch origin main

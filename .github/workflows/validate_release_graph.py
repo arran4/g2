@@ -1,5 +1,37 @@
+import os
+import subprocess
+import tempfile
 import yaml
 import sys
+
+
+def check_exact_main_guard(step):
+    # GitHub's GITHUB_* defaults cannot be overridden by a step's env mapping.
+    # Exercise the actual guard with the runner's short GITHUB_REF_NAME value.
+    assert step.get('env', {}).get('RELEASE_REF') == '${{ github.ref }}', "release guard must use a custom variable for the full ref"
+    with tempfile.TemporaryDirectory(prefix='g2-release-guard-') as repo:
+        def git(*args):
+            return subprocess.check_output(['git', '-C', repo, *args], text=True, stderr=subprocess.STDOUT).strip()
+
+        git('init', '-b', 'main')
+        git('-c', 'user.name=Jane Doe', '-c', 'user.email=jane@example.com',
+            '-c', 'commit.gpgsign=false', '-c', 'core.hooksPath=/dev/null',
+            'commit', '--allow-empty', '-m', 'Release guard fixture')
+        sha = git('rev-parse', 'HEAD')
+        git('remote', 'add', 'origin', repo)
+        cases = [
+            ('refs/heads/main', sha, True, ''),
+            ('refs/heads/feature', sha, False, 'must run on refs/heads/main'),
+            ('refs/heads/main', '0' * 40, False, 'but origin/main is at'),
+        ]
+        for ref, requested_sha, succeeds, message in cases:
+            env = dict(os.environ, GITHUB_REF_NAME=ref.rsplit('/', 1)[-1],
+                       RELEASE_REF=ref, GITHUB_SHA=requested_sha)
+            result = subprocess.run(['bash', '-c', step['run']], cwd=repo, env=env,
+                                    text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+            assert (result.returncode == 0) == succeeds, f"release guard for {ref} at {requested_sha}: {result.stdout}"
+            assert message in result.stdout, f"release guard returned an unexpected diagnostic: {result.stdout}"
+
 
 def run_tests():
     with open(".github/workflows/ci.yml") as f:
@@ -104,6 +136,7 @@ def run_tests():
     assert "refs/heads/main" in exact_main_script, "Must ensure current ref is refs/heads/main"
     assert "git fetch origin main" in exact_main_script, "Must fetch origin/main"
     assert "$MAIN_SHA\" != \"$GITHUB_SHA" in exact_main_script, "Must require exact commit equality with origin/main"
+    check_exact_main_guard(exact_main[0])
 
     # Check 1b: Final race check
     tag_push_step = [s for s in prep_steps if "Tag and push" in s.get('name', '')]

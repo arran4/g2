@@ -1,6 +1,6 @@
 module github.com/arran4/g2
 
-go 1.25.0
+go 1.26.0
 
 require (
 	github.com/antchfx/xmlquery v1.5.1
@@ -10,7 +10,7 @@ require (
 	golang.org/x/crypto v0.54.0
 	golang.org/x/text v0.40.0
 	golang.org/x/tools v0.48.0
-	mvdan.cc/sh/v3 v3.12.0
+	mvdan.cc/sh/v3 v3.14.1
 )
 
 require (
