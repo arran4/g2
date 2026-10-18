@@ -1,0 +1,64 @@
+-- config/repos.conf --
+[master]
+location = @ROOT@/master
+[child]
+location = @ROOT@/child
+-- config/package.mask --
+-cat/user-removed
+-cat/master-kept::master
+-- config/package.unmask --
+cat/canceled
+-cat/canceled
+cat/master-kept
+cat/master-removed
+cat/parent-kept
+cat/parent-removed
+cat/profile-unmasked
+cat/user-removed
+-- master/metadata/layout.conf --
+masters =
+profile-formats = portage-1
+-- master/profiles/repo_name --
+master
+-- master/profiles/package.mask --
+cat/master-kept
+cat/master-removed
+cat/profile-unmasked
+cat/user-removed
+-- master/profiles/base/package.mask --
+cat/parent-kept
+cat/parent-removed
+-- child/metadata/layout.conf --
+masters = master
+profile-formats = portage-1
+-- child/profiles/repo_name --
+child
+-- child/profiles/package.mask --
+-cat/master-removed
+-- child/profiles/selected/parent --
+master:base
+-- child/profiles/selected/package.mask --
+-cat/parent-removed
+-cat/master-kept
+-- child/profiles/selected/package.unmask --
+cat/profile-unmasked
+-- child/cat/master-kept/master-kept-1.ebuild --
+EAPI=8
+SLOT="0"
+-- child/cat/master-removed/master-removed-1.ebuild --
+EAPI=8
+SLOT="0"
+-- child/cat/parent-kept/parent-kept-1.ebuild --
+EAPI=8
+SLOT="0"
+-- child/cat/parent-removed/parent-removed-1.ebuild --
+EAPI=8
+SLOT="0"
+-- child/cat/profile-unmasked/profile-unmasked-1.ebuild --
+EAPI=8
+SLOT="0"
+-- child/cat/user-removed/user-removed-1.ebuild --
+EAPI=8
+SLOT="0"
+-- expected.json --
+["required","no-change","required","no-change","no-change","no-change"]

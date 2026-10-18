@@ -15,6 +15,7 @@ func (cfg *MainArgConfig) cmdMasks(args []string) error {
 		fmt.Printf("Usage:\n")
 		fmt.Printf("\t%s\n", strings.Join(cfg.Args, " "))
 		fmt.Printf("\t\t %s \t\t %s\n", "list", "list masked packages")
+		fmt.Printf("\t\t %s \t\t %s\n", "audit", "report redundant user package.unmask entries without changes")
 		fmt.Printf("\t\t %s \t\t %s\n", "mask", "add a package to masked")
 		fmt.Printf("\t\t %s \t\t %s\n", "unmask", "remove a package from masked")
 		fmt.Printf("\t\t %s \t\t %s\n", "reset", "reset a package mask status")
@@ -33,6 +34,8 @@ func (cfg *MainArgConfig) cmdMasks(args []string) error {
 	cfg.Args = append(cfg.Args, cmd)
 
 	switch cmd {
+	case "audit":
+		return cfg.cmdMasksAudit(fs.Args()[1:])
 	case "list":
 		return cfg.cmdMasksList(fs.Args()[1:])
 	case "mask":
