@@ -448,6 +448,7 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
+      issues: write
     steps:
       - uses: actions/checkout@v4
 
@@ -507,6 +508,12 @@ jobs:
           git add -A
           git commit -m "ci: automated formatting fixes"
           git push origin "$BRANCH"
+
+          # This label is also required by the parent-close cleanup job.
+          gh label create ci-autofix \
+            --description "Automated formatting PRs" \
+            --color "D4C5F9" \
+            --force
 
           gh pr create \
             --title "ci: automated formatting fixes" \

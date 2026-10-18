@@ -60,6 +60,15 @@ def run_tests():
 
     assert "needs.route.outputs.run_autofix == 'true'" in autofix.get('if', ''), "autofix lane must use run_autofix output"
 
+    # The autofix PR label is also used by the parent-close cleanup lane.
+    assert autofix.get('permissions', {}).get('issues') == 'write', "autofix must be allowed to create the required label"
+    pr_steps = [step for step in autofix.get('steps', []) if step.get('name') == 'Create PR if changes exist']
+    assert len(pr_steps) == 1, "autofix PR creation step missing or duplicated"
+    pr_script = pr_steps[0].get('run', '')
+    assert 'gh label create ci-autofix' in pr_script, "autofix must ensure the label exists"
+    assert pr_script.index('gh label create ci-autofix') < pr_script.index('gh pr create'), "autofix must create label before PR"
+    assert '--label "ci-autofix"' in pr_script, "autofix PR must carry cleanup label"
+
     assert 'git fetch --tags --force' not in str(prepare), "prepare-release-tag must not contain stale logic"
 
 
