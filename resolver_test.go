@@ -2,6 +2,10 @@ package g2
 
 import (
 	"context"
+	"encoding/json"
+	"os"
+	"os/exec"
+	"strings"
 	"testing"
 )
 
@@ -150,19 +154,60 @@ func TestResolveBash_ParameterExpansions(t *testing.T) {
 	}
 }
 
-
 // Regression for the bracket-expression panic seen during the Gentoo
 // overlays static-site generation: mvdan/sh v3.12.0 could produce an invalid
 // regexp when a negated POSIX character class included an escaped backslash.
 // The pattern is legal Bash and must expand without panicking or changing the
 // meaning of the escaped backslash.
 func TestResolveBashBracketPatternWithEscapedBackslash(t *testing.T) {
-	got := resolveBash(context.Background(),
-		`${VAR//[^[:alnum:]\\]/_}`,
-		map[string]string{"VAR": `a\!b:`},
-	)
-	const want = `a\_b_`
-	if got != want {
-		t.Fatalf("resolveBash() = %q, want %q", got, want)
+	data, err := os.ReadFile("testdata/shell_bracket_patterns.json")
+	if err != nil {
+		t.Fatalf("read shell bracket regression cases: %v", err)
+	}
+	var tests []struct {
+		Name  string
+		Text  string
+		Value string
+		Want  string
+	}
+	if err := json.Unmarshal(data, &tests); err != nil {
+		t.Fatalf("decode shell bracket regression cases: %v", err)
+	}
+	bash, bashErr := exec.LookPath("bash")
+	for _, tt := range tests {
+		t.Run(tt.Name, func(t *testing.T) {
+			vars := map[string]string{"VAR": tt.Value}
+			// resolveBash trims a command's final newline, like echo output.
+			command := `printf '%s\n' "` + tt.Text + `"`
+			for _, mode := range []string{"literal", "fast_path", "interpreter"} {
+				t.Run(mode, func(t *testing.T) {
+					text := tt.Text
+					var opts []ResolveBashOption
+					switch mode {
+					case "fast_path":
+						opts = append(opts, WithFastPath())
+					case "interpreter":
+						text = command
+					}
+					if got := resolveBash(context.Background(), text, vars, opts...); got != tt.Want {
+						t.Fatalf("resolveBash(%q) = %q, want %q", text, got, tt.Want)
+					}
+				})
+			}
+			t.Run("bash", func(t *testing.T) {
+				if bashErr != nil {
+					t.Skip("bash is unavailable; fixed expectations still checked above")
+				}
+				cmd := exec.CommandContext(t.Context(), bash, "--noprofile", "--norc", "-c", command)
+				cmd.Env = []string{"LC_ALL=C", "VAR=" + tt.Value}
+				got, err := cmd.CombinedOutput()
+				if err != nil {
+					t.Fatalf("evaluate bracket pattern with Bash: %v: %s", err, got)
+				}
+				if strings.TrimSuffix(string(got), "\n") != tt.Want {
+					t.Fatalf("Bash expansion = %q, want %q", got, tt.Want)
+				}
+			})
+		})
 	}
 }

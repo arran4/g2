@@ -1,0 +1,68 @@
+[
+  {
+    "Name": "global_replacement",
+    "Text": "${VAR//[^[:alnum:]\\\\]/_}",
+    "Value": "a\\!b:",
+    "Want": "a\\_b_"
+  },
+  {
+    "Name": "first_replacement",
+    "Text": "${VAR/[^[:alnum:]\\\\]/_}",
+    "Value": "a\\!b:",
+    "Want": "a\\_b:"
+  },
+  {
+    "Name": "negated_posix_class",
+    "Text": "${VAR//[^[:alnum:]]/_}",
+    "Value": "a\\!b:",
+    "Want": "a__b_"
+  },
+  {
+    "Name": "bang_negation",
+    "Text": "${VAR//[![:alnum:]\\\\]/_}",
+    "Value": "a\\!b:",
+    "Want": "a\\_b_"
+  },
+  {
+    "Name": "empty_value",
+    "Text": "${VAR//[^[:alnum:]\\\\]/_}",
+    "Value": "",
+    "Want": ""
+  },
+  {
+    "Name": "allowed_characters",
+    "Text": "${VAR//[^[:alnum:]\\\\]/_}",
+    "Value": "Az09\\",
+    "Want": "Az09\\"
+  },
+  {
+    "Name": "positive_class",
+    "Text": "${VAR//[[:alnum:]\\\\]/_}",
+    "Value": "a\\!b:",
+    "Want": "__!_:"
+  },
+  {
+    "Name": "mixed_class_and_literals",
+    "Text": "${VAR//[^[:alnum:]\\\\._-]/_}",
+    "Value": "a\\._-!b:",
+    "Want": "a\\._-_b_"
+  },
+  {
+    "Name": "leading_removal",
+    "Text": "${VAR#[^[:alnum:]\\\\]}",
+    "Value": "!\\a:",
+    "Want": "\\a:"
+  },
+  {
+    "Name": "trailing_removal",
+    "Text": "${VAR%[^[:alnum:]\\\\]}",
+    "Value": "a\\!",
+    "Want": "a\\"
+  },
+  {
+    "Name": "newline_replacement",
+    "Text": "${VAR//[^[:alnum:]\\\\]/_}",
+    "Value": "a\\!\nb:",
+    "Want": "a\\__b_"
+  }
+]
