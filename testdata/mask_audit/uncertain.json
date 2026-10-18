@@ -1,0 +1,7 @@
+[
+  {"name":"profile_cycle","path":"repo/profiles/selected/parent","content":".\n"},
+  {"name":"shared_profile_ancestry","path":"repo/profiles/selected/parent","content":"../base\n../base\n"},
+  {"name":"unavailable_master","path":"repo/metadata/layout.conf","content":"masters = unavailable\nprofile-formats = portage-1\n"},
+  {"name":"unsupported_profile_eapi","path":"repo/profiles/selected/eapi","content":"99\n"},
+  {"name":"repository_master_override","path":"config/repos.conf","content":"[test]\nlocation = @ROOT@/repo\nmasters = other\n"}
+]

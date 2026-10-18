@@ -1,0 +1,83 @@
+Read-only audit fixture. Paths in repos.conf are expanded by the test harness.
+-- config/repos.conf --
+[test]
+location = @ROOT@/repo
+-- config/package.mask --
+# A local mask
+cat/local
+-- config/package.unmask/10-main --
+# User policy
+
+cat/obsolete
+cat/needed
+cat/missing
+cat/duplicate
+cat/duplicate
+cat/overlap
+=cat/overlap-2
+>=cat/limited-2
+cat/profile
+cat/local
+cat/slotted:1/2
+cat/inherited:1
+-- config/package.unmask/.ignored --
+cat/ignored
+-- config/package.unmask/backup.bak --
+cat/ignored
+-- config/package.unmask/editor~ --
+cat/ignored
+-- repo/metadata/layout.conf --
+masters =
+profile-formats = portage-1
+-- repo/profiles/repo_name --
+test
+-- repo/profiles/package.mask --
+# Repository policy
+cat/needed
+cat/duplicate
+cat/overlap
+>=cat/limited-2
+cat/slotted
+cat/inherited
+-- repo/profiles/base/package.mask --
+cat/profile
+-- repo/profiles/selected/parent --
+../base
+-- repo/profiles/selected/eapi --
+8
+-- repo/cat/obsolete/obsolete-1.ebuild --
+EAPI=8
+SLOT="0"
+-- repo/cat/needed/needed-1.ebuild --
+EAPI=8
+SLOT="0"
+-- repo/cat/duplicate/duplicate-1.ebuild --
+EAPI=8
+SLOT="0"
+-- repo/cat/overlap/overlap-1.ebuild --
+EAPI=8
+SLOT="0"
+-- repo/cat/overlap/overlap-2.ebuild --
+EAPI=8
+SLOT="0"
+-- repo/cat/limited/limited-1.ebuild --
+EAPI=8
+SLOT="0"
+-- repo/cat/limited/limited-2.ebuild --
+EAPI=8
+SLOT="0"
+-- repo/cat/profile/profile-1.ebuild --
+EAPI=8
+SLOT="0"
+-- repo/cat/local/local-1.ebuild --
+EAPI=8
+SLOT="0"
+-- repo/cat/slotted/slotted-1.ebuild --
+EAPI=8
+SLOT="1/2"
+-- repo/cat/inherited/inherited-1.ebuild --
+EAPI=8
+inherit example
+SLOT="1"
+-- expected.json --
+["no-change","required","non-matching","duplicate/shadowed","duplicate/shadowed","required","duplicate/shadowed","required","required","required","required","indeterminate"]

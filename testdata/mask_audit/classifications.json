@@ -1,0 +1,70 @@
+[
+  {
+    "name": "mask_disappeared",
+    "input": {"candidates": [{"category":"cat","package":"pkg","version":"1","repository":"test"}], "unmasks":[{"atom":"cat/pkg","file":"package.unmask","line":3,"user":true}]},
+    "want": ["no-change"]
+  },
+  {
+    "name": "required_for_one_version",
+    "input": {"candidates":[{"category":"cat","package":"pkg","version":"1","repository":"test"},{"category":"cat","package":"pkg","version":"2","repository":"test"}], "masks":[{"atom":">=cat/pkg-2","file":"repo/package.mask","line":7}], "unmasks":[{"atom":"cat/pkg","file":"package.unmask","line":3,"user":true}]},
+    "want": ["required"],
+    "affected": ["cat/pkg-2::test"]
+  },
+  {
+    "name": "no_available_version",
+    "input": {"candidates":[{"category":"cat","package":"pkg","version":"1","repository":"test"}], "unmasks":[{"atom":">=cat/pkg-2","file":"package.unmask","line":3,"user":true}]},
+    "want": ["non-matching"]
+  },
+  {
+    "name": "exact_duplicates",
+    "input": {"candidates":[{"category":"cat","package":"pkg","version":"1","repository":"test"}], "masks":[{"atom":"cat/pkg","file":"repo/package.mask","line":7}], "unmasks":[{"atom":"cat/pkg","file":"package.unmask","line":3,"user":true},{"atom":"cat/pkg","file":"package.unmask","line":4,"user":true}]},
+    "want": ["duplicate/shadowed","duplicate/shadowed"]
+  },
+  {
+    "name": "overlapping_nonidentical_rules",
+    "input": {"candidates":[{"category":"cat","package":"pkg","version":"1","repository":"test"},{"category":"cat","package":"pkg","version":"2","repository":"test"}], "masks":[{"atom":"cat/pkg","file":"repo/package.mask","line":7}], "unmasks":[{"atom":"cat/pkg","file":"package.unmask","line":3,"user":true},{"atom":"=cat/pkg-2","file":"package.unmask","line":4,"user":true}]},
+    "want": ["required","duplicate/shadowed"],
+    "affected": ["cat/pkg-1::test"]
+  },
+  {
+    "name": "mutual_cover_is_not_a_removal_plan",
+    "input": {"candidates":[{"category":"cat","package":"pkg","version":"1","repository":"test"},{"category":"cat","package":"pkg","version":"2","repository":"test"}], "masks":[{"atom":"cat/pkg","file":"repo/package.mask","line":7}], "unmasks":[{"atom":">=cat/pkg-1","file":"package.unmask","line":3,"user":true},{"atom":"<=cat/pkg-2","file":"package.unmask","line":4,"user":true}]},
+    "want": ["duplicate/shadowed","duplicate/shadowed"]
+  },
+  {
+    "name": "repository_scope",
+    "input": {"candidates":[{"category":"cat","package":"pkg","version":"1","repository":"other"}], "masks":[{"atom":"cat/pkg","file":"repo/package.mask","line":7,"repository":"test"}], "unmasks":[{"atom":"cat/pkg::other","file":"package.unmask","line":3,"user":true}]},
+    "want": ["no-change"]
+  },
+  {
+    "name": "profile_unmask_already_covers",
+    "input": {"candidates":[{"category":"cat","package":"pkg","version":"1","repository":"test"}], "masks":[{"atom":"cat/pkg","file":"repo/package.mask","line":7}], "unmasks":[{"atom":"cat/pkg","file":"profile/package.unmask","line":1},{"atom":"cat/pkg","file":"package.unmask","line":3,"user":true}]},
+    "want": ["no-change"]
+  },
+  {
+    "name": "unsupported_atom_is_not_nonmatching",
+    "input": {"candidates":[], "unmasks":[{"atom":"cat/pkg[foo]","file":"package.unmask","line":3,"user":true}]},
+    "want": ["indeterminate"]
+  },
+  {
+    "name": "unknown_slot_is_not_nonmatching",
+    "input": {"candidates":[{"category":"cat","package":"pkg","version":"1","repository":"test"}], "unmasks":[{"atom":"cat/pkg:1","file":"package.unmask","line":3,"user":true}]},
+    "want": ["indeterminate"]
+  },
+  {
+    "name": "unsupported_mask_blocks_safety_claim",
+    "input": {"candidates":[{"category":"cat","package":"pkg","version":"1","repository":"test"}], "masks":[{"atom":"cat/*","file":"repo/package.mask","line":7}], "unmasks":[{"atom":"cat/pkg","file":"package.unmask","line":3,"user":true}]},
+    "want": ["indeterminate"]
+  },
+  {
+    "name": "incomplete_inventory",
+    "input": {"problems":["repository unavailable"], "unmasks":[{"atom":"cat/pkg","file":"package.unmask","line":3,"user":true}]},
+    "want": ["indeterminate"]
+  },
+  {
+    "name": "slot_and_subslot",
+    "input": {"candidates":[{"category":"cat","package":"pkg","version":"1","repository":"test","slot":"1/2"},{"category":"cat","package":"pkg","version":"2","repository":"test","slot":"2/3"}], "masks":[{"atom":"cat/pkg","file":"repo/package.mask","line":7}], "unmasks":[{"atom":"cat/pkg:1/2","file":"package.unmask","line":3,"user":true}]},
+    "want": ["required"],
+    "affected": ["cat/pkg-1::test"]
+  }
+]
