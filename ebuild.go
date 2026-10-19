@@ -12,7 +12,13 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
+
+	"mvdan.cc/sh/v3/syntax"
 )
+
+var reEbuildVar = regexp.MustCompile(`\$+\{?([a-zA-Z0-9_]+)\}?`)
+var ebuildSyntaxMu sync.Mutex
 
 type URIEntry struct {
 	URL      string
@@ -55,6 +61,51 @@ type Ebuild struct {
 
 	orderOverride []string
 	EbuildHeader  string
+
+	syntaxRawText string
+	syntaxFile    *syntax.File
+	syntaxErr     error
+	syntaxParsed  bool
+}
+
+// ParsedSyntax returns the parsed mvdan.cc/sh/v3/syntax AST for the ebuild's RawText,
+// caching the result across lint rules.
+func (e *Ebuild) ParsedSyntax() (*syntax.File, error) {
+	if e == nil || e.RawText == "" {
+		return nil, nil
+	}
+	ebuildSyntaxMu.Lock()
+	if e.syntaxParsed && e.syntaxRawText == e.RawText {
+		f, err := e.syntaxFile, e.syntaxErr
+		ebuildSyntaxMu.Unlock()
+		return f, err
+	}
+	raw := e.RawText
+	ebuildSyntaxMu.Unlock()
+
+	parser := syntax.NewParser(syntax.KeepComments(true))
+	f, err := parser.Parse(strings.NewReader(raw), "")
+
+	ebuildSyntaxMu.Lock()
+	e.syntaxRawText = raw
+	e.syntaxFile = f
+	e.syntaxErr = err
+	e.syntaxParsed = true
+	ebuildSyntaxMu.Unlock()
+	return f, err
+}
+
+// ClearSyntaxCache releases the cached syntax AST to free memory after linting.
+func (e *Ebuild) ClearSyntaxCache() {
+	if e == nil {
+		return
+	}
+	ebuildSyntaxMu.Lock()
+	e.syntaxRawText = ""
+	e.syntaxFile = nil
+	e.syntaxErr = nil
+	e.syntaxParsed = false
+	ebuildSyntaxMu.Unlock()
 }
 
 type varEntry struct {
@@ -228,7 +279,6 @@ func ParseEbuild(fsys fs.FS, path string, mode ParsingMode) (*Ebuild, error) {
 		e.ParseWarnings = append(parser.Warnings, parsedEbuild.Warnings...)
 
 		uncertainVars := make(map[string]bool)
-		reVar := regexp.MustCompile(`\$+\{?([a-zA-Z0-9_]+)\}?`)
 
 		// Evaluate assignments sequentially in source order
 		for _, assignment := range parsedEbuild.Assignments {
@@ -237,7 +287,7 @@ func ParseEbuild(fsys fs.FS, path string, mode ParsingMode) (*Ebuild, error) {
 			if strings.Contains(assignment.Value, "`") || strings.Contains(assignment.Value, "$(") {
 				isUncertain = true
 			} else {
-				matches := reVar.FindAllStringSubmatch(assignment.Value, -1)
+				matches := reEbuildVar.FindAllStringSubmatch(assignment.Value, -1)
 				for _, m := range matches {
 					varName := m[1]
 					if _, exists := e.Vars[varName]; !exists {

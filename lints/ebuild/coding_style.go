@@ -56,9 +56,8 @@ func (r *CodingStyleLintRule) LintWithQA(repoDir string, pkg *g2.PackageData, qa
 
 	for _, ver := range pkg.Versions {
 		if ver.Ebuild != nil && ver.Ebuild.RawText != "" {
-			parser := syntax.NewParser(syntax.KeepComments(true))
-			f, err := parser.Parse(strings.NewReader(ver.Ebuild.RawText), "")
-			if err != nil {
+			f, err := ver.Ebuild.ParsedSyntax()
+			if err != nil || f == nil {
 				continue // handled by syntax error lint
 			}
 

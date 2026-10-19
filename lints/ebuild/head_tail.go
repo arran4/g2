@@ -36,9 +36,8 @@ func (l *HeadTailLintRule) Lint(repoDir string, pkgData *g2.PackageData) []lints
 			continue
 		}
 
-		parser := syntax.NewParser()
-		f, err := parser.Parse(strings.NewReader(version.Ebuild.RawText), "")
-		if err != nil {
+		f, err := version.Ebuild.ParsedSyntax()
+		if err != nil || f == nil {
 			continue
 		}
 

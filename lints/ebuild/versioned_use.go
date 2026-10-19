@@ -25,6 +25,8 @@ func init() {
 	lints.RegisterLintRule(&VersionedUseLintRule{})
 }
 
+var versionedFlagRegex = regexp.MustCompile(`^[a-zA-Z]+[0-9]+$`)
+
 type VersionedUseLintRule struct{}
 
 func (r *VersionedUseLintRule) Lint(repoDir string, pkg *g2.PackageData) []lints.LintResult {
@@ -52,8 +54,6 @@ func (r *VersionedUseLintRule) LintWithQA(repoDir string, pkg *g2.PackageData, q
 			}
 		}
 	}
-
-	versionedFlagRegex := regexp.MustCompile(`^[a-zA-Z]+[0-9]+$`)
 
 	for _, ver := range pkg.Versions {
 		if ver.Ebuild != nil && ver.Ebuild.Vars != nil {

@@ -55,8 +55,13 @@ func (r *UseUnderscoresLintRule) LintWithQA(repoDir string, pkg *g2.PackageData,
 	}
 
 	// Load USE_EXPAND descriptions
-	descDir := filepath.Join(repoDir, "profiles", "desc")
-	useExpandDescs, _ := g2.ParseUseExpandDescDir(descDir)
+	var useExpandDescs map[string]*g2.UseExpandDesc
+	if ctx := lints.GetRepoContext(repoDir); ctx != nil {
+		useExpandDescs = ctx.UseExpandDescs
+	} else {
+		descDir := filepath.Join(repoDir, "profiles", "desc")
+		useExpandDescs, _ = g2.ParseUseExpandDescDir(descDir)
+	}
 
 	for _, ver := range pkg.Versions {
 		if ver.Ebuild != nil && ver.Ebuild.Vars != nil {

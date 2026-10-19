@@ -48,9 +48,15 @@ func (r *RepoNameMissingLintRule) LintWithQA(repoDir string, pkg *g2.PackageData
 		r.repoCache = make(map[string]bool)
 	})
 
-	r.mu.RLock()
-	hasName, cached := r.repoCache[repoDir]
-	r.mu.RUnlock()
+	var hasName, cached bool
+	if ctx := lints.GetRepoContext(repoDir); ctx != nil {
+		hasName = ctx.HasRepoName
+		cached = true
+	} else {
+		r.mu.RLock()
+		hasName, cached = r.repoCache[repoDir]
+		r.mu.RUnlock()
+	}
 
 	if !cached {
 		// Perform I/O outside of the lock to avoid blocking other goroutines

@@ -2,7 +2,6 @@ package ebuild
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/arran4/g2"
 	"github.com/arran4/g2/lints"
@@ -36,9 +35,8 @@ func (l *UseConditionalCodeLintRule) Lint(repoDir string, pkgData *g2.PackageDat
 			continue
 		}
 
-		parser := syntax.NewParser()
-		f, err := parser.Parse(strings.NewReader(version.Ebuild.RawText), "")
-		if err != nil {
+		f, err := version.Ebuild.ParsedSyntax()
+		if err != nil || f == nil {
 			continue
 		}
 

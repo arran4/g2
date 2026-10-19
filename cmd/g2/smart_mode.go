@@ -115,6 +115,13 @@ func (b *billyFS) Open(name string) (fs.File, error) {
 	return &billyFile{bf: f, fs: b.bfs, name: name}, nil
 }
 
+func (b *billyFS) Stat(name string) (fs.FileInfo, error) {
+	if !fs.ValidPath(name) {
+		return nil, &fs.PathError{Op: "stat", Path: name, Err: fs.ErrInvalid}
+	}
+	return b.bfs.Stat(name)
+}
+
 func (f *billyFile) Stat() (fs.FileInfo, error) {
 	return f.fs.Stat(f.name)
 }

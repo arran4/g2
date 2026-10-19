@@ -2,7 +2,6 @@ package ebuild
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/arran4/g2"
 	"github.com/arran4/g2/lints"
@@ -56,9 +55,8 @@ func (r *LicenseVariablesLintRule) LintWithQA(repoDir string, pkg *g2.PackageDat
 
 	for _, ver := range pkg.Versions {
 		if ver.Ebuild != nil && ver.Ebuild.RawText != "" {
-			parser := syntax.NewParser(syntax.KeepComments(true))
-			f, err := parser.Parse(strings.NewReader(ver.Ebuild.RawText), "")
-			if err != nil {
+			f, err := ver.Ebuild.ParsedSyntax()
+			if err != nil || f == nil {
 				continue
 			}
 

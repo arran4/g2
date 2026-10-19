@@ -32,9 +32,18 @@ func (r *UseExpandRule) Lint(repoDir string, pkgData *g2.PackageData) []lints.Li
 	var results []lints.LintResult
 
 	// Load USE_EXPAND descriptions
-	descDir := filepath.Join(repoDir, "profiles", "desc")
-	useExpandDescs, err := g2.ParseUseExpandDescDir(descDir)
-	if err != nil || len(useExpandDescs) == 0 {
+	var useExpandDescs map[string]*g2.UseExpandDesc
+	if ctx := lints.GetRepoContext(repoDir); ctx != nil {
+		useExpandDescs = ctx.UseExpandDescs
+	} else {
+		descDir := filepath.Join(repoDir, "profiles", "desc")
+		var err error
+		useExpandDescs, err = g2.ParseUseExpandDescDir(descDir)
+		if err != nil {
+			return results
+		}
+	}
+	if len(useExpandDescs) == 0 {
 		return results // No descriptions available to validate against
 	}
 

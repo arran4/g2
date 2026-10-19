@@ -210,6 +210,12 @@ func (r *MD5CacheInvalidLintRule) Lint(repoDir string, pkg *g2.PackageData) []li
 }
 
 func (r *MD5CacheInvalidLintRule) LintWithQA(repoDir string, pkg *g2.PackageData, qa *g2.QAPolicy) []lints.LintResult {
+	if ctx := lints.GetRepoContext(repoDir); ctx != nil && ctx.FS != nil {
+		if !ctx.HasMD5CacheDir {
+			return nil
+		}
+		return r.LintFS(ctx.FS, ctx.RepoDirInFS, pkg, qa, ctx.HashEclass)
+	}
 	return r.LintFS(os.DirFS(repoDir), repoDir, pkg, qa, r.getEclassMD5)
 }
 
