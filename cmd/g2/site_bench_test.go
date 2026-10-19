@@ -132,8 +132,9 @@ func TestPrepareAggregatedDataLargeScaleSpeed(t *testing.T) {
 			DefinedEclasses:  []g2.EclassData{{Name: "distutils-r1"}, {Name: "cargo"}},
 			UseDesc: &g2.UseDesc{
 				Flags: map[string]string{
-					"test": "Enable tests",
-					"doc":  "Build documentation",
+					"test":             "Enable tests",
+					"doc":              "Build documentation",
+					"unused-in-repo-0": "Flag defined in UseDesc before any package uses it",
 				},
 			},
 			ValidUseExpands: map[string]bool{"python_targets": true},
@@ -164,6 +165,16 @@ func TestPrepareAggregatedDataLargeScaleSpeed(t *testing.T) {
 				// Shared package across overlays
 				pkgName = fmt.Sprintf("py-shared-%d", p)
 			}
+			var useBlocks []g2.Use
+			if r > 0 {
+				useBlocks = []g2.Use{
+					{
+						Flags: []g2.Flag{
+							{Name: "unused-in-repo-0", Text: "Used in subsequent overlay"},
+						},
+					},
+				}
+			}
 			pkgData := g2.PackageData{
 				Name:                pkgName,
 				Category:            "dev-python",
@@ -173,6 +184,7 @@ func TestPrepareAggregatedDataLargeScaleSpeed(t *testing.T) {
 					Maintainers: []g2.Maintainer{
 						{Email: "python@example.com", Name: "Python Project", Type: "project"},
 					},
+					Use: useBlocks,
 				},
 				Versions: []g2.VersionData{
 					{

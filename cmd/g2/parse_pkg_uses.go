@@ -23,6 +23,8 @@ func AggregateUseFlags(sites []*g2.SiteData, aggPackages map[string]*AggPackage)
 			}
 			globalAggUseFlags[flag] = aggFlag
 			globalSeenPkgs[flag] = make(map[string]bool)
+		} else if globalSeenPkgs[flag] == nil {
+			globalSeenPkgs[flag] = make(map[string]bool)
 		}
 		if !globalSeenPkgs[flag][pkgKey] && aggPackages != nil {
 			if ap, ok := aggPackages[pkgKey]; ok {
@@ -47,6 +49,8 @@ func AggregateUseFlags(sites []*g2.SiteData, aggPackages map[string]*AggPackage)
 					MetadataDescs: make(map[string]string),
 				}
 				repoAggUseFlags[flag] = aggFlag
+				repoSeenPkgs[flag] = make(map[string]bool)
+			} else if repoSeenPkgs[flag] == nil {
 				repoSeenPkgs[flag] = make(map[string]bool)
 			}
 			if !repoSeenPkgs[flag][pkgKey] && aggPackages != nil {
@@ -121,6 +125,7 @@ func AggregateUseFlags(sites []*g2.SiteData, aggPackages map[string]*AggPackage)
 						LocalDescs:    make(map[string]string),
 						MetadataDescs: make(map[string]string),
 					}
+					globalSeenPkgs[flag] = make(map[string]bool)
 				}
 				globalAggUseFlags[flag].GlobalDesc = desc
 
@@ -131,6 +136,7 @@ func AggregateUseFlags(sites []*g2.SiteData, aggPackages map[string]*AggPackage)
 						LocalDescs:    make(map[string]string),
 						MetadataDescs: make(map[string]string),
 					}
+					repoSeenPkgs[flag] = make(map[string]bool)
 				}
 				repoAggUseFlags[flag].GlobalDesc = desc
 			}
