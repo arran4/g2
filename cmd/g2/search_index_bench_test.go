@@ -7,7 +7,7 @@ import (
 
 func BenchmarkDeduplicateStrings(b *testing.B) {
 	var input []string
-	for i := 0; i < 1000; i++ {
+	for i := range 1000 {
 		input = append(input, fmt.Sprintf("str-%d", i%100))
 	}
 	b.ResetTimer()

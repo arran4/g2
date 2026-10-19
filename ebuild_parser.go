@@ -272,8 +272,8 @@ func (p *EbuildParser) Parse() (ParsedEbuild, error) {
 				if err != nil && !errors.Is(err, io.EOF) {
 					return result, err
 				}
-				if strings.HasSuffix(ident, "+") {
-					ident = strings.TrimSuffix(ident, "+")
+				if before, ok := strings.CutSuffix(ident, "+"); ok {
+					ident = before
 					result.Assignments = append(result.Assignments, VariableAssignment{Name: ident, Value: val, Append: true})
 					if result.Variables[ident] != "" {
 						result.Variables[ident] += " " + val

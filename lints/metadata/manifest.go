@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 
 	"github.com/arran4/g2"
 	"github.com/arran4/g2/lints"
@@ -95,13 +96,7 @@ func (r *ManifestLintRule) LintWithQA(repoDir string, pkg *g2.PackageData, qa *g
 
 		if len(manifestHashes) > 0 {
 			for _, hash := range entry.Hashes {
-				allowed := false
-				for _, allowedHash := range manifestHashes {
-					if hash.Type == allowedHash {
-						allowed = true
-						break
-					}
-				}
+				allowed := slices.Contains(manifestHashes, hash.Type)
 				if !allowed {
 					res := lints.LintResult{
 						RuleMetadata: ruleManifestChecks,

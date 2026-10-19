@@ -75,7 +75,6 @@ func TestDeduplicateEbuildsTxtar(t *testing.T) {
 	sort.Strings(cases)
 
 	for _, tc := range cases {
-		tc := tc
 		t.Run(strings.TrimSuffix(path.Base(tc), ".txtar"), func(t *testing.T) {
 			raw, err := deduplicateEbuildsCases.ReadFile(tc)
 			if err != nil {
