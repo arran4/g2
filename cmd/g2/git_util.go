@@ -150,73 +150,6 @@ func (g *repoGitInfo) fileModTime(relPath string) time.Time {
 	return time.Now()
 }
 
-func getFileModTime(repoDir string, relPath string, fast bool) time.Time {
-	repo, err := git.PlainOpen(repoDir)
-	if err == nil {
-		head, err := repo.Head()
-		if err == nil {
-			if fast {
-				commitIter, err := repo.Log(&git.LogOptions{
-					From:     head.Hash(),
-					FileName: &relPath,
-				})
-				if err == nil {
-					commit, err := commitIter.Next()
-					if err == nil && commit != nil {
-						return commit.Author.When
-					}
-				}
-			} else {
-				commitIter, err := repo.Log(&git.LogOptions{From: head.Hash()})
-				if err == nil {
-					var modTime time.Time
-					err = commitIter.ForEach(func(c *object.Commit) error {
-						file, err := c.File(relPath)
-						if err != nil {
-							return nil // file not found in this commit
-						}
-
-						if c.NumParents() == 0 {
-							modTime = c.Author.When
-							return fmt.Errorf("found")
-						}
-
-						foundSame := false
-						for i := 0; i < c.NumParents(); i++ {
-							parent, err := c.Parent(i)
-							if err != nil {
-								continue
-							}
-							parentFile, err := parent.File(relPath)
-							if err == nil && parentFile.Hash == file.Hash {
-								foundSame = true
-								break
-							}
-						}
-
-						if !foundSame {
-							modTime = c.Author.When
-							return fmt.Errorf("found")
-						}
-
-						return nil
-					})
-
-					if err != nil && err.Error() == "found" {
-						return modTime
-					}
-				}
-			}
-		}
-	}
-
-	info, err := os.Stat(filepath.Join(repoDir, relPath))
-	if err == nil {
-		return info.ModTime()
-	}
-	return time.Now()
-}
-
 func getGitOriginURL(repoDir string) (string, error) {
 	if repoDir == "" {
 		return "", fmt.Errorf("empty repoDir")
@@ -235,16 +168,6 @@ func getGitOriginURL(repoDir string) (string, error) {
 		return "", fmt.Errorf("remote.origin.url is empty")
 	}
 	return url, nil
-}
-
-func getFileCommit(repoDir string, filepath string) (string, error) {
-	cmd := exec.Command("git", "log", "-n", "1", "--pretty=format:%H", "--", filepath)
-	cmd.Dir = repoDir
-	out, err := cmd.Output()
-	if err != nil {
-		return "", fmt.Errorf("getting file commit: %w", err)
-	}
-	return strings.TrimSpace(string(out)), nil
 }
 
 func generateGitHubRawURL(remoteURL, commitHash, relativeFilepath string) string {
