@@ -26,6 +26,8 @@ func init() {
 	lints.RegisterLintRule(&DependencyNoRevisionLintRule{})
 }
 
+var revisionRe = regexp.MustCompile(`-r\d+$`)
+
 type DependencyNoRevisionLintRule struct{}
 
 func (r *DependencyNoRevisionLintRule) Lint(repoDir string, pkg *g2.PackageData) []lints.LintResult {
@@ -35,7 +37,6 @@ func (r *DependencyNoRevisionLintRule) Lint(repoDir string, pkg *g2.PackageData)
 func (r *DependencyNoRevisionLintRule) LintWithQA(repoDir string, pkg *g2.PackageData, qa *g2.QAPolicy) []lints.LintResult {
 	var results []lints.LintResult
 	severity := ruleDependencyNoRevision.Severity
-	revisionRe := regexp.MustCompile(`-r\d+$`)
 
 	if qa != nil {
 		if val, ok := qa.Policies["PG0002"]; ok {

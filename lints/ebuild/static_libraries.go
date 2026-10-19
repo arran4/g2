@@ -114,9 +114,8 @@ func (l *StaticLibrariesLintRule) LintWithQA(repoDir string, pkgData *g2.Package
 			continue
 		}
 
-		parser := syntax.NewParser()
-		f, err := parser.Parse(strings.NewReader(version.Ebuild.RawText), "")
-		if err != nil {
+		f, err := version.Ebuild.ParsedSyntax()
+		if err != nil || f == nil {
 			continue
 		}
 

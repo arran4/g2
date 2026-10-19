@@ -3,7 +3,6 @@ package ebuild
 import (
 	"fmt"
 	"strconv"
-	"strings"
 
 	"github.com/arran4/g2"
 	"github.com/arran4/g2/lints"
@@ -54,9 +53,8 @@ func (r *BannedVariablesLintRule) Lint(repoDir string, pkg *g2.PackageData) []li
 			"INSDESTTREE": 7,
 		}
 
-		parser := syntax.NewParser()
-		f, err := parser.Parse(strings.NewReader(ver.Ebuild.RawText), "")
-		if err != nil {
+		f, err := ver.Ebuild.ParsedSyntax()
+		if err != nil || f == nil {
 			continue
 		}
 

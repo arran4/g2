@@ -1,7 +1,9 @@
 package metadata
 
 import (
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 
@@ -52,9 +54,19 @@ func (r *ManifestLintRule) LintWithQA(repoDir string, pkg *g2.PackageData, qa *g
 	}
 
 	// layout.conf checks
-	layoutConfPath := filepath.Join(repoDir, "metadata", "layout.conf")
-	lc, err := g2.ParseLayoutConf(layoutConfPath)
-	if err != nil {
+	ctx := lints.GetRepoContext(repoDir)
+	var lc *g2.LayoutConf
+	if ctx != nil {
+		lc = ctx.LayoutConf
+	} else {
+		layoutConfPath := filepath.Join(repoDir, "metadata", "layout.conf")
+		var err error
+		lc, err = g2.ParseLayoutConf(layoutConfPath)
+		if err != nil {
+			return results
+		}
+	}
+	if lc == nil {
 		return results
 	}
 
@@ -104,15 +116,25 @@ func (r *ManifestLintRule) LintWithQA(repoDir string, pkg *g2.PackageData, qa *g
 
 		// Ensure the file exists if it's expected to be in the tree
 		if entry.Type == "EBUILD" || entry.Type == "MISC" || entry.Type == "AUX" {
-			var filePath string
-			if entry.Type == "AUX" {
-				filePath = filepath.Join(repoDir, pkg.Category, pkg.Name, "files", entry.Filename)
+			var err error
+			if ctx != nil && ctx.FS != nil {
+				var relPath string
+				if entry.Type == "AUX" {
+					relPath = filepath.ToSlash(filepath.Join(ctx.RepoDirInFS, pkg.Category, pkg.Name, "files", entry.Filename))
+				} else {
+					relPath = filepath.ToSlash(filepath.Join(ctx.RepoDirInFS, pkg.Category, pkg.Name, entry.Filename))
+				}
+				_, err = fs.Stat(ctx.FS, relPath)
 			} else {
-				filePath = filepath.Join(repoDir, pkg.Category, pkg.Name, entry.Filename)
+				var filePath string
+				if entry.Type == "AUX" {
+					filePath = filepath.Join(repoDir, pkg.Category, pkg.Name, "files", entry.Filename)
+				} else {
+					filePath = filepath.Join(repoDir, pkg.Category, pkg.Name, entry.Filename)
+				}
+				_, err = os.Stat(filePath)
 			}
-
-			_, err := os.Stat(filePath)
-			if os.IsNotExist(err) {
+			if errors.Is(err, fs.ErrNotExist) || os.IsNotExist(err) {
 				res := lints.LintResult{
 					RuleMetadata: ruleManifestChecks,
 					Message:      fmt.Sprintf("[%s] Manifest entry %s references a missing file", cases.Title(language.English).String(string(lints.SeverityError)), entry.Filename),

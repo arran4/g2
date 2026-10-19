@@ -11,9 +11,53 @@ import (
 // and returns the sorted global UseFlags list. It also aggregates per-repo USE flags inside g2.SiteData.
 func AggregateUseFlags(sites []*g2.SiteData, aggPackages map[string]*AggPackage) ([]*AggUseFlag, map[string]*AggUseFlag) {
 	globalAggUseFlags := make(map[string]*AggUseFlag)
+	globalSeenPkgs := make(map[string]map[string]bool)
+
+	addGlobalPkg := func(flag string, pkgKey string) *AggUseFlag {
+		aggFlag, ok := globalAggUseFlags[flag]
+		if !ok {
+			aggFlag = &AggUseFlag{
+				Name:          flag,
+				LocalDescs:    make(map[string]string),
+				MetadataDescs: make(map[string]string),
+			}
+			globalAggUseFlags[flag] = aggFlag
+			globalSeenPkgs[flag] = make(map[string]bool)
+		}
+		if !globalSeenPkgs[flag][pkgKey] && aggPackages != nil {
+			if ap, ok := aggPackages[pkgKey]; ok {
+				aggFlag.Packages = append(aggFlag.Packages, ap)
+				aggFlag.Count++
+				globalSeenPkgs[flag][pkgKey] = true
+			}
+		}
+		return aggFlag
+	}
 
 	for _, site := range sites {
 		repoAggUseFlags := make(map[string]*AggUseFlag)
+		repoSeenPkgs := make(map[string]map[string]bool)
+
+		addRepoPkg := func(flag string, pkgKey string) *AggUseFlag {
+			aggFlag, ok := repoAggUseFlags[flag]
+			if !ok {
+				aggFlag = &AggUseFlag{
+					Name:          flag,
+					LocalDescs:    make(map[string]string),
+					MetadataDescs: make(map[string]string),
+				}
+				repoAggUseFlags[flag] = aggFlag
+				repoSeenPkgs[flag] = make(map[string]bool)
+			}
+			if !repoSeenPkgs[flag][pkgKey] && aggPackages != nil {
+				if ap, ok := aggPackages[pkgKey]; ok {
+					aggFlag.Packages = append(aggFlag.Packages, ap)
+					aggFlag.Count++
+					repoSeenPkgs[flag][pkgKey] = true
+				}
+			}
+			return aggFlag
+		}
 
 		for _, pkg := range site.Categories {
 			for _, p := range pkg.Packages {
@@ -21,63 +65,16 @@ func AggregateUseFlags(sites []*g2.SiteData, aggPackages map[string]*AggPackage)
 
 				if p.Metadata != nil {
 					pkgMd := p.Metadata
-					if pkgMd != nil {
-						for _, useBlock := range pkgMd.Use {
-							for _, flag := range useBlock.Flags {
-								// Global
-								if _, ok := globalAggUseFlags[flag.Name]; !ok {
-									globalAggUseFlags[flag.Name] = &AggUseFlag{
-										Name:          flag.Name,
-										LocalDescs:    make(map[string]string),
-										MetadataDescs: make(map[string]string),
-									}
-								}
-								// Global logic
-								foundPkgGlobal := false
-								for _, pkgObj := range globalAggUseFlags[flag.Name].Packages {
-									if pkgObj.Name == p.Name && pkgObj.Category == p.Category {
-										foundPkgGlobal = true
-										break
-									}
-								}
-								if !foundPkgGlobal && aggPackages != nil {
-									if ap, ok := aggPackages[pkgKey]; ok {
-										globalAggUseFlags[flag.Name].Packages = append(globalAggUseFlags[flag.Name].Packages, ap)
-										globalAggUseFlags[flag.Name].Count++
-									}
-								}
+					for _, useBlock := range pkgMd.Use {
+						for _, flag := range useBlock.Flags {
+							gFlag := addGlobalPkg(flag.Name, pkgKey)
+							if flag.Text != "" {
+								gFlag.MetadataDescs[pkgKey] = flag.Text
+							}
 
-								if flag.Text != "" {
-									globalAggUseFlags[flag.Name].MetadataDescs[pkgKey] = flag.Text
-								}
-
-								// Repo
-								if _, ok := repoAggUseFlags[flag.Name]; !ok {
-									repoAggUseFlags[flag.Name] = &AggUseFlag{
-										Name:          flag.Name,
-										LocalDescs:    make(map[string]string),
-										MetadataDescs: make(map[string]string),
-									}
-								}
-
-								// Repo logic
-								foundPkgRepo := false
-								for _, pkgObj := range repoAggUseFlags[flag.Name].Packages {
-									if pkgObj.Name == p.Name && pkgObj.Category == p.Category {
-										foundPkgRepo = true
-										break
-									}
-								}
-								if !foundPkgRepo && aggPackages != nil {
-									if ap, ok := aggPackages[pkgKey]; ok {
-										repoAggUseFlags[flag.Name].Packages = append(repoAggUseFlags[flag.Name].Packages, ap)
-										repoAggUseFlags[flag.Name].Count++
-									}
-								}
-
-								if flag.Text != "" {
-									repoAggUseFlags[flag.Name].MetadataDescs[pkgKey] = flag.Text
-								}
+							rFlag := addRepoPkg(flag.Name, pkgKey)
+							if flag.Text != "" {
+								rFlag.MetadataDescs[pkgKey] = flag.Text
 							}
 						}
 					}
@@ -91,52 +88,8 @@ func AggregateUseFlags(sites []*g2.SiteData, aggPackages map[string]*AggPackage)
 							parsedFlags := parseIUSEFlagsFunc(iuse)
 							for _, flagObj := range parsedFlags {
 								flag := flagObj.Name
-								// Global
-								if _, ok := globalAggUseFlags[flag]; !ok {
-									globalAggUseFlags[flag] = &AggUseFlag{
-										Name:          flag,
-										LocalDescs:    make(map[string]string),
-										MetadataDescs: make(map[string]string),
-									}
-								}
-								// Repo
-								if _, ok := repoAggUseFlags[flag]; !ok {
-									repoAggUseFlags[flag] = &AggUseFlag{
-										Name:          flag,
-										LocalDescs:    make(map[string]string),
-										MetadataDescs: make(map[string]string),
-									}
-								}
-
-								// Global logic
-								foundPkgGlobal := false
-								for _, pkgObj := range globalAggUseFlags[flag].Packages {
-									if pkgObj.Name == p.Name && pkgObj.Category == p.Category {
-										foundPkgGlobal = true
-										break
-									}
-								}
-								if !foundPkgGlobal && aggPackages != nil {
-									if ap, ok := aggPackages[pkgKey]; ok {
-										globalAggUseFlags[flag].Packages = append(globalAggUseFlags[flag].Packages, ap)
-										globalAggUseFlags[flag].Count++
-									}
-								}
-
-								// Repo logic
-								foundPkgRepo := false
-								for _, pkgObj := range repoAggUseFlags[flag].Packages {
-									if pkgObj.Name == p.Name && pkgObj.Category == p.Category {
-										foundPkgRepo = true
-										break
-									}
-								}
-								if !foundPkgRepo && aggPackages != nil {
-									if ap, ok := aggPackages[pkgKey]; ok {
-										repoAggUseFlags[flag].Packages = append(repoAggUseFlags[flag].Packages, ap)
-										repoAggUseFlags[flag].Count++
-									}
-								}
+								addGlobalPkg(flag, pkgKey)
+								addRepoPkg(flag, pkgKey)
 							}
 						}
 
@@ -150,53 +103,8 @@ func AggregateUseFlags(sites []*g2.SiteData, aggPackages map[string]*AggPackage)
 									continue
 								}
 								flag = strings.TrimPrefix(flag, "!") // remove negations
-
-								// Global
-								if _, ok := globalAggUseFlags[flag]; !ok {
-									globalAggUseFlags[flag] = &AggUseFlag{
-										Name:          flag,
-										LocalDescs:    make(map[string]string),
-										MetadataDescs: make(map[string]string),
-									}
-								}
-								// Repo
-								if _, ok := repoAggUseFlags[flag]; !ok {
-									repoAggUseFlags[flag] = &AggUseFlag{
-										Name:          flag,
-										LocalDescs:    make(map[string]string),
-										MetadataDescs: make(map[string]string),
-									}
-								}
-
-								// Global
-								foundPkgGlobal := false
-								for _, pkgObj := range globalAggUseFlags[flag].Packages {
-									if pkgObj.Name == p.Name && pkgObj.Category == p.Category {
-										foundPkgGlobal = true
-										break
-									}
-								}
-								if !foundPkgGlobal && aggPackages != nil {
-									if ap, ok := aggPackages[pkgKey]; ok {
-										globalAggUseFlags[flag].Packages = append(globalAggUseFlags[flag].Packages, ap)
-										globalAggUseFlags[flag].Count++
-									}
-								}
-
-								// Repo
-								foundPkgRepo := false
-								for _, pkgObj := range repoAggUseFlags[flag].Packages {
-									if pkgObj.Name == p.Name && pkgObj.Category == p.Category {
-										foundPkgRepo = true
-										break
-									}
-								}
-								if !foundPkgRepo && aggPackages != nil {
-									if ap, ok := aggPackages[pkgKey]; ok {
-										repoAggUseFlags[flag].Packages = append(repoAggUseFlags[flag].Packages, ap)
-										repoAggUseFlags[flag].Count++
-									}
-								}
+								addGlobalPkg(flag, pkgKey)
+								addRepoPkg(flag, pkgKey)
 							}
 						}
 					}

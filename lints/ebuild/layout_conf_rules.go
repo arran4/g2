@@ -38,9 +38,18 @@ func (r *LayoutConfLintRule) LintWithQA(repoDir string, pkg *g2.PackageData, qa 
 	var results []lints.LintResult
 	severity := lints.SeverityWarning
 
-	layoutConfPath := filepath.Join(repoDir, "metadata", "layout.conf")
-	lc, err := g2.ParseLayoutConf(layoutConfPath)
-	if err != nil {
+	var lc *g2.LayoutConf
+	if ctx := lints.GetRepoContext(repoDir); ctx != nil {
+		lc = ctx.LayoutConf
+	} else {
+		layoutConfPath := filepath.Join(repoDir, "metadata", "layout.conf")
+		var err error
+		lc, err = g2.ParseLayoutConf(layoutConfPath)
+		if err != nil {
+			return results
+		}
+	}
+	if lc == nil {
 		return results
 	}
 

@@ -1618,6 +1618,7 @@ func generateSite(outDir string, sites []*g2.SiteData, recentDuration time.Durat
 					Name:                pkg.Name,
 					Category:            cat.Name,
 					Repos:               map[string]*g2.SiteData{site.RepoName: site},
+					RepoVersions:        map[string][]g2.VersionData{site.RepoName: pkg.Versions},
 					DominantDescription: pkg.DominantDescription,
 					DominantHomepage:    pkg.DominantHomepage,
 					DominantLicense:     pkg.DominantLicense,
@@ -1676,16 +1677,8 @@ func generateSite(outDir string, sites []*g2.SiteData, recentDuration time.Durat
 
 	totalNodes := len(data.Categories) + data.TotalPackages + len(data.Profiles) + len(data.GlobalNews) + len(data.Moves) + len(data.Eclasses)
 	for _, pkg := range data.Packages {
-		for _, repoSite := range pkg.Repos {
-			for _, cat := range repoSite.Categories {
-				if cat.Name == pkg.Category {
-					for _, repoPkg := range cat.Packages {
-						if repoPkg.Name == pkg.Name {
-							totalNodes += len(repoPkg.Versions)
-						}
-					}
-				}
-			}
+		for repoName := range pkg.Repos {
+			totalNodes += len(pkg.GetVersionsInRepo(repoName))
 		}
 	}
 

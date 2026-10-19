@@ -194,7 +194,7 @@ jobs:
   prepare-release-tag:
     name: Prepare Release Tag
     needs: [route, release-ready]
-    if: ${{ needs.route.outputs.run_release == 'true' }}
+    if: ${{ always() && needs.release-ready.result == 'success' && needs.route.outputs.run_release == 'true' }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -554,7 +554,7 @@ jobs:
   goreleaser:
     name: Release Publisher
     needs: [route, release-ready, discover]
-    if: ${{ needs.route.outputs.run_publisher == 'true' && needs.discover.outputs.has_goreleaser == 'true' }}
+    if: ${{ always() && needs.release-ready.result == 'success' && needs.route.outputs.run_publisher == 'true' && needs.discover.outputs.has_goreleaser == 'true' }}
     runs-on: ubuntu-latest
     permissions:
       contents: write

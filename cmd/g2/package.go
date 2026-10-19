@@ -526,7 +526,7 @@ func (cfg *CmdPackageArgConfig) cmdIndexOverlay(args []string) error {
 	log.Printf("Indexing overlay: %s", overlayPath)
 
 	sysFS := os.DirFS(overlayPath)
-	repo, err := parseRepo(sysFS, overlayPath, "local", false, nil)
+	repo, err := parseRepo(sysFS, ".", "local", false, nil, LocalRepoDir(overlayPath))
 	if err != nil {
 		return fmt.Errorf("failed to parse repo: %w", err)
 	}
@@ -603,7 +603,7 @@ func (cfg *CmdPackageArgConfig) cmdIndexRepositories(args []string) error {
 		overlayPath := rep.Sources[0].Text
 		sysFS := os.DirFS(overlayPath)
 		repCopy := rep
-		r, err := parseRepo(sysFS, overlayPath, rep.Name, false, &repCopy)
+		r, err := parseRepo(sysFS, ".", rep.Name, false, &repCopy, LocalRepoDir(overlayPath))
 		if err != nil {
 			log.Printf("failed to parse repo %s: %v", overlayPath, err)
 			continue
@@ -696,7 +696,7 @@ func (cfg *CmdPackageArgConfig) cmdIndex(args []string) error {
 	var sites []*g2.SiteData
 	for _, overlayPath := range overlayPaths {
 		sysFS := os.DirFS(overlayPath)
-		repo, err := parseRepo(sysFS, overlayPath, "local", false, nil)
+		repo, err := parseRepo(sysFS, ".", "local", false, nil, LocalRepoDir(overlayPath))
 		if err != nil {
 			log.Printf("failed to parse repo %s: %v", overlayPath, err)
 			continue

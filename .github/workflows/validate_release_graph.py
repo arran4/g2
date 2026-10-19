@@ -70,7 +70,10 @@ def run_tests():
 
     prepare = jobs.get('prepare-release-tag')
     assert prepare, "prepare-release-tag missing"
-    assert "needs.route.outputs.run_release == 'true'" in prepare.get('if', ''), "prepare-release-tag must require run_release == 'true'"
+    p_if = prepare.get('if', '')
+    assert "always()" in p_if, "prepare-release-tag must use always() because transitive needs via release-ready may be skipped"
+    assert "needs.release-ready.result == 'success'" in p_if, "prepare-release-tag must require release-ready success"
+    assert "needs.route.outputs.run_release == 'true'" in p_if, "prepare-release-tag must require run_release == 'true'"
 
     validation = jobs.get('release-ready')
     assert validation, "release-ready job missing"
@@ -108,6 +111,8 @@ def run_tests():
     assert goreleaser, "goreleaser/publisher job missing"
     g_if = goreleaser.get('if', '')
 
+    assert "always()" in g_if, "goreleaser must use always() so skipped code-check ancestors in publish-tag mode do not skip publishing"
+    assert "needs.release-ready.result == 'success'" in g_if, "goreleaser must require release-ready success"
     assert "needs.route.outputs.run_publisher == 'true'" in g_if, "goreleaser must require run_publisher == 'true'"
     assert "needs.route.outputs.run_release == 'true'" not in g_if, "publisher must not be reachable directly from release preparation"
     assert "release-ready" in goreleaser.get('needs', []), "goreleaser must depend on release-ready"

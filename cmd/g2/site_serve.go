@@ -66,7 +66,7 @@ func (cfg *MainArgConfig) cmdSiteServe(args []string) error {
 	}
 	if isOverlayDir(location) {
 		log.Printf("Parsing local overlay at %s", location)
-		siteData, err := parseRepo(os.DirFS(location), ".", "Gentoo Packages", false, nil)
+		siteData, err := parseRepo(os.DirFS(location), ".", "Gentoo Packages", false, nil, LocalRepoDir(location))
 		if err != nil {
 			return fmt.Errorf("parsing repo %s: %w", location, err)
 		}
@@ -135,7 +135,7 @@ func (cfg *MainArgConfig) cmdSiteServe(args []string) error {
 					func() {
 						memManager.Acquire(defaultAlloc)
 						defer memManager.Release(defaultAlloc)
-						siteData, err = parseRepo(os.DirFS(repoPath), ".", repoName, false, nil)
+						siteData, err = parseRepo(os.DirFS(repoPath), ".", repoName, false, nil, LocalRepoDir(repoPath))
 					}()
 					if err != nil {
 						log.Printf("Warning: failed to parse repo %s: %v", repoName, err)
