@@ -24,8 +24,8 @@ func FetchMainGentooCategories() map[string]bool {
 			if resp.StatusCode == http.StatusOK {
 				data, err := io.ReadAll(resp.Body)
 				if err == nil {
-					lines := strings.Split(string(data), "\n")
-					for _, line := range lines {
+					lines := strings.SplitSeq(string(data), "\n")
+					for line := range lines {
 						cat := strings.TrimSpace(line)
 						if cat != "" && !strings.HasPrefix(cat, "#") {
 							mainGentooCategories[cat] = true

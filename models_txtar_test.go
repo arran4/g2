@@ -16,7 +16,7 @@ import (
 //go:embed testdata/models/*.txtar testdata/models_json/*.txtar
 var modelsTestdataFS embed.FS
 
-func assertStableParse(t *testing.T, xmlData []byte, model interface{}) {
+func assertStableParse(t *testing.T, xmlData []byte, model any) {
 	err := xml.Unmarshal(xmlData, model)
 	if err != nil {
 		t.Fatalf("unmarshal error: %v", err)
@@ -27,7 +27,7 @@ func assertStableParse(t *testing.T, xmlData []byte, model interface{}) {
 	}
 
 	modelType := reflect.TypeOf(model)
-	if modelType.Kind() == reflect.Ptr { //nolint:govet
+	if modelType.Kind() == reflect.Pointer { //nolint:govet
 		modelType = modelType.Elem()
 	}
 	model2 := reflect.New(modelType).Interface()
@@ -54,7 +54,6 @@ func TestModelsTxtar(t *testing.T) {
 	}
 
 	for _, fixture := range entries {
-		fixture := fixture
 		t.Run(strings.TrimSuffix(path.Base(fixture), ".txtar"), func(t *testing.T) {
 			raw, err := modelsTestdataFS.ReadFile(fixture)
 			if err != nil {
@@ -81,7 +80,7 @@ func TestModelsTxtar(t *testing.T) {
 				t.Fatalf("neither input.xml nor input.json found in fixture")
 			}
 
-			var model interface{}
+			var model any
 			if strings.Contains(fixture, "glsa") {
 				model = &GLSA{}
 			} else if strings.Contains(fixture, "pkgmetadata") {

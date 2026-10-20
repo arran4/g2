@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 
 	"io/fs"
 	"log"
@@ -271,7 +272,7 @@ func parseRepoCategoriesAndPackages(sysFS fs.FS, repoDir string, localRepoDir st
 
 	supportedCategories := make(map[string]bool)
 	if categoriesBytes, err := fs.ReadFile(sysFS, filepath.ToSlash(filepath.Join(repoDir, "profiles", "categories"))); err == nil {
-		for _, line := range strings.Split(string(categoriesBytes), "\n") {
+		for line := range strings.SplitSeq(string(categoriesBytes), "\n") {
 			cat := strings.TrimSpace(line)
 			if cat != "" && !strings.HasPrefix(cat, "#") {
 				supportedCategories[cat] = true
@@ -310,19 +311,16 @@ func parseRepoCategoriesAndPackages(sysFS fs.FS, repoDir string, localRepoDir st
 	for j := range site.InfoPkgs {
 		atom := site.InfoPkgs[j].PackageAtom
 		baseAtom := atom
-		if idx := strings.Index(atom, ":"); idx != -1 {
-			baseAtom = atom[:idx]
+		if before, _, ok := strings.Cut(atom, ":"); ok {
+			baseAtom = before
 		}
 		infoPkgsMap[baseAtom] = true
 	}
 
 	hasGentooMaster := false
 	if site.LayoutConf != nil {
-		for _, master := range site.LayoutConf.Masters() {
-			if master == "gentoo" {
-				hasGentooMaster = true
-				break
-			}
+		if slices.Contains(site.LayoutConf.Masters(), "gentoo") {
+			hasGentooMaster = true
 		}
 	}
 	mainCats := g2.FetchMainGentooCategories()
@@ -544,7 +542,7 @@ func parseRepoCategoriesAndPackages(sysFS fs.FS, repoDir string, localRepoDir st
 				continue
 			}
 			isMasked := true
-			for _, p := range strings.Fields(v.Ebuild.Vars["KEYWORDS"]) {
+			for p := range strings.FieldsSeq(v.Ebuild.Vars["KEYWORDS"]) {
 				if !strings.HasPrefix(p, "-") && !strings.HasPrefix(p, "~") {
 					isMasked = false
 					break
@@ -705,10 +703,7 @@ func parseRepoCategoriesAndPackages(sysFS fs.FS, repoDir string, localRepoDir st
 		grp.mu.Unlock()
 	}
 
-	numWorkers := runtime.GOMAXPROCS(0)
-	if numWorkers < 1 {
-		numWorkers = 1
-	}
+	numWorkers := max(runtime.GOMAXPROCS(0), 1)
 	if len(workItems) <= 1 || numWorkers == 1 {
 		for _, item := range workItems {
 			processPkg(item)
@@ -720,13 +715,11 @@ func parseRepoCategoriesAndPackages(sysFS fs.FS, repoDir string, localRepoDir st
 		itemCh := make(chan pkgWorkItem, numWorkers*2)
 		var wg sync.WaitGroup
 		for w := 0; w < numWorkers; w++ {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
+			wg.Go(func() {
 				for item := range itemCh {
 					processPkg(item)
 				}
-			}()
+			})
 		}
 		for _, item := range workItems {
 			itemCh <- item
