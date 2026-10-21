@@ -464,7 +464,7 @@ func cachePolicy(mode, masters, reposConf string) (*g2.CachePolicy, error) {
 	if masters == "" {
 		return policy, nil
 	}
-	for _, mapping := range strings.Split(masters, ",") {
+	for mapping := range strings.SplitSeq(masters, ",") {
 		name, location, ok := strings.Cut(mapping, "=")
 		if !ok || strings.TrimSpace(name) == "" || strings.TrimSpace(location) == "" {
 			return nil, fmt.Errorf("invalid --master-repo mapping %q (want name=path)", mapping)
@@ -488,7 +488,7 @@ func discoverCacheEbuilds(cfs g2.CacheFS, repoDir string) ([]cacheEbuild, error)
 	categoriesPath := filepath.ToSlash(filepath.Join(repoDir, "profiles", "categories"))
 	contents, err := fs.ReadFile(cfs, categoriesPath)
 	if err == nil {
-		for _, line := range strings.Split(string(contents), "\n") {
+		for line := range strings.SplitSeq(string(contents), "\n") {
 			name := strings.TrimSpace(line)
 			if name != "" && !strings.HasPrefix(name, "#") {
 				categoryNames = append(categoryNames, name)

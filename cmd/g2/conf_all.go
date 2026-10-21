@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"sort"
@@ -98,9 +99,9 @@ func (cfg *MainArgConfig) cmdConfAll(args []string) error {
 			// Just blindly try to clean it
 			if filepath.IsAbs(relProfilePath) {
 				p := filepath.Clean(relProfilePath)
-				idx := strings.Index(p, "profiles/")
-				if idx != -1 {
-					relProfilePath = p[idx+len("profiles/"):]
+				_, after, ok := strings.Cut(p, "profiles/")
+				if ok {
+					relProfilePath = after
 				}
 			}
 
@@ -153,9 +154,7 @@ func (cfg *MainArgConfig) cmdConfAll(args []string) error {
 					if content, ok := makeDefaults[parentPath]; ok {
 						vars, err := g2.ParseMakeConfContent(content, parentPath+"/make.defaults")
 						if err == nil {
-							for k, v := range vars {
-								mergedVars[k] = v
-							}
+							maps.Copy(mergedVars, vars)
 						}
 					}
 				}

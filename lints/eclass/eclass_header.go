@@ -62,8 +62,8 @@ func (r *EclassHeaderLintRule) LintWithQA(repoDir string, eclass *g2.Ebuild, qa 
 	hasMaintainerTag := false
 	hasBlurbTag := false
 
-	lines := strings.Split(eclass.RawText, "\n")
-	for _, line := range lines {
+	lines := strings.SplitSeq(eclass.RawText, "\n")
+	for line := range lines {
 		trimmed := strings.TrimSpace(line)
 		if strings.HasPrefix(trimmed, "# @ECLASS:") {
 			hasEclassTag = true

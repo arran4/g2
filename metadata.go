@@ -214,7 +214,7 @@ type Description struct {
 }
 
 // ParseMetadata parses a metadata.xml file and returns either a PkgMetadata or CatMetadata pointer (as interface{}), or an error.
-func ParseMetadata(path string) (interface{}, error) {
+func ParseMetadata(path string) (any, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, err
@@ -225,12 +225,12 @@ func ParseMetadata(path string) (interface{}, error) {
 }
 
 // ParseMetadataBytes parses metadata from a byte slice.
-func ParseMetadataBytes(data []byte) (interface{}, error) {
+func ParseMetadataBytes(data []byte) (any, error) {
 	return ParseMetadataFromReader(bytes.NewReader(data))
 }
 
 // ParseMetadataFromReader parses metadata from an io.Reader.
-func ParseMetadataFromReader(r io.Reader) (interface{}, error) {
+func ParseMetadataFromReader(r io.Reader) (any, error) {
 	// We need to read the whole thing to peek or just try to unmarshal.
 	// Since we don't know if it is pkgmetadata or catmetadata, we can decode into a struct that captures the root name.
 
@@ -256,7 +256,7 @@ func ParseMetadataFromReader(r io.Reader) (interface{}, error) {
 }
 
 // WriteMetadata writes the metadata to a file with proper headers.
-func WriteMetadata(path string, data interface{}) error {
+func WriteMetadata(path string, data any) error {
 	var output []byte
 	output = append(output, []byte(xml.Header)...)
 

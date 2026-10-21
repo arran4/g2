@@ -3,6 +3,8 @@ package main
 import (
 	"bufio"
 	"context"
+	"maps"
+	"slices"
 
 	"flag"
 	"fmt"
@@ -158,7 +160,6 @@ func (cfg *MainArgConfig) cmdOverlay(args []string) error {
 	g, _ := errgroup.WithContext(context.Background())
 
 	for _, task := range tasks {
-		task := task
 		g.Go(func() error {
 			isRemote := strings.HasPrefix(task.Location, "http://") || strings.HasPrefix(task.Location, "https://") || strings.HasPrefix(task.Location, "git://")
 			var parseLocation string
@@ -346,7 +347,7 @@ func parseLayoutConfFromFS(sysFS fs.FS, path string) (*g2.LayoutConf, error) {
 	return g2.ParseLayoutConfFromReader(file)
 }
 
-func parseMetadataFromFS(sysFS fs.FS, path string) (interface{}, error) {
+func parseMetadataFromFS(sysFS fs.FS, path string) (any, error) {
 	file, err := sysFS.Open(path)
 	if err != nil {
 		return nil, err
@@ -385,9 +386,9 @@ func getHighestVersionsAndCount(versions []g2.VersionData, site *g2.SiteData) ([
 		}
 
 		keywords := ver.Ebuild.Vars["KEYWORDS"]
-		parts := strings.Fields(keywords)
+		parts := strings.FieldsSeq(keywords)
 
-		for _, p := range parts {
+		for p := range parts {
 			if strings.HasPrefix(p, "-") {
 				continue
 			}
@@ -729,13 +730,7 @@ func extractVirtualDeps(site *g2.SiteData) {
 				pkg.VirtualDeps = append(pkg.VirtualDeps, dep)
 				if targetPkg, ok := pkgMap[dep]; ok {
 					virtualName := pkg.Category + "/" + pkg.Name
-					found := false
-					for _, v := range targetPkg.ReverseVirtuals {
-						if v == virtualName {
-							found = true
-							break
-						}
-					}
+					found := slices.Contains(targetPkg.ReverseVirtuals, virtualName)
 					if !found {
 						targetPkg.ReverseVirtuals = append(targetPkg.ReverseVirtuals, virtualName)
 					}
@@ -748,13 +743,7 @@ func extractVirtualDeps(site *g2.SiteData) {
 				if targetPkg, ok := pkgMap[dep]; ok {
 					for _, otherDep := range pkg.VirtualDeps {
 						if otherDep != dep {
-							found := false
-							for _, e := range targetPkg.Equivalents {
-								if e == otherDep {
-									found = true
-									break
-								}
-							}
+							found := slices.Contains(targetPkg.Equivalents, otherDep)
 							if !found {
 								targetPkg.Equivalents = append(targetPkg.Equivalents, otherDep)
 							}
@@ -915,14 +904,13 @@ func parseProfilesDirFS(sysFS fs.FS, repoDir string, entries []g2.ProfileDescEnt
 		var g errgroup.Group
 		var mu sync.Mutex
 		for _, fname := range fileNames {
-			fname := fname
 			g.Go(func() error {
 				b, err := fs.ReadFile(sysFS, path2.Join(path, fname))
 				if err == nil {
 					content := string(b)
 					var parents []string
 					if fname == "parent" {
-						for _, line := range strings.Split(content, "\n") {
+						for line := range strings.SplitSeq(content, "\n") {
 							line = strings.TrimSpace(line)
 							if line == "" || strings.HasPrefix(line, "#") {
 								continue
@@ -969,8 +957,8 @@ func parseProfilesDirFS(sysFS fs.FS, repoDir string, entries []g2.ProfileDescEnt
 
 func parseProfilesDesc(content string) []g2.ProfileDescEntry {
 	var entries []g2.ProfileDescEntry
-	lines := strings.Split(content, "\n")
-	for _, line := range lines {
+	lines := strings.SplitSeq(content, "\n")
+	for line := range lines {
 		line = strings.TrimSpace(line)
 		if line == "" || strings.HasPrefix(line, "#") {
 			continue
@@ -1072,8 +1060,8 @@ func getRepoEclasses(site *g2.SiteData, aggPackages map[string]*AggPackage) []*A
 				if ver.Ebuild != nil && ver.Ebuild.Vars != nil {
 					inherited := ver.Ebuild.Vars["INHERITED"]
 					if inherited != "" {
-						eclasses := strings.Fields(inherited)
-						for _, ec := range eclasses {
+						eclasses := strings.FieldsSeq(inherited)
+						for ec := range eclasses {
 							if _, ok := eclassMap[ec]; !ok {
 								eclassMap[ec] = &AggEclass{
 									Name:  ec,
@@ -1329,8 +1317,8 @@ func parseDuration(s string) (time.Duration, string, error) {
 	if s == "" {
 		return 90 * 24 * time.Hour, "3 months", nil
 	}
-	if strings.HasSuffix(s, "mo") {
-		val, err := strconv.Atoi(strings.TrimSuffix(s, "mo"))
+	if before, ok := strings.CutSuffix(s, "mo"); ok {
+		val, err := strconv.Atoi(before)
 		if err != nil {
 			return 0, "", err
 		}
@@ -1339,8 +1327,8 @@ func parseDuration(s string) (time.Duration, string, error) {
 		}
 		return time.Duration(val) * 30 * 24 * time.Hour, fmt.Sprintf("%d months", val), nil
 	}
-	if strings.HasSuffix(s, "d") {
-		val, err := strconv.Atoi(strings.TrimSuffix(s, "d"))
+	if before, ok := strings.CutSuffix(s, "d"); ok {
+		val, err := strconv.Atoi(before)
 		if err != nil {
 			return 0, "", err
 		}
@@ -1588,22 +1576,16 @@ func aggregateEclasses(sites []*g2.SiteData) map[string]*AggEclass {
 				}
 				eclassPkgMap[eclass.Name] = make(map[string]*AggPackage)
 			}
-			for rName, rData := range eclass.Repos {
-				aggEclasses[eclass.Name].Repos[rName] = rData
-			}
+			maps.Copy(aggEclasses[eclass.Name].Repos, eclass.Repos)
 			pkgMap := eclassPkgMap[eclass.Name]
 			for _, pkg := range eclass.Packages {
 				pkgKey := pkg.Category + "/" + pkg.Name
 				if existingPkg, ok := pkgMap[pkgKey]; ok {
-					for rName, rData := range pkg.Repos {
-						existingPkg.Repos[rName] = rData
-					}
+					maps.Copy(existingPkg.Repos, pkg.Repos)
 				} else {
 					newPkg := *pkg
 					newRepos := make(map[string]*g2.SiteData, len(pkg.Repos))
-					for k, v := range pkg.Repos {
-						newRepos[k] = v
-					}
+					maps.Copy(newRepos, pkg.Repos)
 					newPkg.Repos = newRepos
 					aggEclasses[eclass.Name].Packages = append(aggEclasses[eclass.Name].Packages, &newPkg)
 					pkgMap[pkgKey] = &newPkg
@@ -1670,13 +1652,7 @@ func aggregatePackagesAndCategories(sites []*g2.SiteData, aggProjects map[string
 				}
 				catPkgMap[cat.Name][pkg.Name] = aggPkg
 				for _, rev := range pkg.ReverseVirtuals {
-					found := false
-					for _, existingRev := range aggPkg.ReverseVirtuals {
-						if existingRev == rev {
-							found = true
-							break
-						}
-					}
+					found := slices.Contains(aggPkg.ReverseVirtuals, rev)
 					if !found {
 						aggPkg.ReverseVirtuals = append(aggPkg.ReverseVirtuals, rev)
 					}
@@ -1686,13 +1662,7 @@ func aggregatePackagesAndCategories(sites []*g2.SiteData, aggProjects map[string
 				}
 
 				for _, dep := range pkg.VirtualDeps {
-					found := false
-					for _, existingDep := range aggPkg.VirtualDeps {
-						if existingDep == dep {
-							found = true
-							break
-						}
-					}
+					found := slices.Contains(aggPkg.VirtualDeps, dep)
 					if !found {
 						aggPkg.VirtualDeps = append(aggPkg.VirtualDeps, dep)
 					}
@@ -1956,7 +1926,7 @@ var renderBufPool = sync.Pool{
 	},
 }
 
-func renderPage(path string, tmpl *template.Template, name string, data interface{}) error {
+func renderPage(path string, tmpl *template.Template, name string, data any) error {
 	f, err := os.Create(path)
 	if err != nil {
 		return fmt.Errorf("creating file %s: %w", path, err)
@@ -2137,20 +2107,16 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, 
 
 		// Clean workers
 		for i := 0; i < limit; i++ {
-			cleanWg.Add(1)
-			go func() {
-				defer cleanWg.Done()
+			cleanWg.Go(func() {
 				for task := range cleanCh {
 					_ = os.RemoveAll(task.repoPath)
 				}
-			}()
+			})
 		}
 
 		// Parse workers
 		for i := 0; i < limit; i++ {
-			parseWg.Add(1)
-			go func() {
-				defer parseWg.Done()
+			parseWg.Go(func() {
 				for task := range parseCh {
 					log.Printf("[START] Parsing repository: %s", task.repo.Name)
 
@@ -2284,14 +2250,12 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, 
 
 					allSitesMu.Unlock()
 				}
-			}()
+			})
 		}
 
 		// Fetch workers
 		for i := 0; i < limit; i++ {
-			fetchWg.Add(1)
-			go func() {
-				defer fetchWg.Done()
+			fetchWg.Go(func() {
 				for task := range fetchCh {
 					log.Printf("[START] Fetching remote repository: %s (%s)", task.repo.Name, task.gitUrl)
 
@@ -2345,7 +2309,7 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, 
 						checkoutTime: checkoutTime,
 					}
 				}
-			}()
+			})
 		}
 
 		for _, repo := range repos.Repositories {
@@ -2391,7 +2355,6 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, 
 		}
 
 		for _, repo := range repos.Repositories {
-			repo := repo // loop variable capture
 			if len(repo.Sources) == 0 {
 				continue
 			}

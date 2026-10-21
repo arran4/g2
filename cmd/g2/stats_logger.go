@@ -20,7 +20,7 @@ func logStats(action string, repoName string, duration time.Duration, repoPath s
 	runtime.ReadMemStats(&memStats)
 
 	var parts []string
-	var vals []interface{}
+	var vals []any
 
 	parts = append(parts, fmt.Sprintf("[DONE] Finished %s repository %%s in %%s.", action))
 	vals = append(vals, repoName, duration)

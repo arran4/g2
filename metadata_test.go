@@ -13,7 +13,7 @@ func TestParseMetadata(t *testing.T) {
 	tests := []struct {
 		name     string
 		path     string
-		wantType interface{}
+		wantType any
 		wantErr  bool
 	}{
 		{
@@ -123,7 +123,7 @@ func TestParseMetadataFromReader(t *testing.T) {
 	tests := []struct {
 		name     string
 		input    string
-		wantType interface{}
+		wantType any
 		wantErr  bool
 	}{
 		{

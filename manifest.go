@@ -101,8 +101,8 @@ func ParseManifest(path string) (*Manifest, error) {
 
 func ParseManifestContent(content string) (*Manifest, error) {
 	m := &Manifest{}
-	lines := strings.Split(content, "\n")
-	for _, line := range lines {
+	lines := strings.SplitSeq(content, "\n")
+	for line := range lines {
 		line = strings.TrimSpace(line)
 		if line == "" || strings.HasPrefix(line, "#") {
 			continue
