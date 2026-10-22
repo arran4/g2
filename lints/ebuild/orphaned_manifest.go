@@ -44,6 +44,12 @@ func (r *OrphanedManifestLintRule) LintWithQA(repoDir string, pkg *g2.PackageDat
 	if len(pkg.Versions) > 0 {
 		for _, ver := range pkg.Versions {
 			if ver.Ebuild != nil {
+				// An unresolved SRC_URI (including eclass-generated distfiles such
+				// as CARGO_CRATE_URIS) means the set of source files is incomplete.
+				// Do not assert that a Manifest DIST entry is orphaned.
+				if ver.Ebuild.SrcUriUncertain {
+					parseFailed = true
+				}
 				for _, uri := range ver.Ebuild.SrcUri {
 					if uri.Filename != "" {
 						usedFiles[uri.Filename] = true
@@ -60,6 +66,9 @@ func (r *OrphanedManifestLintRule) LintWithQA(repoDir string, pkg *g2.PackageDat
 				if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".ebuild") {
 					parsedEbuild, err := g2.ParseEbuild(ctx.FS, filepath.ToSlash(filepath.Join(pkgDir, entry.Name())), g2.ParseFull)
 					if err == nil {
+						if parsedEbuild.SrcUriUncertain {
+							parseFailed = true
+						}
 						for _, uri := range parsedEbuild.SrcUri {
 							usedFiles[uri.Filename] = true
 						}
@@ -77,6 +86,9 @@ func (r *OrphanedManifestLintRule) LintWithQA(repoDir string, pkg *g2.PackageDat
 				if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".ebuild") {
 					parsedEbuild, err := g2.ParseEbuild(os.DirFS(pkgDir), entry.Name(), g2.ParseFull)
 					if err == nil {
+						if parsedEbuild.SrcUriUncertain {
+							parseFailed = true
+						}
 						for _, uri := range parsedEbuild.SrcUri {
 							usedFiles[uri.Filename] = true
 						}
