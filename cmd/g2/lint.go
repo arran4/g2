@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 
@@ -188,21 +189,15 @@ func (cfg *MainArgConfig) runOldLint(args []string) error {
 					continue
 				}
 				if *tagFilter != "" {
-					hasTag := false
-					for _, t := range w.RuleMetadata.Tags {
-						if t == *tagFilter {
-							hasTag = true
-							break
-						}
-					}
+					hasTag := slices.Contains(w.RuleMetadata.Tags, *tagFilter)
 					if !hasTag {
 						continue
 					}
 				}
 				isIgnored := false
 				if *disableRule != "" {
-					disabled := strings.Split(*disableRule, ",")
-					for _, dr := range disabled {
+					disabled := strings.SplitSeq(*disableRule, ",")
+					for dr := range disabled {
 						if strings.EqualFold(string(w.RuleMetadata.ID), strings.TrimSpace(dr)) {
 							isIgnored = true
 							break
@@ -210,8 +205,8 @@ func (cfg *MainArgConfig) runOldLint(args []string) error {
 					}
 				}
 				if !isIgnored && *ignoreTag != "" {
-					ignoredTags := strings.Split(*ignoreTag, ",")
-					for _, it := range ignoredTags {
+					ignoredTags := strings.SplitSeq(*ignoreTag, ",")
+					for it := range ignoredTags {
 						it = strings.TrimSpace(it)
 						for _, t := range w.RuleMetadata.Tags {
 							if strings.EqualFold(t, it) {
@@ -406,21 +401,15 @@ func (cfg *MainArgConfig) runLintCore(location string, targetMap map[string]bool
 				continue
 			}
 			if tagFilter != "" {
-				hasTag := false
-				for _, t := range w.RuleMetadata.Tags {
-					if t == tagFilter {
-						hasTag = true
-						break
-					}
-				}
+				hasTag := slices.Contains(w.RuleMetadata.Tags, tagFilter)
 				if !hasTag {
 					continue
 				}
 			}
 			isIgnored := false
 			if disableRule != "" {
-				disabled := strings.Split(disableRule, ",")
-				for _, dr := range disabled {
+				disabled := strings.SplitSeq(disableRule, ",")
+				for dr := range disabled {
 					if strings.EqualFold(string(w.RuleMetadata.ID), strings.TrimSpace(dr)) {
 						isIgnored = true
 						break
@@ -428,8 +417,8 @@ func (cfg *MainArgConfig) runLintCore(location string, targetMap map[string]bool
 				}
 			}
 			if !isIgnored && ignoreTag != "" {
-				ignoredTags := strings.Split(ignoreTag, ",")
-				for _, it := range ignoredTags {
+				ignoredTags := strings.SplitSeq(ignoreTag, ",")
+				for it := range ignoredTags {
 					it = strings.TrimSpace(it)
 					for _, t := range w.RuleMetadata.Tags {
 						if strings.EqualFold(t, it) {
@@ -483,21 +472,15 @@ func (cfg *MainArgConfig) runLintCore(location string, targetMap map[string]bool
 				continue
 			}
 			if tagFilter != "" {
-				hasTag := false
-				for _, t := range w.RuleMetadata.Tags {
-					if t == tagFilter {
-						hasTag = true
-						break
-					}
-				}
+				hasTag := slices.Contains(w.RuleMetadata.Tags, tagFilter)
 				if !hasTag {
 					continue
 				}
 			}
 			isIgnored := false
 			if disableRule != "" {
-				disabled := strings.Split(disableRule, ",")
-				for _, dr := range disabled {
+				disabled := strings.SplitSeq(disableRule, ",")
+				for dr := range disabled {
 					if strings.EqualFold(string(w.RuleMetadata.ID), strings.TrimSpace(dr)) {
 						isIgnored = true
 						break
@@ -505,8 +488,8 @@ func (cfg *MainArgConfig) runLintCore(location string, targetMap map[string]bool
 				}
 			}
 			if !isIgnored && ignoreTag != "" {
-				ignoredTags := strings.Split(ignoreTag, ",")
-				for _, it := range ignoredTags {
+				ignoredTags := strings.SplitSeq(ignoreTag, ",")
+				for it := range ignoredTags {
 					it = strings.TrimSpace(it)
 					for _, t := range w.RuleMetadata.Tags {
 						if strings.EqualFold(t, it) {
@@ -643,21 +626,15 @@ func (cfg *MainArgConfig) runLintCore(location string, targetMap map[string]bool
 					continue
 				}
 				if tagFilter != "" {
-					hasTag := false
-					for _, t := range w.RuleMetadata.Tags {
-						if t == tagFilter {
-							hasTag = true
-							break
-						}
-					}
+					hasTag := slices.Contains(w.RuleMetadata.Tags, tagFilter)
 					if !hasTag {
 						continue
 					}
 				}
 				isIgnored := false
 				if disableRule != "" {
-					disabled := strings.Split(disableRule, ",")
-					for _, dr := range disabled {
+					disabled := strings.SplitSeq(disableRule, ",")
+					for dr := range disabled {
 						if strings.EqualFold(string(w.RuleMetadata.ID), strings.TrimSpace(dr)) {
 							isIgnored = true
 							break
@@ -665,8 +642,8 @@ func (cfg *MainArgConfig) runLintCore(location string, targetMap map[string]bool
 					}
 				}
 				if !isIgnored && ignoreTag != "" {
-					ignoredTags := strings.Split(ignoreTag, ",")
-					for _, it := range ignoredTags {
+					ignoredTags := strings.SplitSeq(ignoreTag, ",")
+					for it := range ignoredTags {
 						it = strings.TrimSpace(it)
 						for _, t := range w.RuleMetadata.Tags {
 							if strings.EqualFold(t, it) {

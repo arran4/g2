@@ -101,7 +101,6 @@ func TestCacheGenerate(t *testing.T) {
 	}
 
 	for _, fixture := range entries {
-		fixture := fixture
 		t.Run(strings.TrimSuffix(path.Base(fixture), ".txtar"), func(t *testing.T) {
 			raw, err := cacheTestdataFS.ReadFile(fixture)
 			if err != nil {
@@ -799,9 +798,9 @@ func TestCacheTransitiveInheritance(t *testing.T) {
 	}
 
 	eclassesLine := ""
-	for _, line := range strings.Split(content, "\n") {
-		if strings.HasPrefix(line, "_eclasses_=") {
-			eclassesLine = strings.TrimPrefix(line, "_eclasses_=")
+	for line := range strings.SplitSeq(content, "\n") {
+		if after, ok := strings.CutPrefix(line, "_eclasses_="); ok {
+			eclassesLine = after
 		}
 	}
 	parts := strings.Split(eclassesLine, "\t")
