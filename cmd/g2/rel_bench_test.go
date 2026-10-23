@@ -11,7 +11,7 @@ func BenchmarkRelToRootLoop(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		relToRoot := "../../"
-		for j := 0; j < count; j++ {
+		for range count {
 			relToRoot += "../"
 		}
 	}

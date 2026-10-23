@@ -573,7 +573,7 @@ func (cfg *CmdPackageArgConfig) cmdIndexRepositories(args []string) error {
 	var allowRepos map[string]bool
 	if *repoFilter != "" {
 		allowRepos = make(map[string]bool)
-		for _, repo := range strings.Split(*repoFilter, ",") {
+		for repo := range strings.SplitSeq(*repoFilter, ",") {
 			allowRepos[strings.TrimSpace(repo)] = true
 		}
 	}
@@ -645,7 +645,7 @@ func (cfg *CmdPackageArgConfig) cmdIndex(args []string) error {
 	var allowRepos map[string]bool
 	if *repoFilter != "" {
 		allowRepos = make(map[string]bool)
-		for _, repo := range strings.Split(*repoFilter, ",") {
+		for repo := range strings.SplitSeq(*repoFilter, ",") {
 			allowRepos[strings.TrimSpace(repo)] = true
 		}
 	}

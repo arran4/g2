@@ -408,7 +408,7 @@ func TestScalarOnlyOperators(t *testing.T) {
 		val, err := evaluator.Evaluate("get(" + ts.URL + "/whitespaced_list) | json(items) | trim")
 		assert.NoError(t, err)
 		assert.True(t, val.IsList())
-		assert.Equal(t, []interface{}{"  apple  ", "  banana  "}, val.List)
+		assert.Equal(t, []any{"  apple  ", "  banana  "}, val.List)
 
 		// But when reduced to a scalar, trim strips whitespace
 		scalarVal, err := evaluator.Evaluate("get(" + ts.URL + "/whitespaced_list) | json(items) | first | trim")
@@ -421,7 +421,7 @@ func TestScalarOnlyOperators(t *testing.T) {
 		val, err := evaluator.Evaluate("get(" + ts.URL + "/whitespaced_list) | json(items) | replace('apple', 'pear')")
 		assert.NoError(t, err)
 		assert.True(t, val.IsList())
-		assert.Equal(t, []interface{}{"  apple  ", "  banana  "}, val.List)
+		assert.Equal(t, []any{"  apple  ", "  banana  "}, val.List)
 
 		// But when reduced to a scalar, replace replaces
 		scalarVal, err := evaluator.Evaluate("get(" + ts.URL + "/whitespaced_list) | json(items) | first | replace('apple', 'pear')")
@@ -454,7 +454,7 @@ func TestCardinality(t *testing.T) {
 		name        string
 		pipeline    string
 		expectEmpty bool
-		expectValue interface{}
+		expectValue any
 		expectList  bool
 	}{
 		{"json bool", "get(" + ts.URL + "/json_bool) | json(k)", false, false, false},

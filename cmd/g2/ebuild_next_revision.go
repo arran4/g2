@@ -75,8 +75,8 @@ func sanitizeVersion(v string) string {
 	for {
 		changed := false
 		for _, suffix := range []string{".ebuild", ".tmp", ".tbz2", ".tar.gz", ".tar.bz2", ".tar.xz", ".tar.zst"} {
-			if strings.HasSuffix(v, suffix) {
-				v = strings.TrimSuffix(v, suffix)
+			if before, ok := strings.CutSuffix(v, suffix); ok {
+				v = before
 				changed = true
 			}
 		}

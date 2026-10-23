@@ -549,7 +549,7 @@ func generateSearchIndex(outDir string, sites []*g2.SiteData) error {
 		return fmt.Errorf("loading templates for search: %w", err)
 	}
 
-	if err := renderPage(filepath.Join(searchDir, "index.html"), tmpl, "search.html", map[string]interface{}{
+	if err := renderPage(filepath.Join(searchDir, "index.html"), tmpl, "search.html", map[string]any{
 		"Title":       "Search Overlays",
 		"BaseURL":     "../",
 		"Breadcrumbs": []g2.Breadcrumb{{Name: "Search"}},
@@ -578,8 +578,8 @@ func nextToken(s string) (token, rest string) {
 
 func getBucket(token string) string {
 	val := token
-	if idx := strings.Index(token, ":"); idx != -1 {
-		val = token[idx+1:]
+	if _, after, ok := strings.Cut(token, ":"); ok {
+		val = after
 	}
 	t := strings.ToLower(val)
 	var cleaned []rune
@@ -622,8 +622,8 @@ func tokenizeDocument(doc SearchDocument) []string {
 		}
 	}
 	// Fullname split by /
-	parts := strings.Split(doc.FullName, "/")
-	for _, p := range parts {
+	parts := strings.SplitSeq(doc.FullName, "/")
+	for p := range parts {
 		addToken(p)
 	}
 

@@ -7,6 +7,7 @@ import (
 	"io"
 	"io/fs"
 	"log"
+	"maps"
 	"os"
 	"path"
 	"path/filepath"
@@ -119,7 +120,7 @@ func GenerateCacheFS(cfs CacheFS, repoDir string, targetPkgs []string, policy *C
 		categoriesBytes, err := fs.ReadFile(cfs, filepath.ToSlash(filepath.Join(repoDir, "profiles", "categories")))
 		var categories []string
 		if err == nil {
-			for _, line := range strings.Split(string(categoriesBytes), "\n") {
+			for line := range strings.SplitSeq(string(categoriesBytes), "\n") {
 				cat := strings.TrimSpace(line)
 				if cat != "" && !strings.HasPrefix(cat, "#") {
 					categories = append(categories, cat)
@@ -432,9 +433,7 @@ func GetExpectedCacheContent(cfs CacheFS, ident CacheIdentity, ebuild *Ebuild, p
 	needsPortage := needsPortageEvaluation(ebuild)
 
 	metadataVars := make(map[string]string)
-	for k, v := range ebuild.Vars {
-		metadataVars[k] = v
-	}
+	maps.Copy(metadataVars, ebuild.Vars)
 
 	if needsPortage {
 		if policy == nil || policy.PortageContext == nil || ident.RepoName == "" {
@@ -606,7 +605,7 @@ func eclassClosure(resolver *EclassResolver, names []string, visiting, seen map[
 				return fmt.Errorf("eclass %q from repository %q contributes %s; canonical cache metadata requires Portage evaluation", name, repo.Name, key)
 			}
 		}
-		for _, child := range strings.Fields(parsed.Vars["INHERITED"]) {
+		for child := range strings.FieldsSeq(parsed.Vars["INHERITED"]) {
 			if err := visit(child); err != nil {
 				return err
 			}

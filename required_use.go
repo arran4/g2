@@ -22,8 +22,8 @@ func (f RequiredUseFlag) String() string {
 
 func (f RequiredUseFlag) Evaluate(context map[string]bool) bool {
 	// A flag starting with ! means it must NOT be set
-	if strings.HasPrefix(f.Name, "!") {
-		flagName := strings.TrimPrefix(f.Name, "!")
+	if after, ok := strings.CutPrefix(f.Name, "!"); ok {
+		flagName := after
 		return !context[flagName]
 	}
 	return context[f.Name]
@@ -251,8 +251,8 @@ func parseTokens(tokens []string, start int, end int) ([]RequiredUseNode, int, e
 			continue
 		}
 
-		if strings.HasSuffix(tok, "?") {
-			cond := strings.TrimSuffix(tok, "?")
+		if before, ok := strings.CutSuffix(tok, "?"); ok {
+			cond := before
 			if i+1 >= end || tokens[i+1] != "(" {
 				return nil, i, fmt.Errorf("expected '(' after conditional %s at token %d", tok, i)
 			}
