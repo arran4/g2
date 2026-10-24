@@ -76,7 +76,7 @@ type GenericPageContext struct {
 	Manifest              *g2.ManifestEntryData
 
 	// Legacy generic interface overrides for TmplPkgs and map
-	Category map[string]interface{}
+	Category map[string]any
 	Package  any
 	Packages any
 	UseFlag  any

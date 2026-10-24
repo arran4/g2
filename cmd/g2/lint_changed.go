@@ -79,7 +79,7 @@ func getGitModifiedPackagesChanged(repoDir string, explicitBase string) ([]strin
 		cmd.Dir = repoDir
 		out, err := cmd.Output()
 		if err == nil {
-			for _, f := range strings.Split(string(out), "\x00") {
+			for f := range strings.SplitSeq(string(out), "\x00") {
 				if f != "" {
 					files = append(files, f)
 				}

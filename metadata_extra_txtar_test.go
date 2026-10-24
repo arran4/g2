@@ -22,7 +22,6 @@ func TestMetadataExtraTxtar(t *testing.T) {
 	}
 
 	for _, fixture := range entries {
-		fixture := fixture
 		t.Run(strings.TrimSuffix(path.Base(fixture), ".txtar"), func(t *testing.T) {
 			raw, err := metadataExtraFS.ReadFile(fixture)
 			if err != nil {
@@ -52,7 +51,7 @@ func TestMetadataExtraTxtar(t *testing.T) {
 					t.Fatalf("ParseGLSABytes failed: %v", err)
 				}
 				// create a map representation for comparison to ignore XMLName
-				actualMap := make(map[string]interface{})
+				actualMap := make(map[string]any)
 				b, _ := json.Marshal(glsa)
 				_ = json.Unmarshal(b, &actualMap)
 				delete(actualMap, "XMLName")
@@ -62,7 +61,7 @@ func TestMetadataExtraTxtar(t *testing.T) {
 				if err != nil {
 					t.Fatalf("ParseMirrorsBytes failed: %v", err)
 				}
-				actualMap := make(map[string]interface{})
+				actualMap := make(map[string]any)
 				b, _ := json.Marshal(mirrors)
 				_ = json.Unmarshal(b, &actualMap)
 				delete(actualMap, "XMLName")
@@ -72,7 +71,7 @@ func TestMetadataExtraTxtar(t *testing.T) {
 				if err != nil {
 					t.Fatalf("ParseProjectsBytes failed: %v", err)
 				}
-				actualMap := make(map[string]interface{})
+				actualMap := make(map[string]any)
 				b, _ := json.Marshal(projects)
 				_ = json.Unmarshal(b, &actualMap)
 				delete(actualMap, "XMLName")
@@ -82,7 +81,7 @@ func TestMetadataExtraTxtar(t *testing.T) {
 				if err != nil {
 					t.Fatalf("ParseRepositoriesBytes failed: %v", err)
 				}
-				actualMap := make(map[string]interface{})
+				actualMap := make(map[string]any)
 				b, _ := json.Marshal(repositories)
 				_ = json.Unmarshal(b, &actualMap)
 				delete(actualMap, "XMLName")
@@ -92,7 +91,7 @@ func TestMetadataExtraTxtar(t *testing.T) {
 				if err != nil {
 					t.Fatalf("ParseUserInfoBytes failed: %v", err)
 				}
-				actualMap := make(map[string]interface{})
+				actualMap := make(map[string]any)
 				b, _ := json.Marshal(userinfo)
 				_ = json.Unmarshal(b, &actualMap)
 				delete(actualMap, "XMLName")
@@ -104,10 +103,10 @@ func TestMetadataExtraTxtar(t *testing.T) {
 	}
 }
 
-func compareJSON(t *testing.T, expectedJSON []byte, actual interface{}) {
+func compareJSON(t *testing.T, expectedJSON []byte, actual any) {
 	t.Helper()
 
-	var expected interface{}
+	var expected any
 
 	if err := json.Unmarshal(expectedJSON, &expected); err != nil {
 		t.Fatalf("failed to unmarshal expected json: %v", err)

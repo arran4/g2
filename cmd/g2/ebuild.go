@@ -8,6 +8,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"text/tabwriter"
@@ -384,8 +385,8 @@ func (cfg *CmdEbuildArgConfig) cmdEbuildExplain(args []string, opts ...any) erro
 		if val, ok := ebuild.Vars[depVar]; ok && val != "" {
 			_, _ = fmt.Fprintf(out, "%s:\n", depVar)
 			// Indent slightly to read better
-			lines := strings.Split(val, "\n")
-			for _, line := range lines {
+			lines := strings.SplitSeq(val, "\n")
+			for line := range lines {
 				trimmed := strings.TrimSpace(line)
 				if trimmed != "" {
 					_, _ = fmt.Fprintf(out, "  %s\n", trimmed)
@@ -432,8 +433,8 @@ func (cfg *CmdEbuildArgConfig) cmdEbuildExplain(args []string, opts ...any) erro
 			}
 		}
 	} else if srcUri, ok := ebuild.Vars["SRC_URI"]; ok && srcUri != "" {
-		lines := strings.Split(srcUri, "\n")
-		for _, line := range lines {
+		lines := strings.SplitSeq(srcUri, "\n")
+		for line := range lines {
 			trimmed := strings.TrimSpace(line)
 			if trimmed != "" {
 				_, _ = fmt.Fprintln(out, trimmed)
@@ -588,7 +589,7 @@ func (cfg *CmdEbuildArgConfig) cmdEbuildDeps(args []string, opts ...any) error {
 						// but since users requested one-per-line for standard format,
 						// printing evaluated/flattened is better, or splitting the raw string.
 						_, _ = fmt.Fprintf(out, "### %s - %s\n", filename, field)
-						for _, token := range strings.Fields(val) {
+						for token := range strings.FieldsSeq(val) {
 							_, _ = fmt.Fprintln(out, token)
 						}
 						_, _ = fmt.Fprintln(out)
@@ -721,8 +722,8 @@ func (cfg *CmdEbuildArgConfig) cmdEbuildCheck(args []string) error {
 		}
 		if pv == "" {
 			pv = strings.TrimSuffix(base, ".ebuild")
-			if strings.HasPrefix(pv, pkgName+"-") {
-				pv = strings.TrimPrefix(pv, pkgName+"-")
+			if after, ok := strings.CutPrefix(pv, pkgName+"-"); ok {
+				pv = after
 			}
 			pvr = pv
 		}
@@ -756,13 +757,7 @@ func (cfg *CmdEbuildArgConfig) cmdEbuildCheck(args []string) error {
 			continue
 		}
 		if *tagFilter != "" {
-			hasTag := false
-			for _, t := range w.RuleMetadata.Tags {
-				if t == *tagFilter {
-					hasTag = true
-					break
-				}
-			}
+			hasTag := slices.Contains(w.RuleMetadata.Tags, *tagFilter)
 			if !hasTag {
 				continue
 			}
@@ -850,8 +845,8 @@ func (cfg *CmdEbuildArgConfig) cmdEbuildQuery(args []string) error {
 	}
 
 	if *format == "lines" {
-		fields := strings.Fields(val)
-		for _, field := range fields {
+		fields := strings.FieldsSeq(val)
+		for field := range fields {
 			fmt.Println(field)
 		}
 	} else {

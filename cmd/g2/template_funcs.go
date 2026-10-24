@@ -110,7 +110,7 @@ func resolveBreadcrumbsFunc(currentPath string, crumbs []g2.Breadcrumb) []g2.Bre
 
 var tmplPkgRegex = regexp.MustCompile(`&lt;pkg&gt;(.*?)&lt;/pkg&gt;`)
 
-func formatPkgLinkBodyFunc(body string, baseURL string, currentRepo string, repoPkgs interface{}, globalPkgs []*AggPackage) template.HTML {
+func formatPkgLinkBodyFunc(body string, baseURL string, currentRepo string, repoPkgs any, globalPkgs []*AggPackage) template.HTML {
 	safeBody := template.HTMLEscapeString(body)
 	return template.HTML(tmplPkgRegex.ReplaceAllStringFunc(safeBody, func(m string) string {
 		match := tmplPkgRegex.FindStringSubmatch(m)

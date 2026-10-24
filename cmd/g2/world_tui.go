@@ -130,16 +130,10 @@ func runWorldTUI(path string, lines []string) error {
 		if mode == "edit_modal" {
 			modalWidth := 60
 			modalHeight := len(editModalOptions) + 4
-			startX := (termWidth-modalWidth)/2 + 1
-			if startX < 1 {
-				startX = 1
-			}
-			startY := (termHeight-modalHeight)/2 + 1
-			if startY < 1 {
-				startY = 1
-			}
+			startX := max((termWidth-modalWidth)/2+1, 1)
+			startY := max((termHeight-modalHeight)/2+1, 1)
 
-			for i := 0; i < modalHeight; i++ {
+			for i := range modalHeight {
 				fmt.Printf("\033[%d;%dH", startY+i, startX)
 				switch i {
 				case 0, modalHeight - 1:
@@ -237,8 +231,8 @@ func runWorldTUI(path string, lines []string) error {
 							switch editModalCursor {
 							case 0: // Comment / Uncomment
 								trimmed := strings.TrimSpace(line)
-								if strings.HasPrefix(trimmed, "#") {
-									lines[promptRealIdx] = strings.TrimSpace(strings.TrimPrefix(trimmed, "#"))
+								if after, ok := strings.CutPrefix(trimmed, "#"); ok {
+									lines[promptRealIdx] = strings.TrimSpace(after)
 								} else {
 									lines[promptRealIdx] = "# " + line
 								}
@@ -251,8 +245,8 @@ func runWorldTUI(path string, lines []string) error {
 								if strings.HasPrefix(trimmed, "#") {
 									inputBuffer = ""
 									mode = "prompt_comment_after"
-								} else if idx := strings.Index(line, "#"); idx != -1 {
-									lines[promptRealIdx] = strings.TrimSpace(line[:idx])
+								} else if before, _, ok := strings.Cut(line, "#"); ok {
+									lines[promptRealIdx] = strings.TrimSpace(before)
 									mode = "normal"
 								} else {
 									inputBuffer = ""
@@ -293,7 +287,7 @@ func runWorldTUI(path string, lines []string) error {
 			} else if mode == "insert" || mode == "filter" || strings.HasPrefix(mode, "prompt_") {
 				// Handle insert/filter/prompt modes
 				// Support UTF-8 multi-byte sequences by converting the entire buffer read
-				for i := 0; i < n; i++ {
+				for i := range n {
 					c := buf[i]
 					switch c {
 					case 27: // Esc
@@ -434,9 +428,9 @@ func runWorldTUI(path string, lines []string) error {
 							realIdx := filteredIndices[cursor]
 							line := lines[realIdx]
 							trimmed := strings.TrimSpace(line)
-							if strings.HasPrefix(trimmed, "#") {
+							if after, ok := strings.CutPrefix(trimmed, "#"); ok {
 								// Uncomment (remove first occurrence of # and leading spaces)
-								lines[realIdx] = strings.TrimSpace(strings.TrimPrefix(trimmed, "#"))
+								lines[realIdx] = strings.TrimSpace(after)
 							} else {
 								// Comment
 								lines[realIdx] = "# " + line
