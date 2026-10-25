@@ -38,8 +38,8 @@ func (c *RepoLintContext) HashEclass(eclassPath string) (string, error) {
 	repoDirSlash := filepath.ToSlash(c.RepoDirInFS)
 	if repoDirSlash != "" && repoDirSlash != "." && strings.HasPrefix(ePath, repoDirSlash+"/") {
 		relPath = strings.TrimPrefix(ePath, repoDirSlash+"/")
-	} else if strings.HasPrefix(ePath, "./") {
-		relPath = strings.TrimPrefix(ePath, "./")
+	} else if after, ok := strings.CutPrefix(ePath, "./"); ok {
+		relPath = after
 	}
 
 	c.eclassMu.RLock()

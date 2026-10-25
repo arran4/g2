@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"maps"
 	"strings"
 
 	"mvdan.cc/sh/v3/expand"
@@ -44,9 +45,7 @@ func WithVars(vars map[string]string) ResolveBashOption {
 		if o.Variables == nil {
 			o.Variables = make(map[string]string)
 		}
-		for k, v := range vars {
-			o.Variables[k] = v
-		}
+		maps.Copy(o.Variables, vars)
 	}
 }
 
@@ -83,12 +82,8 @@ func resolveBash(ctx context.Context, text string, variables map[string]string, 
 				mergedVars := variables
 				if len(options.Variables) > 0 {
 					mergedVars = make(map[string]string, len(variables)+len(options.Variables))
-					for k, v := range variables {
-						mergedVars[k] = v
-					}
-					for k, v := range options.Variables {
-						mergedVars[k] = v
-					}
+					maps.Copy(mergedVars, variables)
+					maps.Copy(mergedVars, options.Variables)
 				}
 
 				var buf strings.Builder
@@ -151,12 +146,8 @@ func resolveBash(ctx context.Context, text string, variables map[string]string, 
 	mergedVars := variables
 	if len(options.Variables) > 0 {
 		mergedVars = make(map[string]string, len(variables)+len(options.Variables))
-		for k, v := range variables {
-			mergedVars[k] = v
-		}
-		for k, v := range options.Variables {
-			mergedVars[k] = v
-		}
+		maps.Copy(mergedVars, variables)
+		maps.Copy(mergedVars, options.Variables)
 	}
 
 	var env []string

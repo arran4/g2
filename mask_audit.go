@@ -118,7 +118,7 @@ func MatchMaskAtom(raw string, c MaskCandidate) (bool, error) {
 		return false, fmt.Errorf("unsupported operator in %q", raw)
 	}
 	if a.Slot != "" {
-		for _, part := range strings.Split(a.Slot, "/") {
+		for part := range strings.SplitSeq(a.Slot, "/") {
 			if !maskAtomComponent.MatchString(part) {
 				return false, fmt.Errorf("unsupported slot constraint in %q", raw)
 			}
