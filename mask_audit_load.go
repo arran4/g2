@@ -438,7 +438,7 @@ func auditProfileCascade(profile string, repos map[string]*RepoInfo) ([]string, 
 		if err != nil && !os.IsNotExist(err) {
 			return fmt.Errorf("read profile parents in %s: %w", path, err)
 		}
-		for _, line := range strings.Split(string(parents), "\n") {
+		for line := range strings.SplitSeq(string(parents), "\n") {
 			line, _, _ = strings.Cut(line, "#")
 			parent := strings.TrimSpace(line)
 			if parent == "" {
@@ -518,7 +518,7 @@ func staticAuditSlot(path string) string {
 			if assignment.Append || assignment.Index != nil {
 				return ""
 			}
-			for _, component := range strings.Split(value, "/") {
+			for component := range strings.SplitSeq(value, "/") {
 				if !maskAtomComponent.MatchString(component) {
 					return ""
 				}

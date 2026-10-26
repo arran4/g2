@@ -47,7 +47,7 @@ func WithRepoCategory(cat *g2.CategoryData) GenericPageContextOption {
 	}
 }
 
-func WithCategory(cat map[string]interface{}) GenericPageContextOption {
+func WithCategory(cat map[string]any) GenericPageContextOption {
 	return func(c *GenericPageContext) {
 		c.Category = cat
 	}
@@ -137,7 +137,7 @@ func NewGenericPageContext(opts ...GenericPageContextOption) GenericPageContext 
 		RepoPackage:   &g2.PackageData{},
 		Project:       &AggProject{Project: &g2.Project{}},
 		RepoCategory:  &g2.CategoryData{},
-		Category:      map[string]interface{}{},
+		Category:      map[string]any{},
 		GlobalProfile: &g2.AggProfile{},
 		RepoProfile:   &g2.ProfileData{},
 		Group:         &RepoGroup{},
@@ -213,7 +213,7 @@ func TestAllTemplatesRender(t *testing.T) {
 		{
 			name: "Extreme Edge Cases",
 			data: NewGenericPageContext(
-				WithCategory(map[string]interface{}{
+				WithCategory(map[string]any{
 					"ReposList": []*g2.SiteData{},
 					"Name":      "invalid-no-slashes",
 				}),
