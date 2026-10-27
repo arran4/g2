@@ -60,7 +60,7 @@ func buildSyntheticOverlayFS(numCategories, pkgsPerCategory, versionsPerPkg int)
 				verStr := fmt.Sprintf("1.%d.0", v)
 				ebuildName := fmt.Sprintf("%s-%s.ebuild", pkgName, verStr)
 				distName := fmt.Sprintf("%s-%s.tar.gz", pkgName, verStr)
-				manifestBuf.WriteString(fmt.Sprintf("DIST %s 1024 BLAKE2B deadbeef SHA512 cafebabe\n", distName))
+				fmt.Fprintf(&manifestBuf, "DIST %s 1024 BLAKE2B deadbeef SHA512 cafebabe\n", distName)
 				ebuildContent := fmt.Sprintf(`# Copyright 1999-2026 Gentoo Authors
 # Distributed under the terms of the GNU General Public License v2
 
