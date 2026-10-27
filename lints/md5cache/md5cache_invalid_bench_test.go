@@ -71,7 +71,7 @@ func createSyntheticOverlay(b *testing.B, tempDir string) ([]*g2.PackageData, st
 				if i > 0 {
 					eclassesLine.WriteString("\t")
 				}
-				eclassesLine.WriteString(fmt.Sprintf("eclass%d\t%s", i, eclassHashes[i]))
+				fmt.Fprintf(&eclassesLine, "eclass%d\t%s", i, eclassHashes[i])
 			}
 
 			_ = os.WriteFile(cacheFile, fmt.Appendf(nil, "_md5_=%s\n_eclasses_=%s\n", ebuildHash, eclassesLine.String()), 0644)
