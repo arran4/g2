@@ -2,6 +2,7 @@ package g2
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 )
 
@@ -133,10 +134,8 @@ func (b *EbuildBuilder) Build() *Ebuild {
 }
 
 func (b *EbuildBuilder) appendOrder(name string) {
-	for _, v := range b.e.orderOverride {
-		if v == name {
-			return
-		}
+	if slices.Contains(b.e.orderOverride, name) {
+		return
 	}
 	b.e.orderOverride = append(b.e.orderOverride, name)
 }

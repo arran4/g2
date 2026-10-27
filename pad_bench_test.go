@@ -51,7 +51,7 @@ func padVersionTokensBuilder(v string) string {
 			}
 			pad := 10 - (i - start)
 			if pad > 0 {
-				for j := 0; j < pad; j++ {
+				for range pad {
 					sb.WriteByte('0')
 				}
 			}

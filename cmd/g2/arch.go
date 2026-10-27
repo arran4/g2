@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"slices"
 
 	"github.com/arran4/g2"
 )
@@ -70,13 +71,7 @@ func (cfg *MainArgConfig) cmdArchListAdd(args []string) error {
 		al = &g2.ArchList{}
 	}
 
-	found := false
-	for _, a := range al.Arches {
-		if a == *archName {
-			found = true
-			break
-		}
-	}
+	found := slices.Contains(al.Arches, *archName)
 
 	if !found {
 		al.Arches = append(al.Arches, *archName)

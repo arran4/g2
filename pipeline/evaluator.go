@@ -19,8 +19,8 @@ import (
 // It explicitly distinguishes zero cardinality, scalars, and lists.
 type PipelineValue struct {
 	IsEmpty bool
-	Value   interface{}
-	List    []interface{}
+	Value   any
+	List    []any
 	RawNode *xmlquery.Node
 }
 
@@ -131,7 +131,7 @@ func (e *Evaluator) evaluateCommand(cmdStr string, val *PipelineValue, currentUR
 			items = xmlquery.Find(doc, "//*[local-name()='entry']")
 		}
 
-		var list []interface{}
+		var list []any
 		for _, item := range items {
 			list = append(list, item.OutputXML(true))
 		}
@@ -231,7 +231,7 @@ func (e *Evaluator) evaluateCommand(cmdStr string, val *PipelineValue, currentUR
 		if err != nil {
 			return val, nil
 		}
-		var links []interface{}
+		var links []any
 		var f func(*html.Node)
 		f = func(n *html.Node) {
 			if n.Type == html.ElementNode && n.Data == "a" {
@@ -271,7 +271,7 @@ func (e *Evaluator) evaluateCommand(cmdStr string, val *PipelineValue, currentUR
 		if err != nil {
 			return nil, fmt.Errorf("error executing xpath: %v", err)
 		}
-		var results []interface{}
+		var results []any
 		for _, n := range nodes {
 			text := n.InnerText()
 			if text != "" {
@@ -291,7 +291,7 @@ func (e *Evaluator) evaluateCommand(cmdStr string, val *PipelineValue, currentUR
 			return nil, fmt.Errorf("invalid regex %q: %v", pattern, err)
 		}
 		if val.IsList() {
-			var results []interface{}
+			var results []any
 			for _, item := range val.List {
 				m := re.FindStringSubmatch(fmt.Sprintf("%v", item))
 				if m != nil {
@@ -321,21 +321,21 @@ func (e *Evaluator) evaluateCommand(cmdStr string, val *PipelineValue, currentUR
 		if val.IsEmpty || val.IsList() {
 			return nil, fmt.Errorf("error parsing JSON path %s: input must be scalar string", path)
 		}
-		var obj interface{}
+		var obj any
 		strVal := val.GetString()
 		err := json.Unmarshal([]byte(strVal), &obj)
 		if err != nil {
 			return nil, fmt.Errorf("error parsing JSON path %s: %v", path, err)
 		}
 
-		parts := strings.Split(path, ".")
-		for _, part := range parts {
+		parts := strings.SplitSeq(path, ".")
+		for part := range parts {
 			if part == "" {
 				continue
 			}
-			if m, ok := obj.(map[string]interface{}); ok {
+			if m, ok := obj.(map[string]any); ok {
 				obj = m[part]
-			} else if l, ok := obj.([]interface{}); ok {
+			} else if l, ok := obj.([]any); ok {
 				idx, err := strconv.Atoi(part)
 				if err == nil && idx >= 0 && idx < len(l) {
 					obj = l[idx]
@@ -351,12 +351,12 @@ func (e *Evaluator) evaluateCommand(cmdStr string, val *PipelineValue, currentUR
 			return &PipelineValue{IsEmpty: true}, nil
 		}
 
-		if v, ok := obj.([]interface{}); ok {
+		if v, ok := obj.([]any); ok {
 			return &PipelineValue{List: v, IsEmpty: false}, nil
 		}
 
 		// Primitives (string, bool, float64, map)
-		if _, ok := obj.(map[string]interface{}); ok {
+		if _, ok := obj.(map[string]any); ok {
 			b, _ := json.Marshal(obj)
 			return &PipelineValue{Value: string(b), IsEmpty: false}, nil
 		}
