@@ -950,7 +950,7 @@ func cmpInt(a, b int) int {
 func compareGentooVersionParts(v1, v2 GentooVersion) int {
 	maxLen := max(len(v2.Nums), len(v1.Nums))
 
-	for i := 0; i < maxLen; i++ {
+	for i := range maxLen {
 		if i >= len(v1.Nums) {
 			// v1 is shorter. If remaining v2 parts are all 0, they are equal in this part
 			allZero := true
@@ -1019,7 +1019,7 @@ func compareGentooVersionParts(v1, v2 GentooVersion) int {
 
 	maxSuffixLen := max(len(v2.Suffixes), len(v1.Suffixes))
 
-	for i := 0; i < maxSuffixLen; i++ {
+	for i := range maxSuffixLen {
 		var s1, s2 GentooSuffix
 
 		if i >= len(v1.Suffixes) {
