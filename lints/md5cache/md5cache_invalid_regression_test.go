@@ -54,7 +54,7 @@ func TestMD5CacheInvalidLintRule_InjectedEclassHashes(t *testing.T) {
 		{name: "mismatching", cachedHash: "incorrect", wantMismatch: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			fsys[cachePath].Data = []byte(fmt.Sprintf("EAPI=8\n_eclasses_=shared\t%s\n_md5_=%s\n", tc.cachedHash, ebuildMD5))
+			fsys[cachePath].Data = fmt.Appendf(nil, "EAPI=8\n_eclasses_=shared\t%s\n_md5_=%s\n", tc.cachedHash, ebuildMD5)
 			calls := 0
 			hashEclass := func(path string) (string, error) {
 				calls++

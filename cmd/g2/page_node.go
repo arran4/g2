@@ -19,8 +19,8 @@ func (n *PageNode) BaseURL() string {
 	curr := n
 	for curr.Parent != nil {
 		if curr.Path != "" {
-			parts := strings.Split(curr.Path, "/")
-			for _, p := range parts {
+			parts := strings.SplitSeq(curr.Path, "/")
+			for p := range parts {
 				if p != "" {
 					depth++
 				}
@@ -43,8 +43,8 @@ func (n *PageNode) Breadcrumbs() []g2.Breadcrumb {
 			temp := n
 			for temp != curr {
 				if temp.Path != "" {
-					parts := strings.Split(temp.Path, "/")
-					for _, p := range parts {
+					parts := strings.SplitSeq(temp.Path, "/")
+					for p := range parts {
 						if p != "" {
 							depthDiff++
 						}

@@ -1,6 +1,7 @@
 package md5cache
 
 import (
+	"strings"
 	"time"
 
 	"bytes"
@@ -29,15 +30,15 @@ func createSyntheticOverlay(b *testing.B, tempDir string) ([]*g2.PackageData, st
 	_ = os.MkdirAll(eclassDir, 0755)
 
 	var eclassHashes []string
-	for i := 0; i < 10; i++ {
-		content := []byte(fmt.Sprintf("eclass content %d", i))
+	for i := range 10 {
+		content := fmt.Appendf(nil, "eclass content %d", i)
 		eclassFile := filepath.Join(eclassDir, fmt.Sprintf("eclass%d.eclass", i))
 		_ = os.WriteFile(eclassFile, content, 0644)
 		eclassHashes = append(eclassHashes, fmt.Sprintf("%x", md5.Sum(content)))
 	}
 
 	var packages []*g2.PackageData
-	for p := 0; p < 100; p++ {
+	for p := range 100 {
 		pkgName := fmt.Sprintf("pkg%d", p)
 		pkg := &g2.PackageData{
 			Category: "app-test",
@@ -51,7 +52,7 @@ func createSyntheticOverlay(b *testing.B, tempDir string) ([]*g2.PackageData, st
 		ebuildDir := filepath.Join(tempDir, "app-test", pkg.Name)
 		_ = os.MkdirAll(ebuildDir, 0755)
 
-		for v := 0; v < 2; v++ {
+		for v := range 2 {
 			ver := fmt.Sprintf("%d.0", v)
 			pkg.Versions[v] = g2.VersionData{
 				Version: ver,
@@ -65,15 +66,15 @@ func createSyntheticOverlay(b *testing.B, tempDir string) ([]*g2.PackageData, st
 			_ = os.WriteFile(ebuildFile, ebuildContent, 0644)
 			ebuildHash := fmt.Sprintf("%x", md5.Sum(ebuildContent))
 
-			eclassesLine := ""
-			for i := 0; i < 10; i++ {
+			var eclassesLine strings.Builder
+			for i := range 10 {
 				if i > 0 {
-					eclassesLine += "\t"
+					eclassesLine.WriteString("\t")
 				}
-				eclassesLine += fmt.Sprintf("eclass%d\t%s", i, eclassHashes[i])
+				fmt.Fprintf(&eclassesLine, "eclass%d\t%s", i, eclassHashes[i])
 			}
 
-			_ = os.WriteFile(cacheFile, []byte(fmt.Sprintf("_md5_=%s\n_eclasses_=%s\n", ebuildHash, eclassesLine)), 0644)
+			_ = os.WriteFile(cacheFile, fmt.Appendf(nil, "_md5_=%s\n_eclasses_=%s\n", ebuildHash, eclassesLine.String()), 0644)
 		}
 		packages = append(packages, pkg)
 	}
@@ -132,7 +133,7 @@ func BenchmarkMD5CacheInvalid_InvalidatedEclass(b *testing.B) {
 		oldContent, _ := os.ReadFile(eclassFile)
 		oldHash := fmt.Sprintf("%x", md5.Sum(oldContent))
 
-		newContent := []byte(fmt.Sprintf("changed %d", i))
+		newContent := fmt.Appendf(nil, "changed %d", i)
 		newHash := fmt.Sprintf("%x", md5.Sum(newContent))
 		_ = os.WriteFile(eclassFile, newContent, 0644)
 
@@ -140,13 +141,13 @@ func BenchmarkMD5CacheInvalid_InvalidatedEclass(b *testing.B) {
 		_ = os.Chtimes(eclassFile, newTime, newTime)
 
 		for _, pkg := range packages {
-			for v := 0; v < 2; v++ {
+			for v := range 2 {
 				ver := fmt.Sprintf("%d.0", v)
 				cacheFile := filepath.Join(cacheDir, fmt.Sprintf("%s-%s", pkg.Name, ver))
 				data, _ := os.ReadFile(cacheFile)
 
-				oldStr := []byte(fmt.Sprintf("eclass0\t%s", oldHash))
-				newStr := []byte(fmt.Sprintf("eclass0\t%s", newHash))
+				oldStr := fmt.Appendf(nil, "eclass0\t%s", oldHash)
+				newStr := fmt.Appendf(nil, "eclass0\t%s", newHash)
 				data = bytes.Replace(data, oldStr, newStr, 1)
 				_ = os.WriteFile(cacheFile, data, 0644)
 			}

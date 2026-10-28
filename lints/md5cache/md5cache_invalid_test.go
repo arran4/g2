@@ -47,7 +47,7 @@ func TestMD5CacheInvalidLintRule(t *testing.T) {
 	_ = os.WriteFile(eclassFile, []byte("# test\n"), 0644)
 	eclassMd5 := fmt.Sprintf("%x", md5.Sum([]byte("# test\n")))
 
-	_ = os.WriteFile(cacheFile, []byte(fmt.Sprintf("_md5_=%s\n_eclasses_=test\t%s\n", md5sum, eclassMd5)), 0644)
+	_ = os.WriteFile(cacheFile, fmt.Appendf(nil, "_md5_=%s\n_eclasses_=test\t%s\n", md5sum, eclassMd5), 0644)
 
 	results := rule.Lint(tempDir, pkg)
 	if len(results) != 0 {
@@ -55,7 +55,7 @@ func TestMD5CacheInvalidLintRule(t *testing.T) {
 	}
 
 	// 2. Invalid ebuild md5
-	_ = os.WriteFile(cacheFile, []byte(fmt.Sprintf("_md5_=%s\n_eclasses_=test\t%s\n", "invalidmd5", eclassMd5)), 0644)
+	_ = os.WriteFile(cacheFile, fmt.Appendf(nil, "_md5_=%s\n_eclasses_=test\t%s\n", "invalidmd5", eclassMd5), 0644)
 	results = rule.Lint(tempDir, pkg)
 	if len(results) != 1 {
 		t.Errorf("Expected 1 result for invalid ebuild md5, got %d", len(results))
@@ -64,7 +64,7 @@ func TestMD5CacheInvalidLintRule(t *testing.T) {
 	}
 
 	// 3. Invalid eclass md5
-	_ = os.WriteFile(cacheFile, []byte(fmt.Sprintf("_md5_=%s\n_eclasses_=test\t%s\n", md5sum, "invalidmd5")), 0644)
+	_ = os.WriteFile(cacheFile, fmt.Appendf(nil, "_md5_=%s\n_eclasses_=test\t%s\n", md5sum, "invalidmd5"), 0644)
 	results = rule.Lint(tempDir, pkg)
 	if len(results) != 1 {
 		t.Errorf("Expected 1 result for invalid eclass md5, got %d", len(results))
@@ -73,7 +73,7 @@ func TestMD5CacheInvalidLintRule(t *testing.T) {
 	}
 
 	// 4. Missing _md5_
-	_ = os.WriteFile(cacheFile, []byte(fmt.Sprintf("_eclasses_=test\t%s\n", eclassMd5)), 0644)
+	_ = os.WriteFile(cacheFile, fmt.Appendf(nil, "_eclasses_=test\t%s\n", eclassMd5), 0644)
 	results = rule.Lint(tempDir, pkg)
 	if len(results) != 1 {
 		t.Errorf("Expected 1 result for missing _md5_, got %d", len(results))
@@ -82,7 +82,7 @@ func TestMD5CacheInvalidLintRule(t *testing.T) {
 	}
 
 	// 5. Invalid format
-	_ = os.WriteFile(cacheFile, []byte(fmt.Sprintf("_md5_=%s\ninvalidline\n", md5sum)), 0644)
+	_ = os.WriteFile(cacheFile, fmt.Appendf(nil, "_md5_=%s\ninvalidline\n", md5sum), 0644)
 	results = rule.Lint(tempDir, pkg)
 	if len(results) != 1 {
 		t.Errorf("Expected 1 result for invalid format, got %d", len(results))
@@ -268,14 +268,14 @@ func TestMD5CacheInvalidLintRule_Concurrency(t *testing.T) {
 	_ = os.MkdirAll(eclassDir, 0755)
 
 	var files []string
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		p := filepath.Join(eclassDir, fmt.Sprintf("test%d.eclass", i))
-		_ = os.WriteFile(p, []byte(fmt.Sprintf("content%d", i)), 0644)
+		_ = os.WriteFile(p, fmt.Appendf(nil, "content%d", i), 0644)
 		files = append(files, p)
 	}
 
 	var wg sync.WaitGroup
-	for i := 0; i < 50; i++ {
+	for i := range 50 {
 		wg.Add(1)
 		go func(idx int) {
 			defer wg.Done()
@@ -487,7 +487,7 @@ func TestMD5CacheInvalid_Revisioned(t *testing.T) {
 	_ = os.WriteFile(ebuildFile, []byte("EAPI=8\n"), 0644)
 	md5sum := fmt.Sprintf("%x", md5.Sum([]byte("EAPI=8\n")))
 
-	_ = os.WriteFile(cacheFile, []byte(fmt.Sprintf("_md5_=%s\n", md5sum)), 0644)
+	_ = os.WriteFile(cacheFile, fmt.Appendf(nil, "_md5_=%s\n", md5sum), 0644)
 
 	results := rule.Lint(tempDir, pkg)
 	if len(results) != 0 {

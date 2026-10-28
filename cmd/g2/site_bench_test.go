@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 	"testing/fstest"
 	"time"
@@ -33,14 +34,14 @@ func buildSyntheticOverlayFS(numCategories, pkgsPerCategory, versionsPerPkg int)
 	}
 
 	validCats := []string{"dev-python", "dev-libs", "app-misc", "sys-apps", "net-misc", "www-apps", "media-libs", "sci-libs"}
-	var categoriesBuf string
-	for c := 0; c < numCategories; c++ {
+	var categoriesBuf strings.Builder
+	for c := range numCategories {
 		catName := validCats[c%len(validCats)]
 		if c >= len(validCats) {
 			catName = fmt.Sprintf("%s-%d", catName, c)
 		}
-		categoriesBuf += catName + "\n"
-		for p := 0; p < pkgsPerCategory; p++ {
+		categoriesBuf.WriteString(catName + "\n")
+		for p := range pkgsPerCategory {
 			pkgName := fmt.Sprintf("pkg-%d", p)
 			pkgDir := catName + "/" + pkgName
 			memFS[pkgDir+"/metadata.xml"] = &fstest.MapFile{
@@ -54,12 +55,12 @@ func buildSyntheticOverlayFS(numCategories, pkgsPerCategory, versionsPerPkg int)
 </pkgmetadata>
 `),
 			}
-			var manifestBuf string
-			for v := 0; v < versionsPerPkg; v++ {
+			var manifestBuf strings.Builder
+			for v := range versionsPerPkg {
 				verStr := fmt.Sprintf("1.%d.0", v)
 				ebuildName := fmt.Sprintf("%s-%s.ebuild", pkgName, verStr)
 				distName := fmt.Sprintf("%s-%s.tar.gz", pkgName, verStr)
-				manifestBuf += fmt.Sprintf("DIST %s 1024 BLAKE2B deadbeef SHA512 cafebabe\n", distName)
+				fmt.Fprintf(&manifestBuf, "DIST %s 1024 BLAKE2B deadbeef SHA512 cafebabe\n", distName)
 				ebuildContent := fmt.Sprintf(`# Copyright 1999-2026 Gentoo Authors
 # Distributed under the terms of the GNU General Public License v2
 
@@ -91,12 +92,12 @@ src_prepare() {
 				}
 			}
 			memFS[pkgDir+"/Manifest"] = &fstest.MapFile{
-				Data: []byte(manifestBuf),
+				Data: []byte(manifestBuf.String()),
 			}
 		}
 	}
 	memFS["profiles/categories"] = &fstest.MapFile{
-		Data: []byte(categoriesBuf),
+		Data: []byte(categoriesBuf.String()),
 	}
 	return memFS
 }
@@ -123,7 +124,7 @@ func TestPrepareAggregatedDataLargeScaleSpeed(t *testing.T) {
 	const pkgsPerRepo = 2500 // 10,000 packages sharing identical licenses, eclasses, and USE flags
 
 	sites := make([]*g2.SiteData, 0, numRepos)
-	for r := 0; r < numRepos; r++ {
+	for r := range numRepos {
 		repoName := fmt.Sprintf("overlay-%d", r)
 		site := &g2.SiteData{
 			Title:            repoName,
@@ -159,7 +160,7 @@ func TestPrepareAggregatedDataLargeScaleSpeed(t *testing.T) {
 
 		cat := g2.CategoryData{Name: "dev-python", Packages: make([]g2.PackageData, 0, pkgsPerRepo)}
 		repoAggPkgs := make(map[string]*AggPackage, pkgsPerRepo)
-		for p := 0; p < pkgsPerRepo; p++ {
+		for p := range pkgsPerRepo {
 			pkgName := fmt.Sprintf("py-pkg-%d-%d", r, p)
 			if p%3 == 0 {
 				// Shared package across overlays
