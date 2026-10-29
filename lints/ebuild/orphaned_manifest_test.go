@@ -140,7 +140,6 @@ SRC_URI="https://which-browser-site.pages.dev/downloads/v${MY_BASE_PV}/${MY_DEB_
 	}
 }
 
-
 // Verify that a syntactically valid ebuild with eclass-generated SRC_URI values
 // cannot produce reliable orphaned-DIST claims from static URI enumeration.
 func TestOrphanedManifestLintRule_UncertainSrcURI(t *testing.T) {
