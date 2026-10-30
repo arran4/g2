@@ -2,6 +2,7 @@ package ebuild
 
 import (
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -37,20 +38,63 @@ func (r *OrphanedManifestLintRule) LintWithQA(repoDir string, pkg *g2.PackageDat
 		return results
 	}
 
-	pkgDir := filepath.Join(repoDir, pkg.Category, pkg.Name)
 	usedFiles := make(map[string]bool)
 	parseFailed := false
-	entries, err := os.ReadDir(pkgDir)
-	if err == nil {
-		for _, entry := range entries {
-			if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".ebuild") {
-				parsedEbuild, err := g2.ParseEbuild(os.DirFS(pkgDir), entry.Name(), g2.ParseFull)
-				if err == nil {
-					for _, uri := range parsedEbuild.SrcUri {
-						usedFiles[uri.Filename] = true
-					}
-				} else {
+
+	if len(pkg.Versions) > 0 {
+		for _, ver := range pkg.Versions {
+			if ver.Ebuild != nil {
+				// An unresolved SRC_URI (including eclass-generated distfiles such
+				// as CARGO_CRATE_URIS) means the set of source files is incomplete.
+				// Do not assert that a Manifest DIST entry is orphaned.
+				if ver.Ebuild.SrcUriUncertain {
 					parseFailed = true
+				}
+				for _, uri := range ver.Ebuild.SrcUri {
+					if uri.Filename != "" {
+						usedFiles[uri.Filename] = true
+					} else if uri.URL != "" {
+						usedFiles[filepath.Base(uri.URL)] = true
+					}
+				}
+			}
+		}
+	} else if ctx := lints.GetRepoContext(repoDir); ctx != nil && ctx.FS != nil {
+		pkgDir := filepath.ToSlash(filepath.Join(ctx.RepoDirInFS, pkg.Category, pkg.Name))
+		if entries, err := fs.ReadDir(ctx.FS, pkgDir); err == nil {
+			for _, entry := range entries {
+				if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".ebuild") {
+					parsedEbuild, err := g2.ParseEbuild(ctx.FS, filepath.ToSlash(filepath.Join(pkgDir, entry.Name())), g2.ParseFull)
+					if err == nil {
+						if parsedEbuild.SrcUriUncertain {
+							parseFailed = true
+						}
+						for _, uri := range parsedEbuild.SrcUri {
+							usedFiles[uri.Filename] = true
+						}
+					} else {
+						parseFailed = true
+					}
+				}
+			}
+		}
+	} else {
+		pkgDir := filepath.Join(repoDir, pkg.Category, pkg.Name)
+		entries, err := os.ReadDir(pkgDir)
+		if err == nil {
+			for _, entry := range entries {
+				if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".ebuild") {
+					parsedEbuild, err := g2.ParseEbuild(os.DirFS(pkgDir), entry.Name(), g2.ParseFull)
+					if err == nil {
+						if parsedEbuild.SrcUriUncertain {
+							parseFailed = true
+						}
+						for _, uri := range parsedEbuild.SrcUri {
+							usedFiles[uri.Filename] = true
+						}
+					} else {
+						parseFailed = true
+					}
 				}
 			}
 		}

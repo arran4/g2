@@ -3,6 +3,7 @@ package g2
 import (
 	_ "embed"
 	"encoding/json"
+	"maps"
 	"reflect"
 	"strings"
 	"testing"
@@ -22,10 +23,10 @@ func TestEbuildsFromTxtar(t *testing.T) {
 	}
 
 	for _, f := range archive.Files {
-		if strings.HasSuffix(f.Name, ".ebuild") {
+		if before, ok := strings.CutSuffix(f.Name, ".ebuild"); ok {
 			t.Run(f.Name, func(t *testing.T) {
 				ebuildContent := f.Data
-				goldenName := strings.TrimSuffix(f.Name, ".ebuild") + ".golden"
+				goldenName := before + ".golden"
 				jsonName := strings.TrimSuffix(f.Name, ".ebuild") + ".json"
 
 				golden, ok := files[goldenName]
@@ -119,15 +120,11 @@ func TestEbuildsFromTxtar(t *testing.T) {
 				if mode == ParseFull {
 					// Make copies to avoid modifying original
 					vars1 = make(map[string]string)
-					for k, v := range ebuild.Vars {
-						vars1[k] = v
-					}
+					maps.Copy(vars1, ebuild.Vars)
 					delete(vars1, "SRC_URI")
 
 					vars2 = make(map[string]string)
-					for k, v := range ebuild2.Vars {
-						vars2[k] = v
-					}
+					maps.Copy(vars2, ebuild2.Vars)
 					delete(vars2, "SRC_URI")
 				}
 

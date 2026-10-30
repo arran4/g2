@@ -194,7 +194,7 @@ jobs:
   prepare-release-tag:
     name: Prepare Release Tag
     needs: [route, release-ready]
-    if: ${{ needs.route.outputs.run_release == 'true' }}
+    if: ${{ always() && needs.release-ready.result == 'success' && needs.route.outputs.run_release == 'true' }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -212,12 +212,12 @@ jobs:
           mode: install
       - name: Verify Exact Origin/Main
         env:
-          GITHUB_REF_NAME: ${{ github.ref }}
+          RELEASE_REF: ${{ github.ref }}
           GITHUB_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
-          if [[ "$GITHUB_REF_NAME" != "refs/heads/main" ]]; then
-            echo "Error: Manual release preparation must run on refs/heads/main, got $GITHUB_REF_NAME"
+          if [[ "$RELEASE_REF" != "refs/heads/main" ]]; then
+            echo "Error: Manual release preparation must run on refs/heads/main, got $RELEASE_REF"
             exit 1
           fi
           git fetch origin main
@@ -448,6 +448,7 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
+      issues: write
     steps:
       - uses: actions/checkout@v4
 
@@ -508,6 +509,12 @@ jobs:
           git commit -m "ci: automated formatting fixes"
           git push origin "$BRANCH"
 
+          # This label is also required by the parent-close cleanup job.
+          gh label create ci-autofix \
+            --description "Automated formatting PRs" \
+            --color "D4C5F9" \
+            --force
+
           gh pr create \
             --title "ci: automated formatting fixes" \
             --body "Automated formatting pass. Parent-PR: ${PARENT_PR}" \
@@ -547,7 +554,7 @@ jobs:
   goreleaser:
     name: Release Publisher
     needs: [route, release-ready, discover]
-    if: ${{ needs.route.outputs.run_publisher == 'true' && needs.discover.outputs.has_goreleaser == 'true' }}
+    if: ${{ always() && needs.release-ready.result == 'success' && needs.route.outputs.run_publisher == 'true' && needs.discover.outputs.has_goreleaser == 'true' }}
     runs-on: ubuntu-latest
     permissions:
       contents: write

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/arran4/g2"
@@ -55,7 +56,7 @@ func (l *RepoLayoutLintRule) LintRepo(repoDir string, site *g2.SiteData) []lints
 	repoCategories := make(map[string]bool)
 	catPath := filepath.Join(repoDir, "profiles", "categories")
 	if b, err := os.ReadFile(catPath); err == nil {
-		for _, line := range strings.Split(string(b), "\n") {
+		for line := range strings.SplitSeq(string(b), "\n") {
 			line = strings.TrimSpace(line)
 			if line != "" && !strings.HasPrefix(line, "#") {
 				repoCategories[line] = true
@@ -68,7 +69,7 @@ func (l *RepoLayoutLintRule) LintRepo(repoDir string, site *g2.SiteData) []lints
 		upstreamCategories = make(map[string]bool)
 		catPath := filepath.Join(UpstreamRepoPath, "profiles", "categories")
 		if b, err := os.ReadFile(catPath); err == nil {
-			for _, line := range strings.Split(string(b), "\n") {
+			for line := range strings.SplitSeq(string(b), "\n") {
 				line = strings.TrimSpace(line)
 				if line != "" && !strings.HasPrefix(line, "#") {
 					upstreamCategories[line] = true
@@ -128,11 +129,8 @@ func (l *RepoLayoutLintRule) LintRepo(repoDir string, site *g2.SiteData) []lints
 
 			hasGentooMaster := false
 			if site != nil && site.LayoutConf != nil {
-				for _, m := range site.LayoutConf.Masters() {
-					if m == "gentoo" {
-						hasGentooMaster = true
-						break
-					}
+				if slices.Contains(site.LayoutConf.Masters(), "gentoo") {
+					hasGentooMaster = true
 				}
 			}
 

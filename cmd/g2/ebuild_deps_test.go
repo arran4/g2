@@ -29,7 +29,6 @@ func TestEbuildDeps(t *testing.T) {
 	}
 
 	for _, fixture := range entries {
-		fixture := fixture
 		t.Run(strings.TrimSuffix(path.Base(fixture), ".txtar"), func(t *testing.T) {
 			raw, err := depsTestFS.ReadFile(fixture)
 			if err != nil {

@@ -3,13 +3,16 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 
 	"io/fs"
 	"log"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/arran4/g2"
 	"github.com/arran4/g2/lints"
@@ -195,13 +198,13 @@ func parseRepoNews(sysFS fs.FS, repoDir string, site *g2.SiteData) {
 }
 
 // parseRepoAuthors extracts author information from the metadata/AUTHORS file and sets the raw URL.
-func parseRepoAuthors(repoDir string, site *g2.SiteData, remoteURL string) {
-	authorsFile, err := os.Open(filepath.Join(repoDir, "metadata", "AUTHORS"))
+func parseRepoAuthors(sysFS fs.FS, repoDir string, gitInfo *repoGitInfo, site *g2.SiteData, remoteURL string) {
+	authorsFile, err := sysFS.Open(filepath.ToSlash(filepath.Join(repoDir, "metadata", "AUTHORS")))
 	if err == nil {
 		if authors, err := g2.ParseAuthors(authorsFile); err == nil {
 			site.Authors = authors
 			if remoteURL != "" {
-				if commitHash, err := getFileCommit(repoDir, "metadata/AUTHORS"); err == nil && commitHash != "" {
+				if commitHash := gitInfo.fileCommit("metadata/AUTHORS"); commitHash != "" {
 					site.AuthorsURL = generateGitHubRawURL(remoteURL, commitHash, "metadata/AUTHORS")
 				}
 			}
@@ -231,11 +234,45 @@ func isCategoryAllowed(repoCats map[string]bool, hasGentooMaster bool, mainCats 
 	return false
 }
 
+func newRepoLintContext(sysFS fs.FS, repoDir string, site *g2.SiteData) *lints.RepoLintContext {
+	hasRepoName := site.LayoutConf != nil && site.LayoutConf.GetValue("repo-name") != ""
+	if !hasRepoName {
+		if b, err := fs.ReadFile(sysFS, filepath.ToSlash(filepath.Join(repoDir, "profiles", "repo_name"))); err == nil && strings.TrimSpace(string(b)) != "" {
+			hasRepoName = true
+		}
+	}
+	hasMD5CacheDir := false
+	if st, err := fs.Stat(sysFS, filepath.ToSlash(filepath.Join(repoDir, "metadata", "md5-cache"))); err == nil && st.IsDir() {
+		hasMD5CacheDir = true
+	}
+	return &lints.RepoLintContext{
+		FS:             sysFS,
+		RepoDirInFS:    repoDir,
+		QAPolicy:       site.QAPolicy,
+		LayoutConf:     site.LayoutConf,
+		UseExpandDescs: site.UseExpandDescs,
+		ArchList:       site.ArchList,
+		HasRepoName:    hasRepoName,
+		HasMD5CacheDir: hasMD5CacheDir,
+	}
+}
+
 // parseRepoCategoriesAndPackages recursively crawls and parses the repo's categories, packages, and their ebuilds.
-func parseRepoCategoriesAndPackages(sysFS fs.FS, repoDir string, repoName string, fastGit bool, remoteURL string, site *g2.SiteData, targetMap TargetPackages) error {
+func parseRepoCategoriesAndPackages(sysFS fs.FS, repoDir string, localRepoDir string, gitInfo *repoGitInfo, repoName string, fastGit bool, remoteURL string, site *g2.SiteData, targetMap TargetPackages) error {
+	if gitInfo == nil {
+		gitInfo = newRepoGitInfo(sysFS, repoDir, localRepoDir, fastGit)
+	}
+
+	lintRepoKey := localRepoDir
+	if lintRepoKey == "" {
+		lintRepoKey = fmt.Sprintf("virtual:%s:%p", repoName, site)
+	}
+	lints.SetRepoContext(lintRepoKey, newRepoLintContext(sysFS, repoDir, site))
+	defer lints.ClearRepoContext(lintRepoKey)
+
 	supportedCategories := make(map[string]bool)
 	if categoriesBytes, err := fs.ReadFile(sysFS, filepath.ToSlash(filepath.Join(repoDir, "profiles", "categories"))); err == nil {
-		for _, line := range strings.Split(string(categoriesBytes), "\n") {
+		for line := range strings.SplitSeq(string(categoriesBytes), "\n") {
 			cat := strings.TrimSpace(line)
 			if cat != "" && !strings.HasPrefix(cat, "#") {
 				supportedCategories[cat] = true
@@ -274,19 +311,16 @@ func parseRepoCategoriesAndPackages(sysFS fs.FS, repoDir string, repoName string
 	for j := range site.InfoPkgs {
 		atom := site.InfoPkgs[j].PackageAtom
 		baseAtom := atom
-		if idx := strings.Index(atom, ":"); idx != -1 {
-			baseAtom = atom[:idx]
+		if before, _, ok := strings.Cut(atom, ":"); ok {
+			baseAtom = before
 		}
 		infoPkgsMap[baseAtom] = true
 	}
 
 	hasGentooMaster := false
 	if site.LayoutConf != nil {
-		for _, master := range site.LayoutConf.Masters() {
-			if master == "gentoo" {
-				hasGentooMaster = true
-				break
-			}
+		if slices.Contains(site.LayoutConf.Masters(), "gentoo") {
+			hasGentooMaster = true
 		}
 	}
 	mainCats := g2.FetchMainGentooCategories()
@@ -295,6 +329,24 @@ func parseRepoCategoriesAndPackages(sysFS fs.FS, repoDir string, repoName string
 	if err != nil {
 		return fmt.Errorf("reading repo dir: %w", err)
 	}
+
+	type pkgWorkItem struct {
+		catIdx  int
+		catName string
+		catPath string
+		inMain  bool
+		pkgName string
+	}
+
+	type catWorkGroup struct {
+		name     string
+		inMain   bool
+		packages []g2.PackageData
+		mu       sync.Mutex
+	}
+
+	var catGroups []*catWorkGroup
+	var workItems []pkgWorkItem
 
 	for _, entry := range entries {
 		if !entry.IsDir() {
@@ -320,7 +372,6 @@ func parseRepoCategoriesAndPackages(sysFS fs.FS, repoDir string, repoName string
 						categoryAllowed = true
 						break
 					} else if len(parts) == 1 {
-						// It's a bare package name, we must search all categories
 						categoryAllowed = true
 						break
 					}
@@ -331,9 +382,7 @@ func parseRepoCategoriesAndPackages(sysFS fs.FS, repoDir string, repoName string
 			}
 		}
 
-		catData := g2.CategoryData{Name: name}
 		catPath := filepath.Join(repoDir, name)
-
 		inMain := len(mainCats) == 0 || mainCats[name]
 
 		pkgEntries, err := fs.ReadDir(sysFS, filepath.ToSlash(catPath))
@@ -341,6 +390,12 @@ func parseRepoCategoriesAndPackages(sysFS fs.FS, repoDir string, repoName string
 			log.Printf("Warning: reading category dir %s: %v", catPath, err)
 			continue
 		}
+
+		catIdx := len(catGroups)
+		catGroups = append(catGroups, &catWorkGroup{
+			name:   name,
+			inMain: inMain,
+		})
 
 		for _, pkgEntry := range pkgEntries {
 			if !pkgEntry.IsDir() {
@@ -350,285 +405,333 @@ func parseRepoCategoriesAndPackages(sysFS fs.FS, repoDir string, repoName string
 			if strings.HasPrefix(pkgName, ".") {
 				continue
 			}
-
-			pkgPath := filepath.Join(catPath, pkgName)
-			pkgData := g2.PackageData{
-				Name:     pkgName,
-				Category: name,
-			}
-
 			pkgStr := name + "/" + pkgName
-
 			if len(targetMap) > 0 {
-				qualified := pkgStr
-				if !targetMap[qualified] && !targetMap[pkgName] && !targetMap[name] {
+				if !targetMap[pkgStr] && !targetMap[pkgName] && !targetMap[name] {
 					continue
 				}
 			}
-
-			files, err := fs.ReadDir(sysFS, filepath.ToSlash(pkgPath))
-			if err != nil {
-				log.Printf("Warning: reading package dir %s: %v", pkgPath, err)
-				continue
-			}
-
-			for _, file := range files {
-				if file.IsDir() || !strings.HasSuffix(file.Name(), ".ebuild") {
-					continue
-				}
-
-				ebuildPath := filepath.Join(pkgPath, file.Name())
-				ebuild, err := g2.ParseEbuild(sysFS, filepath.ToSlash(ebuildPath), g2.ParseFull)
-				if err != nil {
-					log.Printf("Warning: parsing ebuild %s in repo %s: %v", ebuildPath, repoName, err)
-					continue
-				}
-
-				for _, w := range ebuild.ParseWarnings {
-					log.Printf("Warning: parsing ebuild %s in repo %s: %v", ebuildPath, repoName, w)
-				}
-
-				version := ""
-				if ebuild.Vars != nil {
-					version = ebuild.Vars["PV"]
-				}
-				if version == "" {
-					vars := g2.ParseEbuildVariables(file.Name())
-					if vars != nil {
-						version = vars["PV"]
-						if version == "" {
-							version = vars["PVR"]
-						}
-					}
-				}
-
-				pvr := ""
-				if ebuild.Vars != nil {
-					pvr = ebuild.Vars["PVR"]
-				}
-				if pvr == "" {
-					vars := g2.ParseEbuildVariables(file.Name())
-					if vars != nil {
-						pvr = vars["PVR"]
-					}
-				}
-				if pvr == "" {
-					pvr = version
-				}
-
-				var ebuildRawURL string
-				relPath, _ := filepath.Rel(repoDir, ebuildPath)
-				if remoteURL != "" {
-					if commitHash, _ := getFileCommit(repoDir, relPath); commitHash != "" {
-						ebuildRawURL = generateGitHubRawURL(remoteURL, commitHash, relPath)
-					}
-				}
-
-				modTime := getFileModTime(repoDir, relPath, fastGit)
-				if modTime.After(pkgData.ModTime) {
-					pkgData.ModTime = modTime
-				}
-
-				vd := g2.VersionData{
-					Version:      version,
-					PVR:          pvr,
-					Ebuild:       ebuild,
-					EbuildRawURL: ebuildRawURL,
-					ModTime:      modTime,
-				}
-
-				if slot := ebuild.Vars["SLOT"]; slot != "" {
-					if moves, ok := slotMovesMap[pkgStr]; ok {
-						for _, sm := range moves {
-							if sm.Old == slot {
-								vd.MovedToSlot = sm.New
-								break
-							}
-						}
-					}
-				}
-
-				pkgData.Versions = append(pkgData.Versions, vd)
-			}
-
-			if len(pkgData.Versions) == 0 {
-				continue
-			}
-
-			pkgData.HighestStableVersion, pkgData.HighestTestingVersion, pkgData.SnapshotVersion, pkgData.EbuildCount = getHighestVersionsAndCount(pkgData.Versions, site)
-
-			metaPath := filepath.Join(pkgPath, "metadata.xml")
-			metadata, err := parseMetadataFromFS(sysFS, filepath.ToSlash(metaPath))
-			if err == nil {
-				if pkgMd, ok := metadata.(*g2.PkgMetadata); ok {
-					pkgData.Metadata = pkgMd
-				} else {
-					pkgData.MetadataError = fmt.Errorf("metadata.xml is not a pkgmetadata")
-				}
-			} else {
-				pkgData.MetadataError = err
-			}
-
-			var highestUnmasked *g2.Ebuild
-			var highestMasked *g2.Ebuild
-			for _, v := range pkgData.Versions {
-				if v.Ebuild == nil || v.Ebuild.Vars == nil {
-					continue
-				}
-				isMasked := true
-				for _, p := range strings.Fields(v.Ebuild.Vars["KEYWORDS"]) {
-					if !strings.HasPrefix(p, "-") && !strings.HasPrefix(p, "~") {
-						isMasked = false
-						break
-					}
-				}
-				if !isMasked {
-					if highestUnmasked == nil || g2.CompareVersions(v.Version, highestUnmasked.Vars["PV"]) > 0 {
-						highestUnmasked = v.Ebuild
-					}
-				} else {
-					if highestMasked == nil || g2.CompareVersions(v.Version, highestMasked.Vars["PV"]) > 0 {
-						highestMasked = v.Ebuild
-					}
-				}
-			}
-
-			targetEbuild := highestUnmasked
-			if targetEbuild == nil {
-				targetEbuild = highestMasked
-			}
-			if targetEbuild == nil && len(pkgData.Versions) > 0 {
-				for _, v := range pkgData.Versions {
-					if v.Ebuild != nil && v.Ebuild.Vars != nil {
-						targetEbuild = v.Ebuild
-						break
-					}
-				}
-			}
-
-			if pkgData.Metadata != nil && len(pkgData.Metadata.LongDescription) > 0 {
-				pkgData.DominantDescription = pkgData.Metadata.LongDescription[0].Body
-			} else if targetEbuild != nil {
-				pkgData.DominantDescription = targetEbuild.Vars["DESCRIPTION"]
-			}
-
-			if targetEbuild != nil {
-				pkgData.DominantHomepage = targetEbuild.Vars["HOMEPAGE"]
-				pkgData.DominantLicense = targetEbuild.Vars["LICENSE"]
-			}
-
-			sort.Slice(pkgData.Versions, func(i, j int) bool {
-				return pkgData.Versions[i].Version > pkgData.Versions[j].Version
+			workItems = append(workItems, pkgWorkItem{
+				catIdx:  catIdx,
+				catName: name,
+				catPath: catPath,
+				inMain:  inMain,
+				pkgName: pkgName,
 			})
+		}
+	}
 
-			if remoteURL != "" {
-				relPath, _ := filepath.Rel(repoDir, metaPath)
-				if commitHash, _ := getFileCommit(repoDir, relPath); commitHash != "" {
-					pkgData.MetadataRawURL = generateGitHubRawURL(remoteURL, commitHash, relPath)
-				}
-			}
+	processPkg := func(item pkgWorkItem) {
+		name := item.catName
+		pkgName := item.pkgName
+		inMain := item.inMain
+		pkgPath := filepath.Join(item.catPath, pkgName)
+		pkgData := g2.PackageData{
+			Name:     pkgName,
+			Category: name,
+		}
+		pkgStr := name + "/" + pkgName
 
-			for i, v := range pkgData.Versions {
-				if v.Ebuild != nil {
-					applicableMirrors := make(map[string][]string)
-					for _, uri := range v.Ebuild.SrcUri {
-						if strings.HasPrefix(uri.URL, "mirror://") {
-							parts := strings.SplitN(uri.URL[len("mirror://"):], "/", 2)
-							if len(parts) > 0 {
-								mirrorName := parts[0]
-								if mirrors, ok := site.ThirdPartyMirrors[mirrorName]; ok {
-									applicableMirrors[mirrorName] = mirrors
-								}
-							}
-						}
-					}
-					if len(applicableMirrors) > 0 {
-						pkgData.Versions[i].ApplicableMirrors = applicableMirrors
-					}
-				}
-			}
-
-			manifestPath := filepath.Join(pkgPath, "Manifest")
-			manifest, err := parseManifestFromFS(sysFS, filepath.ToSlash(manifestPath))
-			if err == nil {
-				pkgData.Manifest = manifest
-				pkgData.ManifestData = buildManifestData(manifest, pkgData.Versions, site.ThirdPartyMirrors)
-			}
-
-			filesDirPath := filepath.Join(pkgPath, "files")
-			if info, err := fs.Stat(sysFS, filepath.ToSlash(filesDirPath)); err == nil && info.IsDir() {
-				fileEntries, err := fs.ReadDir(sysFS, filepath.ToSlash(filesDirPath))
-				if err == nil {
-					for _, fe := range fileEntries {
-						if !fe.IsDir() {
-							fd := g2.FileData{
-								Name: fe.Name(),
-								Path: filepath.Join(filesDirPath, fe.Name()),
-							}
-							if remoteURL != "" {
-								relPath, _ := filepath.Rel(repoDir, fd.Path)
-								if commitHash, _ := getFileCommit(repoDir, relPath); commitHash != "" {
-									fd.RawURL = generateGitHubRawURL(remoteURL, commitHash, relPath)
-								}
-							}
-							pkgData.Files = append(pkgData.Files, fd)
-						}
-					}
-				}
-			}
-
-			g2PkgData := g2.PackageData{
-				Name:          pkgData.Name,
-				Category:      pkgData.Category,
-				Metadata:      pkgData.Metadata,
-				MetadataError: pkgData.MetadataError,
-				Manifest:      pkgData.Manifest,
-			}
-
-			if dep, ok := deprecatedMap[pkgStr]; ok {
-				pkgData.Deprecated = dep
-			}
-
-			if mask, ok := maskedMap[pkgStr]; ok {
-				pkgData.Masked = mask
-			}
-
-			for i, v := range pkgData.Versions {
-				pkgData.Versions[i].Deprecated = pkgData.Deprecated
-				pkgData.Versions[i].Masked = pkgData.Masked
-
-				g2PkgData.Versions = append(g2PkgData.Versions, g2.VersionData{
-					Version:      v.Version,
-					PVR:          v.PVR,
-					Ebuild:       v.Ebuild,
-					EbuildRawURL: v.EbuildRawURL,
-					Deprecated:   pkgData.Versions[i].Deprecated,
-					Masked:       pkgData.Versions[i].Masked,
-				})
-			}
-
-			if infoPkgsMap[pkgStr] {
-				pkgData.IsInfoPkg = true
-			}
-
-			pkgData.LintWarnings = lints.PerformLinting(repoDir, &g2PkgData)
-
-			if len(supportedCategories) > 0 && !supportedCategories[name] {
-				if hasGentooMaster && mainCats[name] {
-					// No warning, perfectly valid inherited category
-				} else if inMain {
-					pkgData.LintWarnings = append(pkgData.LintWarnings, fmt.Sprintf("Warning: category '%s' is not listed in repo's profiles/categories", name))
-				} else {
-					pkgData.LintWarnings = append(pkgData.LintWarnings, fmt.Sprintf("Error: category '%s' is not listed in repo's profiles/categories or the main gentoo categories list", name))
-				}
-			} else if len(mainCats) > 0 && !inMain {
-				pkgData.LintWarnings = append(pkgData.LintWarnings, fmt.Sprintf("Note: category '%s' is not in the main gentoo categories list", name))
-			}
-
-			catData.Packages = append(catData.Packages, pkgData)
+		files, err := fs.ReadDir(sysFS, filepath.ToSlash(pkgPath))
+		if err != nil {
+			log.Printf("Warning: reading package dir %s: %v", pkgPath, err)
+			return
 		}
 
-		if len(catData.Packages) > 0 {
+		for _, file := range files {
+			if file.IsDir() || !strings.HasSuffix(file.Name(), ".ebuild") {
+				continue
+			}
+
+			ebuildPath := filepath.Join(pkgPath, file.Name())
+			ebuild, err := g2.ParseEbuild(sysFS, filepath.ToSlash(ebuildPath), g2.ParseFull)
+			if err != nil {
+				log.Printf("Warning: parsing ebuild %s in repo %s: %v", ebuildPath, repoName, err)
+				continue
+			}
+
+			for _, w := range ebuild.ParseWarnings {
+				log.Printf("Warning: parsing ebuild %s in repo %s: %v", ebuildPath, repoName, w)
+			}
+
+			version := ""
+			if ebuild.Vars != nil {
+				version = ebuild.Vars["PV"]
+			}
+			if version == "" {
+				vars := g2.ParseEbuildVariables(file.Name())
+				if vars != nil {
+					version = vars["PV"]
+					if version == "" {
+						version = vars["PVR"]
+					}
+				}
+			}
+
+			pvr := ""
+			if ebuild.Vars != nil {
+				pvr = ebuild.Vars["PVR"]
+			}
+			if pvr == "" {
+				vars := g2.ParseEbuildVariables(file.Name())
+				if vars != nil {
+					pvr = vars["PVR"]
+				}
+			}
+			if pvr == "" {
+				pvr = version
+			}
+
+			var ebuildRawURL string
+			relPath, _ := filepath.Rel(repoDir, ebuildPath)
+			if remoteURL != "" {
+				if commitHash := gitInfo.fileCommit(relPath); commitHash != "" {
+					ebuildRawURL = generateGitHubRawURL(remoteURL, commitHash, relPath)
+				}
+			}
+
+			modTime := gitInfo.fileModTime(relPath)
+			if modTime.After(pkgData.ModTime) {
+				pkgData.ModTime = modTime
+			}
+
+			vd := g2.VersionData{
+				Version:      version,
+				PVR:          pvr,
+				Ebuild:       ebuild,
+				EbuildRawURL: ebuildRawURL,
+				ModTime:      modTime,
+			}
+
+			if slot := ebuild.Vars["SLOT"]; slot != "" {
+				if moves, ok := slotMovesMap[pkgStr]; ok {
+					for _, sm := range moves {
+						if sm.Old == slot {
+							vd.MovedToSlot = sm.New
+							break
+						}
+					}
+				}
+			}
+
+			pkgData.Versions = append(pkgData.Versions, vd)
+		}
+
+		if len(pkgData.Versions) == 0 {
+			return
+		}
+
+		pkgData.HighestStableVersion, pkgData.HighestTestingVersion, pkgData.SnapshotVersion, pkgData.EbuildCount = getHighestVersionsAndCount(pkgData.Versions, site)
+
+		metaPath := filepath.Join(pkgPath, "metadata.xml")
+		metadata, err := parseMetadataFromFS(sysFS, filepath.ToSlash(metaPath))
+		if err == nil {
+			if pkgMd, ok := metadata.(*g2.PkgMetadata); ok {
+				pkgData.Metadata = pkgMd
+			} else {
+				pkgData.MetadataError = fmt.Errorf("metadata.xml is not a pkgmetadata")
+			}
+		} else {
+			pkgData.MetadataError = err
+		}
+
+		var highestUnmasked *g2.Ebuild
+		var highestMasked *g2.Ebuild
+		for _, v := range pkgData.Versions {
+			if v.Ebuild == nil || v.Ebuild.Vars == nil {
+				continue
+			}
+			isMasked := true
+			for p := range strings.FieldsSeq(v.Ebuild.Vars["KEYWORDS"]) {
+				if !strings.HasPrefix(p, "-") && !strings.HasPrefix(p, "~") {
+					isMasked = false
+					break
+				}
+			}
+			if !isMasked {
+				if highestUnmasked == nil || g2.CompareVersions(v.Version, highestUnmasked.Vars["PV"]) > 0 {
+					highestUnmasked = v.Ebuild
+				}
+			} else {
+				if highestMasked == nil || g2.CompareVersions(v.Version, highestMasked.Vars["PV"]) > 0 {
+					highestMasked = v.Ebuild
+				}
+			}
+		}
+
+		targetEbuild := highestUnmasked
+		if targetEbuild == nil {
+			targetEbuild = highestMasked
+		}
+		if targetEbuild == nil && len(pkgData.Versions) > 0 {
+			for _, v := range pkgData.Versions {
+				if v.Ebuild != nil && v.Ebuild.Vars != nil {
+					targetEbuild = v.Ebuild
+					break
+				}
+			}
+		}
+
+		if pkgData.Metadata != nil && len(pkgData.Metadata.LongDescription) > 0 {
+			pkgData.DominantDescription = pkgData.Metadata.LongDescription[0].Body
+		} else if targetEbuild != nil {
+			pkgData.DominantDescription = targetEbuild.Vars["DESCRIPTION"]
+		}
+
+		if targetEbuild != nil {
+			pkgData.DominantHomepage = targetEbuild.Vars["HOMEPAGE"]
+			pkgData.DominantLicense = targetEbuild.Vars["LICENSE"]
+		}
+
+		sort.Slice(pkgData.Versions, func(i, j int) bool {
+			return pkgData.Versions[i].Version > pkgData.Versions[j].Version
+		})
+
+		if remoteURL != "" {
+			relPath, _ := filepath.Rel(repoDir, metaPath)
+			if commitHash := gitInfo.fileCommit(relPath); commitHash != "" {
+				pkgData.MetadataRawURL = generateGitHubRawURL(remoteURL, commitHash, relPath)
+			}
+		}
+
+		for i, v := range pkgData.Versions {
+			if v.Ebuild != nil {
+				applicableMirrors := make(map[string][]string)
+				for _, uri := range v.Ebuild.SrcUri {
+					if strings.HasPrefix(uri.URL, "mirror://") {
+						parts := strings.SplitN(uri.URL[len("mirror://"):], "/", 2)
+						if len(parts) > 0 {
+							mirrorName := parts[0]
+							if mirrors, ok := site.ThirdPartyMirrors[mirrorName]; ok {
+								applicableMirrors[mirrorName] = mirrors
+							}
+						}
+					}
+				}
+				if len(applicableMirrors) > 0 {
+					pkgData.Versions[i].ApplicableMirrors = applicableMirrors
+				}
+			}
+		}
+
+		manifestPath := filepath.Join(pkgPath, "Manifest")
+		manifest, err := parseManifestFromFS(sysFS, filepath.ToSlash(manifestPath))
+		if err == nil {
+			pkgData.Manifest = manifest
+			pkgData.ManifestData = buildManifestData(manifest, pkgData.Versions, site.ThirdPartyMirrors)
+		}
+
+		filesDirPath := filepath.Join(pkgPath, "files")
+		if info, err := fs.Stat(sysFS, filepath.ToSlash(filesDirPath)); err == nil && info.IsDir() {
+			fileEntries, err := fs.ReadDir(sysFS, filepath.ToSlash(filesDirPath))
+			if err == nil {
+				for _, fe := range fileEntries {
+					if !fe.IsDir() {
+						fd := g2.FileData{
+							Name: fe.Name(),
+							Path: filepath.Join(filesDirPath, fe.Name()),
+						}
+						if remoteURL != "" {
+							relPath, _ := filepath.Rel(repoDir, fd.Path)
+							if commitHash := gitInfo.fileCommit(relPath); commitHash != "" {
+								fd.RawURL = generateGitHubRawURL(remoteURL, commitHash, relPath)
+							}
+						}
+						pkgData.Files = append(pkgData.Files, fd)
+					}
+				}
+			}
+		}
+
+		g2PkgData := g2.PackageData{
+			Name:          pkgData.Name,
+			Category:      pkgData.Category,
+			Metadata:      pkgData.Metadata,
+			MetadataError: pkgData.MetadataError,
+			Manifest:      pkgData.Manifest,
+			Files:         pkgData.Files,
+		}
+
+		if dep, ok := deprecatedMap[pkgStr]; ok {
+			pkgData.Deprecated = dep
+		}
+
+		if mask, ok := maskedMap[pkgStr]; ok {
+			pkgData.Masked = mask
+		}
+
+		for i, v := range pkgData.Versions {
+			pkgData.Versions[i].Deprecated = pkgData.Deprecated
+			pkgData.Versions[i].Masked = pkgData.Masked
+
+			g2PkgData.Versions = append(g2PkgData.Versions, g2.VersionData{
+				Version:      v.Version,
+				PVR:          v.PVR,
+				Ebuild:       v.Ebuild,
+				EbuildRawURL: v.EbuildRawURL,
+				Deprecated:   pkgData.Versions[i].Deprecated,
+				Masked:       pkgData.Versions[i].Masked,
+			})
+		}
+
+		if infoPkgsMap[pkgStr] {
+			pkgData.IsInfoPkg = true
+		}
+
+		pkgData.LintWarnings = lints.PerformLinting(lintRepoKey, &g2PkgData)
+		for _, v := range pkgData.Versions {
+			if v.Ebuild != nil {
+				v.Ebuild.ClearSyntaxCache()
+			}
+		}
+
+		if len(supportedCategories) > 0 && !supportedCategories[name] {
+			if hasGentooMaster && mainCats[name] {
+				// No warning, perfectly valid inherited category
+			} else if inMain {
+				pkgData.LintWarnings = append(pkgData.LintWarnings, fmt.Sprintf("Warning: category '%s' is not listed in repo's profiles/categories", name))
+			} else {
+				pkgData.LintWarnings = append(pkgData.LintWarnings, fmt.Sprintf("Error: category '%s' is not listed in repo's profiles/categories or the main gentoo categories list", name))
+			}
+		} else if len(mainCats) > 0 && !inMain {
+			pkgData.LintWarnings = append(pkgData.LintWarnings, fmt.Sprintf("Note: category '%s' is not in the main gentoo categories list", name))
+		}
+
+		grp := catGroups[item.catIdx]
+		grp.mu.Lock()
+		grp.packages = append(grp.packages, pkgData)
+		grp.mu.Unlock()
+	}
+
+	numWorkers := max(runtime.GOMAXPROCS(0), 1)
+	if len(workItems) <= 1 || numWorkers == 1 {
+		for _, item := range workItems {
+			processPkg(item)
+		}
+	} else {
+		if numWorkers > len(workItems) {
+			numWorkers = len(workItems)
+		}
+		itemCh := make(chan pkgWorkItem, numWorkers*2)
+		var wg sync.WaitGroup
+		for w := 0; w < numWorkers; w++ {
+			wg.Go(func() {
+				for item := range itemCh {
+					processPkg(item)
+				}
+			})
+		}
+		for _, item := range workItems {
+			itemCh <- item
+		}
+		close(itemCh)
+		wg.Wait()
+	}
+
+	for _, grp := range catGroups {
+		if len(grp.packages) > 0 {
+			name := grp.name
+			inMain := grp.inMain
 			if len(supportedCategories) > 0 && !supportedCategories[name] {
 				if hasGentooMaster && mainCats[name] {
 					// No warning, perfectly valid inherited category
@@ -641,10 +744,13 @@ func parseRepoCategoriesAndPackages(sysFS fs.FS, repoDir string, repoName string
 				log.Printf("Note: category '%s' is not in the main gentoo categories list", name)
 			}
 
-			sort.Slice(catData.Packages, func(i, j int) bool {
-				return catData.Packages[i].Name < catData.Packages[j].Name
+			sort.Slice(grp.packages, func(i, j int) bool {
+				return grp.packages[i].Name < grp.packages[j].Name
 			})
-			site.Categories = append(site.Categories, catData)
+			site.Categories = append(site.Categories, g2.CategoryData{
+				Name:     name,
+				Packages: grp.packages,
+			})
 		}
 	}
 

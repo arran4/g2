@@ -1,7 +1,10 @@
 package main
 
 import (
+	"bufio"
 	"context"
+	"maps"
+	"slices"
 
 	"flag"
 	"fmt"
@@ -33,6 +36,7 @@ func getProcessMemUsage() uint64 {
 }
 
 type SourceURL string
+type LocalRepoDir string
 
 func getDefaultCacheDir() string {
 	cacheDir, err := os.UserCacheDir()
@@ -156,7 +160,6 @@ func (cfg *MainArgConfig) cmdOverlay(args []string) error {
 	g, _ := errgroup.WithContext(context.Background())
 
 	for _, task := range tasks {
-		task := task
 		g.Go(func() error {
 			isRemote := strings.HasPrefix(task.Location, "http://") || strings.HasPrefix(task.Location, "https://") || strings.HasPrefix(task.Location, "git://")
 			var parseLocation string
@@ -201,7 +204,7 @@ func (cfg *MainArgConfig) cmdOverlay(args []string) error {
 				}
 
 				t1 := time.Now()
-				siteData, err = parseRepo(os.DirFS(parseLocation), ".", task.Name, *fastGit, nil, SourceURL(task.Location))
+				siteData, err = parseRepo(os.DirFS(parseLocation), ".", task.Name, *fastGit, nil, SourceURL(task.Location), LocalRepoDir(parseLocation))
 				if err != nil {
 					return fmt.Errorf("parsing repo %s: %w", task.Name, err)
 				}
@@ -223,7 +226,7 @@ func (cfg *MainArgConfig) cmdOverlay(args []string) error {
 				}
 
 				t1 := time.Now()
-				siteData, err = parseRepo(os.DirFS(parseLocation), ".", task.Name, *fastGit, nil, SourceURL(task.Location))
+				siteData, err = parseRepo(os.DirFS(parseLocation), ".", task.Name, *fastGit, nil, SourceURL(task.Location), LocalRepoDir(parseLocation))
 				if err != nil {
 					return fmt.Errorf("parsing repo %s: %w", task.Name, err)
 				}
@@ -344,7 +347,7 @@ func parseLayoutConfFromFS(sysFS fs.FS, path string) (*g2.LayoutConf, error) {
 	return g2.ParseLayoutConfFromReader(file)
 }
 
-func parseMetadataFromFS(sysFS fs.FS, path string) (interface{}, error) {
+func parseMetadataFromFS(sysFS fs.FS, path string) (any, error) {
 	file, err := sysFS.Open(path)
 	if err != nil {
 		return nil, err
@@ -383,9 +386,9 @@ func getHighestVersionsAndCount(versions []g2.VersionData, site *g2.SiteData) ([
 		}
 
 		keywords := ver.Ebuild.Vars["KEYWORDS"]
-		parts := strings.Fields(keywords)
+		parts := strings.FieldsSeq(keywords)
 
-		for _, p := range parts {
+		for p := range parts {
 			if strings.HasPrefix(p, "-") {
 				continue
 			}
@@ -532,14 +535,15 @@ func isValidLicense(s string) bool {
 // sanitizeFilename restricts a string to characters safe for file and directory names
 // and limits its length to prevent "file name too long" errors.
 func sanitizeFilename(s string) string {
+	origLen := len(s)
 	if len(s) > 250 {
-		log.Printf("Warning: name %q is too long, truncating to 250 characters", s)
 		s = s[:250]
 	}
 	var sb strings.Builder
+	nullCount := 0
 	for _, r := range s {
 		if r == '\x00' {
-			log.Printf("Warning: name %q contains null bytes, stripping them", s)
+			nullCount++
 			continue
 		}
 		// Replace characters that are invalid or problematic in file names and URLs
@@ -550,8 +554,8 @@ func sanitizeFilename(s string) string {
 		}
 	}
 	res := sb.String()
-	if res != s {
-		log.Printf("Warning: name %q was sanitized to %q", s, res)
+	if origLen > 250 || nullCount > 0 || res != s {
+		log.Printf("Warning: filename (len=%d, null_bytes=%d) was sanitized to %q", origLen, nullCount, res)
 	}
 	return res
 }
@@ -562,6 +566,7 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool, r
 	title := defaultTitle
 	var repoName string
 	var remoteURL string
+	var localRepoDir string
 
 	var targetPkgs TargetPackages
 
@@ -569,12 +574,17 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool, r
 		switch o := opt.(type) {
 		case SourceURL:
 			remoteURL = string(o)
+		case LocalRepoDir:
+			localRepoDir = string(o)
 		case TargetPackages:
 			targetPkgs = o
 		}
 	}
+	if localRepoDir == "" && repoDir != "." && repoDir != "" {
+		localRepoDir = repoDir
+	}
 
-	remoteURL = resolveRemoteURL(repoDir, repoInfo, remoteURL)
+	remoteURL = resolveRemoteURL(localRepoDir, repoInfo, remoteURL)
 
 	repoNameBytes, err := fs.ReadFile(sysFS, filepath.ToSlash(filepath.Join(repoDir, "profiles", "repo_name")))
 	if err == nil && len(repoNameBytes) > 0 {
@@ -584,6 +594,8 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool, r
 		if repoInfo != nil && repoInfo.Name != "" {
 			repoName = repoInfo.Name
 		} else if base := filepath.Base(repoDir); base != "." && base != "" {
+			repoName = base
+		} else if base := filepath.Base(localRepoDir); base != "." && base != "" {
 			repoName = base
 		} else {
 			repoName = defaultTitle
@@ -607,6 +619,8 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool, r
 		PackageCount:    0,
 	}
 
+	gitInfo := newRepoGitInfo(sysFS, repoDir, localRepoDir, fastGit)
+
 	parseRepoProfilesDir(sysFS, repoDir, site)
 
 	if site.UseExpandDescs != nil {
@@ -616,7 +630,7 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool, r
 	}
 
 	parseRepoNews(sysFS, repoDir, site)
-	parseRepoAuthors(repoDir, site, remoteURL)
+	parseRepoAuthors(sysFS, repoDir, gitInfo, site, remoteURL)
 
 	var profilesDescEntries []g2.ProfileDescEntry
 	profilesDescBytes, err := fs.ReadFile(sysFS, filepath.ToSlash(filepath.Join(repoDir, "profiles", "profiles.desc")))
@@ -656,10 +670,8 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool, r
 	}
 
 	pf, err := sysFS.Open(filepath.ToSlash(filepath.Join(repoDir, "metadata", "projects.xml")))
-	if err != nil {
-		if fastGit {
-			pf, err = os.Open(filepath.Join(repoDir, "metadata", "projects.xml"))
-		}
+	if err != nil && fastGit && localRepoDir != "" {
+		pf, err = os.Open(filepath.Join(localRepoDir, "metadata", "projects.xml"))
 	}
 	if err == nil {
 		if projects, err := g2.ParseProjectsFromReader(pf); err == nil {
@@ -670,7 +682,7 @@ func parseRepo(sysFS fs.FS, repoDir string, defaultTitle string, fastGit bool, r
 		_ = pf.Close()
 	}
 
-	if err := parseRepoCategoriesAndPackages(sysFS, repoDir, repoName, fastGit, remoteURL, site, targetPkgs); err != nil {
+	if err := parseRepoCategoriesAndPackages(sysFS, repoDir, localRepoDir, gitInfo, repoName, fastGit, remoteURL, site, targetPkgs); err != nil {
 		return nil, err
 	}
 
@@ -718,13 +730,7 @@ func extractVirtualDeps(site *g2.SiteData) {
 				pkg.VirtualDeps = append(pkg.VirtualDeps, dep)
 				if targetPkg, ok := pkgMap[dep]; ok {
 					virtualName := pkg.Category + "/" + pkg.Name
-					found := false
-					for _, v := range targetPkg.ReverseVirtuals {
-						if v == virtualName {
-							found = true
-							break
-						}
-					}
+					found := slices.Contains(targetPkg.ReverseVirtuals, virtualName)
 					if !found {
 						targetPkg.ReverseVirtuals = append(targetPkg.ReverseVirtuals, virtualName)
 					}
@@ -737,13 +743,7 @@ func extractVirtualDeps(site *g2.SiteData) {
 				if targetPkg, ok := pkgMap[dep]; ok {
 					for _, otherDep := range pkg.VirtualDeps {
 						if otherDep != dep {
-							found := false
-							for _, e := range targetPkg.Equivalents {
-								if e == otherDep {
-									found = true
-									break
-								}
-							}
+							found := slices.Contains(targetPkg.Equivalents, otherDep)
 							if !found {
 								targetPkg.Equivalents = append(targetPkg.Equivalents, otherDep)
 							}
@@ -904,14 +904,13 @@ func parseProfilesDirFS(sysFS fs.FS, repoDir string, entries []g2.ProfileDescEnt
 		var g errgroup.Group
 		var mu sync.Mutex
 		for _, fname := range fileNames {
-			fname := fname
 			g.Go(func() error {
 				b, err := fs.ReadFile(sysFS, path2.Join(path, fname))
 				if err == nil {
 					content := string(b)
 					var parents []string
 					if fname == "parent" {
-						for _, line := range strings.Split(content, "\n") {
+						for line := range strings.SplitSeq(content, "\n") {
 							line = strings.TrimSpace(line)
 							if line == "" || strings.HasPrefix(line, "#") {
 								continue
@@ -958,8 +957,8 @@ func parseProfilesDirFS(sysFS fs.FS, repoDir string, entries []g2.ProfileDescEnt
 
 func parseProfilesDesc(content string) []g2.ProfileDescEntry {
 	var entries []g2.ProfileDescEntry
-	lines := strings.Split(content, "\n")
-	for _, line := range lines {
+	lines := strings.SplitSeq(content, "\n")
+	for line := range lines {
 		line = strings.TrimSpace(line)
 		if line == "" || strings.HasPrefix(line, "#") {
 			continue
@@ -1000,6 +999,7 @@ type AggPackage struct {
 	Name                string
 	Category            string
 	Repos               map[string]*g2.SiteData
+	RepoVersions        map[string][]g2.VersionData
 	DominantDescription string
 	DominantHomepage    string
 	DominantLicense     string
@@ -1060,8 +1060,8 @@ func getRepoEclasses(site *g2.SiteData, aggPackages map[string]*AggPackage) []*A
 				if ver.Ebuild != nil && ver.Ebuild.Vars != nil {
 					inherited := ver.Ebuild.Vars["INHERITED"]
 					if inherited != "" {
-						eclasses := strings.Fields(inherited)
-						for _, ec := range eclasses {
+						eclasses := strings.FieldsSeq(inherited)
+						for ec := range eclasses {
 							if _, ok := eclassMap[ec]; !ok {
 								eclassMap[ec] = &AggEclass{
 									Name:  ec,
@@ -1098,6 +1098,8 @@ func getRepoEclasses(site *g2.SiteData, aggPackages map[string]*AggPackage) []*A
 
 func getRepoLicenses(site *g2.SiteData, aggPackages map[string]*AggPackage) []*AggLicense {
 	aggLicenses := make(map[string]*AggLicense)
+	seenPackages := make(map[string]map[string]bool)
+	seenAliases := make(map[string]map[string]bool)
 
 	for _, providedLic := range site.ProvidedLicenses {
 		if _, ok := aggLicenses[providedLic]; !ok {
@@ -1106,6 +1108,8 @@ func getRepoLicenses(site *g2.SiteData, aggPackages map[string]*AggPackage) []*A
 				ProvidedByRepos: map[string]*g2.SiteData{site.RepoName: site},
 				UsedByRepos:     make(map[string]*g2.SiteData),
 			}
+			seenPackages[providedLic] = make(map[string]bool)
+			seenAliases[providedLic] = make(map[string]bool)
 		}
 	}
 
@@ -1129,36 +1133,26 @@ func getRepoLicenses(site *g2.SiteData, aggPackages map[string]*AggPackage) []*A
 									ProvidedByRepos: make(map[string]*g2.SiteData),
 									UsedByRepos:     make(map[string]*g2.SiteData),
 								}
+								seenPackages[lic] = make(map[string]bool)
+								seenAliases[lic] = make(map[string]bool)
 							}
 
 							aggLicenses[lic].UsedByRepos[site.RepoName] = site
 
-							found := false
-							for _, p := range aggLicenses[lic].Packages {
-								if p.Name == pkg.Name && p.Category == pkg.Category {
-									found = true
-									break
-								}
-							}
-							if !found {
+							if !seenPackages[lic][pkgKey] {
 								if aggPkg, ok := aggPackages[pkgKey]; ok {
 									aggLicenses[lic].Packages = append(aggLicenses[lic].Packages, aggPkg)
 									aggLicenses[lic].Count++
+									seenPackages[lic][pkgKey] = true
 								}
 							}
 
 							if site.LicenseMapping != nil {
 								if aliases, ok := site.LicenseMapping[lic]; ok {
 									for _, alias := range aliases {
-										hasAlias := false
-										for _, existing := range aggLicenses[lic].Aliases {
-											if existing == alias {
-												hasAlias = true
-												break
-											}
-										}
-										if !hasAlias {
+										if !seenAliases[lic][alias] {
 											aggLicenses[lic].Aliases = append(aggLicenses[lic].Aliases, alias)
+											seenAliases[lic][alias] = true
 										}
 									}
 								}
@@ -1183,6 +1177,21 @@ func getRepoLicenses(site *g2.SiteData, aggPackages map[string]*AggPackage) []*A
 
 func getRepoUseFlags(site *g2.SiteData, aggPackages map[string]*AggPackage) []*AggUseFlag {
 	aggUseFlags := make(map[string]*AggUseFlag)
+	seenPackages := make(map[string]map[string]bool)
+
+	ensureFlag := func(flag string) *AggUseFlag {
+		uf, ok := aggUseFlags[flag]
+		if !ok {
+			uf = &AggUseFlag{
+				Name:          flag,
+				LocalDescs:    make(map[string]string),
+				MetadataDescs: make(map[string]string),
+			}
+			aggUseFlags[flag] = uf
+			seenPackages[flag] = make(map[string]bool)
+		}
+		return uf
+	}
 
 	for _, cat := range site.Categories {
 		for _, pkg := range cat.Packages {
@@ -1195,24 +1204,11 @@ func getRepoUseFlags(site *g2.SiteData, aggPackages map[string]*AggPackage) []*A
 						parsedFlags := parseIUSEFlagsFunc(iuse)
 						for _, flagObj := range parsedFlags {
 							flag := flagObj.Name
-							if _, ok := aggUseFlags[flag]; !ok {
-								aggUseFlags[flag] = &AggUseFlag{
-									Name:          flag,
-									LocalDescs:    make(map[string]string),
-									MetadataDescs: make(map[string]string),
-								}
-							}
-
-							foundPkg := false
-							for _, p := range aggUseFlags[flag].Packages {
-								if p.Name == pkg.Name && p.Category == pkg.Category {
-									foundPkg = true
-									break
-								}
-							}
-							if !foundPkg {
-								aggUseFlags[flag].Packages = append(aggUseFlags[flag].Packages, aggPackages[pkgKey])
-								aggUseFlags[flag].Count++
+							uf := ensureFlag(flag)
+							if !seenPackages[flag][pkgKey] {
+								uf.Packages = append(uf.Packages, aggPackages[pkgKey])
+								uf.Count++
+								seenPackages[flag][pkgKey] = true
 							}
 						}
 					}
@@ -1227,24 +1223,11 @@ func getRepoUseFlags(site *g2.SiteData, aggPackages map[string]*AggPackage) []*A
 							}
 							flag = strings.TrimPrefix(flag, "!") // remove negations
 
-							if _, ok := aggUseFlags[flag]; !ok {
-								aggUseFlags[flag] = &AggUseFlag{
-									Name:          flag,
-									LocalDescs:    make(map[string]string),
-									MetadataDescs: make(map[string]string),
-								}
-							}
-
-							foundPkg := false
-							for _, p := range aggUseFlags[flag].Packages {
-								if p.Name == pkg.Name && p.Category == pkg.Category {
-									foundPkg = true
-									break
-								}
-							}
-							if !foundPkg {
-								aggUseFlags[flag].Packages = append(aggUseFlags[flag].Packages, aggPackages[pkgKey])
-								aggUseFlags[flag].Count++
+							uf := ensureFlag(flag)
+							if !seenPackages[flag][pkgKey] {
+								uf.Packages = append(uf.Packages, aggPackages[pkgKey])
+								uf.Count++
+								seenPackages[flag][pkgKey] = true
 							}
 						}
 					}
@@ -1254,28 +1237,15 @@ func getRepoUseFlags(site *g2.SiteData, aggPackages map[string]*AggPackage) []*A
 			if pkg.Metadata != nil {
 				for _, useBlock := range pkg.Metadata.Use {
 					for _, flag := range useBlock.Flags {
-						if _, ok := aggUseFlags[flag.Name]; !ok {
-							aggUseFlags[flag.Name] = &AggUseFlag{
-								Name:          flag.Name,
-								LocalDescs:    make(map[string]string),
-								MetadataDescs: make(map[string]string),
-							}
-						}
-
-						foundPkg := false
-						for _, p := range aggUseFlags[flag.Name].Packages {
-							if p.Name == pkg.Name && p.Category == pkg.Category {
-								foundPkg = true
-								break
-							}
-						}
-						if !foundPkg {
-							aggUseFlags[flag.Name].Packages = append(aggUseFlags[flag.Name].Packages, aggPackages[pkgKey])
-							aggUseFlags[flag.Name].Count++
+						uf := ensureFlag(flag.Name)
+						if !seenPackages[flag.Name][pkgKey] {
+							uf.Packages = append(uf.Packages, aggPackages[pkgKey])
+							uf.Count++
+							seenPackages[flag.Name][pkgKey] = true
 						}
 
 						if flag.Text != "" {
-							aggUseFlags[flag.Name].MetadataDescs[pkgKey] = flag.Text
+							uf.MetadataDescs[pkgKey] = flag.Text
 						}
 					}
 				}
@@ -1347,8 +1317,8 @@ func parseDuration(s string) (time.Duration, string, error) {
 	if s == "" {
 		return 90 * 24 * time.Hour, "3 months", nil
 	}
-	if strings.HasSuffix(s, "mo") {
-		val, err := strconv.Atoi(strings.TrimSuffix(s, "mo"))
+	if before, ok := strings.CutSuffix(s, "mo"); ok {
+		val, err := strconv.Atoi(before)
 		if err != nil {
 			return 0, "", err
 		}
@@ -1357,8 +1327,8 @@ func parseDuration(s string) (time.Duration, string, error) {
 		}
 		return time.Duration(val) * 30 * 24 * time.Hour, fmt.Sprintf("%d months", val), nil
 	}
-	if strings.HasSuffix(s, "d") {
-		val, err := strconv.Atoi(strings.TrimSuffix(s, "d"))
+	if before, ok := strings.CutSuffix(s, "d"); ok {
+		val, err := strconv.Atoi(before)
 		if err != nil {
 			return 0, "", err
 		}
@@ -1592,41 +1562,33 @@ func aggregateMoves(sites []*g2.SiteData) map[string]*AggPackageMove {
 
 func aggregateEclasses(sites []*g2.SiteData) map[string]*AggEclass {
 	aggEclasses := make(map[string]*AggEclass)
+	eclassPkgMap := make(map[string]map[string]*AggPackage)
 	for _, site := range sites {
-		for _, eclass := range site.AggEclasses.([]*AggEclass) {
+		eclasses, ok := site.AggEclasses.([]*AggEclass)
+		if !ok {
+			continue
+		}
+		for _, eclass := range eclasses {
 			if _, ok := aggEclasses[eclass.Name]; !ok {
 				aggEclasses[eclass.Name] = &AggEclass{
 					Name:  eclass.Name,
 					Repos: make(map[string]*g2.SiteData),
 				}
+				eclassPkgMap[eclass.Name] = make(map[string]*AggPackage)
 			}
-			for rName, rData := range eclass.Repos {
-				aggEclasses[eclass.Name].Repos[rName] = rData
-			}
+			maps.Copy(aggEclasses[eclass.Name].Repos, eclass.Repos)
+			pkgMap := eclassPkgMap[eclass.Name]
 			for _, pkg := range eclass.Packages {
-				foundPkg := false
-				for _, existingPkg := range aggEclasses[eclass.Name].Packages {
-					if existingPkg.Name == pkg.Name && existingPkg.Category == pkg.Category {
-						newRepos := make(map[string]*g2.SiteData)
-						for k, v := range existingPkg.Repos {
-							newRepos[k] = v
-						}
-						for rName, rData := range pkg.Repos {
-							newRepos[rName] = rData
-						}
-						existingPkg.Repos = newRepos
-						foundPkg = true
-						break
-					}
-				}
-				if !foundPkg {
+				pkgKey := pkg.Category + "/" + pkg.Name
+				if existingPkg, ok := pkgMap[pkgKey]; ok {
+					maps.Copy(existingPkg.Repos, pkg.Repos)
+				} else {
 					newPkg := *pkg
-					newRepos := make(map[string]*g2.SiteData)
-					for k, v := range pkg.Repos {
-						newRepos[k] = v
-					}
+					newRepos := make(map[string]*g2.SiteData, len(pkg.Repos))
+					maps.Copy(newRepos, pkg.Repos)
 					newPkg.Repos = newRepos
 					aggEclasses[eclass.Name].Packages = append(aggEclasses[eclass.Name].Packages, &newPkg)
+					pkgMap[pkgKey] = &newPkg
 				}
 			}
 		}
@@ -1641,6 +1603,9 @@ func aggregatePackagesAndCategories(sites []*g2.SiteData, aggProjects map[string
 	totalPackages := 0
 
 	catPkgMap := make(map[string]map[string]*AggPackage)
+	seenLicPackages := make(map[string]map[string]bool)
+	seenLicAliases := make(map[string]map[string]bool)
+	seenProjPackages := make(map[string]map[string]bool)
 
 	for _, site := range sites {
 		for _, providedLic := range site.ProvidedLicenses {
@@ -1650,6 +1615,8 @@ func aggregatePackagesAndCategories(sites []*g2.SiteData, aggProjects map[string
 					ProvidedByRepos: make(map[string]*g2.SiteData),
 					UsedByRepos:     make(map[string]*g2.SiteData),
 				}
+				seenLicPackages[providedLic] = make(map[string]bool)
+				seenLicAliases[providedLic] = make(map[string]bool)
 			}
 			aggLicenses[providedLic].ProvidedByRepos[site.RepoName] = site
 		}
@@ -1661,61 +1628,58 @@ func aggregatePackagesAndCategories(sites []*g2.SiteData, aggProjects map[string
 			}
 			for _, pkg := range cat.Packages {
 				pkgKey := cat.Name + "/" + pkg.Name
-				if _, ok := aggPackages[pkgKey]; !ok {
-					aggPackages[pkgKey] = &AggPackage{Name: pkg.Name, Category: cat.Name, Repos: make(map[string]*g2.SiteData)}
+				aggPkg, ok := aggPackages[pkgKey]
+				if !ok {
+					aggPkg = &AggPackage{
+						Name:         pkg.Name,
+						Category:     cat.Name,
+						Repos:        make(map[string]*g2.SiteData),
+						RepoVersions: make(map[string][]g2.VersionData),
+					}
+					aggPackages[pkgKey] = aggPkg
 					totalPackages++
 				}
-				aggPackages[pkgKey].Repos[site.RepoName] = site
-				if aggPackages[pkgKey].DominantDescription == "" {
-					aggPackages[pkgKey].DominantDescription = pkg.DominantDescription
+				aggPkg.Repos[site.RepoName] = site
+				aggPkg.RepoVersions[site.RepoName] = pkg.Versions
+				if aggPkg.DominantDescription == "" {
+					aggPkg.DominantDescription = pkg.DominantDescription
 				}
-				if aggPackages[pkgKey].DominantHomepage == "" {
-					aggPackages[pkgKey].DominantHomepage = pkg.DominantHomepage
+				if aggPkg.DominantHomepage == "" {
+					aggPkg.DominantHomepage = pkg.DominantHomepage
 				}
-				if aggPackages[pkgKey].DominantLicense == "" {
-					aggPackages[pkgKey].DominantLicense = pkg.DominantLicense
+				if aggPkg.DominantLicense == "" {
+					aggPkg.DominantLicense = pkg.DominantLicense
 				}
-				catPkgMap[cat.Name][pkg.Name] = aggPackages[pkgKey]
+				catPkgMap[cat.Name][pkg.Name] = aggPkg
 				for _, rev := range pkg.ReverseVirtuals {
-					found := false
-					for _, existingRev := range aggPackages[pkgKey].ReverseVirtuals {
-						if existingRev == rev {
-							found = true
-							break
-						}
-					}
+					found := slices.Contains(aggPkg.ReverseVirtuals, rev)
 					if !found {
-						aggPackages[pkgKey].ReverseVirtuals = append(aggPackages[pkgKey].ReverseVirtuals, rev)
+						aggPkg.ReverseVirtuals = append(aggPkg.ReverseVirtuals, rev)
 					}
 				}
-				sort.Strings(aggPackages[pkgKey].ReverseVirtuals)
+				if len(pkg.ReverseVirtuals) > 0 {
+					sort.Strings(aggPkg.ReverseVirtuals)
+				}
 
 				for _, dep := range pkg.VirtualDeps {
-					found := false
-					for _, existingDep := range aggPackages[pkgKey].VirtualDeps {
-						if existingDep == dep {
-							found = true
-							break
-						}
-					}
+					found := slices.Contains(aggPkg.VirtualDeps, dep)
 					if !found {
-						aggPackages[pkgKey].VirtualDeps = append(aggPackages[pkgKey].VirtualDeps, dep)
+						aggPkg.VirtualDeps = append(aggPkg.VirtualDeps, dep)
 					}
 				}
-				sort.Strings(aggPackages[pkgKey].VirtualDeps)
+				if len(pkg.VirtualDeps) > 0 {
+					sort.Strings(aggPkg.VirtualDeps)
+				}
 
 				if pkg.Metadata != nil {
 					for _, maint := range pkg.Metadata.Maintainers {
 						if proj, ok := aggProjects[maint.Email]; ok {
-							found := false
-							for _, p := range proj.Packages {
-								if p.Name == pkg.Name && p.Category == pkg.Category {
-									found = true
-									break
-								}
+							if seenProjPackages[maint.Email] == nil {
+								seenProjPackages[maint.Email] = make(map[string]bool)
 							}
-							if !found {
-								proj.Packages = append(proj.Packages, aggPackages[pkgKey])
+							if !seenProjPackages[maint.Email][pkgKey] {
+								proj.Packages = append(proj.Packages, aggPkg)
+								seenProjPackages[maint.Email][pkgKey] = true
 							}
 						}
 					}
@@ -1738,35 +1702,25 @@ func aggregatePackagesAndCategories(sites []*g2.SiteData, aggProjects map[string
 										ProvidedByRepos: make(map[string]*g2.SiteData),
 										UsedByRepos:     make(map[string]*g2.SiteData),
 									}
+									seenLicPackages[lic] = make(map[string]bool)
+									seenLicAliases[lic] = make(map[string]bool)
 								}
 
 								aggLicenses[lic].UsedByRepos[site.RepoName] = site
 
-								found := false
-								for _, p := range aggLicenses[lic].Packages {
-									if p.Name == pkg.Name && p.Category == pkg.Category {
-										found = true
-										break
-									}
-								}
-								if !found {
-									aggLicenses[lic].Packages = append(aggLicenses[lic].Packages, aggPackages[pkgKey])
+								if !seenLicPackages[lic][pkgKey] {
+									aggLicenses[lic].Packages = append(aggLicenses[lic].Packages, aggPkg)
 									aggLicenses[lic].Count++
+									seenLicPackages[lic][pkgKey] = true
 								}
 
 								// Add aliases from this site's license mapping
 								if site.LicenseMapping != nil {
 									if aliases, ok := site.LicenseMapping[lic]; ok {
 										for _, alias := range aliases {
-											hasAlias := false
-											for _, existing := range aggLicenses[lic].Aliases {
-												if existing == alias {
-													hasAlias = true
-													break
-												}
-											}
-											if !hasAlias {
+											if !seenLicAliases[lic][alias] {
 												aggLicenses[lic].Aliases = append(aggLicenses[lic].Aliases, alias)
+												seenLicAliases[lic][alias] = true
 											}
 										}
 									}
@@ -1966,21 +1920,37 @@ func prepareAggregatedData(sites []*g2.SiteData) *AggregatedData {
 	}
 }
 
-func renderPage(path string, tmpl *template.Template, name string, data interface{}) error {
+var renderBufPool = sync.Pool{
+	New: func() any {
+		return bufio.NewWriterSize(nil, 32*1024)
+	},
+}
+
+func renderPage(path string, tmpl *template.Template, name string, data any) error {
 	f, err := os.Create(path)
 	if err != nil {
 		return fmt.Errorf("creating file %s: %w", path, err)
 	}
 	defer func() { _ = f.Close() }()
 
-	if err := tmpl.ExecuteTemplate(f, "layout_header.html", data); err != nil {
+	bw := renderBufPool.Get().(*bufio.Writer)
+	bw.Reset(f)
+	defer func() {
+		bw.Reset(nil)
+		renderBufPool.Put(bw)
+	}()
+
+	if err := tmpl.ExecuteTemplate(bw, "layout_header.html", data); err != nil {
 		return fmt.Errorf("executing layout_header template for %s: %w", path, err)
 	}
-	if err := tmpl.ExecuteTemplate(f, name, data); err != nil {
+	if err := tmpl.ExecuteTemplate(bw, name, data); err != nil {
 		return fmt.Errorf("executing template %s for %s: %w", name, path, err)
 	}
-	if err := tmpl.ExecuteTemplate(f, "layout_footer.html", data); err != nil {
+	if err := tmpl.ExecuteTemplate(bw, "layout_footer.html", data); err != nil {
 		return fmt.Errorf("executing layout_footer template for %s: %w", path, err)
+	}
+	if err := bw.Flush(); err != nil {
+		return fmt.Errorf("flushing buffered writer for %s: %w", path, err)
 	}
 
 	return nil
@@ -2137,20 +2107,16 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, 
 
 		// Clean workers
 		for i := 0; i < limit; i++ {
-			cleanWg.Add(1)
-			go func() {
-				defer cleanWg.Done()
+			cleanWg.Go(func() {
 				for task := range cleanCh {
 					_ = os.RemoveAll(task.repoPath)
 				}
-			}()
+			})
 		}
 
 		// Parse workers
 		for i := 0; i < limit; i++ {
-			parseWg.Add(1)
-			go func() {
-				defer parseWg.Done()
+			parseWg.Go(func() {
 				for task := range parseCh {
 					log.Printf("[START] Parsing repository: %s", task.repo.Name)
 
@@ -2164,16 +2130,18 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, 
 
 					t1 := time.Now()
 					var parseFS fs.FS
+					parseOpts := []any{SourceURL(task.gitUrl)}
 					if task.sysFS != nil {
 						parseFS = task.sysFS
 					} else {
 						parseFS = os.DirFS(task.repoPath)
+						parseOpts = append(parseOpts, LocalRepoDir(task.repoPath))
 					}
 					var siteData *g2.SiteData
 					func() {
 						memManager.Acquire(defaultAlloc)
 						defer memManager.Release(defaultAlloc)
-						siteData, err = parseRepo(parseFS, ".", task.repo.Name, fastGit, &repoCopy, SourceURL(task.gitUrl))
+						siteData, err = parseRepo(parseFS, ".", task.repo.Name, fastGit, &repoCopy, parseOpts...)
 					}()
 
 					cleanCh <- cleanTask{repoPath: task.repoPath}
@@ -2282,14 +2250,12 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, 
 
 					allSitesMu.Unlock()
 				}
-			}()
+			})
 		}
 
 		// Fetch workers
 		for i := 0; i < limit; i++ {
-			fetchWg.Add(1)
-			go func() {
-				defer fetchWg.Done()
+			fetchWg.Go(func() {
 				for task := range fetchCh {
 					log.Printf("[START] Fetching remote repository: %s (%s)", task.repo.Name, task.gitUrl)
 
@@ -2343,7 +2309,7 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, 
 						checkoutTime: checkoutTime,
 					}
 				}
-			}()
+			})
 		}
 
 		for _, repo := range repos.Repositories {
@@ -2389,7 +2355,6 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, 
 		}
 
 		for _, repo := range repos.Repositories {
-			repo := repo // loop variable capture
 			if len(repo.Sources) == 0 {
 				continue
 			}
@@ -2461,16 +2426,18 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, 
 
 				t1 := time.Now()
 				var parseFS fs.FS
+				parseOpts := []any{SourceURL(gitUrl)}
 				if sysFS != nil {
 					parseFS = sysFS
 				} else {
 					parseFS = os.DirFS(repoPath)
+					parseOpts = append(parseOpts, LocalRepoDir(repoPath))
 				}
 				var siteData *g2.SiteData
 				func() {
 					memManager.Acquire(defaultAlloc)
 					defer memManager.Release(defaultAlloc)
-					siteData, err = parseRepo(parseFS, ".", repo.Name, fastGit, &repoCopy, SourceURL(gitUrl))
+					siteData, err = parseRepo(parseFS, ".", repo.Name, fastGit, &repoCopy, parseOpts...)
 				}()
 				if err != nil {
 					log.Printf("Failed to parse repo %s: %v", repo.Name, err)
@@ -2647,6 +2614,11 @@ func (e *AggEclass) IsDefinedLocally(repoName string) bool {
 }
 
 func (a *AggPackage) GetVersionsInRepo(repoName string) []g2.VersionData {
+	if a.RepoVersions != nil {
+		if vers, ok := a.RepoVersions[repoName]; ok {
+			return vers
+		}
+	}
 	if site, ok := a.Repos[repoName]; ok {
 		for _, cat := range site.Categories {
 			if cat.Name == a.Category {

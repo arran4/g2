@@ -52,8 +52,8 @@ func cmdDevUpdateTxtarTests() error {
 
 	// Just recreate the files
 	for i, f := range archive.Files {
-		if strings.HasSuffix(f.Name, ".golden") {
-			ebuildName := strings.TrimSuffix(f.Name, ".golden") + ".ebuild"
+		if before, ok := strings.CutSuffix(f.Name, ".golden"); ok {
+			ebuildName := before + ".ebuild"
 			ebuildData, ok := ebuilds[ebuildName]
 			if !ok {
 				continue

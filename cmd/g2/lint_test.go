@@ -131,7 +131,7 @@ func TestCmdLintList(t *testing.T) {
 		t.Fatalf("cmdLintList json format failed: %v", err)
 	}
 
-	var rawEntries []map[string]interface{}
+	var rawEntries []map[string]any
 	if err := json.Unmarshal([]byte(jsonOut), &rawEntries); err != nil {
 		t.Fatalf("failed to unmarshal JSON output: %v\nOutput was:\n%s", err, jsonOut)
 	}
@@ -152,13 +152,13 @@ func TestCmdLintList(t *testing.T) {
 		}
 
 		if rawRefs, ok := entry["references"]; ok && rawRefs != nil {
-			refs, ok := rawRefs.([]interface{})
+			refs, ok := rawRefs.([]any)
 			if !ok {
 				t.Errorf("rule %q has non-array 'references' field", id)
 				continue
 			}
 			for _, refItem := range refs {
-				refMap, ok := refItem.(map[string]interface{})
+				refMap, ok := refItem.(map[string]any)
 				if !ok {
 					t.Errorf("rule %q reference item is not an object", id)
 					continue

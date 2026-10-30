@@ -21,7 +21,6 @@ func TestMetadataFromTxtar(t *testing.T) {
 	}
 
 	for _, fixture := range entries {
-		fixture := fixture
 		t.Run(strings.TrimSuffix(path.Base(fixture), ".txtar"), func(t *testing.T) {
 			raw, err := metadataTxtarFS.ReadFile(fixture)
 			if err != nil {
@@ -76,7 +75,7 @@ func TestMetadataFromTxtar(t *testing.T) {
 				}
 
 				// JSON to XML circular testing
-				var gotFromJSON interface{}
+				var gotFromJSON any
 				switch got.(type) {
 				case *PkgMetadata:
 					var p PkgMetadata

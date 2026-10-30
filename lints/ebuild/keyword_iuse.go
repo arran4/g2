@@ -3,7 +3,6 @@ package ebuild
 import (
 	"fmt"
 	"path/filepath"
-	"strings"
 
 	"github.com/arran4/g2"
 	"github.com/arran4/g2/lints"
@@ -34,9 +33,18 @@ func (r *KeywordIUSELintRule) LintWithQA(repoDir string, pkg *g2.PackageData, qa
 	var results []lints.LintResult
 
 	// Get arches list to know the keywords
-	archesFile := filepath.Join(repoDir, "profiles", "arch.list")
-	arches, err := g2.ParseArchListFile(archesFile)
-	if err != nil {
+	var arches *g2.ArchList
+	if ctx := lints.GetRepoContext(repoDir); ctx != nil {
+		arches = ctx.ArchList
+	} else {
+		archesFile := filepath.Join(repoDir, "profiles", "arch.list")
+		var err error
+		arches, err = g2.ParseArchListFile(archesFile)
+		if err != nil {
+			return results
+		}
+	}
+	if arches == nil {
 		return results
 	}
 
@@ -67,8 +75,8 @@ func (r *KeywordIUSELintRule) LintWithQA(repoDir string, pkg *g2.PackageData, qa
 
 		// Also check for `use <keyword>` and `usex <keyword>` etc.
 		if ver.Ebuild.RawText != "" {
-			f, err := syntax.NewParser().Parse(strings.NewReader(ver.Ebuild.RawText), "")
-			if err == nil {
+			f, err := ver.Ebuild.ParsedSyntax()
+			if err == nil && f != nil {
 				syntax.Walk(f, func(node syntax.Node) bool {
 					call, ok := node.(*syntax.CallExpr)
 					if ok && len(call.Args) > 1 {

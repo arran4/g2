@@ -7,12 +7,19 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"maps"
 	"path/filepath"
 	"regexp"
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
+
+	"mvdan.cc/sh/v3/syntax"
 )
+
+var reEbuildVar = regexp.MustCompile(`\$+\{?([a-zA-Z0-9_]+)\}?`)
+var ebuildSyntaxMu sync.Mutex
 
 type URIEntry struct {
 	URL      string
@@ -55,6 +62,51 @@ type Ebuild struct {
 
 	orderOverride []string
 	EbuildHeader  string
+
+	syntaxRawText string
+	syntaxFile    *syntax.File
+	syntaxErr     error
+	syntaxParsed  bool
+}
+
+// ParsedSyntax returns the parsed mvdan.cc/sh/v3/syntax AST for the ebuild's RawText,
+// caching the result across lint rules.
+func (e *Ebuild) ParsedSyntax() (*syntax.File, error) {
+	if e == nil || e.RawText == "" {
+		return nil, nil
+	}
+	ebuildSyntaxMu.Lock()
+	if e.syntaxParsed && e.syntaxRawText == e.RawText {
+		f, err := e.syntaxFile, e.syntaxErr
+		ebuildSyntaxMu.Unlock()
+		return f, err
+	}
+	raw := e.RawText
+	ebuildSyntaxMu.Unlock()
+
+	parser := syntax.NewParser(syntax.KeepComments(true))
+	f, err := parser.Parse(strings.NewReader(raw), "")
+
+	ebuildSyntaxMu.Lock()
+	e.syntaxRawText = raw
+	e.syntaxFile = f
+	e.syntaxErr = err
+	e.syntaxParsed = true
+	ebuildSyntaxMu.Unlock()
+	return f, err
+}
+
+// ClearSyntaxCache releases the cached syntax AST to free memory after linting.
+func (e *Ebuild) ClearSyntaxCache() {
+	if e == nil {
+		return
+	}
+	ebuildSyntaxMu.Lock()
+	e.syntaxRawText = ""
+	e.syntaxFile = nil
+	e.syntaxErr = nil
+	e.syntaxParsed = false
+	ebuildSyntaxMu.Unlock()
 }
 
 type varEntry struct {
@@ -78,7 +130,7 @@ func cleanValue(v string) string {
 	return strings.Join(lines, "\n")
 }
 
-func (e *Ebuild) addVar(k string, addedVars map[string]bool, orderedItems *[]interface{}) {
+func (e *Ebuild) addVar(k string, addedVars map[string]bool, orderedItems *[]any) {
 	if addedVars[k] {
 		return
 	}
@@ -98,7 +150,7 @@ func (e *Ebuild) addVar(k string, addedVars map[string]bool, orderedItems *[]int
 	addedVars[k] = true
 }
 
-func (e *Ebuild) addFunc(k string, addedFuncs map[string]bool, orderedItems *[]interface{}) {
+func (e *Ebuild) addFunc(k string, addedFuncs map[string]bool, orderedItems *[]any) {
 	if addedFuncs[k] {
 		return
 	}
@@ -122,7 +174,7 @@ func (e *Ebuild) String() string {
 	addedVars := make(map[string]bool)
 	addedFuncs := make(map[string]bool)
 
-	var orderedItems []interface{}
+	var orderedItems []any
 
 	// 1. Process items in the exact order they appeared in the original source
 	for _, name := range e.orderOverride {
@@ -202,9 +254,7 @@ func ParseEbuild(fsys fs.FS, path string, mode ParsingMode) (*Ebuild, error) {
 
 	// Always parse metadata from filename
 	vars := ParseEbuildVariables(path)
-	for k, v := range vars {
-		e.Vars[k] = v
-	}
+	maps.Copy(e.Vars, vars)
 
 	if mode == ParseMetadataOnly {
 		return e, nil
@@ -228,7 +278,6 @@ func ParseEbuild(fsys fs.FS, path string, mode ParsingMode) (*Ebuild, error) {
 		e.ParseWarnings = append(parser.Warnings, parsedEbuild.Warnings...)
 
 		uncertainVars := make(map[string]bool)
-		reVar := regexp.MustCompile(`\$+\{?([a-zA-Z0-9_]+)\}?`)
 
 		// Evaluate assignments sequentially in source order
 		for _, assignment := range parsedEbuild.Assignments {
@@ -237,7 +286,7 @@ func ParseEbuild(fsys fs.FS, path string, mode ParsingMode) (*Ebuild, error) {
 			if strings.Contains(assignment.Value, "`") || strings.Contains(assignment.Value, "$(") {
 				isUncertain = true
 			} else {
-				matches := reVar.FindAllStringSubmatch(assignment.Value, -1)
+				matches := reEbuildVar.FindAllStringSubmatch(assignment.Value, -1)
 				for _, m := range matches {
 					varName := m[1]
 					if _, exists := e.Vars[varName]; !exists {
@@ -280,9 +329,7 @@ func ParseEbuild(fsys fs.FS, path string, mode ParsingMode) (*Ebuild, error) {
 		}
 
 		e.Functions = make(map[string]AST)
-		for k, v := range parsedEbuild.Functions {
-			e.Functions[k] = v
-		}
+		maps.Copy(e.Functions, parsedEbuild.Functions)
 		e.orderOverride = parsedEbuild.Order
 		e.EbuildHeader = parsedEbuild.EbuildHeader
 		if parsedEbuild.HasControlFlow {
@@ -422,8 +469,8 @@ func parseDepTokens(tokens []string) ([]DepNode, int) {
 			} else {
 				nodes = append(nodes, DepString(t))
 			}
-		} else if strings.HasSuffix(t, "?") {
-			flag := strings.TrimSuffix(t, "?")
+		} else if before, ok := strings.CutSuffix(t, "?"); ok {
+			flag := before
 			isNegated := false
 			if strings.HasPrefix(flag, "!") {
 				isNegated = true
@@ -559,7 +606,7 @@ func ParseEbuildVariables(filename string) map[string]string {
 func ResolveVariables(text string, variables map[string]string) string {
 	maxLen := 100 * 1024
 
-	for i := 0; i < 5; i++ { // Limit recursion depth
+	for range 5 { // Limit recursion depth
 		original := text
 		text = resolveBash(context.Background(), text, variables, WithFastPath())
 
@@ -901,12 +948,9 @@ func cmpInt(a, b int) int {
 }
 
 func compareGentooVersionParts(v1, v2 GentooVersion) int {
-	maxLen := len(v1.Nums)
-	if len(v2.Nums) > maxLen {
-		maxLen = len(v2.Nums)
-	}
+	maxLen := max(len(v2.Nums), len(v1.Nums))
 
-	for i := 0; i < maxLen; i++ {
+	for i := range maxLen {
 		if i >= len(v1.Nums) {
 			// v1 is shorter. If remaining v2 parts are all 0, they are equal in this part
 			allZero := true
@@ -973,12 +1017,9 @@ func compareGentooVersionParts(v1, v2 GentooVersion) int {
 		"p":     6,
 	}
 
-	maxSuffixLen := len(v1.Suffixes)
-	if len(v2.Suffixes) > maxSuffixLen {
-		maxSuffixLen = len(v2.Suffixes)
-	}
+	maxSuffixLen := max(len(v2.Suffixes), len(v1.Suffixes))
 
-	for i := 0; i < maxSuffixLen; i++ {
+	for i := range maxSuffixLen {
 		var s1, s2 GentooSuffix
 
 		if i >= len(v1.Suffixes) {
@@ -1059,7 +1100,7 @@ func PadVersionTokens(v string) string {
 			}
 			pad := 10 - (i - start)
 			if pad > 0 {
-				for j := 0; j < pad; j++ {
+				for range pad {
 					sb.WriteByte('0')
 				}
 			}
@@ -1271,9 +1312,9 @@ func QualifyAtomForRepo(dep string, targetRepo string) (string, error) {
 	if strings.Count(s, "/") != 1 {
 		return "", fmt.Errorf("invalid package atom %q: expected category/package format", dep)
 	}
-	slashIdx := strings.Index(s, "/")
-	catStr := s[:slashIdx]
-	pkgVerStr := s[slashIdx+1:]
+	before, after, _ := strings.Cut(s, "/")
+	catStr := before
+	pkgVerStr := after
 
 	if err := validateCategoryName(catStr); err != nil {
 		return "", fmt.Errorf("invalid package atom %q: %w", dep, err)

@@ -173,7 +173,6 @@ func generateCategoryPages(outDir string, tmpl *template.Template, data *Aggrega
 	g := new(errgroup.Group)
 	g.SetLimit(10)
 	for _, cat := range data.Categories {
-		cat := cat
 		g.Go(func() error {
 			catDirName := sanitizeFilename(cat.Name)
 			if catDirName == "" {
@@ -220,7 +219,7 @@ func generateCategoryPages(outDir string, tmpl *template.Template, data *Aggrega
 				Title:       "Category: " + cat.Name,
 				BaseURL:     "../../",
 				Breadcrumbs: []g2.Breadcrumb{{Name: title, URL: "../../"}, {Name: "Categories", URL: "../"}, {Name: cat.Name}},
-				Category:    map[string]interface{}{"Name": cat.Name, "Packages": tmplPkgs},
+				Category:    map[string]any{"Name": cat.Name, "Packages": tmplPkgs},
 				Version:     version,
 				GenInfo:     genInfo,
 			}); err != nil {
@@ -242,7 +241,6 @@ func generatePackagePages(outDir string, tmpl *template.Template, data *Aggregat
 	gMoves := new(errgroup.Group)
 	gMoves.SetLimit(10)
 	for oldPath, move := range data.Moves {
-		oldPath, move := oldPath, move
 		gMoves.Go(func() error {
 			parts := strings.Split(oldPath, "/")
 			if len(parts) != 2 {
@@ -302,7 +300,6 @@ func generatePackagePages(outDir string, tmpl *template.Template, data *Aggregat
 	gPkgs := new(errgroup.Group)
 	gPkgs.SetLimit(10)
 	for _, pkg := range data.Packages {
-		pkg := pkg
 		gPkgs.Go(func() error {
 			pkgDir := filepath.Join(outDir, "packages", pkg.Category, pkg.Name)
 			if err := os.MkdirAll(pkgDir, 0755); err != nil {
@@ -366,7 +363,6 @@ func generateOtherGlobalPages(outDir string, tmpl *template.Template, data *Aggr
 	gArches := new(errgroup.Group)
 	gArches.SetLimit(10)
 	for _, a := range data.Arches {
-		a := a
 		gArches.Go(func() error {
 			archDir := filepath.Join(outDir, "arches", a.Name)
 			if err := os.MkdirAll(archDir, 0755); err != nil {
@@ -409,7 +405,6 @@ func generateOtherGlobalPages(outDir string, tmpl *template.Template, data *Aggr
 		gProfiles := new(errgroup.Group)
 		gProfiles.SetLimit(10)
 		for _, p := range data.Profiles {
-			p := p
 			gProfiles.Go(func() error {
 				profDir := filepath.Join(outDir, "profiles", p.Path)
 				if err := os.MkdirAll(profDir, 0755); err != nil {
@@ -594,7 +589,6 @@ func generateOtherGlobalPages(outDir string, tmpl *template.Template, data *Aggr
 		gProjects := new(errgroup.Group)
 		gProjects.SetLimit(10)
 		for _, proj := range data.Projects {
-			proj := proj
 			gProjects.Go(func() error {
 				projDirName := sanitizeFilename(proj.Project.Email)
 				if projDirName == "" {
@@ -667,7 +661,6 @@ func generateRepoPages(outDir string, tmpl *template.Template, sites []*g2.SiteD
 	g.SetLimit(10)
 
 	for _, site := range sites {
-		site := site // loop variable capture
 		g.Go(func() error {
 			repoDir := filepath.Join(outDir, "repos", site.RepoName)
 			if err := os.MkdirAll(repoDir, 0755); err != nil {
@@ -1317,7 +1310,7 @@ func generateRepoCategoriesPages(repoDir string, tmpl *template.Template, site *
 			Title:       "Category: " + cat.Name,
 			BaseURL:     "../../../../",
 			Breadcrumbs: []g2.Breadcrumb{{Name: title, URL: "../../../../"}, {Name: site.RepoName, URL: "../../"}, {Name: "Categories", URL: "../"}, {Name: cat.Name}},
-			Category:    map[string]interface{}{"Name": cat.Name, "Packages": tmplPkgs},
+			Category:    map[string]any{"Name": cat.Name, "Packages": tmplPkgs},
 			Version:     version,
 			GenInfo:     genInfo,
 		}); err != nil {
@@ -1458,7 +1451,6 @@ func generateRepoPackagesPages(repoDir string, tmpl *template.Template, site *g2
 	gPkgs := new(errgroup.Group)
 	gPkgs.SetLimit(10)
 	for _, pkg := range repoPkgs {
-		pkg := pkg
 		gPkgs.Go(func() error {
 			pkgDir := filepath.Join(repoDir, "categories", pkg.Category, "packages", pkg.Name)
 			if err := os.MkdirAll(pkgDir, 0755); err != nil {
@@ -1618,6 +1610,7 @@ func generateSite(outDir string, sites []*g2.SiteData, recentDuration time.Durat
 					Name:                pkg.Name,
 					Category:            cat.Name,
 					Repos:               map[string]*g2.SiteData{site.RepoName: site},
+					RepoVersions:        map[string][]g2.VersionData{site.RepoName: pkg.Versions},
 					DominantDescription: pkg.DominantDescription,
 					DominantHomepage:    pkg.DominantHomepage,
 					DominantLicense:     pkg.DominantLicense,
@@ -1676,16 +1669,8 @@ func generateSite(outDir string, sites []*g2.SiteData, recentDuration time.Durat
 
 	totalNodes := len(data.Categories) + data.TotalPackages + len(data.Profiles) + len(data.GlobalNews) + len(data.Moves) + len(data.Eclasses)
 	for _, pkg := range data.Packages {
-		for _, repoSite := range pkg.Repos {
-			for _, cat := range repoSite.Categories {
-				if cat.Name == pkg.Category {
-					for _, repoPkg := range cat.Packages {
-						if repoPkg.Name == pkg.Name {
-							totalNodes += len(repoPkg.Versions)
-						}
-					}
-				}
-			}
+		for repoName := range pkg.Repos {
+			totalNodes += len(pkg.GetVersionsInRepo(repoName))
 		}
 	}
 

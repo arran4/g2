@@ -1,6 +1,8 @@
 package md5cache
 
 import (
+	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -68,16 +70,29 @@ func (r *MD5CacheLintRule) LintWithQA(repoDir string, pkg *g2.PackageData, qa *g
 		}
 	}
 
+	ctx := lints.GetRepoContext(repoDir)
 	if !policySet {
-		if _, err := r.fs.Stat(filepath.Join(repoDir, "metadata", "md5-cache")); os.IsNotExist(err) {
+		if ctx != nil && ctx.FS != nil {
+			if !ctx.HasMD5CacheDir {
+				return nil
+			}
+		} else if _, err := r.fs.Stat(filepath.Join(repoDir, "metadata", "md5-cache")); os.IsNotExist(err) {
 			return nil
 		}
 	}
 
 	for _, ver := range pkg.Versions {
 		if ver.Ebuild != nil {
-			ident := g2.GetCacheIdentity(repoDir, repoDir, "md5-dict", pkg.Category, pkg.Name, ver)
-			if _, err := r.fs.Stat(ident.CachePath); os.IsNotExist(err) {
+			var err error
+			var ident g2.CacheIdentity
+			if ctx != nil && ctx.FS != nil {
+				ident = g2.GetCacheIdentity(ctx.RepoDirInFS, ctx.RepoDirInFS, "md5-dict", pkg.Category, pkg.Name, ver)
+				_, err = fs.Stat(ctx.FS, filepath.ToSlash(ident.CachePath))
+			} else {
+				ident = g2.GetCacheIdentity(repoDir, repoDir, "md5-dict", pkg.Category, pkg.Name, ver)
+				_, err = r.fs.Stat(ident.CachePath)
+			}
+			if errors.Is(err, fs.ErrNotExist) || os.IsNotExist(err) {
 				sevStr := string(severity)
 				sevTitle := strings.ToUpper(sevStr[:1]) + sevStr[1:]
 				res := lints.LintResult{

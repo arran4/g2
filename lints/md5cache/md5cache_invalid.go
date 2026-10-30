@@ -131,7 +131,7 @@ func (r *MD5CacheInvalidLintRule) getEclassMD5(path string) (string, error) {
 
 	// Bounded retry if file mutates during read
 	success := false
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		f, err := os.Open(canonicalPath)
 		if err != nil {
 			return "", err
@@ -210,6 +210,12 @@ func (r *MD5CacheInvalidLintRule) Lint(repoDir string, pkg *g2.PackageData) []li
 }
 
 func (r *MD5CacheInvalidLintRule) LintWithQA(repoDir string, pkg *g2.PackageData, qa *g2.QAPolicy) []lints.LintResult {
+	if ctx := lints.GetRepoContext(repoDir); ctx != nil && ctx.FS != nil {
+		if !ctx.HasMD5CacheDir {
+			return nil
+		}
+		return r.LintFS(ctx.FS, ctx.RepoDirInFS, pkg, qa, ctx.HashEclass)
+	}
 	return r.LintFS(os.DirFS(repoDir), repoDir, pkg, qa, r.getEclassMD5)
 }
 
@@ -341,8 +347,8 @@ func (r *MD5CacheInvalidLintRule) LintFS(fsys fs.FS, repoDir string, pkg *g2.Pac
 							ePath := filepath.ToSlash(eclassPath)
 							// Make relative if it starts with repoDir to be safe with fsys
 							relPath := ePath
-							if strings.HasPrefix(ePath, filepath.ToSlash(repoDir)+"/") {
-								relPath = strings.TrimPrefix(ePath, filepath.ToSlash(repoDir)+"/")
+							if after, ok := strings.CutPrefix(ePath, filepath.ToSlash(repoDir)+"/"); ok {
+								relPath = after
 							} else if repoDir == "." && strings.HasPrefix(ePath, "./") {
 								relPath = strings.TrimPrefix(ePath, "./")
 							}

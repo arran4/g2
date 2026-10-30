@@ -16,6 +16,8 @@ It streamlines workflows by automating repetitive repository administration task
 
 ## Installation
 
+Building from source requires Go 1.26 or later. Published release binaries do not require a Go installation.
+
 ```bash
 go install github.com/arran4/g2/cmd/g2@latest
 ```
@@ -482,9 +484,26 @@ g2 package <subcommand>
 The `g2 masks` command provides tools for inspecting and modifying user-level and repository-level package mask configuration (`/etc/portage/package.mask` and `package.unmask`).
 
 * `g2 masks list [<filter>]`: List all currently masked and unmasked packages across user config files and repository `profiles/package.mask` entries. An optional filter (like `::guru` or `sci-libs/onnxruntime`) can be provided.
+* `g2 masks audit [--config-root <path>] [--repos-conf <path>] [--profile <path>] [--repository <name=path>] [--format text|json]`: Audit active user `package.unmask` entries without modifying configuration or executing ebuilds.
 * `g2 masks mask <package>`: Add a package to the user's `package.mask` configuration. If `package.mask` is a directory, it creates or appends to a `g2.conf` file inside it. (e.g. `g2 masks mask sci-libs/onnxruntime::guru`)
 * `g2 masks unmask <package>`: Add a package to the user's `package.unmask` configuration. If `package.unmask` is a directory, it creates or appends to a `g2.conf` file inside it. (e.g. `g2 masks unmask sci-libs/onnxruntime::guru`)
 * `g2 masks reset <package>`: Remove all mentions of a package from the user's `package.mask` and `package.unmask` configurations, sweeping through configuration directories as well.
+
+The audit reports `required`, `non-matching`, `no-change`, `duplicate/shadowed`, or `indeterminate` for each entry, including its source file and line, matching version count, and an explanation. Required entries show versions that would become masked and the mask's source. JSON output includes entries, summary counts, and warnings; progress messages go to stderr.
+
+```bash
+g2 masks audit
+g2 masks audit --config-root /path/to/portage --profile /path/to/repo/profiles/selected --format json
+g2 masks audit --config-root /path/to/portage --profile /path/to/profile --repository overlay=/path/to/overlay
+```
+
+By default, the audit reads `repos.conf` and `make.profile` under `--config-root`. Repeat `--repository name=path` to replace repository discovery, including every required master. Input directories are traversed in lexical order; dotfiles and filenames ending in `~` or `.bak` are ignored.
+
+Classification is based on available ebuild versions, repository masks (including a single declared master), the active profile's parent cascade, and user mask/unmask rules. Exact negative rules and `-*` resets are supported. Repositories must declare their `masters` policy in `metadata/layout.conf`; use `masters =` for an independent repository. Portage profile extensions require an explicit `portage-1` profile format.
+
+Unsupported atoms (including package-name globs and USE constraints), complex multiple-master/shared-profile inheritance, unavailable profiles, and unknown slot metadata produce `indeterminate` diagnostics. Slot metadata is used only when it can be established from literal, unconditional ebuild assignments without inheritance or shell execution. Keyword acceptance, licenses, and installed packages are outside this audit.
+
+Each entry is evaluated independently. **Do not remove all duplicate/shadowed entries together:** two rules may cover each other. Re-audit after each removal. The command offers no apply/remove option.
 
 ### `pipeline`
 
@@ -641,6 +660,8 @@ Manage repository-scoped local Portage policies (masks and unmasks) beneath `/et
 ## GitHub Action
 
 You can use the [g2 GitHub Action](https://github.com/arran4/g2-action) to integrate `g2` into your CI/CD workflows. It automatically downloads and installs `g2` for use in your workflow steps.
+
+`arran4/g2-action@v1` installs a published g2 release. Its `version` input accepts `latest` or an explicit release tag such as `v0.0.103`; merging a fix does not update the binary until a release containing it is published. To deploy a particular fix, select its release tag explicitly and check the action's `Found release tag` log entry.
 
 ### Example Usage
 

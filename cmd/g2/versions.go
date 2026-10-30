@@ -114,8 +114,8 @@ func ParseSemanticVersion(v string) SemanticVersion {
 		baseStr = v[:i-1]
 	}
 
-	parts := strings.Split(baseStr, ".")
-	for _, p := range parts {
+	parts := strings.SplitSeq(baseStr, ".")
+	for p := range parts {
 		if p == "" {
 			continue
 		}
@@ -296,19 +296,20 @@ func GentooToSemantic(v string) string {
 		return strings.ReplaceAll(v, "_", "-")
 	}
 
-	res := strings.Join(gv.NumStrs, ".")
+	var res strings.Builder
+	res.WriteString(strings.Join(gv.NumStrs, "."))
 	if gv.Letter != "" {
-		res += gv.Letter
+		res.WriteString(gv.Letter)
 	}
 	for _, s := range gv.Suffixes {
-		res += "-" + s.Name
-		res += s.ValueStr
+		res.WriteString("-" + s.Name)
+		res.WriteString(s.ValueStr)
 	}
 	if gv.Revision > 0 {
-		res += fmt.Sprintf("-r%d", gv.Revision)
+		fmt.Fprintf(&res, "-r%d", gv.Revision)
 	}
 
-	return res
+	return res.String()
 }
 
 func compareVersions(args []string) error {

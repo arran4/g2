@@ -1,12 +1,97 @@
 package lints
 
 import (
+	"crypto/md5"
 	"encoding/json"
 	"fmt"
+	"io/fs"
 	"path/filepath"
+	"strings"
+	"sync"
 
 	"github.com/arran4/g2"
 )
+
+// RepoLintContext holds pre-parsed repository-level metadata and virtual filesystem
+// references to avoid redundant disk reads during per-package linting.
+type RepoLintContext struct {
+	FS             fs.FS
+	RepoDirInFS    string
+	QAPolicy       *g2.QAPolicy
+	LayoutConf     *g2.LayoutConf
+	UseExpandDescs map[string]*g2.UseExpandDesc
+	ArchList       *g2.ArchList
+	HasRepoName    bool
+	HasMD5CacheDir bool
+
+	eclassMu  sync.RWMutex
+	eclassMD5 map[string]string
+}
+
+// HashEclass computes and caches the MD5 hash of an eclass from the RepoLintContext's FS.
+func (c *RepoLintContext) HashEclass(eclassPath string) (string, error) {
+	if c == nil || c.FS == nil {
+		return "", fmt.Errorf("no filesystem in RepoLintContext")
+	}
+	ePath := filepath.ToSlash(eclassPath)
+	relPath := ePath
+	repoDirSlash := filepath.ToSlash(c.RepoDirInFS)
+	if repoDirSlash != "" && repoDirSlash != "." && strings.HasPrefix(ePath, repoDirSlash+"/") {
+		relPath = strings.TrimPrefix(ePath, repoDirSlash+"/")
+	} else if after, ok := strings.CutPrefix(ePath, "./"); ok {
+		relPath = after
+	}
+
+	c.eclassMu.RLock()
+	if c.eclassMD5 != nil {
+		if sum, ok := c.eclassMD5[relPath]; ok {
+			c.eclassMu.RUnlock()
+			return sum, nil
+		}
+	}
+	c.eclassMu.RUnlock()
+
+	data, err := fs.ReadFile(c.FS, relPath)
+	if err != nil {
+		return "", fmt.Errorf("reading eclass %s: %w", relPath, err)
+	}
+	sum := fmt.Sprintf("%x", md5.Sum(data))
+
+	c.eclassMu.Lock()
+	if c.eclassMD5 == nil {
+		c.eclassMD5 = make(map[string]string)
+	}
+	c.eclassMD5[relPath] = sum
+	c.eclassMu.Unlock()
+	return sum, nil
+}
+
+var (
+	repoContextsMu sync.RWMutex
+	repoContexts   = make(map[string]*RepoLintContext)
+)
+
+// SetRepoContext registers a RepoLintContext for the given key.
+func SetRepoContext(key string, ctx *RepoLintContext) {
+	repoContextsMu.Lock()
+	repoContexts[key] = ctx
+	repoContextsMu.Unlock()
+}
+
+// ClearRepoContext removes a registered RepoLintContext for the given key.
+func ClearRepoContext(key string) {
+	repoContextsMu.Lock()
+	delete(repoContexts, key)
+	repoContextsMu.Unlock()
+}
+
+// GetRepoContext retrieves a registered RepoLintContext for the given key, or nil if none is registered.
+func GetRepoContext(key string) *RepoLintContext {
+	repoContextsMu.RLock()
+	ctx := repoContexts[key]
+	repoContextsMu.RUnlock()
+	return ctx
+}
 
 type Severity string
 
@@ -147,9 +232,14 @@ func PerformLintingResultsWithRuleSet(repoDir string, pkg *g2.PackageData, ruleS
 
 	var results []LintResult
 
-	// Try to load QA Policy
-	qaPolicyPath := filepath.Join(repoDir, "metadata", "qa-policy.conf")
-	qa, _ := g2.ParseQAPolicy(qaPolicyPath)
+	// Try to load QA Policy from RepoLintContext first, falling back to disk
+	var qa *g2.QAPolicy
+	if ctx := GetRepoContext(repoDir); ctx != nil {
+		qa = ctx.QAPolicy
+	} else {
+		qaPolicyPath := filepath.Join(repoDir, "metadata", "qa-policy.conf")
+		qa, _ = g2.ParseQAPolicy(qaPolicyPath)
+	}
 
 	for _, rule := range lintRules {
 		if managedRule, ok := rule.(RuleSetManagedLintRule); ok {
@@ -207,8 +297,13 @@ func PerformEclassLintingResults(repoDir string, eclass *g2.Ebuild) []LintResult
 	var results []LintResult
 
 	// Try to load QA Policy
-	qaPolicyPath := filepath.Join(repoDir, "metadata", "qa-policy.conf")
-	qa, _ := g2.ParseQAPolicy(qaPolicyPath)
+	var qa *g2.QAPolicy
+	if ctx := GetRepoContext(repoDir); ctx != nil {
+		qa = ctx.QAPolicy
+	} else {
+		qaPolicyPath := filepath.Join(repoDir, "metadata", "qa-policy.conf")
+		qa, _ = g2.ParseQAPolicy(qaPolicyPath)
+	}
 
 	for _, rule := range eclassLintRules {
 		if qaRule, ok := rule.(QAAwareEclassLintRule); ok {

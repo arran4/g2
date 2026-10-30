@@ -50,6 +50,7 @@ func main() {
 		fmt.Printf("\t\t %s \t\t %s\n", "manifest", "commands relating to Manifest files")
 		fmt.Printf("\t\t %s \t\t %s\n", "versions", "commands relating to version utilities")
 		fmt.Printf("\t\t %s \t\t %s\n", "metadata", "commands relating to metadata.xml files")
+		fmt.Printf("\t\t %s \t\t %s\n", "masks", "inspect, audit, and manage package mask configuration")
 		fmt.Printf("\t\t %s \t\t %s\n", "ebuild", "commands relating to ebuild files")
 		fmt.Printf("\t\t %s \t\t %s\n", "overlay", "commands relating to a single overlay")
 		fmt.Printf("\t\t %s \t\t %s\n", "overlays", "commands relating to multiple overlays")
