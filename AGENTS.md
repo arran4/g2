@@ -2,9 +2,9 @@
 
 * When verifying the static site generation output (e.g., using Playwright or headless Chrome), be aware that the `file://` protocol does not automatically resolve directory paths to `index.html`. You can either start a local HTTP server (e.g. `python3 -m http.server -d <output_dir>`) or use the built-in testing server `go run ./cmd/g2 site serve -port 8080` before attempting to navigate through the generated site.
 * Wrap returned errors only when a new layer contributes useful operation context or preserves a caller-relevant classification; avoid boilerplate wrapping in every helper. Use `%w` when errors.Is/errors.As identity is part of the contract, and do not log then return the same error repeatedly.
-* Increase logging output.
+* Log actionable operation/path context at the command boundary and report intentional skips explicitly; avoid logging the same returned failure at every layer.
 * For testing compile and run steps, use `go run ./cmd/g2 ...` rather than building a `g2` binary and executing it.
-* All test data should be in `/testdata` if it is required for tests. Otherwise, test generated data must be git ignored and not added to the repo.
+* Keep required on-disk test fixtures in `/testdata`; small named literals and in-memory fixtures may stay beside their tests. Keep generated test output in test-owned temporary storage or git-ignored paths, and do not commit it. Update golden fixtures only through an explicit update operation.
 * Do not hardcode specific remote URLs (e.g. `https://github.com/gentoo-mirror/gentoo/blob/stable/` etc) in generic generation templates since the application is used against many different overlays. Ensure variables or configuration dictate correct URLs dynamically.
 * Ensure generated site features remain repository neutral (e.g. do not hardcode links to Gentoo's GitHub or policy guide) as this tool supports importing multiple independent overlay repositories.
 
@@ -26,10 +26,11 @@ When adding or changing g2 commands, agents must inspect the actual command tree
 
 ## Side effects and test fixtures
 
-- A dry-run or validation path must not change a destination overlay, tracked templates or user state. Render candidate changes separately and apply only in the explicit write mode; use temporary storage for any necessary file comparison.
-- Prefer named, in-memory parser fixtures when the OS is not under test. Keep focused real Gentoo/Portage/filesystem integration tests for behaviour that depends on those tools, permissions or on-disk semantics. Existing issue #572 owns broader fixture cleanup.
-- Treat committed/generated output as a reproducible artifact. Verify changes against the source template and inspect exact output before applying or committing.
+- A dry-run or verification path without explicit write flags must not change a destination overlay, tracked templates or user state. Render candidate changes separately and apply only in the explicit write mode (for example, manifest verification with `--fix` or `--clean`); use temporary storage for any necessary file comparison.
+- Resolve environment variables, current working directory and process streams at application boundaries. Prefer explicit paths/options, `io.Reader`/`io.Writer` and the existing `fs.FS` seams for inner logic; do not introduce broad dependency wrappers or silently change public APIs.
+- Keep parser fixtures small, named, deterministic and readable; use `fstest.MapFS` or readable txtar fixtures for file trees when the OS is not under test. Keep focused real Gentoo/Portage/filesystem integration tests for behaviour that depends on those tools, permissions, atomic writes or on-disk layout. Use `t.TempDir()` for those OS contracts and `t.Setenv()` for actual environment wiring, keeping process-global mutations out of parallel tests. Existing issue #572 owns broader fixture and process-state cleanup.
+- Treat committed/generated output as a reproducible artifact. Verify changes against the source template and inspect exact output before applying or committing; do not hand-edit generated README files.
 
 ## Engineering guidance and agent audit
 
-Use https://arran4.github.io/blog/post/2026/055-suggested-coding-standards-for-repositories-and-agents/ selectively, without superseding the more specific rules above. A coding agent must inspect implementation/tests, distinguish verified gaps from hypotheses, and record results and existing issue overlap at https://github.com/arran4/g2/issues/577. Do not equate adding instructions with completing the implementation audit; do not merge automatically.
+Use https://arran4.github.io/blog/post/2026/055-suggested-coding-standards-for-repositories-and-agents/ selectively, without superseding the more specific rules above. Environment/test-boundary rationale: https://arran4.github.io/blog/post/2026/054-stop-rebuilding-xdg-directories-in-go-tests/. A coding agent must inspect implementation/tests, distinguish verified gaps from hypotheses, and record results and existing issue overlap at https://github.com/arran4/g2/issues/577. Do not equate adding instructions with completing the implementation audit; do not merge automatically.
