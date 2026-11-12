@@ -301,6 +301,39 @@ func TestDirectoryAndFileFormat(t *testing.T) {
 	}
 }
 
+
+// TestNewsIdentifierLongerThanTwenty verifies GLEP 42's 20-character
+// short-name recommendation is advisory, not a hard limit.
+func TestNewsIdentifierLongerThanTwenty(t *testing.T) {
+	const id = "2026-08-13-antigravity-migration"
+	fileName := id + ".en.txt"
+	if !newsDirNameRegex.MatchString(id) {
+		t.Fatalf("valid news directory %q rejected", id)
+	}
+	if !newsFileNameRegex.MatchString(fileName) {
+		t.Fatalf("valid news filename %q rejected", fileName)
+	}
+
+	fsys := fstest.MapFS{
+		"metadata/news/" + id + "/" + fileName: &fstest.MapFile{Data: []byte(`Title: Antigravity migrated to GURU
+Author: Test Maintainer <test@example.com>
+Posted: 2026-08-13
+Revision: 2
+News-Item-Format: 2.0
+
+Migration details.
+`)},
+	}
+	rule := NewNewsValidityLintRule(WithFS(fsys))
+	results := rule.Lint(".", &g2.PackageData{Category: "app-misc", Name: "foo"})
+	for _, result := range results {
+		if strings.Contains(result.Message, "Invalid news directory name") ||
+			strings.Contains(result.Message, "Invalid news file name") {
+			t.Errorf("valid long news identifier rejected: %s", result.Message)
+		}
+	}
+}
+
 func TestBodyValidation(t *testing.T) {
 	fsys := fstest.MapFS{
 		"metadata/news/2024-01-06-invalid-body/2024-01-06-invalid-body.en.txt": &fstest.MapFile{Data: []byte(`Title: Valid
