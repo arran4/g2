@@ -16,8 +16,8 @@ import (
 )
 
 var (
-	newsDirNameRegex  = regexp.MustCompile(`^(\d{4}-\d{2}-\d{2})-([a-z0-9+_-]{1,20})$`)
-	newsFileNameRegex = regexp.MustCompile(`^(\d{4}-\d{2}-\d{2})-([a-z0-9+_-]{1,20})\.([a-zA-Z0-9-]+)\.txt$`)
+	newsDirNameRegex  = regexp.MustCompile(`^(\d{4}-\d{2}-\d{2})-([a-z0-9+_-]+)$`)
+	newsFileNameRegex = regexp.MustCompile(`^(\d{4}-\d{2}-\d{2})-([a-z0-9+_-]+)\.([a-zA-Z0-9-]+)\.txt$`)
 )
 
 var ruleNewsValidity = lints.RuleMetadata{
