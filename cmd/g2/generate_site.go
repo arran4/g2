@@ -87,13 +87,15 @@ func generateGlobalPages(outDir string, tmpl *template.Template, sites []*g2.Sit
 			return fmt.Errorf("creating directory: %w", err)
 		}
 		if err := renderPage(filepath.Join(outDir, "news", "index.html"), tmpl, "news_dashboard.html", GenericPageContext{
-			Title:            "News Dashboard",
-			BaseURL:          "../",
-			Breadcrumbs:      []g2.Breadcrumb{{Name: title, URL: "../"}, {Name: "News"}},
-			AlternateFeeds:   newsAlternates(title),
-			RecentGlobalNews: data.RecentNews,
-			Version:          version,
-			GenInfo:          genInfo,
+			Title:                "News Dashboard",
+			BaseURL:              "../",
+			Breadcrumbs:          []g2.Breadcrumb{{Name: title, URL: "../"}, {Name: "News"}},
+			AlternateFeeds:       newsAlternates(title),
+			RecentGlobalNews:     data.RecentNews,
+			RecentNewsFallback:   data.RecentNewsFallback,
+			RecentDurationString: recentDurationStr,
+			Version:              version,
+			GenInfo:              genInfo,
 		}); err != nil {
 			return fmt.Errorf("rendering page: %w", err)
 		}
@@ -122,17 +124,52 @@ func generateGlobalPages(outDir string, tmpl *template.Template, sites []*g2.Sit
 			if err := os.MkdirAll(newsDir, 0755); err != nil {
 				return fmt.Errorf("creating directory %s: %w", newsDir, err)
 			}
+			activeLang := n.Language
+			if activeLang == "" {
+				activeLang = "en"
+			}
 			if err := renderPage(filepath.Join(newsDir, "index.html"), tmpl, "news_article.html", GenericPageContext{
 				Title:          n.Title,
 				BaseURL:        "../../../../",
 				Breadcrumbs:    []g2.Breadcrumb{{Name: title, URL: "../../../../"}, {Name: "News", URL: "../../../"}, {Name: "Archive", URL: "../../"}, {Name: n.Title}},
 				GlobalNewsItem: &n,
+				ActiveLanguage: activeLang,
 				Version:        version,
 				GenInfo:        genInfo,
 			}); err != nil {
 				return fmt.Errorf("rendering page: %w", err)
 			}
-
+			for _, tr := range n.Translations {
+				if !n.MissingEnglish && tr.Language == activeLang {
+					continue
+				}
+				if tr.Item == nil {
+					continue
+				}
+				langDir := filepath.Join(newsDir, tr.Language)
+				if err := os.MkdirAll(langDir, 0755); err != nil {
+					return fmt.Errorf("creating directory %s: %w", langDir, err)
+				}
+				trAgg := AggNewsItem{
+					NewsItem:    *tr.Item,
+					RepoName:    n.RepoName,
+					ArchivePath: n.ArchivePath,
+				}
+				trAgg.Translations = n.Translations
+				if err := renderPage(filepath.Join(langDir, "index.html"), tmpl, "news_article.html", GenericPageContext{
+					Title:                trAgg.Title,
+					BaseURL:              "../../../../../",
+					Breadcrumbs:          []g2.Breadcrumb{{Name: title, URL: "../../../../../"}, {Name: "News", URL: "../../../../"}, {Name: "Archive", URL: "../../../"}, {Name: n.Title, URL: "../"}, {Name: tr.Language}},
+					GlobalNewsItem:       &trAgg,
+					ActiveLanguage:       tr.Language,
+					IsTranslationSubpage: true,
+					DefaultArticleURL:    "../",
+					Version:              version,
+					GenInfo:              genInfo,
+				}); err != nil {
+					return fmt.Errorf("rendering page: %w", err)
+				}
+			}
 		}
 	}
 
@@ -632,7 +669,7 @@ func generateOtherGlobalPages(outDir string, tmpl *template.Template, data *Aggr
 	return nil
 }
 
-func generateRepoPages(outDir string, tmpl *template.Template, sites []*g2.SiteData, data *AggregatedData, title, version, recentDurationStr string, genInfo GenerationInfo) error {
+func generateRepoPages(outDir string, tmpl *template.Template, sites []*g2.SiteData, data *AggregatedData, title, version string, recentDuration time.Duration, recentDurationStr string, genInfo GenerationInfo) error {
 	// 6. Repo-Specific Pages
 
 	if err := os.MkdirAll(filepath.Join(outDir, "repos"), 0755); err != nil {
@@ -687,8 +724,13 @@ func generateRepoPages(outDir string, tmpl *template.Template, sites []*g2.SiteD
 				return err
 			}
 
-			cutoffDate := time.Now().AddDate(0, -3, 0)
+			effDur := recentDuration
+			if effDur <= 0 {
+				effDur = 90 * 24 * time.Hour
+			}
+			cutoffDate := time.Now().Add(-effDur)
 			var repoRecentNews []g2.NewsItem
+			repoRecentFallback := false
 			for _, n := range site.News {
 				if n.Posted.After(cutoffDate) {
 					repoRecentNews = append(repoRecentNews, n)
@@ -697,9 +739,13 @@ func generateRepoPages(outDir string, tmpl *template.Template, sites []*g2.SiteD
 				}
 			}
 			if len(repoRecentNews) == 0 && len(site.News) > 0 {
+				repoRecentFallback = true
 				for i := 0; i < len(site.News) && i < 3; i++ {
 					repoRecentNews = append(repoRecentNews, site.News[i])
 				}
+			}
+			for _, diag := range site.NewsDiagnostics {
+				log.Printf("[NEWS DIAGNOSTIC] repo=%s: %s", site.RepoName, diag)
 			}
 
 			if err := generateRepoIndexAndStatsPages(repoDir, tmpl, site, data, title, version, recentDurationStr, genInfo, repoRecentNews); err != nil {
@@ -710,7 +756,7 @@ func generateRepoPages(outDir string, tmpl *template.Template, sites []*g2.SiteD
 				return err
 			}
 
-			if err := generateRepoNewsPages(repoDir, tmpl, site, title, version, genInfo, repoRecentNews); err != nil {
+			if err := generateRepoNewsPages(repoDir, tmpl, site, title, version, recentDurationStr, genInfo, repoRecentNews, repoRecentFallback); err != nil {
 				return err
 			}
 
@@ -1080,19 +1126,21 @@ func generateRepoProfilesPages(repoDir string, tmpl *template.Template, site *g2
 	return nil
 }
 
-func generateRepoNewsPages(repoDir string, tmpl *template.Template, site *g2.SiteData, title, version string, genInfo GenerationInfo, repoRecentNews []g2.NewsItem) error {
+func generateRepoNewsPages(repoDir string, tmpl *template.Template, site *g2.SiteData, title, version, recentDurationStr string, genInfo GenerationInfo, repoRecentNews []g2.NewsItem, repoRecentFallback bool) error {
 	if len(site.News) > 0 {
 		if err := os.MkdirAll(filepath.Join(repoDir, "news"), 0755); err != nil {
 			return fmt.Errorf("creating directory: %w", err)
 		}
 		if err := renderPage(filepath.Join(repoDir, "news", "index.html"), tmpl, "news_dashboard.html", GenericPageContext{
-			Title:          site.RepoName + " - News Dashboard",
-			BaseURL:        "../../../",
-			Breadcrumbs:    []g2.Breadcrumb{{Name: title, URL: "../../../"}, {Name: "Overlays", URL: "../../../overlays/"}, {Name: site.RepoName, URL: "../"}, {Name: "News"}},
-			AlternateFeeds: newsAlternates(site.RepoName),
-			RecentRepoNews: repoRecentNews,
-			Version:        version,
-			GenInfo:        genInfo,
+			Title:                site.RepoName + " - News Dashboard",
+			BaseURL:              "../../../",
+			Breadcrumbs:          []g2.Breadcrumb{{Name: title, URL: "../../../"}, {Name: "Overlays", URL: "../../../overlays/"}, {Name: site.RepoName, URL: "../"}, {Name: "News"}},
+			AlternateFeeds:       newsAlternates(site.RepoName),
+			RecentRepoNews:       repoRecentNews,
+			RecentNewsFallback:   repoRecentFallback,
+			RecentDurationString: recentDurationStr,
+			Version:              version,
+			GenInfo:              genInfo,
 		}); err != nil {
 			return fmt.Errorf("rendering page: %w", err)
 		}
@@ -1121,15 +1169,47 @@ func generateRepoNewsPages(repoDir string, tmpl *template.Template, site *g2.Sit
 			if err := os.MkdirAll(newsDir, 0755); err != nil {
 				return fmt.Errorf("creating directory %s: %w", newsDir, err)
 			}
+			activeLang := n.Language
+			if activeLang == "" {
+				activeLang = "en"
+			}
 			if err := renderPage(filepath.Join(newsDir, "index.html"), tmpl, "news_article.html", GenericPageContext{
-				Title:        n.Title,
-				BaseURL:      "../../../../../",
-				Breadcrumbs:  []g2.Breadcrumb{{Name: title, URL: "../../../../../"}, {Name: "Overlays", URL: "../../../../../overlays/"}, {Name: site.RepoName, URL: "../../../"}, {Name: "News", URL: "../../"}, {Name: "Archive", URL: "../"}, {Name: n.Title}},
-				RepoNewsItem: &n,
-				Version:      version,
-				GenInfo:      genInfo,
+				Title:          n.Title,
+				BaseURL:        "../../../../../",
+				Breadcrumbs:    []g2.Breadcrumb{{Name: title, URL: "../../../../../"}, {Name: "Overlays", URL: "../../../../../overlays/"}, {Name: site.RepoName, URL: "../../../"}, {Name: "News", URL: "../../"}, {Name: "Archive", URL: "../"}, {Name: n.Title}},
+				RepoNewsItem:   &n,
+				ActiveLanguage: activeLang,
+				Version:        version,
+				GenInfo:        genInfo,
 			}); err != nil {
 				return fmt.Errorf("rendering page: %w", err)
+			}
+			for _, tr := range n.Translations {
+				if !n.MissingEnglish && tr.Language == activeLang {
+					continue
+				}
+				if tr.Item == nil {
+					continue
+				}
+				langDir := filepath.Join(newsDir, tr.Language)
+				if err := os.MkdirAll(langDir, 0755); err != nil {
+					return fmt.Errorf("creating directory %s: %w", langDir, err)
+				}
+				trItem := *tr.Item
+				trItem.Translations = n.Translations
+				if err := renderPage(filepath.Join(langDir, "index.html"), tmpl, "news_article.html", GenericPageContext{
+					Title:                trItem.Title,
+					BaseURL:              "../../../../../../",
+					Breadcrumbs:          []g2.Breadcrumb{{Name: title, URL: "../../../../../../"}, {Name: "Overlays", URL: "../../../../../../overlays/"}, {Name: site.RepoName, URL: "../../../../"}, {Name: "News", URL: "../../../"}, {Name: "Archive", URL: "../../"}, {Name: n.Title, URL: "../"}, {Name: tr.Language}},
+					RepoNewsItem:         &trItem,
+					ActiveLanguage:       tr.Language,
+					IsTranslationSubpage: true,
+					DefaultArticleURL:    "../",
+					Version:              version,
+					GenInfo:              genInfo,
+				}); err != nil {
+					return fmt.Errorf("rendering page: %w", err)
+				}
 			}
 		}
 	}
@@ -1623,7 +1703,7 @@ func generateSite(outDir string, sites []*g2.SiteData, recentDuration time.Durat
 	}
 
 	// Prepare Immutable Render Context
-	data := prepareAggregatedData(sites)
+	data := prepareAggregatedDataWithDuration(sites, recentDuration)
 
 	// Title
 	title := "Gentoo Packages"
@@ -1662,7 +1742,7 @@ func generateSite(outDir string, sites []*g2.SiteData, recentDuration time.Durat
 
 	log.Printf("[PHASE] Rendering %d repository pages...", len(sites))
 	stepRepositoryPages := genInfo.Profiler.Track("Render Repository Pages")
-	if err := generateRepoPages(outDir, tmpl, sites, data, title, version, recentDurationStr, genInfo); err != nil {
+	if err := generateRepoPages(outDir, tmpl, sites, data, title, version, recentDuration, recentDurationStr, genInfo); err != nil {
 		return err
 	}
 	stepRepositoryPages()

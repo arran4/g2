@@ -21,6 +21,13 @@ type NewsNode struct {
 }
 
 // NewsItem represents a parsed Gentoo News Item (GLEP 42).
+type NewsTranslation struct {
+	Language string
+	Title    string
+	FileName string
+	Item     *NewsItem
+}
+
 type NewsItem struct {
 	Title              string
 	Author             string
@@ -35,6 +42,9 @@ type NewsItem struct {
 	BodyAST            []NewsNode
 	DirName            string
 	FileName           string
+	Language           string
+	MissingEnglish     bool
+	Translations       []NewsTranslation
 }
 
 // ToHTML is here for template interface compatibility

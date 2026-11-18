@@ -2,39 +2,93 @@
 
 <article class="news-article">
     {{if .GlobalNewsItem}}
+    {{$item := .GlobalNewsItem}}
+    {{if $item.Translations}}
+    <nav class="news-languages" aria-label="Article languages" style="margin-bottom: 12px;">
+        <strong>Languages:</strong>
+        {{range $item.Translations}}
+            {{if eq .Language $.ActiveLanguage}}
+                <span style="font-weight:bold;padding:2px 6px;border:1px solid #333;border-radius:3px;">{{.Language}}</span>
+            {{else if and (not $item.MissingEnglish) (eq .Language "en")}}
+                <a href="{{if $.IsTranslationSubpage}}{{$.DefaultArticleURL}}{{else}}./{{end}}" style="padding:2px 6px;">{{.Language}}</a>
+            {{else}}
+                <a href="{{if $.IsTranslationSubpage}}{{$.DefaultArticleURL}}{{end}}{{.Language}}/" style="padding:2px 6px;">{{.Language}}</a>
+            {{end}}
+        {{end}}
+    </nav>
+    {{end}}
     <div class="news-meta">
-        <span class="news-date">Posted: {{.GlobalNewsItem.Posted.Format "2006-01-02"}}</span>
-        {{if .GlobalNewsItem.RepoName}}<span class="news-repo"> in <a href="{{.BaseURL}}repos/{{.GlobalNewsItem.RepoName}}/">{{.GlobalNewsItem.RepoName}}</a></span>{{end}}
-        {{if .GlobalNewsItem.Author}}<span class="news-author"> by {{.GlobalNewsItem.Author}}</span>{{end}}
-        {{if .GlobalNewsItem.Revision}}<span class="news-revision"> | Revision: {{.GlobalNewsItem.Revision}}</span>{{end}}
-        {{if or .GlobalNewsItem.NewsItemFormat .GlobalNewsItem.Translator .GlobalNewsItem.DisplayIfInstalled .GlobalNewsItem.DisplayIfKeyword .GlobalNewsItem.DisplayIfProfile}}
+        <span class="news-date">Posted: {{$item.Posted.Format "2006-01-02"}}</span>
+        {{if $item.RepoName}}<span class="news-repo"> in <a href="{{.BaseURL}}repos/{{$item.RepoName}}/">{{$item.RepoName}}</a></span>{{end}}
+        {{if $item.Author}}<span class="news-author"> by {{$item.Author}}</span>{{end}}
+        {{if $item.Revision}}<span class="news-revision"> | Revision: {{$item.Revision}}</span>{{end}}
+        {{if or $item.NewsItemFormat $item.Translator $item.DisplayIfInstalled $item.DisplayIfKeyword $item.DisplayIfProfile}}
         <dl class="news-headers" style="margin-top: 10px; padding: 10px; background: #f9f9f9; border: 1px solid #ddd; border-radius: 4px;">
-            {{if .GlobalNewsItem.NewsItemFormat}}<dt>Format:</dt><dd>{{.GlobalNewsItem.NewsItemFormat}}</dd>{{end}}
-            {{range .GlobalNewsItem.Translator}}<dt>Translator:</dt><dd>{{.}}</dd>{{end}}
-            {{range .GlobalNewsItem.DisplayIfInstalled}}<dt>Display if installed:</dt><dd>{{.}}</dd>{{end}}
-            {{range .GlobalNewsItem.DisplayIfKeyword}}<dt>Display if keyword:</dt><dd>{{.}}</dd>{{end}}
-            {{range .GlobalNewsItem.DisplayIfProfile}}<dt>Display if profile:</dt><dd>{{.}}</dd>{{end}}
+            {{if $item.NewsItemFormat}}<dt>Format:</dt><dd>{{$item.NewsItemFormat}}</dd>{{end}}
+            {{range $item.Translator}}<dt>Translator:</dt><dd>{{.}}</dd>{{end}}
+            {{range $item.DisplayIfInstalled}}<dt>Display if installed:</dt><dd>{{.}}</dd>{{end}}
+            {{range $item.DisplayIfKeyword}}<dt>Display if keyword:</dt><dd>{{.}}</dd>{{end}}
+            {{range $item.DisplayIfProfile}}<dt>Display if profile:</dt><dd>{{.}}</dd>{{end}}
         </dl>
         {{end}}
     </div>
 
-    <div class="news-body" style="margin-top: 1em;">{{.GlobalNewsItem.ToHTMLTemplate}}</div>
+    {{if and $item.MissingEnglish (not .IsTranslationSubpage)}}
+    <div class="news-missing-english" style="margin-top: 1em; padding: 12px; border: 1px solid #d97706; background: #fffbeb; border-radius: 4px;">
+        <strong>English translation not available.</strong>
+        <p>This news item does not have an English (<code>.en.txt</code>) source file. Available translations:</p>
+        <ul>
+            {{range $item.Translations}}
+            <li><a href="{{.Language}}/">{{.Language}}: {{.Title}}</a></li>
+            {{end}}
+        </ul>
+    </div>
+    {{else}}
+    <div class="news-body" style="margin-top: 1em;">{{$item.ToHTMLTemplate}}</div>
+    {{end}}
     {{else if .RepoNewsItem}}
+    {{$item := .RepoNewsItem}}
+    {{if $item.Translations}}
+    <nav class="news-languages" aria-label="Article languages" style="margin-bottom: 12px;">
+        <strong>Languages:</strong>
+        {{range $item.Translations}}
+            {{if eq .Language $.ActiveLanguage}}
+                <span style="font-weight:bold;padding:2px 6px;border:1px solid #333;border-radius:3px;">{{.Language}}</span>
+            {{else if and (not $item.MissingEnglish) (eq .Language "en")}}
+                <a href="{{if $.IsTranslationSubpage}}{{$.DefaultArticleURL}}{{else}}./{{end}}" style="padding:2px 6px;">{{.Language}}</a>
+            {{else}}
+                <a href="{{if $.IsTranslationSubpage}}{{$.DefaultArticleURL}}{{end}}{{.Language}}/" style="padding:2px 6px;">{{.Language}}</a>
+            {{end}}
+        {{end}}
+    </nav>
+    {{end}}
     <div class="news-meta">
-        <span class="news-date">Posted: {{.RepoNewsItem.Posted.Format "2006-01-02"}}</span>
-        {{if .RepoNewsItem.Author}}<span class="news-author"> by {{.RepoNewsItem.Author}}</span>{{end}}
-        {{if .RepoNewsItem.Revision}}<span class="news-revision"> | Revision: {{.RepoNewsItem.Revision}}</span>{{end}}
-        {{if or .RepoNewsItem.NewsItemFormat .RepoNewsItem.Translator .RepoNewsItem.DisplayIfInstalled .RepoNewsItem.DisplayIfKeyword .RepoNewsItem.DisplayIfProfile}}
+        <span class="news-date">Posted: {{$item.Posted.Format "2006-01-02"}}</span>
+        {{if $item.Author}}<span class="news-author"> by {{$item.Author}}</span>{{end}}
+        {{if $item.Revision}}<span class="news-revision"> | Revision: {{$item.Revision}}</span>{{end}}
+        {{if or $item.NewsItemFormat $item.Translator $item.DisplayIfInstalled $item.DisplayIfKeyword $item.DisplayIfProfile}}
         <dl class="news-headers" style="margin-top: 10px; padding: 10px; background: #f9f9f9; border: 1px solid #ddd; border-radius: 4px;">
-            {{if .RepoNewsItem.NewsItemFormat}}<dt>Format:</dt><dd>{{.RepoNewsItem.NewsItemFormat}}</dd>{{end}}
-            {{range .RepoNewsItem.Translator}}<dt>Translator:</dt><dd>{{.}}</dd>{{end}}
-            {{range .RepoNewsItem.DisplayIfInstalled}}<dt>Display if installed:</dt><dd>{{.}}</dd>{{end}}
-            {{range .RepoNewsItem.DisplayIfKeyword}}<dt>Display if keyword:</dt><dd>{{.}}</dd>{{end}}
-            {{range .RepoNewsItem.DisplayIfProfile}}<dt>Display if profile:</dt><dd>{{.}}</dd>{{end}}
+            {{if $item.NewsItemFormat}}<dt>Format:</dt><dd>{{$item.NewsItemFormat}}</dd>{{end}}
+            {{range $item.Translator}}<dt>Translator:</dt><dd>{{.}}</dd>{{end}}
+            {{range $item.DisplayIfInstalled}}<dt>Display if installed:</dt><dd>{{.}}</dd>{{end}}
+            {{range $item.DisplayIfKeyword}}<dt>Display if keyword:</dt><dd>{{.}}</dd>{{end}}
+            {{range $item.DisplayIfProfile}}<dt>Display if profile:</dt><dd>{{.}}</dd>{{end}}
         </dl>
         {{end}}
     </div>
 
-    <div class="news-body" style="margin-top: 1em;">{{.RepoNewsItem.ToHTMLTemplate}}</div>
+    {{if and $item.MissingEnglish (not .IsTranslationSubpage)}}
+    <div class="news-missing-english" style="margin-top: 1em; padding: 12px; border: 1px solid #d97706; background: #fffbeb; border-radius: 4px;">
+        <strong>English translation not available.</strong>
+        <p>This news item does not have an English (<code>.en.txt</code>) source file. Available translations:</p>
+        <ul>
+            {{range $item.Translations}}
+            <li><a href="{{.Language}}/">{{.Language}}: {{.Title}}</a></li>
+            {{end}}
+        </ul>
+    </div>
+    {{else}}
+    <div class="news-body" style="margin-top: 1em;">{{$item.ToHTMLTemplate}}</div>
+    {{end}}
     {{end}}
 </article>

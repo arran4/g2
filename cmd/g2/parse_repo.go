@@ -178,23 +178,94 @@ func parseRepoNews(sysFS fs.FS, repoDir string, site *g2.SiteData) {
 			continue
 		}
 		dirName := entry.Name()
-		txtFile := filepath.Join(newsDir, dirName, dirName+".en.txt")
-
-		content, err := fs.ReadFile(sysFS, filepath.ToSlash(txtFile))
+		dirPath := filepath.ToSlash(filepath.Join(newsDir, dirName))
+		files, err := fs.ReadDir(sysFS, dirPath)
 		if err != nil {
+			site.NewsDiagnostics = append(site.NewsDiagnostics, fmt.Sprintf("news/%s: failed to read directory: %v", dirName, err))
 			continue
 		}
 
-		item := g2.ParseNewsItem(string(content))
-		item.DirName = dirName
-		item.FileName = dirName + ".en.txt"
+		var translations []g2.NewsTranslation
+		for _, f := range files {
+			if f.IsDir() {
+				continue
+			}
+			fname := f.Name()
+			if !strings.HasSuffix(fname, ".txt") {
+				continue
+			}
+			lang := extractNewsLang(dirName, fname)
+			txtFile := filepath.ToSlash(filepath.Join(newsDir, dirName, fname))
+			content, err := fs.ReadFile(sysFS, txtFile)
+			if err != nil {
+				site.NewsDiagnostics = append(site.NewsDiagnostics, fmt.Sprintf("news/%s/%s: failed to read: %v", dirName, fname, err))
+				continue
+			}
+			parsed := g2.ParseNewsItem(string(content))
+			parsed.DirName = dirName
+			parsed.FileName = fname
+			parsed.Language = lang
+			parsedCopy := parsed
+			translations = append(translations, g2.NewsTranslation{
+				Language: lang,
+				Title:    parsed.Title,
+				FileName: fname,
+				Item:     &parsedCopy,
+			})
+		}
 
-		site.News = append(site.News, item)
+		if len(translations) == 0 {
+			site.NewsDiagnostics = append(site.NewsDiagnostics, fmt.Sprintf("news/%s: no readable .txt news files found", dirName))
+			continue
+		}
+
+		sort.Slice(translations, func(i, j int) bool {
+			if translations[i].Language == "en" {
+				return true
+			}
+			if translations[j].Language == "en" {
+				return false
+			}
+			return translations[i].Language < translations[j].Language
+		})
+
+		primary := *translations[0].Item
+		if translations[0].Language != "en" {
+			primary.MissingEnglish = true
+			site.NewsDiagnostics = append(site.NewsDiagnostics, fmt.Sprintf("news/%s: missing English (%s.en.txt); available: %s", dirName, dirName, joinTranslationLangs(translations)))
+		}
+		primary.Translations = translations
+		site.News = append(site.News, primary)
 	}
 
 	sort.Slice(site.News, func(i, j int) bool {
-		return site.News[i].Posted.After(site.News[j].Posted)
+		if !site.News[i].Posted.Equal(site.News[j].Posted) {
+			return site.News[i].Posted.After(site.News[j].Posted)
+		}
+		return site.News[i].DirName < site.News[j].DirName
 	})
+}
+
+func extractNewsLang(dirName, fileName string) string {
+	base := strings.TrimSuffix(fileName, ".txt")
+	if strings.HasPrefix(base, dirName+".") {
+		lang := strings.TrimPrefix(base, dirName+".")
+		if lang != "" {
+			return lang
+		}
+	}
+	if idx := strings.LastIndexByte(base, '.'); idx != -1 && idx+1 < len(base) {
+		return base[idx+1:]
+	}
+	return "und"
+}
+
+func joinTranslationLangs(translations []g2.NewsTranslation) string {
+	langs := make([]string, 0, len(translations))
+	for _, t := range translations {
+		langs = append(langs, t.Language)
+	}
+	return strings.Join(langs, ", ")
 }
 
 // parseRepoAuthors extracts author information from the metadata/AUTHORS file and sets the raw URL.
