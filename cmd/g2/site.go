@@ -1034,7 +1034,35 @@ type AggUseFlag struct {
 	LocalDescs    map[string]string
 	MetadataDescs map[string]string
 	Packages      []*AggPackage
+	PkgRepos      map[string]map[string]bool
 	Warnings      []string
+}
+
+// ReposForPackage returns a sorted list of repository names that associate this flag with pkgKey.
+func (a *AggUseFlag) ReposForPackage(pkgKey string) []string {
+	if a != nil && a.PkgRepos != nil {
+		if repos := a.PkgRepos[pkgKey]; len(repos) > 0 {
+			out := make([]string, 0, len(repos))
+			for rn := range repos {
+				out = append(out, rn)
+			}
+			sort.Strings(out)
+			return out
+		}
+	}
+	if a != nil {
+		for _, p := range a.Packages {
+			if p != nil && p.Category+"/"+p.Name == pkgKey {
+				out := make([]string, 0, len(p.Repos))
+				for rn := range p.Repos {
+					out = append(out, rn)
+				}
+				sort.Strings(out)
+				return out
+			}
+		}
+	}
+	return nil
 }
 
 func getRepoEclasses(site *g2.SiteData, aggPackages map[string]*AggPackage) []*AggEclass {
@@ -1186,9 +1214,12 @@ func getRepoUseFlags(site *g2.SiteData, aggPackages map[string]*AggPackage) []*A
 				Name:          flag,
 				LocalDescs:    make(map[string]string),
 				MetadataDescs: make(map[string]string),
+				PkgRepos:      make(map[string]map[string]bool),
 			}
 			aggUseFlags[flag] = uf
 			seenPackages[flag] = make(map[string]bool)
+		} else if uf.PkgRepos == nil {
+			uf.PkgRepos = make(map[string]map[string]bool)
 		}
 		return uf
 	}
@@ -1205,10 +1236,18 @@ func getRepoUseFlags(site *g2.SiteData, aggPackages map[string]*AggPackage) []*A
 						for _, flagObj := range parsedFlags {
 							flag := flagObj.Name
 							uf := ensureFlag(flag)
-							if !seenPackages[flag][pkgKey] {
-								uf.Packages = append(uf.Packages, aggPackages[pkgKey])
-								uf.Count++
-								seenPackages[flag][pkgKey] = true
+							if uf.PkgRepos[pkgKey] == nil {
+								uf.PkgRepos[pkgKey] = make(map[string]bool)
+							}
+							if site.RepoName != "" {
+								uf.PkgRepos[pkgKey][site.RepoName] = true
+							}
+							if !seenPackages[flag][pkgKey] && aggPackages != nil {
+								if ap, ok := aggPackages[pkgKey]; ok {
+									uf.Packages = append(uf.Packages, ap)
+									uf.Count++
+									seenPackages[flag][pkgKey] = true
+								}
 							}
 						}
 					}
@@ -1224,10 +1263,18 @@ func getRepoUseFlags(site *g2.SiteData, aggPackages map[string]*AggPackage) []*A
 							flag = strings.TrimPrefix(flag, "!") // remove negations
 
 							uf := ensureFlag(flag)
-							if !seenPackages[flag][pkgKey] {
-								uf.Packages = append(uf.Packages, aggPackages[pkgKey])
-								uf.Count++
-								seenPackages[flag][pkgKey] = true
+							if uf.PkgRepos[pkgKey] == nil {
+								uf.PkgRepos[pkgKey] = make(map[string]bool)
+							}
+							if site.RepoName != "" {
+								uf.PkgRepos[pkgKey][site.RepoName] = true
+							}
+							if !seenPackages[flag][pkgKey] && aggPackages != nil {
+								if ap, ok := aggPackages[pkgKey]; ok {
+									uf.Packages = append(uf.Packages, ap)
+									uf.Count++
+									seenPackages[flag][pkgKey] = true
+								}
 							}
 						}
 					}
@@ -1238,10 +1285,18 @@ func getRepoUseFlags(site *g2.SiteData, aggPackages map[string]*AggPackage) []*A
 				for _, useBlock := range pkg.Metadata.Use {
 					for _, flag := range useBlock.Flags {
 						uf := ensureFlag(flag.Name)
-						if !seenPackages[flag.Name][pkgKey] {
-							uf.Packages = append(uf.Packages, aggPackages[pkgKey])
-							uf.Count++
-							seenPackages[flag.Name][pkgKey] = true
+						if uf.PkgRepos[pkgKey] == nil {
+							uf.PkgRepos[pkgKey] = make(map[string]bool)
+						}
+						if site.RepoName != "" {
+							uf.PkgRepos[pkgKey][site.RepoName] = true
+						}
+						if !seenPackages[flag.Name][pkgKey] && aggPackages != nil {
+							if ap, ok := aggPackages[pkgKey]; ok {
+								uf.Packages = append(uf.Packages, ap)
+								uf.Count++
+								seenPackages[flag.Name][pkgKey] = true
+							}
 						}
 
 						if flag.Text != "" {

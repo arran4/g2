@@ -68,10 +68,15 @@
         </tr>
         {{range .GlobalUseFlag.Packages}}
         {{$pkgKey := printf "%s/%s" .Category .Name}}
-        {{$firstRepo := ""}}
-        {{range $r, $d := .Repos}}{{$firstRepo = $r}}{{end}}
+        {{$repos := $.GlobalUseFlag.ReposForPackage $pkgKey}}
         <tr>
-            <td><a href="{{$.BaseURL}}repos/{{$firstRepo}}/categories/{{.Category}}/packages/{{.Name}}/">{{$pkgKey}}</a></td>
+            <td>
+                {{if eq (len $repos) 1}}
+                <a href="{{$.BaseURL}}repos/{{index $repos 0}}/categories/{{.Category}}/packages/{{.Name}}/">{{$pkgKey}}</a>
+                {{else}}
+                <a href="{{$.BaseURL}}packages/{{.Category}}/{{.Name}}/">{{$pkgKey}}</a>
+                {{end}}
+            </td>
             <td>
                 {{$localDesc := index $.GlobalUseFlag.LocalDescs $pkgKey}}
                 {{if $localDesc}}{{$localDesc}}{{else}}<em>-</em>{{end}}
