@@ -1,4 +1,3 @@
-{{define "content"}}
 <h2>Generation Statistics</h2>
 
 <div class="metadata-section">
@@ -14,4 +13,148 @@
     {{end}}
 </div>
 
+{{if .SiteInventory}}
+{{$inv := .SiteInventory}}
+<h3>Site Inventory &amp; Averages</h3>
+<div class="stats-summary-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-bottom:20px;">
+    <div class="card" style="padding:12px;border:1px solid #ddd;border-radius:6px;">
+        <div style="font-size:0.85em;color:#666;">Total Repositories</div>
+        <div style="font-size:1.35em;font-weight:bold;">{{$inv.TotalRepos}}</div>
+    </div>
+    <div class="card" style="padding:12px;border:1px solid #ddd;border-radius:6px;">
+        <div style="font-size:0.85em;color:#666;">Unique Packages</div>
+        <div style="font-size:1.35em;font-weight:bold;">{{$inv.UniquePackages}}</div>
+    </div>
+    <div class="card" style="padding:12px;border:1px solid #ddd;border-radius:6px;">
+        <div style="font-size:0.85em;color:#666;">Per-Repo Packages (Sum)</div>
+        <div style="font-size:1.35em;font-weight:bold;">{{$inv.TotalRepoPackages}}</div>
+    </div>
+    <div class="card" style="padding:12px;border:1px solid #ddd;border-radius:6px;">
+        <div style="font-size:0.85em;color:#666;">Total Ebuilds</div>
+        <div style="font-size:1.35em;font-weight:bold;">{{$inv.TotalEbuilds}}</div>
+    </div>
+    <div class="card" style="padding:12px;border:1px solid #ddd;border-radius:6px;">
+        <div style="font-size:0.85em;color:#666;">News Items (Variants)</div>
+        <div style="font-size:1.35em;font-weight:bold;">{{$inv.TotalNewsItems}} ({{$inv.TotalNewsVariants}})</div>
+    </div>
+    <div class="card" style="padding:12px;border:1px solid #ddd;border-radius:6px;">
+        <div style="font-size:0.85em;color:#666;">Avg Packages / Repo</div>
+        <div style="font-size:1.35em;font-weight:bold;">{{$inv.AvgPackagesPerRepoStr}}</div>
+    </div>
+    <div class="card" style="padding:12px;border:1px solid #ddd;border-radius:6px;">
+        <div style="font-size:0.85em;color:#666;">Avg News / Repo</div>
+        <div style="font-size:1.35em;font-weight:bold;">{{$inv.AvgNewsPerRepoStr}}</div>
+    </div>
+    <div class="card" style="padding:12px;border:1px solid #ddd;border-radius:6px;">
+        <div style="font-size:0.85em;color:#666;">Avg Ebuilds / Package</div>
+        <div style="font-size:1.35em;font-weight:bold;">{{$inv.AvgEbuildsPerPackageStr}}</div>
+    </div>
+</div>
+
+<details style="margin-top:16px;">
+    <summary style="cursor:pointer;font-weight:bold;">Leaderboards / Explore (Top 10)</summary>
+    <div style="margin-top:12px;display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;">
+        {{if $inv.TopReposByPackages}}
+        <div>
+            <h4>Top Repositories by Packages</h4>
+            <table>
+                <thead><tr><th>#</th><th>Repository</th><th>Packages</th></tr></thead>
+                <tbody>
+                    {{range $inv.TopReposByPackages}}
+                    <tr><td>{{.Rank}}</td><td><a href="{{$.BaseURL}}{{.URL}}">{{.Name}}</a></td><td>{{.Count}}</td></tr>
+                    {{end}}
+                </tbody>
+            </table>
+        </div>
+        {{end}}
+        {{if $inv.TopReposByEbuilds}}
+        <div>
+            <h4>Top Repositories by Ebuilds</h4>
+            <table>
+                <thead><tr><th>#</th><th>Repository</th><th>Ebuilds</th></tr></thead>
+                <tbody>
+                    {{range $inv.TopReposByEbuilds}}
+                    <tr><td>{{.Rank}}</td><td><a href="{{$.BaseURL}}{{.URL}}">{{.Name}}</a></td><td>{{.Count}}</td></tr>
+                    {{end}}
+                </tbody>
+            </table>
+        </div>
+        {{end}}
+        {{if $inv.TopReposByNews}}
+        <div>
+            <h4>Top Repositories by News</h4>
+            <table>
+                <thead><tr><th>#</th><th>Repository</th><th>News</th><th>Latest</th></tr></thead>
+                <tbody>
+                    {{range $inv.TopReposByNews}}
+                    <tr><td>{{.Rank}}</td><td><a href="{{$.BaseURL}}{{.URL}}">{{.Name}}</a></td><td>{{.Count}}</td><td>{{if .Detail}}{{.Detail}}{{else}}—{{end}}</td></tr>
+                    {{end}}
+                </tbody>
+            </table>
+        </div>
+        {{end}}
+        {{if $inv.TopPackagesByVersions}}
+        <div>
+            <h4>Top Packages by Ebuild Versions</h4>
+            <table>
+                <thead><tr><th>#</th><th>Package</th><th>Versions</th></tr></thead>
+                <tbody>
+                    {{range $inv.TopPackagesByVersions}}
+                    <tr><td>{{.Rank}}</td><td><a href="{{$.BaseURL}}{{.URL}}">{{.Name}}</a></td><td>{{.Count}}</td></tr>
+                    {{end}}
+                </tbody>
+            </table>
+        </div>
+        {{end}}
+        {{if $inv.TopPackagesByRepos}}
+        <div>
+            <h4>Top Packages by Repository Count</h4>
+            <table>
+                <thead><tr><th>#</th><th>Package</th><th>Repos</th></tr></thead>
+                <tbody>
+                    {{range $inv.TopPackagesByRepos}}
+                    <tr><td>{{.Rank}}</td><td><a href="{{$.BaseURL}}{{.URL}}">{{.Name}}</a></td><td>{{.Count}}</td></tr>
+                    {{end}}
+                </tbody>
+            </table>
+        </div>
+        {{end}}
+    </div>
+</details>
+
+{{if $inv.RepoSummaries}}
+<details style="margin-top:16px;">
+    <summary style="cursor:pointer;font-weight:bold;">Per-Repository Breakdown ({{len $inv.RepoSummaries}} repositories)</summary>
+    <table style="margin-top:10px;">
+        <thead>
+            <tr>
+                <th>Repository</th>
+                <th>Categories</th>
+                <th>Packages</th>
+                <th>Ebuilds</th>
+                <th>News (Variants)</th>
+                <th>Latest News</th>
+                <th>Checkout</th>
+                <th>Parse</th>
+                <th>Details</th>
+            </tr>
+        </thead>
+        <tbody>
+            {{range $inv.RepoSummaries}}
+            <tr>
+                <td><a href="{{$.BaseURL}}repos/{{.RepoName}}/">{{.RepoName}}</a></td>
+                <td>{{.Categories}}</td>
+                <td>{{.Packages}}</td>
+                <td>{{.Ebuilds}}</td>
+                <td>{{.NewsItems}} ({{.NewsVariants}})</td>
+                <td>{{if .LatestNewsDate}}{{.LatestNewsDate}}{{else}}—{{end}}</td>
+                <td>{{if .CheckoutTime}}{{.CheckoutTime}}{{else}}—{{end}}</td>
+                <td>{{if .ParseTime}}{{.ParseTime}}{{else}}—{{end}}</td>
+                <td><a href="{{$.BaseURL}}repos/{{.RepoName}}/stats/">Stats</a></td>
+            </tr>
+            {{end}}
+        </tbody>
+    </table>
+</details>
+{{end}}
 {{end}}
