@@ -82,6 +82,7 @@ func (cfg *MainArgConfig) cmdOverlay(args []string) error {
 	fs := flag.NewFlagSet("overlay site generate", flag.ExitOnError)
 	profileSiteGen := fs.Bool("profile", false, "Generate a profile report of site generation")
 	profileOut := fs.String("profile-out", "profile.txt", "Output file for the profile report, or '-' for stdout")
+	statsJSON := fs.Bool("stats-json", true, "Write machine-readable generation statistics to /stats/stats.json")
 	outDir := fs.String("out", "site_out", "Output directory for the generated site")
 	clear := fs.Bool("clear", false, "Clear output directory before generation")
 	recentDurOpt := fs.String("recent-duration", "3mo", "Duration to consider an update 'recent' (e.g. 3mo, 14d, 72h)")
@@ -157,6 +158,7 @@ func (cfg *MainArgConfig) cmdOverlay(args []string) error {
 	var allSitesMu sync.Mutex
 	var lastLogTime time.Time
 
+	fetchStart := time.Now()
 	g, _ := errgroup.WithContext(context.Background())
 
 	for _, task := range tasks {
@@ -263,7 +265,17 @@ func (cfg *MainArgConfig) cmdOverlay(args []string) error {
 		return allSites[i].RepoName < allSites[j].RepoName
 	})
 
-	genInfo := GenerationInfo{Args: cfg.Args, FastGit: *fastGit, RecentDuration: recentDurationStr}
+	fetchParseWall := time.Since(fetchStart)
+	checkoutWorker, parseWorker := sumRepoWorkerDurations(allSites)
+	genInfo := GenerationInfo{
+		Args:             cfg.Args,
+		FastGit:          *fastGit,
+		RecentDuration:   recentDurationStr,
+		FetchParseWall:   fetchParseWall,
+		CheckoutWorker:   checkoutWorker,
+		ParseWorker:      parseWorker,
+		DisableStatsJSON: !*statsJSON,
+	}
 	profiler := NewProfiler(*profileSiteGen, *profileOut)
 	genInfo.Profiler = profiler
 	if err := generateSite(*outDir, allSites, recentDuration, recentDurationStr, genInfo); err != nil {
@@ -295,6 +307,7 @@ func (cfg *MainArgConfig) cmdOverlays(args []string) error {
 	fs := flag.NewFlagSet("overlays site generate", flag.ExitOnError)
 	profileSiteGen := fs.Bool("profile", false, "Generate a profile report of site generation")
 	profileOut := fs.String("profile-out", "profile.txt", "Output file for the profile report, or '-' for stdout")
+	statsJSON := fs.Bool("stats-json", true, "Write machine-readable generation statistics to /stats/stats.json")
 	outDir := fs.String("out", "site_out", "Output directory for the generated site")
 	clear := fs.Bool("clear", false, "Clear output directory before generation")
 	recentDurOpt := fs.String("recent-duration", "3mo", "Duration to consider an update 'recent' (e.g. 3mo, 14d, 72h)")
@@ -335,7 +348,7 @@ func (cfg *MainArgConfig) cmdOverlays(args []string) error {
 	}
 
 	log.Printf("Generating site (v%s) from remote repositories: %s into %s", version, location, *outDir)
-	return cfg.cmdSiteRemote(location, *outDir, recentDuration, recentDurationStr, *fastGit, *useZip, *concurrency, *retries, *continueOnError, *persistentDir, *reposConfOpt, *tempDir, *workMode, *mode, *profileSiteGen, *profileOut, *smartMode)
+	return cfg.cmdSiteRemote(location, *outDir, recentDuration, recentDurationStr, *fastGit, *useZip, *concurrency, *retries, *continueOnError, *persistentDir, *reposConfOpt, *tempDir, *workMode, *mode, *profileSiteGen, *profileOut, *smartMode, *statsJSON)
 }
 
 func parseLayoutConfFromFS(sysFS fs.FS, path string) (*g2.LayoutConf, error) {
@@ -1956,7 +1969,8 @@ func renderPage(path string, tmpl *template.Template, name string, data any) err
 	return nil
 }
 
-func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, recentDuration time.Duration, recentDurationStr string, fastGit bool, useZip bool, concurrency int, retries int, continueOnError bool, persistentDir string, reposConfPath string, tempDir string, workMode string, mode string, profileSiteGen bool, profileOut string, smartMode bool) error {
+func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, recentDuration time.Duration, recentDurationStr string, fastGit bool, useZip bool, concurrency int, retries int, continueOnError bool, persistentDir string, reposConfPath string, tempDir string, workMode string, mode string, profileSiteGen bool, profileOut string, smartMode bool, statsJSON bool) error {
+	remoteStart := time.Now()
 	var repos g2.Repositories
 
 	if reposConfPath != "" {
@@ -2580,12 +2594,17 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, 
 	log.Printf("--------------------------------------------------")
 
 	log.Printf("Generating integrated site (v%s) for %d repos", version, len(allSites))
+	checkoutWorker, parseWorker := sumRepoWorkerDurations(allSites)
 	profiler := NewProfiler(profileSiteGen, profileOut)
 	genInfo := GenerationInfo{
-		Profiler:       profiler,
-		Args:           cfg.Args,
-		FastGit:        fastGit,
-		RecentDuration: recentDurationStr,
+		Profiler:         profiler,
+		Args:             cfg.Args,
+		FastGit:          fastGit,
+		RecentDuration:   recentDurationStr,
+		FetchParseWall:   time.Since(remoteStart),
+		CheckoutWorker:   checkoutWorker,
+		ParseWorker:      parseWorker,
+		DisableStatsJSON: !statsJSON,
 	}
 	if err := generateSite(outDir, allSites, recentDuration, recentDurationStr, genInfo); err != nil {
 		return fmt.Errorf("generating integrated site: %w", err)
