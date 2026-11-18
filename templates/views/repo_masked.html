@@ -1,7 +1,6 @@
-{{define "content"}}
 <h2>Masked Packages in {{.Repo.RepoName}}</h2>
 
-{{if .Repo.SourceURL}}
+{{if isWebURL .Repo.SourceURL}}
 <p><a href="{{.Repo.SourceURL}}/tree/master/profiles/package.mask" target="_blank">View raw package.mask</a></p>
 {{end}}
 
@@ -14,8 +13,9 @@
     </div>
     <ul class="list-group list-group-flush">
         {{range .Entries}}
+        {{$pkgURL := repoPkgURL $.BaseURL $.Repo.RepoName .Package $.ValidRepoPackages $.ValidPackages}}
         <li class="list-group-item">
-            <a href="../../packages/{{.Package}}/">{{.Package}}</a>
+            {{if $pkgURL}}<a href="{{$pkgURL}}">{{.Package}}</a>{{else}}{{.Package}}{{end}}
         </li>
         {{end}}
     </ul>
@@ -23,5 +23,4 @@
 {{end}}
 {{else}}
 <p>No masked packages found in this repository.</p>
-{{end}}
 {{end}}

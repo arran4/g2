@@ -1,4 +1,3 @@
-{{define "content"}}
 <h2>Generation Statistics</h2>
 
 <div class="metadata-section">
@@ -14,4 +13,28 @@
     {{end}}
 </div>
 
+{{if .LinkReport}}
+<div class="metadata-section">
+    <h3>Link Integrity Verification</h3>
+    <p>
+        <strong>Status:</strong>
+        {{if .LinkReport.Verified}}
+        <span style="color: #155724; font-weight: bold;">Verified (0 issues)</span>
+        {{else}}
+        <span style="color: #721c24; font-weight: bold;">Issues Detected ({{.LinkReport.TotalIssues}})</span>
+        {{end}}
+    </p>
+    <ul>
+        <li><strong>Committed Pages:</strong> {{.LinkReport.CommittedPages}}</li>
+        <li><strong>Committed Assets:</strong> {{.LinkReport.CommittedAssets}}</li>
+        <li><strong>Checked Internal References:</strong> {{.LinkReport.CheckedRefs}} ({{.LinkReport.UniqueTargets}} unique destinations)</li>
+        <li><strong>External References (Unchecked):</strong> {{.LinkReport.ExternalRefs}}</li>
+        <li><strong>Fragment References:</strong> {{.LinkReport.FragmentOnlyRefs}}</li>
+        <li><strong>Missing Targets:</strong> {{.LinkReport.MissingCount}}</li>
+        <li><strong>Duplicate Targets:</strong> {{.LinkReport.DuplicateCount}}</li>
+        <li><strong>Root Escapes:</strong> {{.LinkReport.RootEscapeCount}}</li>
+        <li><strong>Malformed URLs:</strong> {{.LinkReport.MalformedCount}}</li>
+        <li><strong>Case Collisions:</strong> {{.LinkReport.CaseCollisionCount}}</li>
+    </ul>
+</div>
 {{end}}

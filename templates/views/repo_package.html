@@ -10,7 +10,7 @@
 
 {{if .RepoPackage.Deprecated}}
 <div class="alert alert-danger" style="border-color: #ff4c4c; background-color: #ffe6e6;">
-    <strong><a href="../../../deprecated/">Deprecated:</a></strong> This package is deprecated.
+    <strong><a href="{{$.BaseURL}}repos/{{.Repo.RepoName}}/deprecated/">Deprecated:</a></strong> This package is deprecated.
     <p><em>Reason:</em> {{.RepoPackage.Deprecated.Reason}}</p>
     <p><small>Deprecated by {{.RepoPackage.Deprecated.Author}} on {{.RepoPackage.Deprecated.Date}}</small></p>
 </div>
@@ -18,7 +18,7 @@
 
 {{if .RepoPackage.Masked}}
 <div class="alert alert-danger" style="border-color: #ff4c4c; background-color: #ffe6e6;">
-    <strong><a href="../../../masked/">Masked:</a></strong> This package is masked.
+    <strong><a href="{{$.BaseURL}}repos/{{.Repo.RepoName}}/masked/">Masked:</a></strong> This package is masked.
     <p><em>Reason:</em> {{.RepoPackage.Masked.Reason}}</p>
     <p><small>Masked by {{.RepoPackage.Masked.Author}} on {{.RepoPackage.Masked.Date}}</small></p>
 </div>
@@ -35,12 +35,12 @@
 <div class="alert alert-info">
     <strong>Notice:</strong> This package is in a virtual group:
     {{range $index, $virtual := .RepoPackage.ReverseVirtuals}}{{if $index}}, {{end}}
-    {{packageLink $.BaseURL $virtual}}{{end}}
+    {{packageLinkKnown $.BaseURL $virtual $.ValidPackages}}{{end}}
     {{if gt (len .RepoPackage.Equivalents) 0}}
     <br/>
     Equivalents:
     {{range $index, $eq := .RepoPackage.Equivalents}}{{if $index}}, {{end}}
-    {{packageLink $.BaseURL $eq}}{{end}}
+    {{packageLinkKnown $.BaseURL $eq $.ValidPackages}}{{end}}
     {{end}}
 </div>
 {{end}}
@@ -76,7 +76,7 @@
         {{end}}
         {{if .RepoPackage.DominantLicense}}
         <dt><strong>License:</strong></dt>
-        <dd>{{if and .RepoPackage.DominantLicense (index $.ValidLicenses .RepoPackage.DominantLicense)}}<a href="../../../../../../licenses/{{slugify .RepoPackage.DominantLicense}}/">{{.RepoPackage.DominantLicense}}</a>{{else}}{{.RepoPackage.DominantLicense}}{{end}}</dd>
+        <dd>{{if and .RepoPackage.DominantLicense $.ValidLicenses (index $.ValidLicenses .RepoPackage.DominantLicense)}}<a href="{{$.BaseURL}}repos/{{$.Repo.RepoName}}/licenses/{{slugify .RepoPackage.DominantLicense}}/">{{.RepoPackage.DominantLicense}}</a>{{else}}{{.RepoPackage.DominantLicense}}{{end}}</dd>
         {{end}}
     </dl>
 </div>
@@ -88,7 +88,7 @@
     <ul>
         {{range .RepoPackage.VirtualDeps}}
         <li>
-            <a href="{{$.BaseURL}}packages/{{.}}/">{{.}}</a>
+            {{packageLinkKnown $.BaseURL . $.ValidPackages}}
         </li>
         {{end}}
     </ul>
@@ -201,7 +201,7 @@
         </tr>
         {{range $flag := .RepoPackage.PkgUseFlags}}
         <tr>
-            <td><a href="../../../../uses/{{$flag.Name}}/">{{$flag.Name}}</a></td>
+            <td>{{if and $.ValidRepoUseFlags (index $.ValidRepoUseFlags $flag.Name)}}<a href="{{$.BaseURL}}repos/{{$.Repo.RepoName}}/uses/{{$flag.Name}}/">{{$flag.Name}}</a>{{else}}{{$flag.Name}}{{end}}</td>
             <td>
                 {{$flag.Desc}}
                 {{if or (eq $flag.Source "most common use.local.desc") (eq $flag.Source "most common metadata.xml") (eq $flag.Source "")}}

@@ -1,2 +1,5 @@
-{{- /* Go template for redirect */ -}}
-<!DOCTYPE html><html><head><meta http-equiv="refresh" content="0; url={{.TargetURL}}"></head><body><a href="{{.TargetURL}}">Redirecting...</a></body></html>
+{{- /* Go template for redirect inside shared layout */ -}}
+<div class="metadata-section">
+    <h2>Redirecting...</h2>
+    <p>This package is available in a single overlay. If you are not redirected automatically, <a href="{{.TargetURL}}">continue to {{.TargetURL}}</a>.</p>
+</div>

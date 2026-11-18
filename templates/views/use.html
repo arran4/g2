@@ -67,11 +67,22 @@
             <th>Metadata Description (metadata.xml)</th>
         </tr>
         {{range .GlobalUseFlag.Packages}}
+        {{$pkgCat := .Category}}
+        {{$pkgName := .Name}}
         {{$pkgKey := printf "%s/%s" .Category .Name}}
-        {{$firstRepo := ""}}
-        {{range $r, $d := .Repos}}{{$firstRepo = $r}}{{end}}
+        {{$repos := $.GlobalUseFlag.ReposForPackage $pkgKey}}
         <tr>
-            <td><a href="{{$.BaseURL}}repos/{{$firstRepo}}/categories/{{.Category}}/packages/{{.Name}}/">{{$pkgKey}}</a></td>
+            <td>
+                {{if gt (len $repos) 0}}
+                {{$firstRepo := index $repos 0}}
+                <a href="{{$.BaseURL}}repos/{{$firstRepo}}/categories/{{$pkgCat}}/packages/{{$pkgName}}/">{{$pkgKey}}</a>
+                {{if gt (len $repos) 1}}
+                <small>({{range $i, $r := $repos}}{{if $i}}, {{end}}<a href="{{$.BaseURL}}repos/{{$r}}/categories/{{$pkgCat}}/packages/{{$pkgName}}/">{{$r}}</a>{{end}})</small>
+                {{end}}
+                {{else}}
+                <a href="{{$.BaseURL}}packages/{{$pkgCat}}/{{$pkgName}}/">{{$pkgKey}}</a>
+                {{end}}
+            </td>
             <td>
                 {{$localDesc := index $.GlobalUseFlag.LocalDescs $pkgKey}}
                 {{if $localDesc}}{{$localDesc}}{{else}}<em>-</em>{{end}}
