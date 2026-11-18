@@ -44,21 +44,6 @@ func generateGlobalPages(outDir string, tmpl *template.Template, sites []*g2.Sit
 		return fmt.Errorf("rendering page: %w", err)
 	}
 
-	// Generate Stats Page
-	if err := os.MkdirAll(filepath.Join(outDir, "stats"), 0755); err != nil {
-		return err
-	}
-	statsNode := &PageNode{Parent: rootNode, Name: "Statistics", Path: "stats"}
-	if err := renderPage(filepath.Join(outDir, "stats", "index.html"), tmpl, "stats.html", GenericPageContext{
-		Title:       "Generation Statistics",
-		BaseURL:     statsNode.BaseURL(),
-		Breadcrumbs: statsNode.Breadcrumbs(),
-		Version:     version,
-		GenInfo:     genInfo,
-	}); err != nil {
-		return fmt.Errorf("rendering page: %w", err)
-	}
-
 	// 1. Root Dashboard
 	if err := renderPage(filepath.Join(outDir, "index.html"), tmpl, "dashboard.html", GenericPageContext{
 		Title:                title,
@@ -68,8 +53,10 @@ func generateGlobalPages(outDir string, tmpl *template.Template, sites []*g2.Sit
 		GlobalCategories:     data.Categories,
 		GlobalPackages:       data.Packages,
 		Licenses:             data.Licenses,
+		UnsupportedLicenses:  data.UnsupportedLicenses,
 		UseFlags:             data.UseFlags,
 		Projects:             data.Projects,
+		Eclasses:             data.Eclasses,
 		GlobalProfiles:       data.Profiles,
 		Arches:               data.Arches,
 		Version:              version,
@@ -97,7 +84,7 @@ func generateGlobalPages(outDir string, tmpl *template.Template, sites []*g2.Sit
 		}); err != nil {
 			return fmt.Errorf("rendering page: %w", err)
 		}
-		if err := generateGlobalNewsFeeds(filepath.Join(outDir, "news"), title, data.GlobalNews); err != nil {
+		if err := generateGlobalNewsFeedsWithLedger(filepath.Join(outDir, "news"), title, data.GlobalNews, genInfo.Ledger); err != nil {
 			return fmt.Errorf("generating global news feeds: %w", err)
 		}
 
@@ -234,13 +221,20 @@ func generateCategoryPages(outDir string, tmpl *template.Template, data *Aggrega
 func generatePackagePages(outDir string, tmpl *template.Template, data *AggregatedData, title, version string, genInfo GenerationInfo) error {
 	// Global Moved Packages Pages
 	pkgMap := make(map[string]bool)
+	pkgCats := make(map[string]bool)
 	for _, p := range data.Packages {
 		pkgMap[p.Category+"/"+p.Name] = true
+		pkgCats[p.Category] = true
 	}
 
+	movedCats := make(map[string]bool)
 	gMoves := new(errgroup.Group)
 	gMoves.SetLimit(10)
 	for oldPath, move := range data.Moves {
+		parts := strings.Split(oldPath, "/")
+		if len(parts) == 2 && !pkgMap[oldPath] {
+			movedCats[parts[0]] = true
+		}
 		gMoves.Go(func() error {
 			parts := strings.Split(oldPath, "/")
 			if len(parts) != 2 {
@@ -264,13 +258,13 @@ func generatePackagePages(outDir string, tmpl *template.Template, data *Aggregat
 
 			rootNode := &PageNode{Name: title, Path: ""}
 			packagesNode := &PageNode{Parent: rootNode, Name: "Packages", Path: "packages"}
-			catNode := &PageNode{Parent: packagesNode, Name: oldCat, Path: "packages/" + oldCat}
-			pkgNode := &PageNode{Parent: catNode, Name: oldName, Path: "packages/" + oldCat + "/" + oldName}
+			catNode := &PageNode{Parent: packagesNode, Name: oldCat, Path: oldCat}
+			pkgNode := &PageNode{Parent: catNode, Name: oldName, Path: oldName}
 
 			ctx := pkgNode.Context("Package Moved: "+oldCat+"/"+oldName, version, genInfo)
 			ctx.OldName = oldCat + "/" + oldName
 			ctx.NewName = move.New
-			ctx.NewURL = "../../" + newParts[0] + "/" + newParts[1] + "/"
+			ctx.NewURL = ctx.BaseURL + "packages/" + newParts[0] + "/" + newParts[1] + "/"
 
 			if err := renderPage(filepath.Join(pkgDir, "index.html"), tmpl, "moved_package.html", ctx); err != nil {
 				return fmt.Errorf("rendering page: %w", err)
@@ -297,6 +291,35 @@ func generatePackagePages(outDir string, tmpl *template.Template, data *Aggregat
 		return fmt.Errorf("rendering page: %w", err)
 	}
 
+	allPkgCats := make(map[string]bool)
+	for cat := range pkgCats {
+		allPkgCats[cat] = true
+	}
+	for cat := range movedCats {
+		allPkgCats[cat] = true
+	}
+	for cat := range allPkgCats {
+		catDir := filepath.Join(outDir, "packages", cat)
+		if err := os.MkdirAll(catDir, 0755); err != nil {
+			return fmt.Errorf("creating directory %s: %w", catDir, err)
+		}
+		var catPkgs []*AggPackage
+		for _, c := range data.Categories {
+			if c.Name == cat {
+				catPkgs = c.Packages
+				break
+			}
+		}
+		rootNode := &PageNode{Name: title, Path: ""}
+		packagesNode := &PageNode{Parent: rootNode, Name: "Packages", Path: "packages"}
+		catNode := &PageNode{Parent: packagesNode, Name: cat, Path: cat}
+		catCtx := catNode.Context("Packages in "+cat, version, genInfo)
+		catCtx.GlobalPackages = catPkgs
+		if err := renderPage(filepath.Join(catDir, "index.html"), tmpl, "packages.html", catCtx); err != nil {
+			return fmt.Errorf("rendering package category page: %w", err)
+		}
+	}
+
 	gPkgs := new(errgroup.Group)
 	gPkgs.SetLimit(10)
 	for _, pkg := range data.Packages {
@@ -311,7 +334,12 @@ func generatePackagePages(outDir string, tmpl *template.Template, data *Aggregat
 			if len(reposList) == 1 {
 				targetURL := fmt.Sprintf("../../../repos/%s/categories/%s/packages/%s/", reposList[0].RepoName, pkg.Category, pkg.Name)
 				if err := renderPage(filepath.Join(pkgDir, "index.html"), tmpl, "redirect.html", GenericPageContext{
-					TargetURL: targetURL,
+					Title:       "Package: " + pkg.Category + "/" + pkg.Name,
+					BaseURL:     "../../../",
+					Breadcrumbs: []g2.Breadcrumb{{Name: title, URL: "../../../"}, {Name: "Packages", URL: "../../"}, {Name: pkg.Category + "/" + pkg.Name}},
+					Version:     version,
+					GenInfo:     genInfo,
+					TargetURL:   targetURL,
 				}); err != nil {
 					return fmt.Errorf("rendering page: %w", err)
 				}
@@ -321,13 +349,14 @@ func generatePackagePages(outDir string, tmpl *template.Template, data *Aggregat
 					newParts := strings.Split(move.New, "/")
 					if len(newParts) == 2 {
 						movedToName = move.New
-						movedToURL = "../../" + newParts[0] + "/" + newParts[1] + "/"
+						movedToURL = "../../../packages/" + newParts[0] + "/" + newParts[1] + "/"
 					}
 				}
 
 				rootNode := &PageNode{Name: title, Path: ""}
-				catNode := &PageNode{Parent: rootNode, Name: pkg.Category, Path: "packages/" + pkg.Category}
-				pkgNode := &PageNode{Parent: catNode, Name: pkg.Name, Path: "packages/" + pkg.Category + "/" + pkg.Name}
+				packagesNode := &PageNode{Parent: rootNode, Name: "Packages", Path: "packages"}
+				catNode := &PageNode{Parent: packagesNode, Name: pkg.Category, Path: pkg.Category}
+				pkgNode := &PageNode{Parent: catNode, Name: pkg.Name, Path: pkg.Name}
 
 				ctx := pkgNode.Context("Package: "+pkg.Category+"/"+pkg.Name, version, genInfo)
 				ctx.GlobalPackage = pkg
@@ -387,6 +416,10 @@ func generateOtherGlobalPages(outDir string, tmpl *template.Template, data *Aggr
 	}
 
 	// Profiles
+	validGlobalProfiles := make(map[string]bool, len(data.Profiles))
+	for _, p := range data.Profiles {
+		validGlobalProfiles[p.Path] = true
+	}
 	if len(data.Profiles) > 0 {
 		if err := os.MkdirAll(filepath.Join(outDir, "profiles"), 0755); err != nil {
 			return fmt.Errorf("creating directory: %w", err)
@@ -414,13 +447,14 @@ func generateOtherGlobalPages(outDir string, tmpl *template.Template, data *Aggr
 				relToRoot := "../../" + strings.Repeat("../", strings.Count(p.Path, "/"))
 
 				if err := renderPage(filepath.Join(profDir, "index.html"), tmpl, "profile.html", GenericPageContext{
-					Title:       "Profile: " + p.Path,
-					BaseURL:     relToRoot,
-					Breadcrumbs: []g2.Breadcrumb{{Name: title, URL: relToRoot}, {Name: "Profiles", URL: relToRoot + "profiles/"}, {Name: p.Path}},
-					ProfilePath: p.Path,
-					ProfileList: p.Repos,
-					Version:     version,
-					GenInfo:     genInfo,
+					Title:         "Profile: " + p.Path,
+					BaseURL:       relToRoot,
+					Breadcrumbs:   []g2.Breadcrumb{{Name: title, URL: relToRoot}, {Name: "Profiles", URL: relToRoot + "profiles/"}, {Name: p.Path}},
+					ProfilePath:   p.Path,
+					ProfileList:   p.Repos,
+					ValidProfiles: validGlobalProfiles,
+					Version:       version,
+					GenInfo:       genInfo,
 				}); err != nil {
 					return fmt.Errorf("rendering page: %w", err)
 				}
@@ -433,26 +467,43 @@ func generateOtherGlobalPages(outDir string, tmpl *template.Template, data *Aggr
 
 	}
 
-	// 5. Global Licenses
+	// 5. Global Licenses & USE Flags
 	if err := os.MkdirAll(filepath.Join(outDir, "licenses"), 0755); err != nil {
 		return fmt.Errorf("creating directory: %w", err)
 	}
 	if err := os.MkdirAll(filepath.Join(outDir, "uses"), 0755); err != nil {
 		return fmt.Errorf("creating directory: %w", err)
 	}
+	var validGlobalUseFlagsList []*AggUseFlag
+	validGlobalUseFlags := make(map[string]bool)
+	for _, f := range data.UseFlags {
+		if isValidUseFlagName(f.Name) {
+			validGlobalUseFlagsList = append(validGlobalUseFlagsList, f)
+		}
+	}
+	usedUseDirs := make(map[string]string)
+	for _, f := range validGlobalUseFlagsList {
+		if _, ok := reserveUseFlagDest(usedUseDirs, f.Name); ok {
+			validGlobalUseFlags[f.Name] = true
+		}
+	}
 	if err := renderPage(filepath.Join(outDir, "uses", "index.html"), tmpl, "uses.html", GenericPageContext{
 		Title:       "USE Flags",
 		BaseURL:     "../",
 		Breadcrumbs: []g2.Breadcrumb{{Name: title, URL: "../"}, {Name: "USE Flags"}},
-		UseFlags:    data.UseFlags,
+		UseFlags:    validGlobalUseFlagsList,
 		Version:     version,
 		GenInfo:     genInfo,
 	}); err != nil {
 		return err
 	}
 
-	for _, f := range data.UseFlags {
-		safeName := strings.ReplaceAll(f.Name, "/", "_")
+	usedUseDirsRender := make(map[string]string)
+	for _, f := range validGlobalUseFlagsList {
+		safeName, ok := reserveUseFlagDest(usedUseDirsRender, f.Name)
+		if !ok {
+			continue
+		}
 		useDir := filepath.Join(outDir, "uses", safeName)
 		if err := os.MkdirAll(useDir, 0755); err != nil {
 			return fmt.Errorf("creating directory %s: %w", useDir, err)
@@ -494,6 +545,7 @@ func generateOtherGlobalPages(outDir string, tmpl *template.Template, data *Aggr
 				BaseURL:       "../../",
 				Breadcrumbs:   []g2.Breadcrumb{{Name: title, URL: "../../"}, {Name: "USE_EXPAND Flags", URL: "../"}, {Name: prefix}},
 				UseExpandDesc: desc,
+				ValidUseFlags: validGlobalUseFlags,
 				Version:       version,
 				GenInfo:       genInfo,
 			}); err != nil {
@@ -629,6 +681,44 @@ func generateOtherGlobalPages(outDir string, tmpl *template.Template, data *Aggr
 
 	}
 
+	// 5c. Global Eclasses
+	if len(data.Eclasses) > 0 {
+		if err := os.MkdirAll(filepath.Join(outDir, "eclasses"), 0755); err != nil {
+			return fmt.Errorf("creating directory: %w", err)
+		}
+		if err := renderPage(filepath.Join(outDir, "eclasses", "index.html"), tmpl, "eclasses.html", GenericPageContext{
+			Title:       "Eclasses",
+			BaseURL:     "../",
+			Breadcrumbs: []g2.Breadcrumb{{Name: title, URL: "../"}, {Name: "Eclasses"}},
+			Eclasses:    data.Eclasses,
+			Version:     version,
+			GenInfo:     genInfo,
+		}); err != nil {
+			return fmt.Errorf("rendering eclasses page: %w", err)
+		}
+
+		for _, ec := range data.Eclasses {
+			safeName := sanitizeFilename(ec.Name)
+			if safeName == "" {
+				continue
+			}
+			ecDir := filepath.Join(outDir, "eclasses", safeName)
+			if err := os.MkdirAll(ecDir, 0755); err != nil {
+				return fmt.Errorf("creating directory %s: %w", ecDir, err)
+			}
+			if err := renderPage(filepath.Join(ecDir, "index.html"), tmpl, "eclass.html", GenericPageContext{
+				Title:       "Eclass: " + ec.Name,
+				BaseURL:     "../../",
+				Breadcrumbs: []g2.Breadcrumb{{Name: title, URL: "../../"}, {Name: "Eclasses", URL: "../"}, {Name: ec.Name}},
+				Eclass:      ec,
+				Version:     version,
+				GenInfo:     genInfo,
+			}); err != nil {
+				return fmt.Errorf("rendering eclass page: %w", err)
+			}
+		}
+	}
+
 	return nil
 }
 
@@ -657,6 +747,14 @@ func generateRepoPages(outDir string, tmpl *template.Template, sites []*g2.SiteD
 		return err
 	}
 
+	globalValidPkgs := make(map[string]bool, len(data.Packages))
+	aggPackagesMap := make(map[string]*AggPackage, len(data.Packages))
+	for _, p := range data.Packages {
+		key := p.Category + "/" + p.Name
+		globalValidPkgs[key] = true
+		aggPackagesMap[key] = p
+	}
+
 	g := new(errgroup.Group)
 	g.SetLimit(10)
 
@@ -667,11 +765,19 @@ func generateRepoPages(outDir string, tmpl *template.Template, sites []*g2.SiteD
 				return fmt.Errorf("creating directory %s: %w", repoDir, err)
 			}
 
-			if err := generateRepoUseFlagsPages(repoDir, tmpl, site, title, version, genInfo); err != nil {
+			repoValidPkgs := make(map[string]bool)
+			for _, cat := range site.Categories {
+				for _, pkg := range cat.Packages {
+					repoValidPkgs[pkg.Category+"/"+pkg.Name] = true
+				}
+			}
+
+			repoValidUseFlags, err := generateRepoUseFlagsPages(repoDir, tmpl, site, aggPackagesMap, title, version, genInfo)
+			if err != nil {
 				return err
 			}
 
-			if err := generateRepoUseExpandsPages(repoDir, tmpl, site, title, version, genInfo); err != nil {
+			if err := generateRepoUseExpandsPages(repoDir, tmpl, site, repoValidUseFlags, title, version, genInfo); err != nil {
 				return err
 			}
 
@@ -679,7 +785,7 @@ func generateRepoPages(outDir string, tmpl *template.Template, sites []*g2.SiteD
 				return err
 			}
 
-			if err := generateRepoDeprecatedMaskedInfoPages(repoDir, tmpl, site, title); err != nil {
+			if err := generateRepoDeprecatedMaskedInfoPages(repoDir, tmpl, site, title, version, genInfo, repoValidPkgs, globalValidPkgs); err != nil {
 				return err
 			}
 
@@ -753,42 +859,66 @@ func generateRepoGroupPages(outDir string, tmpl *template.Template, data *Aggreg
 	return nil
 }
 
-func generateRepoUseFlagsPages(repoDir string, tmpl *template.Template, site *g2.SiteData, title, version string, genInfo GenerationInfo) error {
-	if site.AggUseFlags != nil && len(site.AggUseFlags.([]*AggUseFlag)) > 0 {
-		if err := os.MkdirAll(filepath.Join(repoDir, "uses"), 0755); err != nil {
-			return fmt.Errorf("creating directory: %w", err)
-		}
-		if err := renderPage(filepath.Join(repoDir, "uses", "index.html"), tmpl, "uses.html", GenericPageContext{
-			Title:       site.RepoName + " - USE Flags",
-			BaseURL:     "../../../",
-			Breadcrumbs: []g2.Breadcrumb{{Name: title, URL: "../../../"}, {Name: site.RepoName, URL: "../"}, {Name: "USE Flags"}},
-			UseFlags:    site.AggUseFlags.([]*AggUseFlag),
-			Version:     version,
-			GenInfo:     genInfo,
-		}); err != nil {
-			return fmt.Errorf("rendering page: %w", err)
-		}
+func generateRepoUseFlagsPages(repoDir string, tmpl *template.Template, site *g2.SiteData, aggPackages map[string]*AggPackage, title, version string, genInfo GenerationInfo) (map[string]bool, error) {
+	validUseFlags := make(map[string]bool)
+	repoUseFlags := getRepoUseFlags(site, aggPackages)
+	site.AggUseFlags = repoUseFlags
+	if len(repoUseFlags) == 0 {
+		return validUseFlags, nil
+	}
 
-		for _, f := range site.AggUseFlags.([]*AggUseFlag) {
-			safeName := strings.ReplaceAll(f.Name, "/", "_")
-			useDir := filepath.Join(repoDir, "uses", safeName)
-			if err := os.MkdirAll(useDir, 0755); err != nil {
-				return fmt.Errorf("creating directory %s: %w", useDir, err)
-			}
-
-			if err := renderPage(filepath.Join(useDir, "index.html"), tmpl, "use.html", GenericPageContext{
-				Title:         "USE Flag: " + f.Name,
-				BaseURL:       "../../../../",
-				Breadcrumbs:   []g2.Breadcrumb{{Name: title, URL: "../../../../"}, {Name: site.RepoName, URL: "../../"}, {Name: "USE Flags", URL: "../"}, {Name: f.Name}},
-				GlobalUseFlag: f,
-				Version:       version,
-				GenInfo:       genInfo,
-			}); err != nil {
-				return err
-			}
+	var filtered []*AggUseFlag
+	for _, f := range repoUseFlags {
+		if isValidUseFlagName(f.Name) {
+			filtered = append(filtered, f)
 		}
 	}
-	return nil
+	if len(filtered) == 0 {
+		site.AggUseFlags = filtered
+		return validUseFlags, nil
+	}
+	site.AggUseFlags = filtered
+
+	if err := os.MkdirAll(filepath.Join(repoDir, "uses"), 0755); err != nil {
+		return nil, fmt.Errorf("creating directory: %w", err)
+	}
+	if err := renderPage(filepath.Join(repoDir, "uses", "index.html"), tmpl, "repo_uses.html", GenericPageContext{
+		Title:       site.RepoName + " - USE Flags",
+		BaseURL:     "../../../",
+		Breadcrumbs: []g2.Breadcrumb{{Name: title, URL: "../../../"}, {Name: site.RepoName, URL: "../"}, {Name: "USE Flags"}},
+		UseFlags:    filtered,
+		Repo:        site,
+		Version:     version,
+		GenInfo:     genInfo,
+	}); err != nil {
+		return nil, fmt.Errorf("rendering page: %w", err)
+	}
+
+	usedDirs := make(map[string]string, len(filtered))
+	for _, f := range filtered {
+		safeName, ok := reserveUseFlagDest(usedDirs, f.Name)
+		if !ok {
+			continue
+		}
+		validUseFlags[f.Name] = true
+		useDir := filepath.Join(repoDir, "uses", safeName)
+		if err := os.MkdirAll(useDir, 0755); err != nil {
+			return nil, fmt.Errorf("creating directory %s: %w", useDir, err)
+		}
+
+		if err := renderPage(filepath.Join(useDir, "index.html"), tmpl, "repo_use.html", GenericPageContext{
+			Title:         site.RepoName + " - USE Flag: " + f.Name,
+			BaseURL:       "../../../../",
+			Breadcrumbs:   []g2.Breadcrumb{{Name: title, URL: "../../../../"}, {Name: site.RepoName, URL: "../../"}, {Name: "USE Flags", URL: "../"}, {Name: f.Name}},
+			GlobalUseFlag: f,
+			Repo:          site,
+			Version:       version,
+			GenInfo:       genInfo,
+		}); err != nil {
+			return nil, err
+		}
+	}
+	return validUseFlags, nil
 }
 
 func generateRepoLicensesPages(repoDir string, tmpl *template.Template, site *g2.SiteData, data *AggregatedData, title, version string, genInfo GenerationInfo) error {
@@ -840,7 +970,7 @@ func generateRepoLicensesPages(repoDir string, tmpl *template.Template, site *g2
 	return nil
 }
 
-func generateRepoUseExpandsPages(repoDir string, tmpl *template.Template, site *g2.SiteData, title, version string, genInfo GenerationInfo) error {
+func generateRepoUseExpandsPages(repoDir string, tmpl *template.Template, site *g2.SiteData, validRepoUseFlags map[string]bool, title, version string, genInfo GenerationInfo) error {
 	if len(site.UseExpandDescs) > 0 {
 		if err := os.MkdirAll(filepath.Join(repoDir, "uses_expand"), 0755); err != nil {
 			return fmt.Errorf("creating directory: %w", err)
@@ -866,6 +996,7 @@ func generateRepoUseExpandsPages(repoDir string, tmpl *template.Template, site *
 				Breadcrumbs:   []g2.Breadcrumb{{Name: title, URL: "../../../../"}, {Name: site.RepoName, URL: "../../"}, {Name: "USE_EXPAND Flags", URL: "../"}, {Name: prefix}},
 				Repo:          site,
 				UseExpandDesc: desc,
+				ValidUseFlags: validRepoUseFlags,
 				Version:       version,
 				GenInfo:       genInfo,
 			}); err != nil {
@@ -876,16 +1007,20 @@ func generateRepoUseExpandsPages(repoDir string, tmpl *template.Template, site *
 	return nil
 }
 
-func generateRepoDeprecatedMaskedInfoPages(repoDir string, tmpl *template.Template, site *g2.SiteData, title string) error {
+func generateRepoDeprecatedMaskedInfoPages(repoDir string, tmpl *template.Template, site *g2.SiteData, title, version string, genInfo GenerationInfo, validRepoPkgs, validGlobalPkgs map[string]bool) error {
 	if len(site.Deprecated) > 0 {
 		if err := os.MkdirAll(filepath.Join(repoDir, "deprecated"), 0755); err != nil {
 			return fmt.Errorf("creating directory: %w", err)
 		}
 		if err := renderPage(filepath.Join(repoDir, "deprecated", "index.html"), tmpl, "repo_deprecated.html", GenericPageContext{
-			Title:       site.RepoName + " - Deprecated",
-			BaseURL:     "../../../",
-			Breadcrumbs: []g2.Breadcrumb{{Name: title, URL: "../../../"}, {Name: site.RepoName, URL: "../"}, {Name: "Deprecated Packages"}},
-			Repo:        site,
+			Title:             site.RepoName + " - Deprecated",
+			BaseURL:           "../../../",
+			Breadcrumbs:       []g2.Breadcrumb{{Name: title, URL: "../../../"}, {Name: site.RepoName, URL: "../"}, {Name: "Deprecated Packages"}},
+			Repo:              site,
+			ValidRepoPackages: validRepoPkgs,
+			ValidPackages:     validGlobalPkgs,
+			Version:           version,
+			GenInfo:           genInfo,
 		}); err != nil {
 			return fmt.Errorf("rendering page: %w", err)
 		}
@@ -896,10 +1031,14 @@ func generateRepoDeprecatedMaskedInfoPages(repoDir string, tmpl *template.Templa
 			return fmt.Errorf("creating directory: %w", err)
 		}
 		if err := renderPage(filepath.Join(repoDir, "masked", "index.html"), tmpl, "repo_masked.html", GenericPageContext{
-			Title:       site.RepoName + " - Masked",
-			BaseURL:     "../../../",
-			Breadcrumbs: []g2.Breadcrumb{{Name: title, URL: "../../../"}, {Name: site.RepoName, URL: "../"}, {Name: "Masked Packages"}},
-			Repo:        site,
+			Title:             site.RepoName + " - Masked",
+			BaseURL:           "../../../",
+			Breadcrumbs:       []g2.Breadcrumb{{Name: title, URL: "../../../"}, {Name: site.RepoName, URL: "../"}, {Name: "Masked Packages"}},
+			Repo:              site,
+			ValidRepoPackages: validRepoPkgs,
+			ValidPackages:     validGlobalPkgs,
+			Version:           version,
+			GenInfo:           genInfo,
 		}); err != nil {
 			return fmt.Errorf("rendering page: %w", err)
 		}
@@ -914,6 +1053,8 @@ func generateRepoDeprecatedMaskedInfoPages(repoDir string, tmpl *template.Templa
 			BaseURL:     "../../../",
 			Breadcrumbs: []g2.Breadcrumb{{Name: title, URL: "../../../"}, {Name: site.RepoName, URL: "../"}, {Name: "Info Vars"}},
 			Repo:        site,
+			Version:     version,
+			GenInfo:     genInfo,
 		}); err != nil {
 			return fmt.Errorf("rendering page: %w", err)
 		}
@@ -927,6 +1068,8 @@ func generateRepoDeprecatedMaskedInfoPages(repoDir string, tmpl *template.Templa
 			BaseURL:     "../../../",
 			Breadcrumbs: []g2.Breadcrumb{{Name: title, URL: "../../../"}, {Name: site.RepoName, URL: "../"}, {Name: "Info Packages"}},
 			Repo:        site,
+			Version:     version,
+			GenInfo:     genInfo,
 		}); err != nil {
 			return fmt.Errorf("rendering page: %w", err)
 		}
@@ -935,6 +1078,12 @@ func generateRepoDeprecatedMaskedInfoPages(repoDir string, tmpl *template.Templa
 }
 
 func generateRepoMovedPackagesPages(repoDir string, tmpl *template.Template, site *g2.SiteData, title, version string, genInfo GenerationInfo) error {
+	activeCats := make(map[string]bool, len(site.Categories))
+	for _, c := range site.Categories {
+		activeCats[c.Name] = true
+	}
+	movedOnlyCats := make(map[string]bool)
+
 	for _, move := range site.Moves {
 		parts := strings.Split(move.Old, "/")
 		if len(parts) != 2 {
@@ -966,22 +1115,57 @@ func generateRepoMovedPackagesPages(repoDir string, tmpl *template.Template, sit
 			continue
 		}
 
+		if !activeCats[oldCat] {
+			movedOnlyCats[oldCat] = true
+		}
+
 		pkgDir := filepath.Join(repoDir, "categories", oldCat, "packages", oldName)
 		if err := os.MkdirAll(pkgDir, 0755); err != nil {
 			return fmt.Errorf("creating directory %s: %w", pkgDir, err)
 		}
 
 		rootNode := &PageNode{Name: title, Path: ""}
-		catNode := &PageNode{Parent: rootNode, Name: oldCat, Path: "packages/" + oldCat}
-		pkgNode := &PageNode{Parent: catNode, Name: oldName, Path: "packages/" + oldCat + "/" + oldName}
+		overlaysNode := &PageNode{Parent: rootNode, Name: "Overlays", Path: "overlays"}
+		repoNode := &PageNode{Parent: overlaysNode, Name: site.RepoName, Path: "repos/" + site.RepoName}
+		catsNode := &PageNode{Parent: repoNode, Name: "Categories", Path: "categories"}
+		catNode := &PageNode{Parent: catsNode, Name: oldCat, Path: oldCat}
+		packagesNode := &PageNode{Parent: catNode, Name: "Packages", Path: "packages"}
+		pkgNode := &PageNode{Parent: packagesNode, Name: oldName, Path: oldName}
+		crumbs := []g2.Breadcrumb{
+			{Name: title, URL: "../../../../../../"},
+			{Name: site.RepoName, URL: "../../../../"},
+			{Name: "Categories", URL: "../../../"},
+			{Name: oldCat, URL: "../../"},
+			{Name: oldName},
+		}
 
 		ctx := pkgNode.Context("Package Moved: "+oldCat+"/"+oldName, version, genInfo)
+		ctx.BaseURL = "../../../../../../"
+		ctx.Breadcrumbs = crumbs
 		ctx.OldName = oldCat + "/" + oldName
 		ctx.NewName = move.New
-		ctx.NewURL = "../../" + newParts[0] + "/" + newParts[1] + "/"
+		ctx.NewURL = "../../../../categories/" + newParts[0] + "/packages/" + newParts[1] + "/"
 
 		if err := renderPage(filepath.Join(pkgDir, "index.html"), tmpl, "moved_package.html", ctx); err != nil {
 			return fmt.Errorf("rendering page: %w", err)
+		}
+	}
+
+	for oldCat := range movedOnlyCats {
+		catDir := filepath.Join(repoDir, "categories", oldCat)
+		if err := os.MkdirAll(catDir, 0755); err != nil {
+			return fmt.Errorf("creating directory %s: %w", catDir, err)
+		}
+		if err := renderPage(filepath.Join(catDir, "index.html"), tmpl, "category.html", GenericPageContext{
+			Title:        "Category: " + oldCat,
+			BaseURL:      "../../../../",
+			Breadcrumbs:  []g2.Breadcrumb{{Name: title, URL: "../../../../"}, {Name: site.RepoName, URL: "../../"}, {Name: "Categories", URL: "../"}, {Name: oldCat}},
+			Repo:         site,
+			RepoCategory: &g2.CategoryData{Name: oldCat},
+			Version:      version,
+			GenInfo:      genInfo,
+		}); err != nil {
+			return fmt.Errorf("rendering moved category page: %w", err)
 		}
 	}
 	return nil
@@ -1024,6 +1208,10 @@ func generateRepoIndexAndStatsPages(repoDir string, tmpl *template.Template, sit
 
 func generateRepoProfilesPages(repoDir string, tmpl *template.Template, site *g2.SiteData, title, version string, genInfo GenerationInfo) error {
 	if len(site.Profiles) > 0 {
+		validProfiles := make(map[string]bool, len(site.Profiles))
+		for _, p := range site.Profiles {
+			validProfiles[p.Path] = true
+		}
 		if err := os.MkdirAll(filepath.Join(repoDir, "profiles"), 0755); err != nil {
 			return fmt.Errorf("creating directory: %w", err)
 		}
@@ -1047,14 +1235,15 @@ func generateRepoProfilesPages(repoDir string, tmpl *template.Template, site *g2
 			relToRoot := "../../../../" + strings.Repeat("../", strings.Count(p.Path, "/"))
 
 			if err := renderPage(filepath.Join(profDir, "index.html"), tmpl, "repo_profile.html", GenericPageContext{
-				Title:       site.RepoName + " - Profile: " + p.Path,
-				BaseURL:     relToRoot,
-				Breadcrumbs: []g2.Breadcrumb{{Name: title, URL: relToRoot}, {Name: site.RepoName, URL: relToRoot + "repos/" + site.RepoName + "/"}, {Name: "Profiles", URL: relToRoot + "repos/" + site.RepoName + "/profiles/"}, {Name: p.Path}},
-				RepoName:    site.RepoName,
-				ProfilePath: p.Path,
-				RepoProfile: &p,
-				Version:     version,
-				GenInfo:     genInfo,
+				Title:         site.RepoName + " - Profile: " + p.Path,
+				BaseURL:       relToRoot,
+				Breadcrumbs:   []g2.Breadcrumb{{Name: title, URL: relToRoot}, {Name: site.RepoName, URL: relToRoot + "repos/" + site.RepoName + "/"}, {Name: "Profiles", URL: relToRoot + "repos/" + site.RepoName + "/profiles/"}, {Name: p.Path}},
+				RepoName:      site.RepoName,
+				ProfilePath:   p.Path,
+				RepoProfile:   &p,
+				ValidProfiles: validProfiles,
+				Version:       version,
+				GenInfo:       genInfo,
 			}); err != nil {
 				return fmt.Errorf("rendering page: %w", err)
 			}
@@ -1096,7 +1285,7 @@ func generateRepoNewsPages(repoDir string, tmpl *template.Template, site *g2.Sit
 		}); err != nil {
 			return fmt.Errorf("rendering page: %w", err)
 		}
-		if err := generateRepoNewsFeeds(filepath.Join(repoDir, "news"), site); err != nil {
+		if err := generateRepoNewsFeedsWithLedger(filepath.Join(repoDir, "news"), site, genInfo.Ledger); err != nil {
 			return fmt.Errorf("generating news feeds for repository %q: %w", site.RepoName, err)
 		}
 
@@ -1137,6 +1326,10 @@ func generateRepoNewsPages(repoDir string, tmpl *template.Template, site *g2.Sit
 }
 
 func generateGlobalNewsFeeds(dir, siteTitle string, news []AggNewsItem) error {
+	return generateGlobalNewsFeedsWithLedger(dir, siteTitle, news, nil)
+}
+
+func generateGlobalNewsFeedsWithLedger(dir, siteTitle string, news []AggNewsItem, ledger *LinkLedger) error {
 	items := make([]g2.FeedItem, 0, len(news))
 	for _, item := range news {
 		description := item.Body
@@ -1145,25 +1338,29 @@ func generateGlobalNewsFeeds(dir, siteTitle string, news []AggNewsItem) error {
 		}
 		items = append(items, newsFeedItem(item.NewsItem, "archive/"+item.ArchivePath+"/", description, item.RepoName))
 	}
-	return renderNewsFeeds(dir, g2.Feed{
+	return renderNewsFeedsWithLedger(dir, g2.Feed{
 		Title:       siteTitle + " News",
 		Link:        "./",
 		Description: "News from " + siteTitle,
 		Items:       items,
-	})
+	}, ledger)
 }
 
 func generateRepoNewsFeeds(dir string, site *g2.SiteData) error {
+	return generateRepoNewsFeedsWithLedger(dir, site, nil)
+}
+
+func generateRepoNewsFeedsWithLedger(dir string, site *g2.SiteData, ledger *LinkLedger) error {
 	items := make([]g2.FeedItem, 0, len(site.News))
 	for _, item := range site.News {
 		items = append(items, newsFeedItem(item, "archive/"+item.DirName+"/", item.Body, site.RepoName))
 	}
-	return renderNewsFeeds(dir, g2.Feed{
+	return renderNewsFeedsWithLedger(dir, g2.Feed{
 		Title:       site.RepoName + " News",
 		Link:        "./",
 		Description: "News from the " + site.RepoName + " repository",
 		Items:       items,
-	})
+	}, ledger)
 }
 
 func newsAlternates(siteTitle string) []AlternateFeed {
@@ -1185,6 +1382,10 @@ func newsFeedItem(item g2.NewsItem, link, description, repoName string) g2.FeedI
 }
 
 func renderNewsFeeds(dir string, feed g2.Feed) error {
+	return renderNewsFeedsWithLedger(dir, feed, nil)
+}
+
+func renderNewsFeedsWithLedger(dir string, feed g2.Feed, ledger *LinkLedger) error {
 	feed.ID = stableURN("feed", feed.Title)
 	if len(feed.Items) > 0 {
 		feed.LastBuildDate = feed.Items[0].PubDate
@@ -1192,12 +1393,12 @@ func renderNewsFeeds(dir string, feed g2.Feed) error {
 	}
 	rssFeed := feed
 	rssFeed.Title += " RSS Feed"
-	if err := renderXMLFeed(filepath.Join(dir, "index.rss"), "rss.xml", rssFeed); err != nil {
+	if err := renderXMLFeedWithLedger(filepath.Join(dir, "index.rss"), "rss.xml", rssFeed, ledger); err != nil {
 		return fmt.Errorf("rendering RSS feed: %w", err)
 	}
 	atomFeed := feed
 	atomFeed.Title += " Atom Feed"
-	if err := renderXMLFeed(filepath.Join(dir, "index.atom"), "atom.xml", atomFeed); err != nil {
+	if err := renderXMLFeedWithLedger(filepath.Join(dir, "index.atom"), "atom.xml", atomFeed, ledger); err != nil {
 		return fmt.Errorf("rendering Atom feed: %w", err)
 	}
 	return nil
@@ -1213,20 +1414,40 @@ func stableURN(namespace string, parts ...string) string {
 }
 
 func renderXMLFeed(path, templateName string, feed g2.Feed) error {
+	return renderXMLFeedWithLedger(path, templateName, feed, nil)
+}
+
+func renderXMLFeedWithLedger(path, templateName string, feed g2.Feed, ledger *LinkLedger) error {
 	feedTemplate, err := getXMLTemplate(templateName)
 	if err != nil {
 		return fmt.Errorf("loading feed template %s: %w", templateName, err)
+	}
+	var buf bytes.Buffer
+	if err := feedTemplate.Execute(&buf, feed); err != nil {
+		return fmt.Errorf("executing %s template for %s: %w", templateName, path, err)
 	}
 	f, err := os.Create(path)
 	if err != nil {
 		return fmt.Errorf("creating feed %s: %w", path, err)
 	}
-	defer func() { _ = f.Close() }()
-	if err := feedTemplate.Execute(f, feed); err != nil {
-		return fmt.Errorf("executing %s template for %s: %w", templateName, path, err)
+	if _, err := f.Write(buf.Bytes()); err != nil {
+		_ = f.Close()
+		return fmt.Errorf("writing feed %s: %w", path, err)
 	}
 	if err := f.Close(); err != nil {
 		return fmt.Errorf("closing feed %s: %w", path, err)
+	}
+	if ledger != nil {
+		relPath := ledger.RelPath(path)
+		ledger.CommitAsset(relPath, int64(buf.Len()))
+		if feed.Link != "" {
+			ledger.RecordRef(relPath, templateName+".channel.link", feed.Link)
+		}
+		for _, item := range feed.Items {
+			if item.Link != "" {
+				ledger.RecordRef(relPath, templateName+".item.link", item.Link)
+			}
+		}
 	}
 	log.Printf("Generated %s news feed with %d items at %s", templateName, len(feed.Items), path)
 	return nil
@@ -1367,12 +1588,7 @@ func generateRepoPackagesPages(repoDir string, tmpl *template.Template, site *g2
 		return fmt.Errorf("rendering page: %w", err)
 	}
 
-	aggPackagesMap := make(map[string]*AggPackage)
-	for _, p := range data.Packages {
-		aggPackagesMap[p.Category+"/"+p.Name] = p
-	}
-	repoUseFlags := getRepoUseFlags(site, aggPackagesMap)
-
+	validRepoEclasses := make(map[string]bool)
 	if site.AggEclasses != nil && len(site.AggEclasses.([]*AggEclass)) > 0 {
 		if err := os.MkdirAll(filepath.Join(repoDir, "eclasses"), 0755); err != nil {
 			return fmt.Errorf("creating directory: %w", err)
@@ -1394,6 +1610,7 @@ func generateRepoPackagesPages(repoDir string, tmpl *template.Template, site *g2
 			if safeName == "" {
 				continue
 			}
+			validRepoEclasses[ec.Name] = true
 			ecDir := filepath.Join(repoDir, "eclasses", safeName)
 			if err := os.MkdirAll(ecDir, 0755); err != nil {
 				return fmt.Errorf("creating directory %s: %w", ecDir, err)
@@ -1413,38 +1630,32 @@ func generateRepoPackagesPages(repoDir string, tmpl *template.Template, site *g2
 		}
 	}
 
-	if err := os.MkdirAll(filepath.Join(repoDir, "uses"), 0755); err != nil {
-		return fmt.Errorf("creating directory: %w", err)
+	validGlobalPkgs := make(map[string]bool, len(data.Packages))
+	for _, p := range data.Packages {
+		validGlobalPkgs[p.Category+"/"+p.Name] = true
 	}
-	if err := renderPage(filepath.Join(repoDir, "uses", "index.html"), tmpl, "repo_uses.html", GenericPageContext{
-		Title:       site.RepoName + " - USE Flags",
-		BaseURL:     "../../../",
-		Breadcrumbs: []g2.Breadcrumb{{Name: title, URL: "../../../"}, {Name: site.RepoName, URL: "../"}, {Name: "USE Flags"}},
-		UseFlags:    repoUseFlags,
-		Repo:        site,
-		Version:     version,
-		GenInfo:     genInfo,
-	}); err != nil {
-		return err
+	validRepoPkgs := make(map[string]bool, len(repoPkgs))
+	for _, p := range repoPkgs {
+		validRepoPkgs[p.Category+"/"+p.Name] = true
 	}
-
-	for _, f := range repoUseFlags {
-		safeName := strings.ReplaceAll(f.Name, "/", "_")
-		useDir := filepath.Join(repoDir, "uses", safeName)
-		if err := os.MkdirAll(useDir, 0755); err != nil {
-			return fmt.Errorf("creating directory %s: %w", useDir, err)
+	validRepoUseFlags := make(map[string]bool)
+	if site.AggUseFlags != nil {
+		if flags, ok := site.AggUseFlags.([]*AggUseFlag); ok {
+			for _, f := range flags {
+				if isValidUseFlagName(f.Name) {
+					validRepoUseFlags[f.Name] = true
+				}
+			}
 		}
-
-		if err := renderPage(filepath.Join(useDir, "index.html"), tmpl, "repo_use.html", GenericPageContext{
-			Title:         site.RepoName + " - USE Flag: " + f.Name,
-			BaseURL:       "../../../../",
-			Breadcrumbs:   []g2.Breadcrumb{{Name: title, URL: "../../../../"}, {Name: site.RepoName, URL: "../../"}, {Name: "USE Flags", URL: "../"}, {Name: f.Name}},
-			GlobalUseFlag: f,
-			Repo:          site,
-			Version:       version,
-			GenInfo:       genInfo,
-		}); err != nil {
-			return err
+	}
+	validRepoLicenses := make(map[string]bool)
+	if site.AggLicenses != nil {
+		if lics, ok := site.AggLicenses.([]*AggLicense); ok {
+			for _, l := range lics {
+				if sanitizeFilename(l.Name) != "" {
+					validRepoLicenses[l.Name] = true
+				}
+			}
 		}
 	}
 
@@ -1461,22 +1672,30 @@ func generateRepoPackagesPages(repoDir string, tmpl *template.Template, site *g2
 			if move, ok := data.Moves[pkg.Category+"/"+pkg.Name]; ok {
 				newParts := strings.Split(move.New, "/")
 				if len(newParts) == 2 {
-					movedToName = move.New
-					movedToURL = "../../../" + newParts[0] + "/packages/" + newParts[1] + "/"
+					if validRepoPkgs[move.New] {
+						movedToName = move.New
+						movedToURL = "../../../" + newParts[0] + "/packages/" + newParts[1] + "/"
+					} else if validGlobalPkgs[move.New] {
+						movedToName = move.New
+						movedToURL = "../../../../../../packages/" + newParts[0] + "/" + newParts[1] + "/"
+					}
 				}
 			}
 
 			if err := renderPage(filepath.Join(pkgDir, "index.html"), tmpl, "repo_package.html", GenericPageContext{
-				Title:         fmt.Sprintf("%s - %s/%s", site.RepoName, pkg.Category, pkg.Name),
-				BaseURL:       "../../../../../../",
-				Breadcrumbs:   []g2.Breadcrumb{{Name: title, URL: "../../../../../../"}, {Name: site.RepoName, URL: "../../../../"}, {Name: "Categories", URL: "../../../"}, {Name: pkg.Category, URL: "../../"}, {Name: pkg.Name}},
-				Repo:          site,
-				RepoPackage:   &pkg,
-				MovedToName:   movedToName,
-				MovedToURL:    movedToURL,
-				Version:       version,
-				GenInfo:       genInfo,
-				ValidLicenses: data.ValidLicenses,
+				Title:             fmt.Sprintf("%s - %s/%s", site.RepoName, pkg.Category, pkg.Name),
+				BaseURL:           "../../../../../../",
+				Breadcrumbs:       []g2.Breadcrumb{{Name: title, URL: "../../../../../../"}, {Name: site.RepoName, URL: "../../../../"}, {Name: "Categories", URL: "../../../"}, {Name: pkg.Category, URL: "../../"}, {Name: pkg.Name}},
+				Repo:              site,
+				RepoPackage:       &pkg,
+				MovedToName:       movedToName,
+				MovedToURL:        movedToURL,
+				Version:           version,
+				GenInfo:           genInfo,
+				ValidLicenses:     validRepoLicenses,
+				ValidPackages:     validGlobalPkgs,
+				ValidRepoPackages: validRepoPkgs,
+				ValidRepoUseFlags: validRepoUseFlags,
 			}); err != nil {
 				return fmt.Errorf("rendering page: %w", err)
 			}
@@ -1520,7 +1739,7 @@ func generateRepoPackagesPages(repoDir string, tmpl *template.Template, site *g2
 
 			for _, v := range pkg.Versions {
 				versionStr := v.Version
-				if v.Ebuild != nil && v.Ebuild.Vars != nil && v.Ebuild.Vars["PV"] != "" {
+				if versionStr == "" && v.Ebuild != nil && v.Ebuild.Vars != nil && v.Ebuild.Vars["PV"] != "" {
 					versionStr = v.Ebuild.Vars["PV"]
 				}
 
@@ -1542,16 +1761,19 @@ func generateRepoPackagesPages(repoDir string, tmpl *template.Template, site *g2
 				}
 
 				if err := renderPage(filepath.Join(ebuildDir, "index.html"), tmpl, "ebuild_details.html", GenericPageContext{
-					Title:            fmt.Sprintf("%s - %s/%s-%s", site.RepoName, pkg.Category, pkg.Name, versionStr),
-					BaseURL:          "../../../../../../../../",
-					Breadcrumbs:      []g2.Breadcrumb{{Name: title, URL: "../../../../../../../../"}, {Name: site.RepoName, URL: "../../../../../../"}, {Name: "Categories", URL: "../../../../../"}, {Name: pkg.Category, URL: "../../../../"}, {Name: pkg.Name, URL: "../../"}, {Name: "Ebuild", URL: "../"}, {Name: versionStr}},
-					Repo:             site,
-					RepoPackage:      &pkg,
-					VersionData:      &v,
-					FilteredManifest: filteredManifest,
-					Version:          version,
-					GenInfo:          genInfo,
-					ValidLicenses:    data.ValidLicenses,
+					Title:             fmt.Sprintf("%s - %s/%s-%s", site.RepoName, pkg.Category, pkg.Name, versionStr),
+					BaseURL:           "../../../../../../../../",
+					Breadcrumbs:       []g2.Breadcrumb{{Name: title, URL: "../../../../../../../../"}, {Name: site.RepoName, URL: "../../../../../../"}, {Name: "Categories", URL: "../../../../../"}, {Name: pkg.Category, URL: "../../../../"}, {Name: pkg.Name, URL: "../../"}, {Name: "Ebuild", URL: "../"}, {Name: versionStr}},
+					Repo:              site,
+					RepoPackage:       &pkg,
+					VersionData:       &v,
+					FilteredManifest:  filteredManifest,
+					Version:           version,
+					GenInfo:           genInfo,
+					ValidLicenses:     validRepoLicenses,
+					ValidPackages:     validGlobalPkgs,
+					ValidRepoEclasses: validRepoEclasses,
+					ValidRepoUseFlags: validRepoUseFlags,
 				}); err != nil {
 					return fmt.Errorf("rendering page: %w", err)
 				}
@@ -1574,6 +1796,16 @@ func generateSite(outDir string, sites []*g2.SiteData, recentDuration time.Durat
 
 	defer genInfo.Profiler.Track("Total Generation")()
 
+	if genInfo.Ledger == nil {
+		genInfo.Ledger = NewLinkLedger(outDir)
+	}
+	genInfo.OutDir = outDir
+
+	title := "Gentoo Packages"
+	if len(sites) == 1 && sites[0].Title != "" {
+		title = sites[0].Title
+	}
+
 	log.Printf("Starting site generation (v%s) with %d repos to %s", version, len(sites), outDir)
 	stepMkdir := genInfo.Profiler.Track("Create Output Directory")
 	if err := os.MkdirAll(outDir, 0755); err != nil {
@@ -1589,7 +1821,7 @@ func generateSite(outDir string, sites []*g2.SiteData, recentDuration time.Durat
 
 	// Generate search index
 	stepSearchIndex := genInfo.Profiler.Track("Generate Search Index")
-	if err := generateSearchIndex(outDir, sites); err != nil {
+	if err := generateSearchIndexWithInfo(outDir, sites, title, version, genInfo); err != nil {
 		log.Printf("Warning: failed to generate search index: %v", err)
 	}
 	stepSearchIndex()
@@ -1624,12 +1856,6 @@ func generateSite(outDir string, sites []*g2.SiteData, recentDuration time.Durat
 
 	// Prepare Immutable Render Context
 	data := prepareAggregatedData(sites)
-
-	// Title
-	title := "Gentoo Packages"
-	if len(sites) == 1 {
-		title = sites[0].Title
-	}
 
 	// Render Phases
 	log.Printf("[PHASE] Rendering global pages...")
@@ -1667,6 +1893,42 @@ func generateSite(outDir string, sites []*g2.SiteData, recentDuration time.Durat
 	}
 	stepRepositoryPages()
 
+	// Preliminary link integrity verification so /stats/ carries current counts,
+	// followed by final reconciliation including /stats/index.html itself.
+	preReport := genInfo.Ledger.VerifyAssumingCommitted("stats/index.html")
+	statsGenInfo := genInfo
+	statsGenInfo.LinkReport = preReport
+	if err := os.MkdirAll(filepath.Join(outDir, "stats"), 0755); err != nil {
+		return fmt.Errorf("creating stats directory: %w", err)
+	}
+	rootNode := &PageNode{Name: title, Path: ""}
+	statsNode := &PageNode{Parent: rootNode, Name: "Statistics", Path: "stats"}
+	if err := renderPage(filepath.Join(outDir, "stats", "index.html"), tmpl, "stats.html", GenericPageContext{
+		Title:       "Generation Statistics",
+		BaseURL:     statsNode.BaseURL(),
+		Breadcrumbs: statsNode.Breadcrumbs(),
+		Version:     version,
+		GenInfo:     statsGenInfo,
+		LinkReport:  preReport,
+	}); err != nil {
+		return fmt.Errorf("rendering stats page: %w", err)
+	}
+
+	report := genInfo.Ledger.Verify()
+	genInfo.LinkReport = report
+	log.Printf("[LINK INTEGRITY] %s", report.SummaryLine())
+	if !report.Verified {
+		limit := min(len(report.Issues), 25)
+		for i := 0; i < limit; i++ {
+			iss := report.Issues[i]
+			log.Printf("[LINK INTEGRITY]   %s source=%q element=%q raw=%q target=%q: %s",
+				iss.Kind, iss.Source, iss.Element, iss.RawURL, iss.NormalizedTarget, iss.Reason)
+		}
+		if len(report.Issues) > limit || report.Truncated {
+			log.Printf("[LINK INTEGRITY]   ... %d total integrity issues recorded", report.TotalIssues)
+		}
+	}
+
 	totalNodes := len(data.Categories) + data.TotalPackages + len(data.Profiles) + len(data.GlobalNews) + len(data.Moves) + len(data.Eclasses)
 	for _, pkg := range data.Packages {
 		for repoName := range pkg.Repos {
@@ -1675,6 +1937,12 @@ func generateSite(outDir string, sites []*g2.SiteData, recentDuration time.Durat
 	}
 
 	log.Printf("[DONE] Site generation complete. Total nodes generated: %d", totalNodes)
+
+	if genInfo.StrictLinks && !report.Verified {
+		first := report.Issues[0]
+		return fmt.Errorf("strict link verification failed (%d issues): %s on %s (%s -> %s): %s",
+			report.TotalIssues, first.Kind, first.Source, first.RawURL, first.NormalizedTarget, first.Reason)
+	}
 
 	return nil
 }

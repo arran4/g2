@@ -6,7 +6,7 @@
     <p>And sync it:</p>
     <pre><code>emerge --sync {{.RepoName}}</code></pre>
     {{if .RemoteURL}}
-    <p>Git Source: <a href="{{.RemoteURL}}">{{.RemoteURL}}</a></p>
+    <p>Git Source: {{if isWebURL .RemoteURL}}<a href="{{.RemoteURL}}">{{.RemoteURL}}</a>{{else}}<code>{{.RemoteURL}}</code>{{end}}</p>
     {{end}}
 </div>
 {{end}}

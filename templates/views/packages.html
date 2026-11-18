@@ -13,7 +13,7 @@
             {{$pkgName := .Name}}
             {{$baseURL := $.BaseURL}}
             <tr>
-                <td><a href="{{.Category}}/{{.Name}}/" class="fw-bold">{{.Category}}/{{.Name}}</a></td>
+                <td><a href="{{$baseURL}}packages/{{.Category}}/{{.Name}}/" class="fw-bold">{{.Category}}/{{.Name}}</a></td>
                 <td>
                     <div class="d-flex flex-wrap gap-1">
                         {{range .ReposList}}

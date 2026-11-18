@@ -69,6 +69,15 @@ type GenericPageContext struct {
 	GlobalProfilesCount   int
 	Authors               []g2.Author
 	ValidLicenses         map[string]bool
+	ValidPackages         map[string]bool
+	ValidRepoPackages     map[string]bool
+	ValidUseFlags         map[string]bool
+	ValidRepoUseFlags     map[string]bool
+	ValidEclasses         map[string]bool
+	ValidRepoEclasses     map[string]bool
+	ValidProfiles         map[string]bool
+	ValidRepoProfiles     map[string]bool
+	LinkReport            *LinkIntegrityReport
 	RepoName              string
 	Group                 *RepoGroup
 	VersionData           *g2.VersionData

@@ -100,7 +100,7 @@
 <ul>
     <li><a href="stats/">Repository Statistics</a></li>
     {{if .Repo.RemoteURL}}
-    <li>Git Source: <a href="{{.Repo.RemoteURL}}">{{.Repo.RemoteURL}}</a></li>
+    <li>Git Source: {{if isWebURL .Repo.RemoteURL}}<a href="{{.Repo.RemoteURL}}">{{.Repo.RemoteURL}}</a>{{else}}<code>{{.Repo.RemoteURL}}</code>{{end}}</li>
     {{end}}
     {{if .Repo.EAPI}}
     <li>EAPI: {{.Repo.EAPI}}</li>

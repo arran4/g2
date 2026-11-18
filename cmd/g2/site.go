@@ -1,7 +1,7 @@
 package main
 
 import (
-	"bufio"
+	"bytes"
 	"context"
 	"maps"
 	"slices"
@@ -94,6 +94,7 @@ func (cfg *MainArgConfig) cmdOverlay(args []string) error {
 	includeGentoo := fs.Bool("include-gentoo", false, "Include the base Gentoo repository")
 	includeGuru := fs.Bool("include-guru", false, "Include the Guru repository")
 	reposConfOpt := fs.String("repos-conf", "", "Path to repos.conf file or directory")
+	strictLinks := fs.Bool("strict-links", false, "Return non-zero exit code if generated internal links or routes fail integrity verification")
 
 	if err := fs.Parse(args[2:]); err != nil {
 		return fmt.Errorf("parsing flags: %w", err)
@@ -263,7 +264,7 @@ func (cfg *MainArgConfig) cmdOverlay(args []string) error {
 		return allSites[i].RepoName < allSites[j].RepoName
 	})
 
-	genInfo := GenerationInfo{Args: cfg.Args, FastGit: *fastGit, RecentDuration: recentDurationStr}
+	genInfo := GenerationInfo{Args: cfg.Args, FastGit: *fastGit, RecentDuration: recentDurationStr, StrictLinks: *strictLinks}
 	profiler := NewProfiler(*profileSiteGen, *profileOut)
 	genInfo.Profiler = profiler
 	if err := generateSite(*outDir, allSites, recentDuration, recentDurationStr, genInfo); err != nil {
@@ -310,6 +311,7 @@ func (cfg *MainArgConfig) cmdOverlays(args []string) error {
 	tempDir := fs.String("temp-dir", "", "Directory to use for temporary files instead of the default")
 	reposConfOpt := fs.String("repos-conf", "", "Path to repos.conf file or directory")
 	mode := fs.String("mode", "standard", "Processing mode: 'standard' or 'pipeline'")
+	strictLinks := fs.Bool("strict-links", false, "Return non-zero exit code if generated internal links or routes fail integrity verification")
 
 	if err := fs.Parse(args[2:]); err != nil {
 		return fmt.Errorf("parsing flags: %w", err)
@@ -335,7 +337,7 @@ func (cfg *MainArgConfig) cmdOverlays(args []string) error {
 	}
 
 	log.Printf("Generating site (v%s) from remote repositories: %s into %s", version, location, *outDir)
-	return cfg.cmdSiteRemote(location, *outDir, recentDuration, recentDurationStr, *fastGit, *useZip, *concurrency, *retries, *continueOnError, *persistentDir, *reposConfOpt, *tempDir, *workMode, *mode, *profileSiteGen, *profileOut, *smartMode)
+	return cfg.cmdSiteRemote(location, *outDir, recentDuration, recentDurationStr, *fastGit, *useZip, *concurrency, *retries, *continueOnError, *persistentDir, *reposConfOpt, *tempDir, *workMode, *mode, *profileSiteGen, *profileOut, *smartMode, *strictLinks)
 }
 
 func parseLayoutConfFromFS(sysFS fs.FS, path string) (*g2.LayoutConf, error) {
@@ -1033,8 +1035,37 @@ type AggUseFlag struct {
 	GlobalDesc    string
 	LocalDescs    map[string]string
 	MetadataDescs map[string]string
+	PkgRepos      map[string]map[string]bool
 	Packages      []*AggPackage
 	Warnings      []string
+}
+
+// ReposForPackage returns sorted repository names that provide this USE flag for pkgKey ("cat/pkg").
+func (a *AggUseFlag) ReposForPackage(pkgKey string) []string {
+	if a == nil {
+		return nil
+	}
+	if len(a.PkgRepos) > 0 {
+		if rm := a.PkgRepos[pkgKey]; len(rm) > 0 {
+			out := make([]string, 0, len(rm))
+			for rn := range rm {
+				out = append(out, rn)
+			}
+			sort.Strings(out)
+			return out
+		}
+	}
+	for _, p := range a.Packages {
+		if p != nil && p.Category+"/"+p.Name == pkgKey && len(p.Repos) > 0 {
+			out := make([]string, 0, len(p.Repos))
+			for rn := range p.Repos {
+				out = append(out, rn)
+			}
+			sort.Strings(out)
+			return out
+		}
+	}
+	return nil
 }
 
 func getRepoEclasses(site *g2.SiteData, aggPackages map[string]*AggPackage) []*AggEclass {
@@ -1180,17 +1211,34 @@ func getRepoUseFlags(site *g2.SiteData, aggPackages map[string]*AggPackage) []*A
 	seenPackages := make(map[string]map[string]bool)
 
 	ensureFlag := func(flag string) *AggUseFlag {
+		if !isValidUseFlagName(flag) {
+			return nil
+		}
 		uf, ok := aggUseFlags[flag]
 		if !ok {
 			uf = &AggUseFlag{
 				Name:          flag,
 				LocalDescs:    make(map[string]string),
 				MetadataDescs: make(map[string]string),
+				PkgRepos:      make(map[string]map[string]bool),
 			}
 			aggUseFlags[flag] = uf
 			seenPackages[flag] = make(map[string]bool)
 		}
 		return uf
+	}
+
+	recordPkgRepo := func(uf *AggUseFlag, pkgKey string) {
+		if uf == nil || site.RepoName == "" {
+			return
+		}
+		if uf.PkgRepos == nil {
+			uf.PkgRepos = make(map[string]map[string]bool)
+		}
+		if uf.PkgRepos[pkgKey] == nil {
+			uf.PkgRepos[pkgKey] = make(map[string]bool)
+		}
+		uf.PkgRepos[pkgKey][site.RepoName] = true
 	}
 
 	for _, cat := range site.Categories {
@@ -1205,6 +1253,10 @@ func getRepoUseFlags(site *g2.SiteData, aggPackages map[string]*AggPackage) []*A
 						for _, flagObj := range parsedFlags {
 							flag := flagObj.Name
 							uf := ensureFlag(flag)
+							if uf == nil {
+								continue
+							}
+							recordPkgRepo(uf, pkgKey)
 							if !seenPackages[flag][pkgKey] {
 								uf.Packages = append(uf.Packages, aggPackages[pkgKey])
 								uf.Count++
@@ -1224,6 +1276,10 @@ func getRepoUseFlags(site *g2.SiteData, aggPackages map[string]*AggPackage) []*A
 							flag = strings.TrimPrefix(flag, "!") // remove negations
 
 							uf := ensureFlag(flag)
+							if uf == nil {
+								continue
+							}
+							recordPkgRepo(uf, pkgKey)
 							if !seenPackages[flag][pkgKey] {
 								uf.Packages = append(uf.Packages, aggPackages[pkgKey])
 								uf.Count++
@@ -1238,6 +1294,10 @@ func getRepoUseFlags(site *g2.SiteData, aggPackages map[string]*AggPackage) []*A
 				for _, useBlock := range pkg.Metadata.Use {
 					for _, flag := range useBlock.Flags {
 						uf := ensureFlag(flag.Name)
+						if uf == nil {
+							continue
+						}
+						recordPkgRepo(uf, pkgKey)
 						if !seenPackages[flag.Name][pkgKey] {
 							uf.Packages = append(uf.Packages, aggPackages[pkgKey])
 							uf.Count++
@@ -1255,11 +1315,15 @@ func getRepoUseFlags(site *g2.SiteData, aggPackages map[string]*AggPackage) []*A
 
 	if site.UseDesc != nil {
 		for flag, desc := range site.UseDesc.Flags {
+			if !isValidUseFlagName(flag) {
+				continue
+			}
 			if _, ok := aggUseFlags[flag]; !ok {
 				aggUseFlags[flag] = &AggUseFlag{
 					Name:          flag,
 					LocalDescs:    make(map[string]string),
 					MetadataDescs: make(map[string]string),
+					PkgRepos:      make(map[string]map[string]bool),
 				}
 			}
 			aggUseFlags[flag].GlobalDesc = desc
@@ -1786,10 +1850,10 @@ func sortLicenses(aggLicenses map[string]*AggLicense) ([]*AggLicense, []*AggLice
 		sort.Strings(l.Aliases)
 		if len(l.ProvidedByRepos) > 0 {
 			supportedLicenses = append(supportedLicenses, l)
+			validLicenses[l.Name] = true
 		} else {
 			unsupportedLicenses = append(unsupportedLicenses, l)
 		}
-		validLicenses[l.Name] = true
 	}
 	sort.Slice(supportedLicenses, func(i, j int) bool { return supportedLicenses[i].Name < supportedLicenses[j].Name })
 	sort.Slice(unsupportedLicenses, func(i, j int) bool { return unsupportedLicenses[i].Name < unsupportedLicenses[j].Name })
@@ -1922,41 +1986,99 @@ func prepareAggregatedData(sites []*g2.SiteData) *AggregatedData {
 
 var renderBufPool = sync.Pool{
 	New: func() any {
-		return bufio.NewWriterSize(nil, 32*1024)
+		b := new(bytes.Buffer)
+		b.Grow(32 * 1024)
+		return b
 	},
 }
 
-func renderPage(path string, tmpl *template.Template, name string, data any) error {
-	f, err := os.Create(path)
-	if err != nil {
-		return fmt.Errorf("creating file %s: %w", path, err)
+func extractGenInfoFromData(data any) *GenerationInfo {
+	switch v := data.(type) {
+	case GenericPageContext:
+		return &v.GenInfo
+	case *GenericPageContext:
+		if v != nil {
+			return &v.GenInfo
+		}
+	case map[string]any:
+		if gi, ok := v["GenInfo"].(GenerationInfo); ok {
+			return &gi
+		}
+		if gi, ok := v["GenInfo"].(*GenerationInfo); ok && gi != nil {
+			return gi
+		}
 	}
-	defer func() { _ = f.Close() }()
+	return nil
+}
 
-	bw := renderBufPool.Get().(*bufio.Writer)
-	bw.Reset(f)
+func renderPage(path string, tmpl *template.Template, name string, data any) error {
+	gi := extractGenInfoFromData(data)
+	var ledger *LinkLedger
+	var relPath string
+	if gi != nil && gi.Ledger != nil {
+		ledger = gi.Ledger
+		relPath = ledger.RelPath(path)
+		ledger.ReservePage(relPath)
+	}
+
+	buf := renderBufPool.Get().(*bytes.Buffer)
+	buf.Reset()
 	defer func() {
-		bw.Reset(nil)
-		renderBufPool.Put(bw)
+		if buf.Cap() <= 1024*1024 {
+			buf.Reset()
+			renderBufPool.Put(buf)
+		}
 	}()
 
-	if err := tmpl.ExecuteTemplate(bw, "layout_header.html", data); err != nil {
+	if err := tmpl.ExecuteTemplate(buf, "layout_header.html", data); err != nil {
+		if ledger != nil {
+			ledger.FailPage(relPath, err)
+		}
 		return fmt.Errorf("executing layout_header template for %s: %w", path, err)
 	}
-	if err := tmpl.ExecuteTemplate(bw, name, data); err != nil {
+	if err := tmpl.ExecuteTemplate(buf, name, data); err != nil {
+		if ledger != nil {
+			ledger.FailPage(relPath, err)
+		}
 		return fmt.Errorf("executing template %s for %s: %w", name, path, err)
 	}
-	if err := tmpl.ExecuteTemplate(bw, "layout_footer.html", data); err != nil {
+	if err := tmpl.ExecuteTemplate(buf, "layout_footer.html", data); err != nil {
+		if ledger != nil {
+			ledger.FailPage(relPath, err)
+		}
 		return fmt.Errorf("executing layout_footer template for %s: %w", path, err)
 	}
-	if err := bw.Flush(); err != nil {
-		return fmt.Errorf("flushing buffered writer for %s: %w", path, err)
+
+	f, err := os.Create(path)
+	if err != nil {
+		if ledger != nil {
+			ledger.FailPage(relPath, err)
+		}
+		return fmt.Errorf("creating file %s: %w", path, err)
+	}
+	if _, err := f.Write(buf.Bytes()); err != nil {
+		_ = f.Close()
+		if ledger != nil {
+			ledger.FailPage(relPath, err)
+		}
+		return fmt.Errorf("writing rendered output for %s: %w", path, err)
+	}
+	if err := f.Close(); err != nil {
+		if ledger != nil {
+			ledger.FailPage(relPath, err)
+		}
+		return fmt.Errorf("closing file %s: %w", path, err)
+	}
+
+	if ledger != nil {
+		ledger.CommitPage(relPath, int64(buf.Len()))
+		ledger.ScanHTML(relPath, buf.Bytes())
 	}
 
 	return nil
 }
 
-func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, recentDuration time.Duration, recentDurationStr string, fastGit bool, useZip bool, concurrency int, retries int, continueOnError bool, persistentDir string, reposConfPath string, tempDir string, workMode string, mode string, profileSiteGen bool, profileOut string, smartMode bool) error {
+func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, recentDuration time.Duration, recentDurationStr string, fastGit bool, useZip bool, concurrency int, retries int, continueOnError bool, persistentDir string, reposConfPath string, tempDir string, workMode string, mode string, profileSiteGen bool, profileOut string, smartMode bool, strictLinks bool) error {
 	var repos g2.Repositories
 
 	if reposConfPath != "" {
@@ -2586,6 +2708,7 @@ func (cfg *MainArgConfig) cmdSiteRemote(repositoriesFile string, outDir string, 
 		Args:           cfg.Args,
 		FastGit:        fastGit,
 		RecentDuration: recentDurationStr,
+		StrictLinks:    strictLinks,
 	}
 	if err := generateSite(outDir, allSites, recentDuration, recentDurationStr, genInfo); err != nil {
 		return fmt.Errorf("generating integrated site: %w", err)

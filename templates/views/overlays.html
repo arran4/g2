@@ -12,8 +12,8 @@
     <tbody>
         {{range .Repos}}
         <tr>
-            <td><a href="../repos/{{.RepoName}}/">{{.RepoName}}</a></td>
-            <td>{{if .RemoteURL}}<a href="{{.RemoteURL}}">{{.RemoteURL}}</a>{{end}}</td>
+            <td><a href="{{$.BaseURL}}repos/{{.RepoName}}/">{{.RepoName}}</a></td>
+            <td>{{if .RemoteURL}}{{if isWebURL .RemoteURL}}<a href="{{.RemoteURL}}">{{.RemoteURL}}</a>{{else}}<code>{{.RemoteURL}}</code>{{end}}{{end}}</td>
             <td>{{len .Categories}}</td>
             <td>{{.PackageCount}}</td>
             <td>{{len .Profiles}}</td>

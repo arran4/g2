@@ -11,52 +11,83 @@ type PageNode struct {
 	Path   string
 }
 
+func pageNodeSegmentPath(parentCanonical, rawPath string) string {
+	cleaned := strings.Trim(rawPath, "/")
+	if cleaned == "" {
+		return parentCanonical
+	}
+	if parentCanonical == "" {
+		return cleaned
+	}
+	if cleaned == parentCanonical || strings.HasPrefix(cleaned, parentCanonical+"/") {
+		return cleaned
+	}
+	return parentCanonical + "/" + cleaned
+}
+
+// CanonicalPath returns the normalized site-relative slash-separated path for n
+// (for example "packages/app-misc/foo"), regardless of whether intermediate nodes
+// stored single path segments or cumulative paths from root.
+func (n *PageNode) CanonicalPath() string {
+	if n == nil {
+		return ""
+	}
+	var chain []*PageNode
+	for curr := n; curr != nil; curr = curr.Parent {
+		chain = append(chain, curr)
+	}
+	canonical := ""
+	for i := len(chain) - 1; i >= 0; i-- {
+		if chain[i].Parent == nil && strings.Trim(chain[i].Path, "/") == "" {
+			continue
+		}
+		canonical = pageNodeSegmentPath(canonical, chain[i].Path)
+	}
+	return canonical
+}
+
 func (n *PageNode) BaseURL() string {
 	if n == nil || n.Parent == nil {
 		return ""
 	}
-	depth := 0
-	curr := n
-	for curr.Parent != nil {
-		if curr.Path != "" {
-			parts := strings.SplitSeq(curr.Path, "/")
-			for p := range parts {
-				if p != "" {
-					depth++
-				}
-			}
-		}
-		curr = curr.Parent
+	canonical := n.CanonicalPath()
+	if canonical == "" {
+		return ""
 	}
-
-	return strings.Repeat("../", depth)
+	return strings.Repeat("../", strings.Count(canonical, "/")+1)
 }
 
 func (n *PageNode) Breadcrumbs() []g2.Breadcrumb {
-	var crumbs []g2.Breadcrumb
-	curr := n
+	var chain []*PageNode
+	for curr := n; curr != nil; curr = curr.Parent {
+		chain = append(chain, curr)
+	}
+	if len(chain) == 0 {
+		return nil
+	}
 
-	for curr != nil {
-		url := ""
-		if curr != n {
-			depthDiff := 0
-			temp := n
-			for temp != curr {
-				if temp.Path != "" {
-					parts := strings.SplitSeq(temp.Path, "/")
-					for p := range parts {
-						if p != "" {
-							depthDiff++
-						}
-					}
-				}
-				temp = temp.Parent
-			}
-			url = strings.Repeat("../", depthDiff)
+	currentCanonical := n.CanonicalPath()
+	crumbs := make([]g2.Breadcrumb, 0, len(chain))
+	canonical := ""
+
+	for i := len(chain) - 1; i >= 0; i-- {
+		curr := chain[i]
+		if curr.Parent != nil || strings.Trim(curr.Path, "/") != "" {
+			canonical = pageNodeSegmentPath(canonical, curr.Path)
 		}
 
-		crumbs = append([]g2.Breadcrumb{{Name: curr.Name, URL: url}}, crumbs...)
-		curr = curr.Parent
+		crumbURL := ""
+		if curr != n {
+			rel := pathRel(currentCanonical, canonical)
+			if rel != "." {
+				crumbURL = rel + "/"
+			}
+		}
+
+		crumbs = append(crumbs, g2.Breadcrumb{
+			Name: curr.Name,
+			URL:  crumbURL,
+		})
 	}
 
 	return crumbs

@@ -1,4 +1,4 @@
-<h2><a href="../../../">{{.RepoPackage.Category}}</a>/<a href="../../">{{.RepoPackage.Name}}</a> - {{.VersionData.Version}} (<a href="../../../../../../">{{.Repo.RepoName}}</a>)</h2>
+<h2><a href="{{$.BaseURL}}repos/{{$.Repo.RepoName}}/categories/{{.RepoPackage.Category}}/">{{.RepoPackage.Category}}</a>/<a href="{{$.BaseURL}}repos/{{$.Repo.RepoName}}/categories/{{.RepoPackage.Category}}/packages/{{.RepoPackage.Name}}/">{{.RepoPackage.Name}}</a> - {{.VersionData.Version}} (<a href="{{$.BaseURL}}repos/{{$.Repo.RepoName}}/">{{.Repo.RepoName}}</a>)</h2>
 
 <div class="metadata-section">
     <h3>Search</h3>
@@ -26,12 +26,12 @@
 <div class="alert alert-info">
     <strong>Notice:</strong> This package is in a virtual group:
     {{range $index, $virtual := .RepoPackage.ReverseVirtuals}}{{if $index}}, {{end}}
-    {{packageLink $.BaseURL $virtual}}{{end}}
+    {{packageLinkKnown $.BaseURL $virtual $.ValidPackages}}{{end}}
     {{if gt (len .RepoPackage.Equivalents) 0}}
     <br/>
     Equivalents:
     {{range $index, $eq := .RepoPackage.Equivalents}}{{if $index}}, {{end}}
-    {{packageLink $.BaseURL $eq}}{{end}}
+    {{packageLinkKnown $.BaseURL $eq $.ValidPackages}}{{end}}
     {{end}}
 </div>
 {{end}}
@@ -43,7 +43,7 @@
     <ul>
         {{range .RepoPackage.VirtualDeps}}
         <li>
-            <a href="{{$.BaseURL}}packages/{{.}}/">{{.}}</a>
+            {{packageLinkKnown $.BaseURL . $.ValidPackages}}
         </li>
         {{end}}
     </ul>
@@ -75,7 +75,7 @@
         {{end}}
         {{if .VersionData.Ebuild.Vars.LICENSE}}
         <dt><strong>License:</strong></dt>
-        <dd>{{if and .VersionData.Ebuild.Vars.LICENSE (index $.ValidLicenses .VersionData.Ebuild.Vars.LICENSE)}}<a href="../../../../../../licenses/{{slugify .VersionData.Ebuild.Vars.LICENSE}}/">{{.VersionData.Ebuild.Vars.LICENSE}}</a>{{else}}{{.VersionData.Ebuild.Vars.LICENSE}}{{end}}</dd>
+        <dd>{{if and .VersionData.Ebuild.Vars.LICENSE $.ValidLicenses (index $.ValidLicenses .VersionData.Ebuild.Vars.LICENSE)}}<a href="{{$.BaseURL}}repos/{{$.Repo.RepoName}}/licenses/{{slugify .VersionData.Ebuild.Vars.LICENSE}}/">{{.VersionData.Ebuild.Vars.LICENSE}}</a>{{else}}{{.VersionData.Ebuild.Vars.LICENSE}}{{end}}</dd>
         {{end}}
     </dl>
 </div>
@@ -130,12 +130,12 @@
             {{if eq .Name "global"}}
             <h4>Global/Standard Flags</h4>
             {{else}}
-            <h4>USE_EXPAND: <a href="{{$.BaseURL}}uses_expand/{{.Name}}/">{{.Name}}</a></h4>
+            <h4>USE_EXPAND: {{if and $.Repo.UseExpandDescs (index $.Repo.UseExpandDescs .Name)}}<a href="{{$.BaseURL}}repos/{{$.Repo.RepoName}}/uses_expand/{{.Name}}/">{{.Name}}</a>{{else}}{{.Name}}{{end}}</h4>
             {{end}}
             <div>
                 {{range .Flags}}
                 <div class="iuse-flag">
-                    <a href="{{$.BaseURL}}uses/{{.Name}}/">{{.Name}}</a>
+                    {{if and $.ValidRepoUseFlags (index $.ValidRepoUseFlags .Name)}}<a href="{{$.BaseURL}}repos/{{$.Repo.RepoName}}/uses/{{.Name}}/">{{.Name}}</a>{{else}}{{.Name}}{{end}}
                     {{if .Conditional}}
                     <div class="iuse-tooltip" title="{{.ConditionStr}}">
                         &#10067;
@@ -156,9 +156,11 @@
     <h3>Inherited Eclasses</h3>
     <div>
         {{range split .VersionData.Ebuild.Vars.INHERITED " "}}
+        {{if .}}
         <div class="iuse-flag">
-            <a href="{{$.BaseURL}}repos/{{$.Repo.RepoName}}/eclasses/{{.}}/">{{.}}</a>
+            {{if and $.ValidRepoEclasses (index $.ValidRepoEclasses .)}}<a href="{{$.BaseURL}}repos/{{$.Repo.RepoName}}/eclasses/{{.}}/">{{.}}</a>{{else}}{{.}}{{end}}
         </div>
+        {{end}}
         {{end}}
     </div>
 </div>
@@ -193,15 +195,15 @@
     <h3>Dependencies</h3>
     {{if .VersionData.Ebuild.Vars.DEPEND}}
     <h4>DEPEND</h4>
-    <pre>{{formatDependency $.BaseURL .VersionData.Ebuild.Vars.DEPEND}}</pre>
+    <pre>{{formatDependencyKnown $.BaseURL .VersionData.Ebuild.Vars.DEPEND $.ValidPackages}}</pre>
     {{end}}
     {{if .VersionData.Ebuild.Vars.RDEPEND}}
     <h4>RDEPEND</h4>
-    <pre>{{formatDependency $.BaseURL .VersionData.Ebuild.Vars.RDEPEND}}</pre>
+    <pre>{{formatDependencyKnown $.BaseURL .VersionData.Ebuild.Vars.RDEPEND $.ValidPackages}}</pre>
     {{end}}
     {{if .VersionData.Ebuild.Vars.BDEPEND}}
     <h4>BDEPEND</h4>
-    <pre>{{formatDependency $.BaseURL .VersionData.Ebuild.Vars.BDEPEND}}</pre>
+    <pre>{{formatDependencyKnown $.BaseURL .VersionData.Ebuild.Vars.BDEPEND $.ValidPackages}}</pre>
     {{end}}
 </div>
 {{end}}
@@ -229,7 +231,7 @@
     </table>
 </div>
 {{end}}
-<script src="{{$.BaseURL}}search.js"></script>
+<script src="{{$.BaseURL}}search/search.js"></script>
 <script>
     document.addEventListener("DOMContentLoaded", async function() {
         const searchEngine = new SearchEngine();
@@ -556,7 +558,7 @@
                     const a = document.createElement("a");
                     const name = doc.category + "/" + doc.package + " (" + doc.version + ")";
                     a.textContent = name;
-                    a.href = "../../../../../../categories/" + doc.category + "/packages/" + doc.package + "/ebuild/" + doc.version + "/";
+                    a.href = "{{$.BaseURL}}repos/" + encodeURIComponent(doc.overlay) + "/categories/" + doc.category + "/packages/" + doc.package + "/ebuild/" + doc.version + "/";
 
                     li.appendChild(a);
 
