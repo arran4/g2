@@ -69,7 +69,7 @@
         {{range .GlobalUseFlag.Packages}}
         {{$pkgKey := printf "%s/%s" .Category .Name}}
         <tr>
-            <td><a href="../../repos/{{$.Repo.RepoName}}/categories/{{.Category}}/packages/{{.Name}}/">{{$pkgKey}}</a></td>
+            <td><a href="{{$.BaseURL}}repos/{{$.Repo.RepoName}}/categories/{{.Category}}/packages/{{.Name}}/">{{$pkgKey}}</a></td>
             <td>
                 {{$localDesc := index $.GlobalUseFlag.LocalDescs $pkgKey}}
                 {{if $localDesc}}{{$localDesc}}{{else}}<em>-</em>{{end}}

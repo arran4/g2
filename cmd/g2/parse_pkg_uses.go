@@ -13,18 +13,30 @@ func AggregateUseFlags(sites []*g2.SiteData, aggPackages map[string]*AggPackage)
 	globalAggUseFlags := make(map[string]*AggUseFlag)
 	globalSeenPkgs := make(map[string]map[string]bool)
 
-	addGlobalPkg := func(flag string, pkgKey string) *AggUseFlag {
+	addGlobalPkg := func(flag string, pkgKey string, repoName string) *AggUseFlag {
 		aggFlag, ok := globalAggUseFlags[flag]
 		if !ok {
 			aggFlag = &AggUseFlag{
 				Name:          flag,
 				LocalDescs:    make(map[string]string),
 				MetadataDescs: make(map[string]string),
+				PkgRepos:      make(map[string]map[string]bool),
 			}
 			globalAggUseFlags[flag] = aggFlag
 			globalSeenPkgs[flag] = make(map[string]bool)
-		} else if globalSeenPkgs[flag] == nil {
-			globalSeenPkgs[flag] = make(map[string]bool)
+		} else {
+			if globalSeenPkgs[flag] == nil {
+				globalSeenPkgs[flag] = make(map[string]bool)
+			}
+			if aggFlag.PkgRepos == nil {
+				aggFlag.PkgRepos = make(map[string]map[string]bool)
+			}
+		}
+		if aggFlag.PkgRepos[pkgKey] == nil {
+			aggFlag.PkgRepos[pkgKey] = make(map[string]bool)
+		}
+		if repoName != "" {
+			aggFlag.PkgRepos[pkgKey][repoName] = true
 		}
 		if !globalSeenPkgs[flag][pkgKey] && aggPackages != nil {
 			if ap, ok := aggPackages[pkgKey]; ok {
@@ -47,11 +59,23 @@ func AggregateUseFlags(sites []*g2.SiteData, aggPackages map[string]*AggPackage)
 					Name:          flag,
 					LocalDescs:    make(map[string]string),
 					MetadataDescs: make(map[string]string),
+					PkgRepos:      make(map[string]map[string]bool),
 				}
 				repoAggUseFlags[flag] = aggFlag
 				repoSeenPkgs[flag] = make(map[string]bool)
-			} else if repoSeenPkgs[flag] == nil {
-				repoSeenPkgs[flag] = make(map[string]bool)
+			} else {
+				if repoSeenPkgs[flag] == nil {
+					repoSeenPkgs[flag] = make(map[string]bool)
+				}
+				if aggFlag.PkgRepos == nil {
+					aggFlag.PkgRepos = make(map[string]map[string]bool)
+				}
+			}
+			if aggFlag.PkgRepos[pkgKey] == nil {
+				aggFlag.PkgRepos[pkgKey] = make(map[string]bool)
+			}
+			if site.RepoName != "" {
+				aggFlag.PkgRepos[pkgKey][site.RepoName] = true
 			}
 			if !repoSeenPkgs[flag][pkgKey] && aggPackages != nil {
 				if ap, ok := aggPackages[pkgKey]; ok {
@@ -71,7 +95,7 @@ func AggregateUseFlags(sites []*g2.SiteData, aggPackages map[string]*AggPackage)
 					pkgMd := p.Metadata
 					for _, useBlock := range pkgMd.Use {
 						for _, flag := range useBlock.Flags {
-							gFlag := addGlobalPkg(flag.Name, pkgKey)
+							gFlag := addGlobalPkg(flag.Name, pkgKey, site.RepoName)
 							if flag.Text != "" {
 								gFlag.MetadataDescs[pkgKey] = flag.Text
 							}
@@ -92,7 +116,7 @@ func AggregateUseFlags(sites []*g2.SiteData, aggPackages map[string]*AggPackage)
 							parsedFlags := parseIUSEFlagsFunc(iuse)
 							for _, flagObj := range parsedFlags {
 								flag := flagObj.Name
-								addGlobalPkg(flag, pkgKey)
+								addGlobalPkg(flag, pkgKey, site.RepoName)
 								addRepoPkg(flag, pkgKey)
 							}
 						}
@@ -107,7 +131,7 @@ func AggregateUseFlags(sites []*g2.SiteData, aggPackages map[string]*AggPackage)
 									continue
 								}
 								flag = strings.TrimPrefix(flag, "!") // remove negations
-								addGlobalPkg(flag, pkgKey)
+								addGlobalPkg(flag, pkgKey, site.RepoName)
 								addRepoPkg(flag, pkgKey)
 							}
 						}
