@@ -437,10 +437,12 @@ func generateOtherGlobalPages(outDir string, tmpl *template.Template, data *Aggr
 	if err := os.MkdirAll(filepath.Join(outDir, "licenses"), 0755); err != nil {
 		return fmt.Errorf("creating directory: %w", err)
 	}
-	if err := os.MkdirAll(filepath.Join(outDir, "uses"), 0755); err != nil {
+	usesDir := filepath.Join(outDir, "uses")
+	if err := os.MkdirAll(usesDir, 0755); err != nil {
 		return fmt.Errorf("creating directory: %w", err)
 	}
-	if err := renderPage(filepath.Join(outDir, "uses", "index.html"), tmpl, "uses.html", GenericPageContext{
+	usesIndexPath := filepath.Join(usesDir, "index.html")
+	if err := renderPage(usesIndexPath, tmpl, "uses.html", GenericPageContext{
 		Title:       "USE Flags",
 		BaseURL:     "../",
 		Breadcrumbs: []g2.Breadcrumb{{Name: title, URL: "../"}, {Name: "USE Flags"}},
@@ -451,14 +453,20 @@ func generateOtherGlobalPages(outDir string, tmpl *template.Template, data *Aggr
 		return err
 	}
 
+	seenGlobalUseDest := map[string]string{
+		filepath.ToSlash(filepath.Clean(usesIndexPath)): "uses index",
+	}
 	for _, f := range data.UseFlags {
-		safeName := strings.ReplaceAll(f.Name, "/", "_")
-		useDir := filepath.Join(outDir, "uses", safeName)
+		destPath, err := reserveUseFlagDest(seenGlobalUseDest, usesDir, f.Name)
+		if err != nil {
+			return fmt.Errorf("global USE flag %q: %w", f.Name, err)
+		}
+		useDir := filepath.Dir(destPath)
 		if err := os.MkdirAll(useDir, 0755); err != nil {
 			return fmt.Errorf("creating directory %s: %w", useDir, err)
 		}
 
-		if err := renderPage(filepath.Join(useDir, "index.html"), tmpl, "use.html", GenericPageContext{
+		if err := renderPage(destPath, tmpl, "use.html", GenericPageContext{
 			Title:         "USE Flag: " + f.Name,
 			BaseURL:       "../../",
 			Breadcrumbs:   []g2.Breadcrumb{{Name: title, URL: "../../"}, {Name: "USE Flags", URL: "../"}, {Name: f.Name}},
@@ -755,10 +763,12 @@ func generateRepoGroupPages(outDir string, tmpl *template.Template, data *Aggreg
 
 func generateRepoUseFlagsPages(repoDir string, tmpl *template.Template, site *g2.SiteData, title, version string, genInfo GenerationInfo) error {
 	if site.AggUseFlags != nil && len(site.AggUseFlags.([]*AggUseFlag)) > 0 {
-		if err := os.MkdirAll(filepath.Join(repoDir, "uses"), 0755); err != nil {
+		usesDir := filepath.Join(repoDir, "uses")
+		if err := os.MkdirAll(usesDir, 0755); err != nil {
 			return fmt.Errorf("creating directory: %w", err)
 		}
-		if err := renderPage(filepath.Join(repoDir, "uses", "index.html"), tmpl, "uses.html", GenericPageContext{
+		usesIndexPath := filepath.Join(usesDir, "index.html")
+		if err := renderPage(usesIndexPath, tmpl, "uses.html", GenericPageContext{
 			Title:       site.RepoName + " - USE Flags",
 			BaseURL:     "../../../",
 			Breadcrumbs: []g2.Breadcrumb{{Name: title, URL: "../../../"}, {Name: site.RepoName, URL: "../"}, {Name: "USE Flags"}},
@@ -769,14 +779,20 @@ func generateRepoUseFlagsPages(repoDir string, tmpl *template.Template, site *g2
 			return fmt.Errorf("rendering page: %w", err)
 		}
 
+		seenRepoUseDest := map[string]string{
+			filepath.ToSlash(filepath.Clean(usesIndexPath)): "repo uses index",
+		}
 		for _, f := range site.AggUseFlags.([]*AggUseFlag) {
-			safeName := strings.ReplaceAll(f.Name, "/", "_")
-			useDir := filepath.Join(repoDir, "uses", safeName)
+			destPath, err := reserveUseFlagDest(seenRepoUseDest, usesDir, f.Name)
+			if err != nil {
+				return fmt.Errorf("repo %q USE flag %q: %w", site.RepoName, f.Name, err)
+			}
+			useDir := filepath.Dir(destPath)
 			if err := os.MkdirAll(useDir, 0755); err != nil {
 				return fmt.Errorf("creating directory %s: %w", useDir, err)
 			}
 
-			if err := renderPage(filepath.Join(useDir, "index.html"), tmpl, "use.html", GenericPageContext{
+			if err := renderPage(destPath, tmpl, "use.html", GenericPageContext{
 				Title:         "USE Flag: " + f.Name,
 				BaseURL:       "../../../../",
 				Breadcrumbs:   []g2.Breadcrumb{{Name: title, URL: "../../../../"}, {Name: site.RepoName, URL: "../../"}, {Name: "USE Flags", URL: "../"}, {Name: f.Name}},
@@ -1413,10 +1429,12 @@ func generateRepoPackagesPages(repoDir string, tmpl *template.Template, site *g2
 		}
 	}
 
-	if err := os.MkdirAll(filepath.Join(repoDir, "uses"), 0755); err != nil {
+	usesDir := filepath.Join(repoDir, "uses")
+	if err := os.MkdirAll(usesDir, 0755); err != nil {
 		return fmt.Errorf("creating directory: %w", err)
 	}
-	if err := renderPage(filepath.Join(repoDir, "uses", "index.html"), tmpl, "repo_uses.html", GenericPageContext{
+	usesIndexPath := filepath.Join(usesDir, "index.html")
+	if err := renderPage(usesIndexPath, tmpl, "repo_uses.html", GenericPageContext{
 		Title:       site.RepoName + " - USE Flags",
 		BaseURL:     "../../../",
 		Breadcrumbs: []g2.Breadcrumb{{Name: title, URL: "../../../"}, {Name: site.RepoName, URL: "../"}, {Name: "USE Flags"}},
@@ -1428,14 +1446,20 @@ func generateRepoPackagesPages(repoDir string, tmpl *template.Template, site *g2
 		return err
 	}
 
+	seenRepoPkgUseDest := map[string]string{
+		filepath.ToSlash(filepath.Clean(usesIndexPath)): "repo uses index",
+	}
 	for _, f := range repoUseFlags {
-		safeName := strings.ReplaceAll(f.Name, "/", "_")
-		useDir := filepath.Join(repoDir, "uses", safeName)
+		destPath, err := reserveUseFlagDest(seenRepoPkgUseDest, usesDir, f.Name)
+		if err != nil {
+			return fmt.Errorf("repo %q USE flag %q: %w", site.RepoName, f.Name, err)
+		}
+		useDir := filepath.Dir(destPath)
 		if err := os.MkdirAll(useDir, 0755); err != nil {
 			return fmt.Errorf("creating directory %s: %w", useDir, err)
 		}
 
-		if err := renderPage(filepath.Join(useDir, "index.html"), tmpl, "repo_use.html", GenericPageContext{
+		if err := renderPage(destPath, tmpl, "repo_use.html", GenericPageContext{
 			Title:         site.RepoName + " - USE Flag: " + f.Name,
 			BaseURL:       "../../../../",
 			Breadcrumbs:   []g2.Breadcrumb{{Name: title, URL: "../../../../"}, {Name: site.RepoName, URL: "../../"}, {Name: "USE Flags", URL: "../"}, {Name: f.Name}},

@@ -1179,7 +1179,10 @@ func getRepoUseFlags(site *g2.SiteData, aggPackages map[string]*AggPackage) []*A
 	aggUseFlags := make(map[string]*AggUseFlag)
 	seenPackages := make(map[string]map[string]bool)
 
-	ensureFlag := func(flag string) *AggUseFlag {
+	ensureFlag := func(flag string) (*AggUseFlag, bool) {
+		if !isValidUseFlagName(flag) {
+			return nil, false
+		}
 		uf, ok := aggUseFlags[flag]
 		if !ok {
 			uf = &AggUseFlag{
@@ -1190,7 +1193,7 @@ func getRepoUseFlags(site *g2.SiteData, aggPackages map[string]*AggPackage) []*A
 			aggUseFlags[flag] = uf
 			seenPackages[flag] = make(map[string]bool)
 		}
-		return uf
+		return uf, true
 	}
 
 	for _, cat := range site.Categories {
@@ -1204,30 +1207,33 @@ func getRepoUseFlags(site *g2.SiteData, aggPackages map[string]*AggPackage) []*A
 						parsedFlags := parseIUSEFlagsFunc(iuse)
 						for _, flagObj := range parsedFlags {
 							flag := flagObj.Name
-							uf := ensureFlag(flag)
-							if !seenPackages[flag][pkgKey] {
-								uf.Packages = append(uf.Packages, aggPackages[pkgKey])
-								uf.Count++
-								seenPackages[flag][pkgKey] = true
+							uf, ok := ensureFlag(flag)
+							if !ok {
+								continue
+							}
+							if !seenPackages[flag][pkgKey] && aggPackages != nil {
+								if ap, ok := aggPackages[pkgKey]; ok {
+									uf.Packages = append(uf.Packages, ap)
+									uf.Count++
+									seenPackages[flag][pkgKey] = true
+								}
 							}
 						}
 					}
 
 					requiredUse := ver.Ebuild.Vars["REQUIRED_USE"]
 					if requiredUse != "" {
-						parsedFlags := parseIUSEFlagsFunc(requiredUse)
-						for _, flagObj := range parsedFlags {
-							flag := flagObj.Name
-							if flag == "(" || flag == ")" || flag == "||" || flag == "^^" || flag == "??" || strings.HasSuffix(flag, "?") {
+						for _, flag := range extractRequiredUseFlags(requiredUse, site.RepoName, pkgKey) {
+							uf, ok := ensureFlag(flag)
+							if !ok {
 								continue
 							}
-							flag = strings.TrimPrefix(flag, "!") // remove negations
-
-							uf := ensureFlag(flag)
-							if !seenPackages[flag][pkgKey] {
-								uf.Packages = append(uf.Packages, aggPackages[pkgKey])
-								uf.Count++
-								seenPackages[flag][pkgKey] = true
+							if !seenPackages[flag][pkgKey] && aggPackages != nil {
+								if ap, ok := aggPackages[pkgKey]; ok {
+									uf.Packages = append(uf.Packages, ap)
+									uf.Count++
+									seenPackages[flag][pkgKey] = true
+								}
 							}
 						}
 					}
@@ -1237,11 +1243,18 @@ func getRepoUseFlags(site *g2.SiteData, aggPackages map[string]*AggPackage) []*A
 			if pkg.Metadata != nil {
 				for _, useBlock := range pkg.Metadata.Use {
 					for _, flag := range useBlock.Flags {
-						uf := ensureFlag(flag.Name)
-						if !seenPackages[flag.Name][pkgKey] {
-							uf.Packages = append(uf.Packages, aggPackages[pkgKey])
-							uf.Count++
-							seenPackages[flag.Name][pkgKey] = true
+						flagName := strings.TrimSpace(flag.Name)
+						uf, ok := ensureFlag(flagName)
+						if !ok {
+							log.Printf("Warning: ignoring invalid USE flag %q in repo %q package %s (source: metadata.xml)", flag.Name, site.RepoName, pkgKey)
+							continue
+						}
+						if !seenPackages[flagName][pkgKey] && aggPackages != nil {
+							if ap, ok := aggPackages[pkgKey]; ok {
+								uf.Packages = append(uf.Packages, ap)
+								uf.Count++
+								seenPackages[flagName][pkgKey] = true
+							}
 						}
 
 						if flag.Text != "" {
@@ -1255,14 +1268,13 @@ func getRepoUseFlags(site *g2.SiteData, aggPackages map[string]*AggPackage) []*A
 
 	if site.UseDesc != nil {
 		for flag, desc := range site.UseDesc.Flags {
-			if _, ok := aggUseFlags[flag]; !ok {
-				aggUseFlags[flag] = &AggUseFlag{
-					Name:          flag,
-					LocalDescs:    make(map[string]string),
-					MetadataDescs: make(map[string]string),
-				}
+			flagName := strings.TrimSpace(flag)
+			uf, ok := ensureFlag(flagName)
+			if !ok {
+				log.Printf("Warning: ignoring invalid USE flag %q in repo %q (source: profiles/use.desc)", flag, site.RepoName)
+				continue
 			}
-			aggUseFlags[flag].GlobalDesc = desc
+			uf.GlobalDesc = desc
 		}
 	}
 
@@ -1271,6 +1283,10 @@ func getRepoUseFlags(site *g2.SiteData, aggPackages map[string]*AggPackage) []*A
 		for prefix, desc := range site.UseExpandDescs {
 			for suffix, text := range desc.Flags {
 				flagName := prefix + "_" + suffix
+				if !isValidUseFlagName(flagName) {
+					log.Printf("Warning: ignoring invalid USE_EXPAND flag %q in repo %q (source: profiles/desc/%s.desc)", flagName, site.RepoName, prefix)
+					continue
+				}
 				if aggFlag, ok := aggUseFlags[flagName]; ok {
 					if aggFlag.GlobalDesc == "" {
 						aggFlag.GlobalDesc = text
@@ -1282,7 +1298,12 @@ func getRepoUseFlags(site *g2.SiteData, aggPackages map[string]*AggPackage) []*A
 	if site.UseLocalDesc != nil {
 		for pkg, flags := range site.UseLocalDesc.Flags {
 			for flag, desc := range flags {
-				if aggFlag, ok := aggUseFlags[flag]; ok {
+				flagName := strings.TrimSpace(flag)
+				if !isValidUseFlagName(flagName) {
+					log.Printf("Warning: ignoring invalid USE flag %q in repo %q package %s (source: profiles/use.local.desc)", flag, site.RepoName, pkg)
+					continue
+				}
+				if aggFlag, ok := aggUseFlags[flagName]; ok {
 					aggFlag.LocalDescs[pkg] = desc
 				}
 			}
