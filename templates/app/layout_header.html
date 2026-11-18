@@ -4,7 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{$pageTitle := .Title}}{{if .Breadcrumbs}}{{$pageTitle = ""}}{{range $i, $bc := .Breadcrumbs}}{{if $i}}{{$pageTitle = printf "%s | %s" $pageTitle $bc.Name}}{{else}}{{$pageTitle = $bc.Name}}{{end}}{{end}}{{end}}{{$pageTitle}}</title>
-    {{range .AlternateFeeds}}<link rel="alternate" type="{{.Type}}" title="{{.Title}}" href="{{.Href}}" />
+    {{if .TargetURL}}<meta http-equiv="refresh" content="0; url={{.TargetURL}}">
+    <link rel="canonical" href="{{.TargetURL}}">
+    {{end}}{{range .AlternateFeeds}}<link rel="alternate" type="{{.Type}}" title="{{.Title}}" href="{{.Href}}" />
     {{end}}
     <style>
         body { font-family: sans-serif; margin: 2em; line-height: 1.6; color: #333; }
