@@ -238,6 +238,35 @@ func generatePackagePages(outDir string, tmpl *template.Template, data *Aggregat
 		pkgMap[p.Category+"/"+p.Name] = true
 	}
 
+	rootNode := &PageNode{Name: title, Path: ""}
+	packagesNode := &PageNode{Parent: rootNode, Name: "Packages", Path: "packages"}
+	createdPkgCats := make(map[string]bool)
+	var createdPkgCatsMu sync.Mutex
+	ensurePkgCatIndex := func(catName string) error {
+		createdPkgCatsMu.Lock()
+		if createdPkgCats[catName] {
+			createdPkgCatsMu.Unlock()
+			return nil
+		}
+		createdPkgCats[catName] = true
+		createdPkgCatsMu.Unlock()
+
+		catDir := filepath.Join(outDir, "packages", catName)
+		if err := os.MkdirAll(catDir, 0755); err != nil {
+			return fmt.Errorf("creating directory %s: %w", catDir, err)
+		}
+		var catPkgs []*AggPackage
+		for _, p := range data.Packages {
+			if p.Category == catName {
+				catPkgs = append(catPkgs, p)
+			}
+		}
+		catNode := &PageNode{Parent: packagesNode, Name: catName, Path: catName}
+		ctx := catNode.Context("Packages: "+catName, version, genInfo)
+		ctx.GlobalPackages = catPkgs
+		return renderPage(filepath.Join(catDir, "index.html"), tmpl, "packages.html", ctx)
+	}
+
 	gMoves := new(errgroup.Group)
 	gMoves.SetLimit(10)
 	for oldPath, move := range data.Moves {
@@ -257,20 +286,22 @@ func generatePackagePages(outDir string, tmpl *template.Template, data *Aggregat
 				return nil
 			}
 
+			if err := ensurePkgCatIndex(oldCat); err != nil {
+				return err
+			}
+
 			pkgDir := filepath.Join(outDir, "packages", oldCat, oldName)
 			if err := os.MkdirAll(pkgDir, 0755); err != nil {
 				return fmt.Errorf("creating directory %s: %w", pkgDir, err)
 			}
 
-			rootNode := &PageNode{Name: title, Path: ""}
-			packagesNode := &PageNode{Parent: rootNode, Name: "Packages", Path: "packages"}
-			catNode := &PageNode{Parent: packagesNode, Name: oldCat, Path: "packages/" + oldCat}
-			pkgNode := &PageNode{Parent: catNode, Name: oldName, Path: "packages/" + oldCat + "/" + oldName}
+			catNode := &PageNode{Parent: packagesNode, Name: oldCat, Path: oldCat}
+			pkgNode := &PageNode{Parent: catNode, Name: oldName, Path: oldName}
 
 			ctx := pkgNode.Context("Package Moved: "+oldCat+"/"+oldName, version, genInfo)
 			ctx.OldName = oldCat + "/" + oldName
 			ctx.NewName = move.New
-			ctx.NewURL = "../../" + newParts[0] + "/" + newParts[1] + "/"
+			ctx.NewURL = ctx.BaseURL + "packages/" + newParts[0] + "/" + newParts[1] + "/"
 
 			if err := renderPage(filepath.Join(pkgDir, "index.html"), tmpl, "moved_package.html", ctx); err != nil {
 				return fmt.Errorf("rendering page: %w", err)
@@ -301,6 +332,9 @@ func generatePackagePages(outDir string, tmpl *template.Template, data *Aggregat
 	gPkgs.SetLimit(10)
 	for _, pkg := range data.Packages {
 		gPkgs.Go(func() error {
+			if err := ensurePkgCatIndex(pkg.Category); err != nil {
+				return err
+			}
 			pkgDir := filepath.Join(outDir, "packages", pkg.Category, pkg.Name)
 			if err := os.MkdirAll(pkgDir, 0755); err != nil {
 				return fmt.Errorf("creating directory %s: %w", pkgDir, err)
@@ -325,9 +359,8 @@ func generatePackagePages(outDir string, tmpl *template.Template, data *Aggregat
 					}
 				}
 
-				rootNode := &PageNode{Name: title, Path: ""}
-				catNode := &PageNode{Parent: rootNode, Name: pkg.Category, Path: "packages/" + pkg.Category}
-				pkgNode := &PageNode{Parent: catNode, Name: pkg.Name, Path: "packages/" + pkg.Category + "/" + pkg.Name}
+				catNode := &PageNode{Parent: packagesNode, Name: pkg.Category, Path: pkg.Category}
+				pkgNode := &PageNode{Parent: catNode, Name: pkg.Name, Path: pkg.Name}
 
 				ctx := pkgNode.Context("Package: "+pkg.Category+"/"+pkg.Name, version, genInfo)
 				ctx.GlobalPackage = pkg
@@ -935,6 +968,33 @@ func generateRepoDeprecatedMaskedInfoPages(repoDir string, tmpl *template.Templa
 }
 
 func generateRepoMovedPackagesPages(repoDir string, tmpl *template.Template, site *g2.SiteData, title, version string, genInfo GenerationInfo) error {
+	hasPkgInRepo := func(catName, pkgName string) bool {
+		for _, cat := range site.Categories {
+			if cat.Name == catName {
+				for _, pkg := range cat.Packages {
+					if pkg.Name == pkgName {
+						return true
+					}
+				}
+			}
+		}
+		return false
+	}
+
+	hasCatInRepo := func(catName string) bool {
+		for _, cat := range site.Categories {
+			if cat.Name == catName {
+				return true
+			}
+		}
+		return false
+	}
+
+	rootNode := &PageNode{Name: title, Path: ""}
+	repoNode := &PageNode{Parent: rootNode, Name: site.RepoName, Path: "repos/" + site.RepoName}
+	catsNode := &PageNode{Parent: repoNode, Name: "Categories", Path: "categories"}
+	ensuredMovedCats := make(map[string]bool)
+
 	for _, move := range site.Moves {
 		parts := strings.Split(move.Old, "/")
 		if len(parts) != 2 {
@@ -942,22 +1002,7 @@ func generateRepoMovedPackagesPages(repoDir string, tmpl *template.Template, sit
 		}
 		oldCat, oldName := parts[0], parts[1]
 
-		// Check if package exists in this repo currently
-		pkgExists := false
-		for _, cat := range site.Categories {
-			if cat.Name == oldCat {
-				for _, pkg := range cat.Packages {
-					if pkg.Name == oldName {
-						pkgExists = true
-						break
-					}
-				}
-			}
-			if pkgExists {
-				break
-			}
-		}
-		if pkgExists {
+		if hasPkgInRepo(oldCat, oldName) {
 			continue
 		}
 
@@ -966,19 +1011,35 @@ func generateRepoMovedPackagesPages(repoDir string, tmpl *template.Template, sit
 			continue
 		}
 
+		catNode := &PageNode{Parent: catsNode, Name: oldCat, Path: oldCat}
+		if !hasCatInRepo(oldCat) && !ensuredMovedCats[oldCat] {
+			ensuredMovedCats[oldCat] = true
+			catDir := filepath.Join(repoDir, "categories", oldCat)
+			if err := os.MkdirAll(catDir, 0755); err != nil {
+				return fmt.Errorf("creating directory %s: %w", catDir, err)
+			}
+			catCtx := catNode.Context(site.RepoName+" - "+oldCat, version, genInfo)
+			catCtx.Repo = site
+			if err := renderPage(filepath.Join(catDir, "index.html"), tmpl, "repo_packages.html", catCtx); err != nil {
+				return fmt.Errorf("rendering moved category page: %w", err)
+			}
+		}
+
 		pkgDir := filepath.Join(repoDir, "categories", oldCat, "packages", oldName)
 		if err := os.MkdirAll(pkgDir, 0755); err != nil {
 			return fmt.Errorf("creating directory %s: %w", pkgDir, err)
 		}
 
-		rootNode := &PageNode{Name: title, Path: ""}
-		catNode := &PageNode{Parent: rootNode, Name: oldCat, Path: "packages/" + oldCat}
-		pkgNode := &PageNode{Parent: catNode, Name: oldName, Path: "packages/" + oldCat + "/" + oldName}
+		pkgNode := &PageNode{Parent: catNode, Name: oldName, Path: "packages/" + oldName}
 
 		ctx := pkgNode.Context("Package Moved: "+oldCat+"/"+oldName, version, genInfo)
 		ctx.OldName = oldCat + "/" + oldName
 		ctx.NewName = move.New
-		ctx.NewURL = "../../" + newParts[0] + "/" + newParts[1] + "/"
+		if hasPkgInRepo(newParts[0], newParts[1]) {
+			ctx.NewURL = "../../../" + newParts[0] + "/packages/" + newParts[1] + "/"
+		} else {
+			ctx.NewURL = ctx.BaseURL + "packages/" + newParts[0] + "/" + newParts[1] + "/"
+		}
 
 		if err := renderPage(filepath.Join(pkgDir, "index.html"), tmpl, "moved_package.html", ctx); err != nil {
 			return fmt.Errorf("rendering page: %w", err)
