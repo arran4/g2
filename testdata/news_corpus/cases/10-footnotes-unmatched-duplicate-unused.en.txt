@@ -1,0 +1,13 @@
+Title: Edge Footnotes Unmatched and Duplicate
+Author: Jane Doe <jane@example.com>
+Posted: 2025-09-10
+Revision: 1
+News-Item-Format: 2.0
+
+See reference [1] and unmatched [99] or code array index below.
+
+  items[1] = "literal"
+
+[1] https://example.com/first
+[1] https://example.com/duplicate-ignored
+[2] https://example.com/unused-definition

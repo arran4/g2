@@ -1,0 +1,12 @@
+Title: Legacy Format 1.0 Plain Item
+Author: Jane Doe <jane@example.com>
+Posted: 2016-05-01
+Revision: 1
+News-Item-Format: 1.0
+
+This is a Format 1.0 plain text news notice. The rest of this paragraph
+still applies.
+---
+
+Visit https://example.com/archive for historical details. Do not confuse
+either/or prose with package atoms or 2020/01/02 dates.

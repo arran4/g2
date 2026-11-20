@@ -1,0 +1,15 @@
+Title: Package Migration to Secondary Overlay
+Author: Jane Doe <jane@example.com>
+Posted: 2026-08-13
+Revision: 1
+News-Item-Format: 2.0
+Display-If-Installed: dev-util/example-bin
+
+The `dev-util/example-bin` package has been removed from this overlay
+because `dev-util/example-tool` is now available in the target overlay.
+
+Please migrate your installation:
+
+emerge --deselect dev-util/example-bin
+emerge --ask dev-util/example-tool
+emerge --depclean dev-util/example-bin

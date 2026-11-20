@@ -1,0 +1,12 @@
+Title: Aktualizacja systemu bazowego
+Author: Jane Doe <jane@example.com>
+Translator: John Doe <john@example.com>
+Posted: 2023-04-02
+Revision: 1
+News-Item-Format: 2.0
+
+## Przygotowanie do aktualizacji
+
+Zaktualizuj pakiet dev-lang/python przed kontynuacją[1].
+
+[1] https://example.com/pl/python-guide

@@ -1,0 +1,17 @@
+Title: Shell Prompt Only Instructions
+Author: Jane Doe <jane@example.com>
+Posted: 2021-07-20
+Revision: 1
+News-Item-Format: 2.0
+
+Run the following root shell commands cleanly:
+
+# emerge --sync
+# emerge -a -uvDU @world --keep-going=y
+# perl-cleaner --all
+# emerge -a --depclean
+
+Also review this configuration file comment block:
+
+# This is the raw git repository and it lacks metadata.
+# We do not recommend using it unless you are an advanced user!
