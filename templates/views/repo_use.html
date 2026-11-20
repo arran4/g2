@@ -58,27 +58,33 @@
 </div>
 {{end}}
 
+{{if .UseDetailPage}}
+{{$dp := .UseDetailPage}}
 <div class="metadata-section">
-    <h3>Packages Using This Flag</h3>
+    <p><a href="{{$.BaseURL}}uses/{{.GlobalUseFlag.Name}}/">View across all overlays</a></p>
+    <h3>Packages Using This Flag ({{$dp.TotalPackages}}{{if $dp.IsPaginated}} — Page {{$dp.Page}} of {{$dp.TotalPages}}{{end}})</h3>
+    {{if $dp.PageLinks}}
+    <nav class="pagination" aria-label="Package list pagination" style="margin: 8px 0;">
+        {{if $dp.PrevURL}}<a href="{{$dp.PrevURL}}">Previous</a> | {{end}}
+        {{range $dp.PageLinks}}
+            {{if .Current}}<strong>[{{.Page}}]</strong> {{else}}<a href="{{.URL}}">{{.Page}}</a> {{end}}
+        {{end}}
+        {{if $dp.NextURL}}| <a href="{{$dp.NextURL}}">Next</a>{{end}}
+    </nav>
+    {{end}}
     <table>
         <tr>
             <th>Package</th>
             <th>Local Description (use.local.desc)</th>
             <th>Metadata Description (metadata.xml)</th>
         </tr>
-        {{range .GlobalUseFlag.Packages}}
-        {{$pkgKey := printf "%s/%s" .Category .Name}}
+        {{range $dp.Packages}}
         <tr>
-            <td><a href="../../repos/{{$.Repo.RepoName}}/categories/{{.Category}}/packages/{{.Name}}/">{{$pkgKey}}</a></td>
-            <td>
-                {{$localDesc := index $.GlobalUseFlag.LocalDescs $pkgKey}}
-                {{if $localDesc}}{{$localDesc}}{{else}}<em>-</em>{{end}}
-            </td>
-            <td>
-                {{$metaDesc := index $.GlobalUseFlag.MetadataDescs $pkgKey}}
-                {{if $metaDesc}}{{$metaDesc}}{{else}}<em>-</em>{{end}}
-            </td>
+            <td><a href="{{$.BaseURL}}repos/{{$.Repo.RepoName}}/categories/{{.Category}}/packages/{{.Name}}/">{{.PkgKey}}</a></td>
+            <td>{{if .LocalDesc}}{{.LocalDesc}}{{else}}<em>-</em>{{end}}</td>
+            <td>{{if .MetadataDesc}}{{.MetadataDesc}}{{else}}<em>-</em>{{end}}</td>
         </tr>
         {{end}}
     </table>
 </div>
+{{end}}

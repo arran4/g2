@@ -1,0 +1,47 @@
+{{if .UseBucket}}
+{{$b := .UseBucket}}
+<h2>USE Flags — Bucket: {{$b.Label}} (Page {{$b.Page}} of {{$b.TotalPages}})</h2>
+
+<p><a href="{{$b.LandingURL}}">Back to USE Flags Directory</a> | Total flags in bucket: {{$b.TotalFlags}}</p>
+
+{{if $b.PageLinks}}
+<nav class="pagination" aria-label="Bucket pagination" style="margin: 10px 0;">
+    {{if $b.PrevURL}}<a href="{{$b.PrevURL}}">Previous</a> | {{end}}
+    {{range $b.PageLinks}}
+        {{if .Current}}<strong>[{{.Page}}]</strong> {{else}}<a href="{{.URL}}">{{.Page}}</a> {{end}}
+    {{end}}
+    {{if $b.NextURL}}| <a href="{{$b.NextURL}}">Next</a>{{end}}
+</nav>
+{{end}}
+
+<table>
+    <thead>
+        <tr>
+            <th>Flag</th>
+            <th>Description</th>
+            <th>Scope</th>
+            <th>Packages</th>
+        </tr>
+    </thead>
+    <tbody>
+        {{range $b.Flags}}
+        <tr>
+            <td><a href="{{$b.FlagLinkPrefix}}{{.N}}/">{{.N}}</a></td>
+            <td>{{.D}}</td>
+            <td><code>{{.S}}</code></td>
+            <td>{{.C}}</td>
+        </tr>
+        {{end}}
+    </tbody>
+</table>
+
+{{if $b.PageLinks}}
+<nav class="pagination" aria-label="Bucket pagination" style="margin: 10px 0;">
+    {{if $b.PrevURL}}<a href="{{$b.PrevURL}}">Previous</a> | {{end}}
+    {{range $b.PageLinks}}
+        {{if .Current}}<strong>[{{.Page}}]</strong> {{else}}<a href="{{.URL}}">{{.Page}}</a> {{end}}
+    {{end}}
+    {{if $b.NextURL}}| <a href="{{$b.NextURL}}">Next</a>{{end}}
+</nav>
+{{end}}
+{{end}}

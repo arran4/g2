@@ -1,62 +1,143 @@
-{{$groups := groupUseFlags .UseFlags}}
+{{if .UseDirectory}}
+{{$d := .UseDirectory}}
+<h2>USE Flags ({{$d.ScopeTitle}})</h2>
 
-{{if $groups.GlobalFlags}}
-<h2>Global USE flags</h2>
-<table>
-    <tr>
-        <th>Flag</th>
-        <th>Description</th>
-        <th>Packages</th>
-    </tr>
-    {{range $groups.GlobalFlags}}
-    <tr>
-        <td><a href="{{.Name}}/">{{.Name}}</a></td>
-        <td>{{.Desc}}</td>
-        <td>{{.Count}}</td>
-    </tr>
-    {{end}}
-</table>
-{{end}}
+<div class="metadata-section">
+    <p>
+        <strong>Total Distinct Flags:</strong> {{$d.Summary.TotalFlags}} |
+        <strong>Defined in use.desc:</strong> {{$d.Summary.GlobalDescCount}} |
+        <strong>Local / metadata.xml descriptions:</strong> {{$d.Summary.LocalDescCount}} |
+        <strong>Undocumented (IUSE only):</strong> {{$d.Summary.UndocumentedCount}}
+    </p>
+    <p><a href="{{$d.IndexJSONURL}}">Download compact JSON index (uses_index.json)</a></p>
+</div>
 
-{{if $groups.CategoryGroups}}
-<h2>Category USE flags</h2>
-{{range $groups.CategoryGroups}}
-<h3>{{.Category}}</h3>
-<table>
-    <tr>
-        <th>Flag</th>
-        <th>Description</th>
-        <th>Packages</th>
-    </tr>
-    {{range .Flags}}
-    <tr>
-        <td><a href="{{.Name}}/">{{.Name}}</a></td>
-        <td>{{.Desc}}</td>
-        <td>{{.Count}}</td>
-    </tr>
-    {{end}}
-</table>
+<div class="metadata-section">
+    <label for="use-filter-input"><strong>Filter / Search USE Flags:</strong></label>
+    <input id="use-filter-input" type="search" placeholder="Type flag name or description..." style="width: 60%; padding: 0.4rem;" />
+    <div id="use-search-status" style="font-size: 0.9em; color: #555; margin-top: 4px;"></div>
+    <table id="use-search-results" style="display:none; margin-top: 10px;">
+        <thead><tr><th>Flag</th><th>Description</th><th>Scope</th><th>Packages</th></tr></thead>
+        <tbody></tbody>
+    </table>
+</div>
+
+{{if $d.Buckets}}
+{{if ne $d.Tier "small"}}
+<div class="metadata-section">
+    <h3>Browse by Prefix</h3>
+    <p class="use-buckets">
+        {{range $d.Buckets}}
+        <a href="{{.URL}}" style="display:inline-block;padding:4px 8px;margin:2px;border:1px solid #ccc;border-radius:4px;">{{.Label}} ({{.Count}})</a>
+        {{end}}
+    </p>
+</div>
 {{end}}
 {{end}}
 
-{{if $groups.PackageGroups}}
-<h2>Local USE flags</h2>
-{{range $groups.PackageGroups}}
-<h3>{{.Category}}</h3>
-{{range .Packages}}
-<h4>{{.Package}}</h4>
-<table>
-    <tr>
-        <th>Flag</th>
-        <th>Description</th>
-    </tr>
-    {{range .Flags}}
-    <tr>
-        <td><a href="{{.Name}}/">{{.Name}}</a></td>
-        <td>{{.Desc}}</td>
-    </tr>
-    {{end}}
+{{if eq $d.Tier "small"}}
+<table id="use-static-table">
+    <thead>
+        <tr>
+            <th>Flag</th>
+            <th>Description</th>
+            <th>Scope</th>
+            <th>Packages</th>
+        </tr>
+    </thead>
+    <tbody>
+        {{range $d.AllFlags}}
+        <tr>
+            <td><a href="{{.N}}/">{{.N}}</a></td>
+            <td>{{.D}}</td>
+            <td><code>{{.S}}</code></td>
+            <td>{{.C}}</td>
+        </tr>
+        {{end}}
+    </tbody>
 </table>
+{{else if eq $d.Tier "large"}}
+<h3>Top {{len $d.TopFlags}} USE Flags (by Distinct Package Count)</h3>
+<table id="use-static-table">
+    <thead>
+        <tr>
+            <th>Flag</th>
+            <th>Description</th>
+            <th>Scope</th>
+            <th>Packages</th>
+        </tr>
+    </thead>
+    <tbody>
+        {{range $d.TopFlags}}
+        <tr>
+            <td><a href="{{.N}}/">{{.N}}</a></td>
+            <td>{{.D}}</td>
+            <td><code>{{.S}}</code></td>
+            <td>{{.C}}</td>
+        </tr>
+        {{end}}
+    </tbody>
+</table>
+{{else}}
+<p>Showing alphabetical bucket index ({{$d.Summary.TotalFlags}} flags). Select a prefix above or use the filter box to search across all flags.</p>
 {{end}}
-{{end}}
+
+<script>
+(function() {
+    var input = document.getElementById('use-filter-input');
+    var resultsTable = document.getElementById('use-search-results');
+    var statusEl = document.getElementById('use-search-status');
+    if (!input || !resultsTable) return;
+    var tbody = resultsTable.querySelector('tbody');
+    var indexPromise = null;
+    function loadIndex() {
+        if (!indexPromise) {
+            indexPromise = fetch('{{$d.IndexJSONURL}}').then(function(r) { return r.json(); });
+        }
+        return indexPromise;
+    }
+    input.addEventListener('input', function() {
+        var q = input.value.trim().toLowerCase();
+        if (!q) {
+            resultsTable.style.display = 'none';
+            statusEl.textContent = '';
+            tbody.innerHTML = '';
+            return;
+        }
+        loadIndex().then(function(entries) {
+            var matches = [];
+            for (var i = 0; i < entries.length && matches.length < 200; i++) {
+                var e = entries[i];
+                if (e.n.toLowerCase().indexOf(q) !== -1 || (e.d && e.d.toLowerCase().indexOf(q) !== -1)) {
+                    matches.push(e);
+                }
+            }
+            tbody.innerHTML = '';
+            for (var j = 0; j < matches.length; j++) {
+                var m = matches[j];
+                var tr = document.createElement('tr');
+                var td1 = document.createElement('td');
+                var a = document.createElement('a');
+                a.href = encodeURIComponent(m.n) + '/';
+                a.textContent = m.n;
+                td1.appendChild(a);
+                var td2 = document.createElement('td');
+                td2.textContent = m.d || '';
+                var td3 = document.createElement('td');
+                td3.textContent = m.s || '';
+                var td4 = document.createElement('td');
+                td4.textContent = String(m.c || 0);
+                tr.appendChild(td1); tr.appendChild(td2); tr.appendChild(td3); tr.appendChild(td4);
+                tbody.appendChild(tr);
+            }
+            resultsTable.style.display = 'table';
+            statusEl.textContent = 'Showing ' + matches.length + ' match(es)' + (matches.length === 200 ? ' (capped at 200)' : '');
+        }).catch(function() {
+            statusEl.textContent = 'Could not load JSON index; use the prefix links above.';
+        });
+    });
+})();
+</script>
+{{else}}
+<p>No USE flags found.</p>
 {{end}}
