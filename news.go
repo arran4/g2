@@ -16,8 +16,11 @@ const (
 
 // NewsNode represents a single abstract syntax tree element in a news item body.
 type NewsNode struct {
-	Type  NewsNodeType
-	Lines []string // Contains the text for text/code, or list items
+	Type      NewsNodeType
+	Lines     []string // Contains the text for text/code, or list items
+	StartLine int      // 1-based source line start inside body (0 if synthetic)
+	EndLine   int      // 1-based source line end inside body (0 if synthetic)
+	RawLines  []string // Exact source lines preserving indentation
 }
 
 // NewsItem represents a parsed Gentoo News Item (GLEP 42).
