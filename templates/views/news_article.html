@@ -18,7 +18,7 @@
         {{end}}
     </div>
 
-    <div class="news-body" style="margin-top: 1em;">{{.GlobalNewsItem.ToHTMLTemplate}}</div>
+    <div class="news-body" style="margin-top: 1em;">{{renderNewsAutolink .GlobalNewsItem .BaseURL .NewsCurrentRepo .NewsPkgIndex .NewsVerIndex}}</div>
     {{else if .RepoNewsItem}}
     <div class="news-meta">
         <span class="news-date">Posted: {{.RepoNewsItem.Posted.Format "2006-01-02"}}</span>
@@ -35,6 +35,6 @@
         {{end}}
     </div>
 
-    <div class="news-body" style="margin-top: 1em;">{{.RepoNewsItem.ToHTMLTemplate}}</div>
+    <div class="news-body" style="margin-top: 1em;">{{renderNewsAutolink .RepoNewsItem .BaseURL .NewsCurrentRepo .NewsPkgIndex .NewsVerIndex}}</div>
     {{end}}
 </article>
