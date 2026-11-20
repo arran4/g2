@@ -1,0 +1,29 @@
+Title: Varnish Renamed
+Author: Jane Doe <jane@example.com>
+Posted: 2026-03-31
+Revision: 1
+News-Item-Format: 2.0
+Display-If-Installed: www-servers/vinyl-cache
+
+# Varnish Renamed to Vinyl-Cache
+
+As of version 9.0.0, www-servers/varnish has been renamed to
+www-servers/vinyl-cache in line with upstream's change of name[0][1][2][3].
+
+# Changes
+
+All binaries have been renamed:
+
+ varnishd                  -> vinyld
+ varnishlog                -> vinyllog
+
+# Upgrading
+
+Update configuration under /etc/conf.d/vinyld before restarting.
+
+# Refs
+
+[0] https://example.com/announcement
+[1] https://example.com/release-notes
+[2] https://example.com/migration
+[3] https://example.com/upstream

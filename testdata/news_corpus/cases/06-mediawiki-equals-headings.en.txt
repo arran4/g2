@@ -1,0 +1,16 @@
+Title: MediaWiki Style Service Upgrade
+Author: Jane Doe <jane@example.com>
+Posted: 2026-02-11
+Revision: 1
+News-Item-Format: 2.0
+Display-If-Installed: sys-auth/example-sssd
+
+== Systemd users ==
+
+Stop the service before upgrading >=sys-auth/example-sssd-2.10:
+
+  systemctl stop example-sssd
+
+== OpenRC users ===
+
+Restart via rc-service after updating permissions.

@@ -1,0 +1,12 @@
+Title: Runtime Container Default Notice
+Author: Jane Doe <jane@example.com>
+Posted: 2026-10-04
+Revision: 1
+News-Item-Format: 2.0
+Display-If-Installed: games-util/runtime-launcher
+
+Disabling the container runtime for games-util/runtime-launcher is no
+longer supported. See https://example.com/docs/runtime (and the tracker
+at https://example.com/issues/42).
+
+Legacy flags can be inspected at https://example.com/legacy-guide.

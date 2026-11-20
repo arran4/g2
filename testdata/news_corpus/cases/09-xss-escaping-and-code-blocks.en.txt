@@ -1,0 +1,12 @@
+Title: Unsafe HTML and Scheme Escape Case
+Author: Jane Doe <jane@example.com>
+Posted: 2026-04-01
+Revision: 1
+News-Item-Format: 2.0
+
+Ignore raw tags like <script>alert(1)</script> and <img src=x onerror=alert(1)>.
+Do not link javascript:alert(1) or data:text/html,<script>1</script>.
+Email Jane at jane@example.com and check <https://example.com/safe(v1)>.
+
+  <script>do-not-render()</script>
+  https://example.com/inside-code-block
