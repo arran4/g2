@@ -4,7 +4,7 @@
     {{if .GlobalNewsItem}}
     <div class="news-meta">
         <span class="news-date">Posted: {{.GlobalNewsItem.Posted.Format "2006-01-02"}}</span>
-        {{if .GlobalNewsItem.RepoName}}<span class="news-repo"> in <a href="{{.BaseURL}}repos/{{.GlobalNewsItem.RepoName}}/">{{.GlobalNewsItem.RepoName}}</a></span>{{end}}
+        {{if .GlobalNewsItem.RepoName}}<span class="news-repo"> in <a href="{{.BaseURL}}repos/{{.GlobalNewsItem.RepoName}}/">{{.GlobalNewsItem.RepoName}}</a> (<a href="{{.BaseURL}}repos/{{.GlobalNewsItem.RepoName}}/news/archive/">repository news archive</a>)</span>{{end}}
         {{if .GlobalNewsItem.Author}}<span class="news-author"> by {{.GlobalNewsItem.Author}}</span>{{end}}
         {{if .GlobalNewsItem.Revision}}<span class="news-revision"> | Revision: {{.GlobalNewsItem.Revision}}</span>{{end}}
         {{if or .GlobalNewsItem.NewsItemFormat .GlobalNewsItem.Translator .GlobalNewsItem.DisplayIfInstalled .GlobalNewsItem.DisplayIfKeyword .GlobalNewsItem.DisplayIfProfile}}
@@ -20,6 +20,9 @@
 
     <div class="news-body" style="margin-top: 1em;">{{.GlobalNewsItem.ToHTMLTemplate}}</div>
     {{else if .RepoNewsItem}}
+    {{if .HasMultipleNewsRepos}}
+    <p class="news-scope-nav"><a href="{{.BaseURL}}news/">All news</a> | <a href="{{.BaseURL}}news/archive/">All news archive</a></p>
+    {{end}}
     <div class="news-meta">
         <span class="news-date">Posted: {{.RepoNewsItem.Posted.Format "2006-01-02"}}</span>
         {{if .RepoNewsItem.Author}}<span class="news-author"> by {{.RepoNewsItem.Author}}</span>{{end}}
