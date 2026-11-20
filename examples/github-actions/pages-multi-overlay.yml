@@ -1,0 +1,76 @@
+# Example workflow only — copy to .github/workflows/deploy-pages.yml and adapt as needed.
+# Requires repository Settings -> Pages -> Build and deployment -> Source: GitHub Actions.
+
+name: Deploy Multi-Overlay Site to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      repositories_source:
+        description: 'Path or URL to repositories.xml'
+        required: false
+        default: 'repositories.xml'
+  # Uncomment to rebuild periodically when upstream overlays change:
+  # schedule:
+  #   - cron: '17 3 * * *'
+
+permissions: {}
+
+concurrency:
+  group: pages-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Generate Aggregated Site
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install g2
+        uses: arran4/g2-action@v1
+        with:
+          mode: install
+          version: latest
+          github-token: ${{ github.token }}
+
+      - name: Generate multi-overlay site
+        env:
+          REPOSITORIES_SOURCE: ${{ inputs.repositories_source || vars.REPOSITORIES_SOURCE || 'repositories.xml' }}
+        run: |
+          g2 overlays site generate -out _site -concurrency 4 -work-mode temp "$REPOSITORIES_SOURCE"
+
+      - name: Validate generated site artifacts
+        run: |
+          test -s _site/index.html
+          test -s _site/stats/index.html
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

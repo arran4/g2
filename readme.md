@@ -661,6 +661,8 @@ Manage repository-scoped local Portage policies (masks and unmasks) beneath `/et
 
 You can use the [g2 GitHub Action](https://github.com/arran4/g2-action) to integrate `g2` into your CI/CD workflows. It automatically downloads and installs `g2` for use in your workflow steps.
 
+Ready-to-copy GitHub Pages deployment examples for single-overlay (`g2 overlay site generate`) and multi-overlay (`g2 overlays site generate`) repositories are provided under [`examples/github-actions/`](examples/github-actions/README.md).
+
 `arran4/g2-action@v1` installs a published g2 release. Its `version` input accepts `latest` or an explicit release tag such as `v0.0.103`; merging a fix does not update the binary until a release containing it is published. To deploy a particular fix, select its release tag explicitly and check the action's `Found release tag` log entry.
 
 ### Example Usage
