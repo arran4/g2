@@ -9,7 +9,7 @@
             {{if .RepoName}}<span class="news-repo"> in {{.RepoName}}</span>{{end}}
             {{if .Author}}<span class="news-author"> by {{.Author}}</span>{{end}}
         </div>
-        <div class="news-body">{{.ToHTMLTemplate}}</div>
+        <div class="news-body">{{renderNewsAutolink . $.BaseURL $.NewsCurrentRepo $.NewsPkgIndex $.NewsVerIndex}}</div>
     </article>
     <hr/>
     {{end}}
@@ -21,7 +21,7 @@
             {{if .Author}}<span class="news-author"> by {{.Author}}</span>{{end}}
             {{/* .RepoName is only available for AggNewsItem (global), but templates might be shared with local NewsItem */}}
         </div>
-        <div class="news-body">{{.ToHTMLTemplate}}</div>
+        <div class="news-body">{{renderNewsAutolink . $.BaseURL $.NewsCurrentRepo $.NewsPkgIndex $.NewsVerIndex}}</div>
     </article>
     <hr/>
     {{end}}
