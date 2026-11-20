@@ -1,0 +1,66 @@
+# Example workflow only — copy to .github/workflows/deploy-pages.yml and adapt as needed.
+# Requires repository Settings -> Pages -> Build and deployment -> Source: GitHub Actions.
+
+name: Deploy Single-Overlay Site to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: pages-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Generate Static Site
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install g2
+        uses: arran4/g2-action@v1
+        with:
+          mode: install
+          version: latest
+          github-token: ${{ github.token }}
+
+      - name: Generate overlay site
+        run: |
+          g2 overlay site generate -out _site .
+
+      - name: Validate generated site artifacts
+        run: |
+          test -s _site/index.html
+          test -s _site/stats/index.html
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
