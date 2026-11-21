@@ -353,9 +353,10 @@ func aggregateUseFlagsWithProvenance(sites []*g2.SiteData, aggPackages map[strin
 		hasUseExpand := false
 		distinctGlobalDescs := make(map[string]bool)
 		for _, gd := range f.GlobalDefs {
-			if gd.SourceKind == SourceUseDesc {
+			switch gd.SourceKind {
+			case SourceUseDesc:
 				hasUseDesc = true
-			} else if gd.SourceKind == SourceUseExpand {
+			case SourceUseExpand:
 				hasUseExpand = true
 			}
 			if gd.Description != "" {
