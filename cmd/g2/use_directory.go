@@ -29,20 +29,22 @@ func defaultUseTierConfig() UseTierConfig {
 	}
 }
 
-// UseDirectorySummary reports metadata-presence counts (not frequency-inferred namespaces).
+// UseDirectorySummary reports authoritative metadata-provenance counts.
 type UseDirectorySummary struct {
 	TotalFlags        int
 	GlobalDescCount   int
+	UseExpandCount    int
 	LocalDescCount    int
 	UndocumentedCount int
 }
 
 // UseIndexEntry is the compact entry stored in uses_index.json and rendered in listings.
 type UseIndexEntry struct {
-	N string `json:"n"` // Flag name
-	D string `json:"d"` // Representative description
-	C int    `json:"c"` // Distinct package count
-	S string `json:"s"` // Metadata presence label: use.desc | local/metadata | undocumented
+	N string `json:"n"`           // Flag name
+	D string `json:"d"`           // Representative description
+	C int    `json:"c"`           // Distinct package count
+	I int    `json:"i,omitempty"` // Repository package instance count
+	S string `json:"s"`           // Authoritative scope label: use.desc | use_expand | local/metadata | undocumented
 }
 
 // UseBucketLink links to a static A-Z / 0-9 / other bucket page.
@@ -87,12 +89,15 @@ type UseBucketPage struct {
 	PageLinks      []UsePageNavLink
 }
 
-// UseDetailPackageRow is a deterministically ordered package entry on a flag detail page.
+// UseDetailPackageRow is a deterministically ordered package usage entry on a flag detail page.
 type UseDetailPackageRow struct {
 	Category     string
 	Name         string
 	PkgKey       string
 	RepoName     string
+	DeclaredIUSE bool
+	RequiredUse  bool
+	Versions     []string
 	LocalDesc    string
 	MetadataDesc string
 }
@@ -120,16 +125,20 @@ type UseDetailPageView struct {
 }
 
 func isValidUseDirFlagName(name string) bool {
-	if name == "" {
-		return false
-	}
-	if strings.ContainsAny(name, "/\\ \t\r\n") || name == "." || name == ".." {
-		return false
-	}
-	return true
+	return isValidSiteUseFlagName(name)
 }
 
 func classifyUseMetadataScope(f *AggUseFlag) string {
+	switch f.Scope {
+	case ScopeGlobalDefined:
+		return "use.desc"
+	case ScopeUseExpand:
+		return "use_expand"
+	case ScopePackageScoped:
+		return "local/metadata"
+	case ScopeUndocumented:
+		return "undocumented"
+	}
 	if f.GlobalDesc != "" {
 		return "use.desc"
 	}
@@ -229,15 +238,26 @@ func buildUseDirectoryData(flags []*AggUseFlag, scopeTitle string, cfg UseTierCo
 		switch scope {
 		case "use.desc":
 			summary.GlobalDescCount++
+		case "use_expand":
+			summary.UseExpandCount++
 		case "local/metadata":
 			summary.LocalDescCount++
 		default:
 			summary.UndocumentedCount++
 		}
+		distinctCount := f.DistinctPackageCount
+		if distinctCount == 0 && f.Count > 0 {
+			distinctCount = f.Count
+		}
+		instanceCount := f.PackageInstanceCount
+		if instanceCount == 0 && distinctCount > 0 {
+			instanceCount = distinctCount
+		}
 		entry := UseIndexEntry{
 			N: f.Name,
 			D: deterministicBestDesc(f),
-			C: f.Count,
+			C: distinctCount,
+			I: instanceCount,
 			S: scope,
 		}
 		entries = append(entries, entry)
@@ -527,36 +547,73 @@ func generateUseDirectoryTree(
 }
 
 func buildUseDetailRows(f *AggUseFlag, repoScope string, pageSize int) ([]UseDetailPackageRow, []UseOverlayLink) {
-	rows := make([]UseDetailPackageRow, 0, len(f.Packages))
 	repoCounts := make(map[string]int)
+	var rows []UseDetailPackageRow
 
-	for _, pkg := range f.Packages {
-		if pkg == nil {
-			continue
+	if len(f.Usages) > 0 {
+		rows = make([]UseDetailPackageRow, 0, len(f.Usages))
+		for _, u := range f.Usages {
+			if u.RepoName != "" {
+				repoCounts[u.RepoName]++
+			}
+			if repoScope != "" && u.RepoName != "" && u.RepoName != repoScope {
+				continue
+			}
+			rName := u.RepoName
+			if rName == "" {
+				rName = repoScope
+			}
+			rows = append(rows, UseDetailPackageRow{
+				Category:     u.Category,
+				Name:         u.Package,
+				PkgKey:       u.Category + "/" + u.Package,
+				RepoName:     rName,
+				DeclaredIUSE: u.DeclaredIUSE,
+				RequiredUse:  u.RequiredUse,
+				Versions:     u.Versions,
+				LocalDesc:    u.LocalDesc,
+				MetadataDesc: u.MetadataDesc,
+			})
 		}
-		pkgKey := pkg.Category + "/" + pkg.Name
-		var repos []string
-		for r := range pkg.Repos {
-			repos = append(repos, r)
-			repoCounts[r]++
+		sort.Slice(rows, func(i, j int) bool {
+			if rows[i].PkgKey != rows[j].PkgKey {
+				return rows[i].PkgKey < rows[j].PkgKey
+			}
+			return rows[i].RepoName < rows[j].RepoName
+		})
+	} else {
+		rows = make([]UseDetailPackageRow, 0, len(f.Packages))
+		for _, pkg := range f.Packages {
+			if pkg == nil {
+				continue
+			}
+			pkgKey := pkg.Category + "/" + pkg.Name
+			var repos []string
+			for r := range pkg.Repos {
+				repos = append(repos, r)
+				repoCounts[r]++
+			}
+			sort.Strings(repos)
+			firstRepo := repoScope
+			if firstRepo == "" && len(repos) > 0 {
+				firstRepo = repos[0]
+			}
+			rows = append(rows, UseDetailPackageRow{
+				Category:     pkg.Category,
+				Name:         pkg.Name,
+				PkgKey:       pkgKey,
+				RepoName:     firstRepo,
+				LocalDesc:    f.LocalDescs[pkgKey],
+				MetadataDesc: f.MetadataDescs[pkgKey],
+			})
 		}
-		sort.Strings(repos)
-		firstRepo := repoScope
-		if firstRepo == "" && len(repos) > 0 {
-			firstRepo = repos[0]
-		}
-		rows = append(rows, UseDetailPackageRow{
-			Category:     pkg.Category,
-			Name:         pkg.Name,
-			PkgKey:       pkgKey,
-			RepoName:     firstRepo,
-			LocalDesc:    f.LocalDescs[pkgKey],
-			MetadataDesc: f.MetadataDescs[pkgKey],
+		sort.Slice(rows, func(i, j int) bool {
+			if rows[i].PkgKey != rows[j].PkgKey {
+				return rows[i].PkgKey < rows[j].PkgKey
+			}
+			return rows[i].RepoName < rows[j].RepoName
 		})
 	}
-	sort.Slice(rows, func(i, j int) bool {
-		return rows[i].PkgKey < rows[j].PkgKey
-	})
 
 	repoNames := make([]string, 0, len(repoCounts))
 	for r := range repoCounts {

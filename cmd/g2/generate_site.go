@@ -736,21 +736,22 @@ func generateRepoGroupPages(outDir string, tmpl *template.Template, data *Aggreg
 }
 
 func generateRepoUseFlagsPages(repoDir string, tmpl *template.Template, site *g2.SiteData, title, version string, genInfo GenerationInfo) error {
-	if site.AggUseFlags != nil && len(site.AggUseFlags.([]*AggUseFlag)) > 0 {
-		return generateUseDirectoryTree(
-			filepath.Join(repoDir, "uses"),
-			3,
-			[]g2.Breadcrumb{{Name: title, URL: "../../../"}, {Name: "Overlays", URL: "../../../overlays/"}, {Name: site.RepoName, URL: "../"}, {Name: "USE Flags"}},
-			title,
-			site.RepoName,
-			tmpl,
-			site.AggUseFlags.([]*AggUseFlag),
-			version,
-			genInfo,
-			defaultUseTierConfig(),
-		)
+	var useFlags []*AggUseFlag
+	if site.AggUseFlags != nil {
+		useFlags, _ = site.AggUseFlags.([]*AggUseFlag)
 	}
-	return nil
+	return generateUseDirectoryTree(
+		filepath.Join(repoDir, "uses"),
+		3,
+		[]g2.Breadcrumb{{Name: title, URL: "../../../"}, {Name: "Overlays", URL: "../../../overlays/"}, {Name: site.RepoName, URL: "../"}, {Name: "USE Flags"}},
+		title,
+		site.RepoName,
+		tmpl,
+		useFlags,
+		version,
+		genInfo,
+		defaultUseTierConfig(),
+	)
 }
 
 func generateRepoLicensesPages(repoDir string, tmpl *template.Template, site *g2.SiteData, data *AggregatedData, title, version string, genInfo GenerationInfo) error {
@@ -1329,12 +1330,6 @@ func generateRepoPackagesPages(repoDir string, tmpl *template.Template, site *g2
 		return fmt.Errorf("rendering page: %w", err)
 	}
 
-	aggPackagesMap := make(map[string]*AggPackage)
-	for _, p := range data.Packages {
-		aggPackagesMap[p.Category+"/"+p.Name] = p
-	}
-	repoUseFlags := getRepoUseFlags(site, aggPackagesMap)
-
 	if site.AggEclasses != nil && len(site.AggEclasses.([]*AggEclass)) > 0 {
 		if err := os.MkdirAll(filepath.Join(repoDir, "eclasses"), 0755); err != nil {
 			return fmt.Errorf("creating directory: %w", err)
@@ -1372,41 +1367,6 @@ func generateRepoPackagesPages(repoDir string, tmpl *template.Template, site *g2
 			}); err != nil {
 				return err
 			}
-		}
-	}
-
-	if err := os.MkdirAll(filepath.Join(repoDir, "uses"), 0755); err != nil {
-		return fmt.Errorf("creating directory: %w", err)
-	}
-	if err := renderPage(filepath.Join(repoDir, "uses", "index.html"), tmpl, "repo_uses.html", GenericPageContext{
-		Title:       site.RepoName + " - USE Flags",
-		BaseURL:     "../../../",
-		Breadcrumbs: []g2.Breadcrumb{{Name: title, URL: "../../../"}, {Name: site.RepoName, URL: "../"}, {Name: "USE Flags"}},
-		UseFlags:    repoUseFlags,
-		Repo:        site,
-		Version:     version,
-		GenInfo:     genInfo,
-	}); err != nil {
-		return err
-	}
-
-	for _, f := range repoUseFlags {
-		safeName := strings.ReplaceAll(f.Name, "/", "_")
-		useDir := filepath.Join(repoDir, "uses", safeName)
-		if err := os.MkdirAll(useDir, 0755); err != nil {
-			return fmt.Errorf("creating directory %s: %w", useDir, err)
-		}
-
-		if err := renderPage(filepath.Join(useDir, "index.html"), tmpl, "repo_use.html", GenericPageContext{
-			Title:         site.RepoName + " - USE Flag: " + f.Name,
-			BaseURL:       "../../../../",
-			Breadcrumbs:   []g2.Breadcrumb{{Name: title, URL: "../../../../"}, {Name: site.RepoName, URL: "../../"}, {Name: "USE Flags", URL: "../"}, {Name: f.Name}},
-			GlobalUseFlag: f,
-			Repo:          site,
-			Version:       version,
-			GenInfo:       genInfo,
-		}); err != nil {
-			return err
 		}
 	}
 

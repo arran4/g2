@@ -5,9 +5,10 @@
 <div class="metadata-section">
     <p>
         <strong>Total Distinct Flags:</strong> {{$d.Summary.TotalFlags}} |
-        <strong>Defined in use.desc:</strong> {{$d.Summary.GlobalDescCount}} |
-        <strong>Local / metadata.xml descriptions:</strong> {{$d.Summary.LocalDescCount}} |
-        <strong>Undocumented (IUSE only):</strong> {{$d.Summary.UndocumentedCount}}
+        <strong>Global (use.desc):</strong> {{$d.Summary.GlobalDescCount}} |
+        <strong>USE_EXPAND (profiles/desc/*.desc):</strong> {{$d.Summary.UseExpandCount}} |
+        <strong>Package-Scoped (use.local.desc / metadata.xml):</strong> {{$d.Summary.LocalDescCount}} |
+        <strong>Undocumented (IUSE / REQUIRED_USE):</strong> {{$d.Summary.UndocumentedCount}}
     </p>
     <p><a href="{{$d.IndexJSONURL}}">Download compact JSON index (uses_index.json)</a></p>
 </div>
@@ -17,7 +18,7 @@
     <input id="use-filter-input" type="search" placeholder="Type flag name or description..." style="width: 60%; padding: 0.4rem;" />
     <div id="use-search-status" style="font-size: 0.9em; color: #555; margin-top: 4px;"></div>
     <table id="use-search-results" style="display:none; margin-top: 10px;">
-        <thead><tr><th>Flag</th><th>Description</th><th>Scope</th><th>Packages</th></tr></thead>
+        <thead><tr><th>Flag</th><th>Description</th><th>Scope</th><th>Distinct Packages</th><th>Repo Instances</th></tr></thead>
         <tbody></tbody>
     </table>
 </div>
@@ -42,7 +43,8 @@
             <th>Flag</th>
             <th>Description</th>
             <th>Scope</th>
-            <th>Packages</th>
+            <th>Distinct Packages</th>
+            <th>Repo Instances</th>
         </tr>
     </thead>
     <tbody>
@@ -52,6 +54,7 @@
             <td>{{.D}}</td>
             <td><code>{{.S}}</code></td>
             <td>{{.C}}</td>
+            <td>{{.I}}</td>
         </tr>
         {{end}}
     </tbody>
@@ -64,7 +67,8 @@
             <th>Flag</th>
             <th>Description</th>
             <th>Scope</th>
-            <th>Packages</th>
+            <th>Distinct Packages</th>
+            <th>Repo Instances</th>
         </tr>
     </thead>
     <tbody>
@@ -74,6 +78,7 @@
             <td>{{.D}}</td>
             <td><code>{{.S}}</code></td>
             <td>{{.C}}</td>
+            <td>{{.I}}</td>
         </tr>
         {{end}}
     </tbody>
@@ -127,7 +132,9 @@
                 td3.textContent = m.s || '';
                 var td4 = document.createElement('td');
                 td4.textContent = String(m.c || 0);
-                tr.appendChild(td1); tr.appendChild(td2); tr.appendChild(td3); tr.appendChild(td4);
+                var td5 = document.createElement('td');
+                td5.textContent = String(m.i || m.c || 0);
+                tr.appendChild(td1); tr.appendChild(td2); tr.appendChild(td3); tr.appendChild(td4); tr.appendChild(td5);
                 tbody.appendChild(tr);
             }
             resultsTable.style.display = 'table';
@@ -139,5 +146,83 @@
 })();
 </script>
 {{else}}
-<p>No USE flags found.</p>
+{{$groups := groupUseFlagsByProvenance .UseFlags}}
+
+{{if $groups.GlobalDefined}}
+<h2>Global USE Flags (profiles/use.desc)</h2>
+<table>
+    <tr>
+        <th>Flag</th>
+        <th>Description</th>
+        <th>Distinct Packages</th>
+        <th>Repo Instances</th>
+    </tr>
+    {{range $groups.GlobalDefined}}
+    <tr>
+        <td><a href="{{.Name}}/">{{.Name}}</a>{{if .HasConflict}} <em>(multiple definitions)</em>{{end}}</td>
+        <td>{{.Desc}}</td>
+        <td>{{.DistinctPackages}}</td>
+        <td>{{.PackageInstances}}</td>
+    </tr>
+    {{end}}
+</table>
+{{end}}
+
+{{if $groups.UseExpandDefined}}
+<h2>USE_EXPAND Flags (profiles/desc/*.desc)</h2>
+<table>
+    <tr>
+        <th>Flag</th>
+        <th>Description</th>
+        <th>Distinct Packages</th>
+        <th>Repo Instances</th>
+    </tr>
+    {{range $groups.UseExpandDefined}}
+    <tr>
+        <td><a href="{{.Name}}/">{{.Name}}</a></td>
+        <td>{{.Desc}}</td>
+        <td>{{.DistinctPackages}}</td>
+        <td>{{.PackageInstances}}</td>
+    </tr>
+    {{end}}
+</table>
+{{end}}
+
+{{if $groups.PackageScoped}}
+<h2>Package-Scoped USE Flags (use.local.desc / metadata.xml)</h2>
+<table>
+    <tr>
+        <th>Flag</th>
+        <th>Representative Description</th>
+        <th>Distinct Packages</th>
+        <th>Repo Instances</th>
+    </tr>
+    {{range $groups.PackageScoped}}
+    <tr>
+        <td><a href="{{.Name}}/">{{.Name}}</a></td>
+        <td>{{.Desc}}</td>
+        <td>{{.DistinctPackages}}</td>
+        <td>{{.PackageInstances}}</td>
+    </tr>
+    {{end}}
+</table>
+{{end}}
+
+{{if $groups.Undocumented}}
+<h2>Undocumented / Declared-Only Flags (IUSE / REQUIRED_USE)</h2>
+<table>
+    <tr>
+        <th>Flag</th>
+        <th>Distinct Packages</th>
+        <th>Repo Instances</th>
+    </tr>
+    {{range $groups.Undocumented}}
+    <tr>
+        <td><a href="{{.Name}}/">{{.Name}}</a></td>
+        <td>{{.DistinctPackages}}</td>
+        <td>{{.PackageInstances}}</td>
+    </tr>
+    {{end}}
+</table>
+{{end}}
 {{end}}
