@@ -1,6 +1,15 @@
 <h2>USE Flag: {{.GlobalUseFlag.Name}}</h2>
 
 <div class="metadata-section">
+    <h3>Provenance Summary</h3>
+    <p>
+        <strong>Authoritative Scope:</strong> <code>{{.GlobalUseFlag.Scope}}</code> |
+        <strong>Distinct Packages:</strong> {{.GlobalUseFlag.DistinctPackageCount}} |
+        <strong>Repository Package Instances:</strong> {{.GlobalUseFlag.PackageInstanceCount}}
+    </p>
+</div>
+
+<div class="metadata-section">
     <h3>Search</h3>
     <form action="{{.BaseURL}}search/" method="get">
         <input type="text" name="q" value="overlay:{{.Repo.RepoName}} use:{{.GlobalUseFlag.Name}} " placeholder="Search packages, descriptions, use flags..." style="width: 80%; padding: 0.5rem;" />
@@ -17,33 +26,47 @@
     </ul>
 </div>
 
-{{if .GlobalUseFlag.GlobalDesc}}
+{{if .GlobalUseFlag.GlobalDefs}}
 <div class="metadata-section">
-    <h3>Global Description</h3>
-    <p>{{.GlobalUseFlag.GlobalDesc}}</p>
+    <h3>Global / USE_EXPAND Definitions</h3>
+    <table>
+        <tr>
+            <th>Repository</th>
+            <th>Source Kind</th>
+            <th>Source File</th>
+            <th>Description</th>
+        </tr>
+        {{range .GlobalUseFlag.GlobalDefs}}
+        <tr>
+            <td><a href="{{$.BaseURL}}repos/{{.RepoName}}/">{{.RepoName}}</a></td>
+            <td><code>{{.SourceKind}}</code></td>
+            <td><code>{{.SourceFile}}</code></td>
+            <td>{{.Description}}</td>
+        </tr>
+        {{end}}
+    </table>
 </div>
 {{end}}
 
-{{if or .GlobalUseFlag.LocalDescs .GlobalUseFlag.MetadataDescs}}
+{{if .GlobalUseFlag.LocalDefs}}
 <div class="metadata-section">
-    <h3>Local and Metadata Descriptions</h3>
-    {{if .GlobalUseFlag.MetadataDescs}}
-    <h4>Metadata Descriptions (metadata.xml)</h4>
-    <ul>
-        {{range $pkgKey, $desc := .GlobalUseFlag.MetadataDescs}}
-        <li><strong>{{$pkgKey}}:</strong> {{$desc}}</li>
+    <h3>Package-Scoped Descriptions (use.local.desc / metadata.xml)</h3>
+    <table>
+        <tr>
+            <th>Package</th>
+            <th>Source Kind</th>
+            <th>Source File</th>
+            <th>Description</th>
+        </tr>
+        {{range .GlobalUseFlag.LocalDefs}}
+        <tr>
+            <td><a href="{{$.BaseURL}}repos/{{.RepoName}}/categories/{{.Category}}/packages/{{.Package}}/">{{.Category}}/{{.Package}}</a></td>
+            <td><code>{{.SourceKind}}</code></td>
+            <td><code>{{.SourceFile}}</code></td>
+            <td>{{.Description}}</td>
+        </tr>
         {{end}}
-    </ul>
-    {{end}}
-
-    {{if .GlobalUseFlag.LocalDescs}}
-    <h4>Local Descriptions (use.local.desc)</h4>
-    <ul>
-        {{range $pkgKey, $desc := .GlobalUseFlag.LocalDescs}}
-        <li><strong>{{$pkgKey}}:</strong> {{$desc}}</li>
-        {{end}}
-    </ul>
-    {{end}}
+    </table>
 </div>
 {{end}}
 
@@ -59,25 +82,22 @@
 {{end}}
 
 <div class="metadata-section">
-    <h3>Packages Using This Flag</h3>
+    <h3>Package Usage Occurrences</h3>
     <table>
         <tr>
             <th>Package</th>
+            <th>Observations</th>
+            <th>Versions</th>
             <th>Local Description (use.local.desc)</th>
             <th>Metadata Description (metadata.xml)</th>
         </tr>
-        {{range .GlobalUseFlag.Packages}}
-        {{$pkgKey := printf "%s/%s" .Category .Name}}
+        {{range .GlobalUseFlag.Usages}}
         <tr>
-            <td><a href="../../repos/{{$.Repo.RepoName}}/categories/{{.Category}}/packages/{{.Name}}/">{{$pkgKey}}</a></td>
-            <td>
-                {{$localDesc := index $.GlobalUseFlag.LocalDescs $pkgKey}}
-                {{if $localDesc}}{{$localDesc}}{{else}}<em>-</em>{{end}}
-            </td>
-            <td>
-                {{$metaDesc := index $.GlobalUseFlag.MetadataDescs $pkgKey}}
-                {{if $metaDesc}}{{$metaDesc}}{{else}}<em>-</em>{{end}}
-            </td>
+            <td><a href="{{$.BaseURL}}repos/{{.RepoName}}/categories/{{.Category}}/packages/{{.Package}}/">{{.Category}}/{{.Package}}</a></td>
+            <td>{{if .DeclaredIUSE}}IUSE{{end}}{{if and .DeclaredIUSE .RequiredUse}} + {{end}}{{if .RequiredUse}}REQUIRED_USE{{end}}{{if and (not .DeclaredIUSE) (not .RequiredUse)}}metadata only{{end}}</td>
+            <td>{{if .Versions}}{{join .Versions ", "}}{{else}}<em>-</em>{{end}}</td>
+            <td>{{if .LocalDesc}}{{.LocalDesc}}{{else}}<em>-</em>{{end}}</td>
+            <td>{{if .MetadataDesc}}{{.MetadataDesc}}{{else}}<em>-</em>{{end}}</td>
         </tr>
         {{end}}
     </table>
