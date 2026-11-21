@@ -1,62 +1,79 @@
-{{$groups := groupUseFlags .UseFlags}}
+{{$groups := groupUseFlagsByProvenance .UseFlags}}
 
-{{if $groups.GlobalFlags}}
-<h2>Global USE flags</h2>
+{{if $groups.GlobalDefined}}
+<h2>Global USE Flags (profiles/use.desc)</h2>
 <table>
     <tr>
         <th>Flag</th>
         <th>Description</th>
-        <th>Packages</th>
+        <th>Distinct Packages</th>
+        <th>Repo Instances</th>
     </tr>
-    {{range $groups.GlobalFlags}}
+    {{range $groups.GlobalDefined}}
     <tr>
-        <td><a href="{{.Name}}/">{{.Name}}</a></td>
+        <td><a href="{{.Name}}/">{{.Name}}</a>{{if .HasConflict}} <em>(multiple definitions)</em>{{end}}</td>
         <td>{{.Desc}}</td>
-        <td>{{.Count}}</td>
+        <td>{{.DistinctPackages}}</td>
+        <td>{{.PackageInstances}}</td>
     </tr>
     {{end}}
 </table>
 {{end}}
 
-{{if $groups.CategoryGroups}}
-<h2>Category USE flags</h2>
-{{range $groups.CategoryGroups}}
-<h3>{{.Category}}</h3>
+{{if $groups.UseExpandDefined}}
+<h2>USE_EXPAND Flags (profiles/desc/*.desc)</h2>
 <table>
     <tr>
         <th>Flag</th>
         <th>Description</th>
-        <th>Packages</th>
+        <th>Distinct Packages</th>
+        <th>Repo Instances</th>
     </tr>
-    {{range .Flags}}
+    {{range $groups.UseExpandDefined}}
     <tr>
         <td><a href="{{.Name}}/">{{.Name}}</a></td>
         <td>{{.Desc}}</td>
-        <td>{{.Count}}</td>
+        <td>{{.DistinctPackages}}</td>
+        <td>{{.PackageInstances}}</td>
     </tr>
     {{end}}
 </table>
-{{end}}
 {{end}}
 
-{{if $groups.PackageGroups}}
-<h2>Local USE flags</h2>
-{{range $groups.PackageGroups}}
-<h3>{{.Category}}</h3>
-{{range .Packages}}
-<h4>{{.Package}}</h4>
+{{if $groups.PackageScoped}}
+<h2>Package-Scoped USE Flags (use.local.desc / metadata.xml)</h2>
 <table>
     <tr>
         <th>Flag</th>
-        <th>Description</th>
+        <th>Representative Description</th>
+        <th>Distinct Packages</th>
+        <th>Repo Instances</th>
     </tr>
-    {{range .Flags}}
+    {{range $groups.PackageScoped}}
     <tr>
         <td><a href="{{.Name}}/">{{.Name}}</a></td>
         <td>{{.Desc}}</td>
+        <td>{{.DistinctPackages}}</td>
+        <td>{{.PackageInstances}}</td>
     </tr>
     {{end}}
 </table>
 {{end}}
-{{end}}
+
+{{if $groups.Undocumented}}
+<h2>Undocumented / Declared-Only Flags (IUSE / REQUIRED_USE)</h2>
+<table>
+    <tr>
+        <th>Flag</th>
+        <th>Distinct Packages</th>
+        <th>Repo Instances</th>
+    </tr>
+    {{range $groups.Undocumented}}
+    <tr>
+        <td><a href="{{.Name}}/">{{.Name}}</a></td>
+        <td>{{.DistinctPackages}}</td>
+        <td>{{.PackageInstances}}</td>
+    </tr>
+    {{end}}
+</table>
 {{end}}
