@@ -24,7 +24,7 @@
             {{if .Repo.SourceURL}}
             <tr>
                 <th>Source URL</th>
-                <td><a href="{{.Repo.SourceURL}}">{{.Repo.SourceURL}}</a></td>
+                <td>{{if isWebURL .Repo.SourceURL}}<a href="{{.Repo.SourceURL}}">{{.Repo.SourceURL}}</a>{{else}}<code>{{.Repo.SourceURL}}</code>{{end}}</td>
             </tr>
             {{end}}
         </tbody>

@@ -6,6 +6,10 @@ type GenerationInfo struct {
 	RepositoriesXML string
 	FastGit         bool
 	RecentDuration  string
+	StrictLinks     bool
+	OutDir          string      `json:"-"`
+	Ledger          *LinkLedger `json:"-"`
+	LinkReport      *LinkIntegrityReport
 	// Placeholders for later:
 	TimeTaken      string
 	MemoryConsumed string

@@ -1,9 +1,49 @@
 package main
 
 import (
-	"github.com/arran4/g2"
 	"sort"
+	"strings"
+	"unicode"
+
+	"github.com/arran4/g2"
 )
+
+func isValidUseFlagName(name string) bool {
+	if name == "" || name == "." || name == ".." {
+		return false
+	}
+	if strings.ContainsAny(name, "/\\ \t\r\n+$!*?\"'`()[]{}<>|;") {
+		return false
+	}
+	if strings.HasPrefix(name, "-") || strings.HasPrefix(name, "+") || strings.HasPrefix(name, ".") {
+		return false
+	}
+	hasAlphaNum := false
+	for _, r := range name {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) {
+			hasAlphaNum = true
+			continue
+		}
+		switch r {
+		case '_', '-', '@', ':':
+		default:
+			return false
+		}
+	}
+	return hasAlphaNum
+}
+
+func reserveUseFlagDirSegment(used map[string]string, name string) (string, bool) {
+	safeName := strings.ReplaceAll(name, "/", "_")
+	if safeName == "" || safeName == "." || safeName == ".." {
+		return "", false
+	}
+	if prev, exists := used[safeName]; exists && prev != name {
+		return "", false
+	}
+	used[safeName] = name
+	return safeName, true
+}
 
 // AggregateUseFlags processes a list of g2.SiteData and updates an aggregate map of UseFlags,
 // and returns the sorted global UseFlags list. It also aggregates per-repo USE flags inside g2.SiteData.
@@ -61,6 +101,9 @@ func populatePkgUseFlags(site *g2.SiteData) {
 			if pkg.Metadata != nil {
 				for _, block := range pkg.Metadata.Use {
 					for _, f := range block.Flags {
+						if !isValidUseFlagName(f.Name) {
+							continue
+						}
 						if f.Text != "" {
 							if metadataCounts[f.Name] == nil {
 								metadataCounts[f.Name] = make(map[string]int)

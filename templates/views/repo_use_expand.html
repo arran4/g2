@@ -29,11 +29,16 @@
         </thead>
         <tbody>
             {{range $flag, $desc := .UseExpandDesc.Flags}}
+            {{$fullFlag := printf "%s_%s" $.UseExpandDesc.Name $flag}}
             <tr>
                 <td><strong>{{$flag}}</strong></td>
                 <td>{{$desc}}</td>
                 <td>
-                    <a href="{{$.BaseURL}}repos/{{$.Repo.RepoName}}/uses/{{$.UseExpandDesc.Name}}_{{$flag}}/">View specific flag page ({{$.UseExpandDesc.Name}}_{{$flag}})</a>
+                    {{if and $.ValidUseFlags (index $.ValidUseFlags $fullFlag)}}
+                    <a href="{{$.BaseURL}}repos/{{$.Repo.RepoName}}/uses/{{$fullFlag}}/">View specific flag page ({{$fullFlag}})</a>
+                    {{else}}
+                    <span>Unused in {{$.Repo.RepoName}} packages ({{$fullFlag}})</span>
+                    {{end}}
                 </td>
             </tr>
             {{end}}

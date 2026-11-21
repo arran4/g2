@@ -71,13 +71,7 @@ type ProvenanceUseFlagItem struct {
 }
 
 func isValidSiteUseFlagName(name string) bool {
-	if name == "" {
-		return false
-	}
-	if strings.ContainsAny(name, "/\\ \t\r\n") || name == "." || name == ".." {
-		return false
-	}
-	return true
+	return isValidUseFlagName(name)
 }
 
 func aggregateUseFlagsWithProvenance(sites []*g2.SiteData, aggPackages map[string]*AggPackage) ([]*AggUseFlag, map[string]*AggUseFlag) {
@@ -195,12 +189,12 @@ func aggregateUseFlagsWithProvenance(sites []*g2.SiteData, aggPackages map[strin
 						}
 					}
 					if req := ver.Ebuild.Vars["REQUIRED_USE"]; req != "" {
-						for _, flagObj := range parseIUSEFlagsFunc(req) {
-							flag := flagObj.Name
-							if flag == "(" || flag == ")" || flag == "||" || flag == "^^" || flag == "??" {
+						cleaned := strings.NewReplacer("(", " ", ")", " ").Replace(req)
+						for tok := range strings.FieldsSeq(cleaned) {
+							if tok == "" || tok == "||" || tok == "^^" || tok == "??" || tok == "!" {
 								continue
 							}
-							flag = strings.TrimPrefix(strings.TrimSuffix(flag, "?"), "!")
+							flag := strings.TrimPrefix(strings.TrimSuffix(tok, "?"), "!")
 							if !isValidSiteUseFlagName(flag) {
 								continue
 							}

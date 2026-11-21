@@ -189,7 +189,7 @@ Generates a static site for a single overlay.
 **Usage:**
 
 ```bash
-g2 overlay site generate [-out <dir>] [-clear] [<location>]
+g2 overlay site generate [-out <dir>] [-clear] [-strict-links] [<location>]
 ```
 
 **Arguments:**
@@ -202,6 +202,9 @@ g2 overlay site generate [-out <dir>] [-clear] [<location>]
 * `-clear`: Clear output directory before generation.
 * `-fast-git-modtime`: Use fast (O(1)) but potentially less reliable go-git file log lookup.
 * `-recent-duration`: Duration to consider an update 'recent' (e.g., 3mo, 14d, 72h) (default "3mo").
+* `-strict-links`: Fail with a non-zero exit code if the built-in link integrity ledger detects broken internal links, root escapes, malformed URLs, or duplicate route writes.
+
+By default, site generation always runs the built-in link and route integrity ledger, logs a summary (and bounded diagnostics for any issues), and records status counts in `/stats/` without failing the build unless `-strict-links` is enabled.
 
 When the overlay contains news items, the generated news dashboard includes RSS 2.0 and Atom feeds at `news/index.rss` and `news/index.atom`. Aggregated sites also provide combined feeds there, while each repository has its own feeds under `repos/<repository>/news/`.
 
@@ -241,7 +244,7 @@ Generates an aggregated static site for multiple remote repositories from a `rep
 **Usage:**
 
 ```bash
-g2 overlays site generate [-out <dir>] [-clear] <repositoriesFile>
+g2 overlays site generate [-out <dir>] [-clear] [-strict-links] <repositoriesFile>
 ```
 
 **Arguments:**

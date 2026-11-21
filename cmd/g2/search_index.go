@@ -58,6 +58,10 @@ type SearchManifest struct {
 var pkgRegex = regexp.MustCompile(`([a-zA-Z0-9_][a-zA-Z0-9_\-\+]*\/[a-zA-Z0-9_][a-zA-Z0-9_\-\+]+)`)
 
 func generateSearchData(outDir, outZip string, sites []*g2.SiteData, maxChunkSizeOverride ...int) error {
+	return generateSearchDataWithLedger(outDir, outZip, sites, nil, maxChunkSizeOverride...)
+}
+
+func generateSearchDataWithLedger(outDir, outZip string, sites []*g2.SiteData, ledger *LinkLedger, maxChunkSizeOverride ...int) error {
 	var documents []SearchDocument
 	docID := 0
 
@@ -299,6 +303,10 @@ func generateSearchData(outDir, outZip string, sites []*g2.SiteData, maxChunkSiz
 						}
 					}
 
+					verPath := ver.Version
+					if verPath == "" {
+						verPath = verStr
+					}
 					doc := SearchDocument{
 						ID:              docID,
 						Overlay:         overlayNameLower,
@@ -330,7 +338,7 @@ func generateSearchData(outDir, outZip string, sites []*g2.SiteData, maxChunkSiz
 						RdependedBy:     []string{},
 						ManifestFiles:   manifestFiles,
 						SearchText:      searchText,
-						PageURL:         fmt.Sprintf("../repos/%s/categories/%s/packages/%s/ebuild/%s/index.html", site.RepoName, cat.Name, pkg.Name, verStr),
+						PageURL:         fmt.Sprintf("../repos/%s/categories/%s/packages/%s/ebuild/%s/index.html", site.RepoName, cat.Name, pkg.Name, verPath),
 					}
 
 					doc.VersionSortKey = g2.PadVersionTokens(verStr)
@@ -469,6 +477,14 @@ func generateSearchData(outDir, outZip string, sites []*g2.SiteData, maxChunkSiz
 			if err != nil {
 				return fmt.Errorf("encoding search doc %d: %w", doc.ID, err)
 			}
+			if ledger != nil {
+				if info, statErr := os.Stat(dataFilePath); statErr == nil {
+					ledger.CommitAsset(ledger.RelPath(dataFilePath), info.Size())
+				} else {
+					ledger.CommitAsset(ledger.RelPath(dataFilePath), 0)
+				}
+				ledger.RecordRef("search/index.html", "search.doc.page_url", doc.PageURL)
+			}
 		}
 
 		// Write partitioned index files
@@ -498,6 +514,13 @@ func generateSearchData(outDir, outZip string, sites []*g2.SiteData, maxChunkSiz
 			if err != nil {
 				return fmt.Errorf("encoding search index %s: %w", bucket, err)
 			}
+			if ledger != nil {
+				if info, statErr := os.Stat(indexFile); statErr == nil {
+					ledger.CommitAsset(ledger.RelPath(indexFile), info.Size())
+				} else {
+					ledger.CommitAsset(ledger.RelPath(indexFile), 0)
+				}
+			}
 		}
 
 		manifest := SearchManifest{
@@ -509,11 +532,21 @@ func generateSearchData(outDir, outZip string, sites []*g2.SiteData, maxChunkSiz
 		if err != nil {
 			return fmt.Errorf("creating search manifest: %w", err)
 		}
-		defer func() { _ = mf.Close() }()
-
 		mEncoder := json.NewEncoder(mf)
-		if err := mEncoder.Encode(manifest); err != nil {
-			return fmt.Errorf("encoding search manifest: %w", err)
+		encErr := mEncoder.Encode(manifest)
+		closeErr := mf.Close()
+		if encErr != nil {
+			return fmt.Errorf("encoding search manifest: %w", encErr)
+		}
+		if closeErr != nil {
+			return fmt.Errorf("closing search manifest: %w", closeErr)
+		}
+		if ledger != nil {
+			if info, statErr := os.Stat(manifestPath); statErr == nil {
+				ledger.CommitAsset(ledger.RelPath(manifestPath), info.Size())
+			} else {
+				ledger.CommitAsset(ledger.RelPath(manifestPath), 0)
+			}
 		}
 	}
 
@@ -521,6 +554,10 @@ func generateSearchData(outDir, outZip string, sites []*g2.SiteData, maxChunkSiz
 }
 
 func generateSearchIndex(outDir string, sites []*g2.SiteData) error {
+	return generateSearchIndexWithInfo(outDir, sites, "Gentoo Packages", version, GenerationInfo{})
+}
+
+func generateSearchIndexWithInfo(outDir string, sites []*g2.SiteData, title, versionStr string, genInfo GenerationInfo) error {
 	searchDir := filepath.Join(outDir, "search")
 	dataDir := filepath.Join(searchDir, "data")
 
@@ -528,7 +565,7 @@ func generateSearchIndex(outDir string, sites []*g2.SiteData) error {
 		return fmt.Errorf("creating search data directory: %w", err)
 	}
 
-	if err := generateSearchData(searchDir, "", sites); err != nil {
+	if err := generateSearchDataWithLedger(searchDir, "", sites, genInfo.Ledger); err != nil {
 		return fmt.Errorf("generating search data: %w", err)
 	}
 
@@ -542,6 +579,9 @@ func generateSearchIndex(outDir string, sites []*g2.SiteData) error {
 		if err := os.WriteFile(destPath, content, 0644); err != nil {
 			return fmt.Errorf("writing search js file %s: %w", jsFile, err)
 		}
+		if genInfo.Ledger != nil {
+			genInfo.Ledger.CommitAsset(genInfo.Ledger.RelPath(destPath), int64(len(content)))
+		}
 	}
 
 	tmpl, err := GetSiteTemplates()
@@ -549,11 +589,15 @@ func generateSearchIndex(outDir string, sites []*g2.SiteData) error {
 		return fmt.Errorf("loading templates for search: %w", err)
 	}
 
+	if title == "" {
+		title = "Gentoo Packages"
+	}
 	if err := renderPage(filepath.Join(searchDir, "index.html"), tmpl, "search.html", map[string]any{
 		"Title":       "Search Overlays",
 		"BaseURL":     "../",
-		"Breadcrumbs": []g2.Breadcrumb{{Name: "Search"}},
-		"Version":     version,
+		"Breadcrumbs": []g2.Breadcrumb{{Name: title, URL: "../"}, {Name: "Search"}},
+		"Version":     versionStr,
+		"GenInfo":     genInfo,
 	}); err != nil {
 		return fmt.Errorf("rendering search index page: %w", err)
 	}

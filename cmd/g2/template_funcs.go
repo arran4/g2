@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"html/template"
 	"net/url"
+	"path"
 	"reflect"
 	"regexp"
 	"sort"
@@ -22,6 +23,7 @@ func getTemplateFuncMap() template.FuncMap {
 		"slugify":             sanitizeFilename,
 		"split":               strings.Split,
 		"formatKeywords":      formatKeywordsFunc,
+		"formatKeywordsKnown": formatKeywordsKnownFunc,
 		"hasPrefix": func(s, prefix any) bool {
 			sStr, ok1 := s.(string)
 			pStr, ok2 := prefix.(string)
@@ -44,14 +46,24 @@ func getTemplateFuncMap() template.FuncMap {
 			return 0
 		},
 		"formatDependency":       formatDependencyFunc,
+		"formatDependencyKnown":  formatDependencyKnownFunc,
 		"packageLink":            packageLinkFunc,
+		"packageLinkKnown":       packageLinkKnownFunc,
+		"repoPkgURL":             repoPkgURLFunc,
+		"validProfileTarget":     validProfileTargetFunc,
 		"formatPkgLinkBody":      formatPkgLinkBodyFunc,
 		"formatQualifiedPackage": formatQualifiedPackageFunc,
-		"resolveBreadcrumbs":     resolveBreadcrumbsFunc,
+		"resolveBreadcrumbs":        resolveBreadcrumbsFunc,
 		"groupUseFlags":             groupUseFlagsFunc,
 		"groupUseFlagsByProvenance": groupUseFlagsByProvenanceFunc,
 		"getBestDesc":               getBestDescFunc,
+		"isWebURL":                  isWebURLFunc,
 	}
+}
+
+func isWebURLFunc(u string) bool {
+	u = strings.TrimSpace(strings.ToLower(u))
+	return strings.HasPrefix(u, "http://") || strings.HasPrefix(u, "https://")
 }
 
 func pathRel(basePath, targetPath string) string {
@@ -154,7 +166,56 @@ func packageLinkFunc(baseURL string, pkg string) template.HTML {
 	return template.HTML(template.HTMLEscapeString(pkg))
 }
 
-func formatDependencyFunc(baseURL string, dep string) template.HTML {
+func packageLinkKnownFunc(baseURL string, pkg string, validPkgs map[string]bool) template.HTML {
+	if validPkgs != nil && !validPkgs[pkg] {
+		return template.HTML(template.HTMLEscapeString(pkg))
+	}
+	return packageLinkFunc(baseURL, pkg)
+}
+
+func repoPkgURLFunc(baseURL, repoName, atom string, validRepoPkgs, validGlobalPkgs map[string]bool) string {
+	pkgName := g2.ExtractPackageNameFromDep(atom)
+	if pkgName == "" {
+		pkgName = strings.TrimSpace(atom)
+	}
+	parts := strings.Split(pkgName, "/")
+	if len(parts) != 2 {
+		return ""
+	}
+	if validRepoPkgs != nil && validRepoPkgs[pkgName] {
+		return fmt.Sprintf("%srepos/%s/categories/%s/packages/%s/", baseURL, url.PathEscape(repoName), url.PathEscape(parts[0]), url.PathEscape(parts[1]))
+	}
+	if validGlobalPkgs != nil && validGlobalPkgs[pkgName] {
+		return fmt.Sprintf("%spackages/%s/%s/", baseURL, url.PathEscape(parts[0]), url.PathEscape(parts[1]))
+	}
+	return ""
+}
+
+func validProfileTargetFunc(currentProfile, ref string, validProfiles map[string]bool) string {
+	ref = strings.TrimSpace(ref)
+	if ref == "" || strings.Contains(ref, ":") || strings.HasPrefix(ref, "/") {
+		return ""
+	}
+	cleaned := path.Clean(ref)
+	if cleaned == "." || cleaned == ".." || strings.HasPrefix(cleaned, "../") {
+		if currentProfile != "" {
+			relResolved := path.Clean(path.Join(currentProfile, ref))
+			if relResolved != "." && relResolved != ".." && !strings.HasPrefix(relResolved, "../") {
+				cleaned = relResolved
+			} else {
+				return ""
+			}
+		} else {
+			return ""
+		}
+	}
+	if validProfiles != nil && !validProfiles[cleaned] {
+		return ""
+	}
+	return cleaned
+}
+
+func formatDependencyKnownFunc(baseURL string, dep string, validPkgs map[string]bool) template.HTML {
 	if dep == "" {
 		return template.HTML("")
 	}
@@ -180,7 +241,7 @@ func formatDependencyFunc(baseURL string, dep string) template.HTML {
 		}
 
 		pkgName := g2.ExtractPackageNameFromDep(token)
-		if pkgName != "" {
+		if pkgName != "" && (validPkgs == nil || validPkgs[pkgName]) {
 			parts := strings.Split(pkgName, "/")
 			if len(parts) == 2 {
 				link := fmt.Sprintf("<a href=\"%spackages/%s/%s/\">%s</a>", template.HTMLEscapeString(baseURL), url.PathEscape(parts[0]), url.PathEscape(parts[1]), template.HTMLEscapeString(token))
@@ -204,7 +265,15 @@ func formatDependencyFunc(baseURL string, dep string) template.HTML {
 	return template.HTML(b.String())
 }
 
+func formatDependencyFunc(baseURL string, dep string) template.HTML {
+	return formatDependencyKnownFunc(baseURL, dep, nil)
+}
+
 func formatKeywordsFunc(keywords string, baseURL string) template.HTML {
+	return formatKeywordsKnownFunc(keywords, baseURL, nil)
+}
+
+func formatKeywordsKnownFunc(keywords string, baseURL string, validArches map[string]bool) template.HTML {
 	if keywords == "" {
 		return template.HTML("")
 	}
@@ -225,6 +294,10 @@ func formatKeywordsFunc(keywords string, baseURL string) template.HTML {
 		}
 
 		safeArchText := template.HTMLEscapeString(arch)
+		if validArches != nil && !validArches[arch] {
+			formatted = append(formatted, prefix+safeArchText)
+			continue
+		}
 		safeArchURL := url.PathEscape(arch)
 
 		formatted = append(formatted, fmt.Sprintf("%s<a href=\"%sarches/%s/\" class=\"text-decoration-none\">%s</a>", prefix, safeBaseURL, safeArchURL, safeArchText))

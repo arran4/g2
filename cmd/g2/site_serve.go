@@ -279,19 +279,19 @@ func parseIUSEFlagsFunc(iuse string) []ParsedIUSEFlag {
 	var flags []ParsedIUSEFlag
 	parts := strings.FieldsSeq(iuse)
 	for part := range parts {
-		if part == "" || part == "." || part == "/" || part == ".." {
-			if part != "" {
-				log.Printf("Warning: filtered out invalid use flag: %q", part)
-			}
-			continue
-		}
-		name := strings.TrimPrefix(part, "+")
-		name = strings.TrimPrefix(name, "-")
 		cond := ""
 		if strings.HasPrefix(part, "+") {
 			cond = "Default: Enabled (+)"
 		} else if strings.HasPrefix(part, "-") {
 			cond = "Default: Disabled (-)"
+		}
+		name := strings.TrimPrefix(part, "+")
+		name = strings.TrimPrefix(name, "-")
+		if !isValidUseFlagName(name) {
+			if part != "" {
+				log.Printf("Warning: filtered out invalid use flag: %q", part)
+			}
+			continue
 		}
 		flags = append(flags, ParsedIUSEFlag{
 			Name:         name,
