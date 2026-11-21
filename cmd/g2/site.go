@@ -1839,11 +1839,6 @@ func sortEclasses(aggEclasses map[string]*AggEclass) []*AggEclass {
 	return sortedEclasses
 }
 
-func extractRecentNews(globalNews []AggNewsItem) []AggNewsItem {
-	recent, _ := extractRecentNewsWithDuration(globalNews, 90*24*time.Hour)
-	return recent
-}
-
 func extractRecentNewsWithDuration(globalNews []AggNewsItem, recentDuration time.Duration) ([]AggNewsItem, bool) {
 	sort.Slice(globalNews, func(i, j int) bool {
 		if !globalNews[i].Posted.Equal(globalNews[j].Posted) {
