@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"sort"
 	"strings"
 
@@ -71,13 +72,7 @@ type ProvenanceUseFlagItem struct {
 }
 
 func isValidSiteUseFlagName(name string) bool {
-	if name == "" {
-		return false
-	}
-	if strings.ContainsAny(name, "/\\ \t\r\n") || name == "." || name == ".." {
-		return false
-	}
-	return true
+	return isValidUseFlagName(name)
 }
 
 func aggregateUseFlagsWithProvenance(sites []*g2.SiteData, aggPackages map[string]*AggPackage) ([]*AggUseFlag, map[string]*AggUseFlag) {
@@ -151,13 +146,15 @@ func aggregateUseFlagsWithProvenance(sites []*g2.SiteData, aggPackages map[strin
 				if p.Metadata != nil {
 					for _, useBlock := range p.Metadata.Use {
 						for _, flag := range useBlock.Flags {
-							if !isValidSiteUseFlagName(flag.Name) {
+							flagName := strings.TrimSpace(flag.Name)
+							if !isValidSiteUseFlagName(flagName) {
+								log.Printf("Warning: ignoring invalid USE flag %q in repo %q package %s (source: metadata.xml)", flag.Name, repoName, pkgKey)
 								continue
 							}
-							u := ensureUsage(flag.Name, repoName, p.Category, p.Name)
+							u := ensureUsage(flagName, repoName, p.Category, p.Name)
 							if flag.Text != "" {
 								u.MetadataDesc = flag.Text
-								f := flagMap[flag.Name]
+								f := flagMap[flagName]
 								if f.MetadataDescs[pkgKey] == "" {
 									f.MetadataDescs[pkgKey] = flag.Text
 								}
@@ -195,15 +192,7 @@ func aggregateUseFlagsWithProvenance(sites []*g2.SiteData, aggPackages map[strin
 						}
 					}
 					if req := ver.Ebuild.Vars["REQUIRED_USE"]; req != "" {
-						for _, flagObj := range parseIUSEFlagsFunc(req) {
-							flag := flagObj.Name
-							if flag == "(" || flag == ")" || flag == "||" || flag == "^^" || flag == "??" {
-								continue
-							}
-							flag = strings.TrimPrefix(strings.TrimSuffix(flag, "?"), "!")
-							if !isValidSiteUseFlagName(flag) {
-								continue
-							}
+						for _, flag := range extractRequiredUseFlagsFromExpr(req, repoName, pkgKey, true) {
 							u := ensureUsage(flag, repoName, p.Category, p.Name)
 							u.RequiredUse = true
 						}
@@ -219,11 +208,13 @@ func aggregateUseFlagsWithProvenance(sites []*g2.SiteData, aggPackages map[strin
 			}
 			sort.Strings(flagKeys)
 			for _, flag := range flagKeys {
-				if !isValidSiteUseFlagName(flag) {
+				flagName := strings.TrimSpace(flag)
+				if !isValidSiteUseFlagName(flagName) {
+					log.Printf("Warning: ignoring invalid USE flag %q in repo %q (source: profiles/use.desc)", flag, repoName)
 					continue
 				}
 				desc := site.UseDesc.Flags[flag]
-				f := ensureFlag(flag)
+				f := ensureFlag(flagName)
 				f.GlobalDefs = append(f.GlobalDefs, UseFlagDefinition{
 					RepoName:    repoName,
 					SourceKind:  SourceUseDesc,
@@ -255,6 +246,7 @@ func aggregateUseFlagsWithProvenance(sites []*g2.SiteData, aggPackages map[strin
 				for _, suffix := range suffixes {
 					flagName := prefix + "_" + suffix
 					if !isValidSiteUseFlagName(flagName) {
+						log.Printf("Warning: ignoring invalid USE_EXPAND flag %q in repo %q (source: profiles/desc/%s.desc)", flagName, repoName, prefix)
 						continue
 					}
 					text := desc.Flags[suffix]
@@ -287,11 +279,13 @@ func aggregateUseFlagsWithProvenance(sites []*g2.SiteData, aggPackages map[strin
 				sort.Strings(flagNames)
 				cat, pkgName := splitCatPkg(pkgKey)
 				for _, flagName := range flagNames {
-					if !isValidSiteUseFlagName(flagName) {
+					trimmedFlag := strings.TrimSpace(flagName)
+					if !isValidSiteUseFlagName(trimmedFlag) {
+						log.Printf("Warning: ignoring invalid USE flag %q in repo %q package %s (source: profiles/use.local.desc)", flagName, repoName, pkgKey)
 						continue
 					}
 					desc := flags[flagName]
-					f := ensureFlag(flagName)
+					f := ensureFlag(trimmedFlag)
 					if f.LocalDescs[pkgKey] == "" && desc != "" {
 						f.LocalDescs[pkgKey] = desc
 					}
@@ -303,7 +297,7 @@ func aggregateUseFlagsWithProvenance(sites []*g2.SiteData, aggPackages map[strin
 						SourceFile:  "profiles/use.local.desc",
 						Description: desc,
 					})
-					if u, ok := usageMaps[flagName][usageKey{repo: repoName, pkg: pkgKey}]; ok && u.LocalDesc == "" {
+					if u, ok := usageMaps[trimmedFlag][usageKey{repo: repoName, pkg: pkgKey}]; ok && u.LocalDesc == "" {
 						u.LocalDesc = desc
 					}
 				}

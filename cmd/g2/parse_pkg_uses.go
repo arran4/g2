@@ -1,9 +1,88 @@
 package main
 
 import (
-	"github.com/arran4/g2"
+	"fmt"
+	"log"
+	"path/filepath"
 	"sort"
+	"strings"
+
+	"github.com/arran4/g2"
 )
+
+// isValidUseFlagName validates a Gentoo USE flag identifier per PMS section 3.1.4:
+// non-empty, starts with ASCII alphanumeric, followed by [A-Za-z0-9+_@-].
+func isValidUseFlagName(name string) bool {
+	if name == "" {
+		return false
+	}
+	for i := 0; i < len(name); i++ {
+		c := name[i]
+		isAlphaNum := (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9')
+		if i == 0 {
+			if !isAlphaNum {
+				return false
+			}
+			continue
+		}
+		if !isAlphaNum && c != '+' && c != '_' && c != '@' && c != '-' {
+			return false
+		}
+	}
+	return true
+}
+
+// extractRequiredUseFlags tokenizes REQUIRED_USE expressions and returns valid USE flag identifiers,
+// ignoring boolean operators, parentheses, and conditional suffixes, and logging malformed tokens.
+func extractRequiredUseFlags(requiredUse, repoName, pkgKey string) []string {
+	return extractRequiredUseFlagsFromExpr(requiredUse, repoName, pkgKey, false)
+}
+
+func extractRequiredUseFlagsFromExpr(requiredUse, repoName, pkgKey string, includeConditionals bool) []string {
+	cleaned := strings.NewReplacer("(", " ", ")", " ").Replace(requiredUse)
+	var flags []string
+	for tok := range strings.FieldsSeq(cleaned) {
+		isCond := strings.HasSuffix(tok, "?")
+		if tok == "" || tok == "||" || tok == "^^" || tok == "??" || tok == "!" || (isCond && !includeConditionals) {
+			continue
+		}
+		flag := strings.TrimPrefix(strings.TrimSuffix(tok, "?"), "!")
+		if !isValidUseFlagName(flag) {
+			log.Printf("Warning: ignoring invalid USE flag %q in repo %q package %s (source: REQUIRED_USE)", tok, repoName, pkgKey)
+			continue
+		}
+		flags = append(flags, flag)
+	}
+	return flags
+}
+
+// useFlagRouteSegment validates and normalizes a USE flag name into a safe single route directory segment.
+func useFlagRouteSegment(name string) (string, error) {
+	if !isValidUseFlagName(name) {
+		return "", fmt.Errorf("invalid USE flag identifier %q", name)
+	}
+	safe := strings.ReplaceAll(name, "/", "_")
+	if safe == "" || safe == "." || safe == ".." || strings.ContainsAny(safe, "/\\\x00") {
+		return "", fmt.Errorf("unsafe USE flag route segment %q from %q", safe, name)
+	}
+	return safe, nil
+}
+
+// reserveUseFlagDest validates the USE flag route segment and ensures it never overwrites
+// the parent uses/index.html or collides with another USE flag destination.
+func reserveUseFlagDest(seen map[string]string, usesDir, flagName string) (string, error) {
+	safeName, err := useFlagRouteSegment(flagName)
+	if err != nil {
+		return "", err
+	}
+	dest := filepath.Clean(filepath.Join(usesDir, safeName, "index.html"))
+	norm := filepath.ToSlash(dest)
+	if existing, exists := seen[norm]; exists {
+		return "", fmt.Errorf("duplicate USE flag output destination %q: flag %q collides with %q", norm, flagName, existing)
+	}
+	seen[norm] = "use flag: " + flagName
+	return dest, nil
+}
 
 // AggregateUseFlags processes a list of g2.SiteData and updates an aggregate map of UseFlags,
 // and returns the sorted global UseFlags list. It also aggregates per-repo USE flags inside g2.SiteData.
@@ -21,7 +100,11 @@ func AggregateUseFlags(sites []*g2.SiteData, aggPackages map[string]*AggPackage)
 func populatePkgUseFlags(site *g2.SiteData) {
 	globalDescs := make(map[string]string)
 	if site.UseDesc != nil {
-		globalDescs = site.UseDesc.Flags
+		for k, v := range site.UseDesc.Flags {
+			if isValidUseFlagName(strings.TrimSpace(k)) {
+				globalDescs[strings.TrimSpace(k)] = v
+			}
+		}
 	}
 
 	localDescs := make(map[string]map[string]string)
@@ -29,7 +112,9 @@ func populatePkgUseFlags(site *g2.SiteData) {
 		for prefix, desc := range site.UseExpandDescs {
 			for suffix, text := range desc.Flags {
 				flagName := prefix + "_" + suffix
-				globalDescs[flagName] = text
+				if isValidUseFlagName(flagName) {
+					globalDescs[flagName] = text
+				}
 			}
 		}
 	}
@@ -47,10 +132,14 @@ func populatePkgUseFlags(site *g2.SiteData) {
 	if site.UseLocalDesc != nil {
 		for _, flags := range site.UseLocalDesc.Flags {
 			for flag, desc := range flags {
-				if localCounts[flag] == nil {
-					localCounts[flag] = make(map[string]int)
+				flagName := strings.TrimSpace(flag)
+				if !isValidUseFlagName(flagName) {
+					continue
 				}
-				localCounts[flag][desc]++
+				if localCounts[flagName] == nil {
+					localCounts[flagName] = make(map[string]int)
+				}
+				localCounts[flagName][desc]++
 			}
 		}
 	}
@@ -61,11 +150,12 @@ func populatePkgUseFlags(site *g2.SiteData) {
 			if pkg.Metadata != nil {
 				for _, block := range pkg.Metadata.Use {
 					for _, f := range block.Flags {
-						if f.Text != "" {
-							if metadataCounts[f.Name] == nil {
-								metadataCounts[f.Name] = make(map[string]int)
+						flagName := strings.TrimSpace(f.Name)
+						if f.Text != "" && isValidUseFlagName(flagName) {
+							if metadataCounts[flagName] == nil {
+								metadataCounts[flagName] = make(map[string]int)
 							}
-							metadataCounts[f.Name][f.Text]++
+							metadataCounts[flagName][f.Text]++
 						}
 					}
 				}
