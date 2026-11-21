@@ -1028,41 +1028,20 @@ type AggLicense struct {
 }
 
 type AggUseFlag struct {
-	Name          string
-	Count         int
-	GlobalDesc    string
-	LocalDescs    map[string]string
-	MetadataDescs map[string]string
-	Packages      []*AggPackage
-	PkgRepos      map[string]map[string]bool
-	Warnings      []string
-}
-
-// ReposForPackage returns a sorted list of repository names that associate this flag with pkgKey.
-func (a *AggUseFlag) ReposForPackage(pkgKey string) []string {
-	if a != nil && a.PkgRepos != nil {
-		if repos := a.PkgRepos[pkgKey]; len(repos) > 0 {
-			out := make([]string, 0, len(repos))
-			for rn := range repos {
-				out = append(out, rn)
-			}
-			sort.Strings(out)
-			return out
-		}
-	}
-	if a != nil {
-		for _, p := range a.Packages {
-			if p != nil && p.Category+"/"+p.Name == pkgKey {
-				out := make([]string, 0, len(p.Repos))
-				for rn := range p.Repos {
-					out = append(out, rn)
-				}
-				sort.Strings(out)
-				return out
-			}
-		}
-	}
-	return nil
+	Name                      string
+	Count                     int
+	DistinctPackageCount      int
+	PackageInstanceCount      int
+	Scope                     UseFlagScope
+	GlobalDesc                string
+	LocalDescs                map[string]string
+	MetadataDescs             map[string]string
+	GlobalDefs                []UseFlagDefinition
+	LocalDefs                 []UseFlagDefinition
+	Usages                    []UseFlagPackageUsage
+	HasConflictingGlobalDescs bool
+	Packages                  []*AggPackage
+	Warnings                  []string
 }
 
 func getRepoEclasses(site *g2.SiteData, aggPackages map[string]*AggPackage) []*AggEclass {
@@ -1204,167 +1183,8 @@ func getRepoLicenses(site *g2.SiteData, aggPackages map[string]*AggPackage) []*A
 }
 
 func getRepoUseFlags(site *g2.SiteData, aggPackages map[string]*AggPackage) []*AggUseFlag {
-	aggUseFlags := make(map[string]*AggUseFlag)
-	seenPackages := make(map[string]map[string]bool)
-
-	ensureFlag := func(flag string) *AggUseFlag {
-		uf, ok := aggUseFlags[flag]
-		if !ok {
-			uf = &AggUseFlag{
-				Name:          flag,
-				LocalDescs:    make(map[string]string),
-				MetadataDescs: make(map[string]string),
-				PkgRepos:      make(map[string]map[string]bool),
-			}
-			aggUseFlags[flag] = uf
-			seenPackages[flag] = make(map[string]bool)
-		} else if uf.PkgRepos == nil {
-			uf.PkgRepos = make(map[string]map[string]bool)
-		}
-		return uf
-	}
-
-	for _, cat := range site.Categories {
-		for _, pkg := range cat.Packages {
-			pkgKey := pkg.Category + "/" + pkg.Name
-
-			for _, ver := range pkg.Versions {
-				if ver.Ebuild != nil && ver.Ebuild.Vars != nil {
-					iuse := ver.Ebuild.Vars["IUSE"]
-					if iuse != "" {
-						parsedFlags := parseIUSEFlagsFunc(iuse)
-						for _, flagObj := range parsedFlags {
-							flag := flagObj.Name
-							uf := ensureFlag(flag)
-							if uf.PkgRepos[pkgKey] == nil {
-								uf.PkgRepos[pkgKey] = make(map[string]bool)
-							}
-							if site.RepoName != "" {
-								uf.PkgRepos[pkgKey][site.RepoName] = true
-							}
-							if !seenPackages[flag][pkgKey] && aggPackages != nil {
-								if ap, ok := aggPackages[pkgKey]; ok {
-									uf.Packages = append(uf.Packages, ap)
-									uf.Count++
-									seenPackages[flag][pkgKey] = true
-								}
-							}
-						}
-					}
-
-					requiredUse := ver.Ebuild.Vars["REQUIRED_USE"]
-					if requiredUse != "" {
-						parsedFlags := parseIUSEFlagsFunc(requiredUse)
-						for _, flagObj := range parsedFlags {
-							flag := flagObj.Name
-							if flag == "(" || flag == ")" || flag == "||" || flag == "^^" || flag == "??" || strings.HasSuffix(flag, "?") {
-								continue
-							}
-							flag = strings.TrimPrefix(flag, "!") // remove negations
-
-							uf := ensureFlag(flag)
-							if uf.PkgRepos[pkgKey] == nil {
-								uf.PkgRepos[pkgKey] = make(map[string]bool)
-							}
-							if site.RepoName != "" {
-								uf.PkgRepos[pkgKey][site.RepoName] = true
-							}
-							if !seenPackages[flag][pkgKey] && aggPackages != nil {
-								if ap, ok := aggPackages[pkgKey]; ok {
-									uf.Packages = append(uf.Packages, ap)
-									uf.Count++
-									seenPackages[flag][pkgKey] = true
-								}
-							}
-						}
-					}
-				}
-			}
-
-			if pkg.Metadata != nil {
-				for _, useBlock := range pkg.Metadata.Use {
-					for _, flag := range useBlock.Flags {
-						uf := ensureFlag(flag.Name)
-						if uf.PkgRepos[pkgKey] == nil {
-							uf.PkgRepos[pkgKey] = make(map[string]bool)
-						}
-						if site.RepoName != "" {
-							uf.PkgRepos[pkgKey][site.RepoName] = true
-						}
-						if !seenPackages[flag.Name][pkgKey] && aggPackages != nil {
-							if ap, ok := aggPackages[pkgKey]; ok {
-								uf.Packages = append(uf.Packages, ap)
-								uf.Count++
-								seenPackages[flag.Name][pkgKey] = true
-							}
-						}
-
-						if flag.Text != "" {
-							uf.MetadataDescs[pkgKey] = flag.Text
-						}
-					}
-				}
-			}
-		}
-	}
-
-	if site.UseDesc != nil {
-		for flag, desc := range site.UseDesc.Flags {
-			if _, ok := aggUseFlags[flag]; !ok {
-				aggUseFlags[flag] = &AggUseFlag{
-					Name:          flag,
-					LocalDescs:    make(map[string]string),
-					MetadataDescs: make(map[string]string),
-				}
-			}
-			aggUseFlags[flag].GlobalDesc = desc
-		}
-	}
-
-	// Integrate USE_EXPAND descriptions
-	if site.UseExpandDescs != nil {
-		for prefix, desc := range site.UseExpandDescs {
-			for suffix, text := range desc.Flags {
-				flagName := prefix + "_" + suffix
-				if aggFlag, ok := aggUseFlags[flagName]; ok {
-					if aggFlag.GlobalDesc == "" {
-						aggFlag.GlobalDesc = text
-					}
-				}
-			}
-		}
-	}
-	if site.UseLocalDesc != nil {
-		for pkg, flags := range site.UseLocalDesc.Flags {
-			for flag, desc := range flags {
-				if aggFlag, ok := aggUseFlags[flag]; ok {
-					aggFlag.LocalDescs[pkg] = desc
-				}
-			}
-		}
-	}
-
-	var sortedUseFlags []*AggUseFlag
-	for _, flag := range aggUseFlags {
-		for _, pkg := range flag.Packages {
-			if pkg == nil {
-				continue
-			}
-			pkgKey := pkg.Category + "/" + pkg.Name
-			hasLocal := flag.LocalDescs[pkgKey] != ""
-			hasMetadata := flag.MetadataDescs[pkgKey] != ""
-
-			if !hasMetadata && !hasLocal && flag.GlobalDesc == "" {
-				flag.Warnings = append(flag.Warnings, fmt.Sprintf("Warning: USE flag '%s' used by %s but has no description in metadata.xml, use.local.desc or use.desc", flag.Name, pkgKey))
-			} else if !hasMetadata && flag.GlobalDesc == "" {
-				flag.Warnings = append(flag.Warnings, fmt.Sprintf("Warning: USE flag '%s' used by %s but not documented in its metadata.xml", flag.Name, pkgKey))
-			}
-		}
-		sortedUseFlags = append(sortedUseFlags, flag)
-	}
-	sort.Slice(sortedUseFlags, func(i, j int) bool { return sortedUseFlags[i].Name < sortedUseFlags[j].Name })
-
-	return sortedUseFlags
+	flags, _ := aggregateUseFlagsWithProvenance([]*g2.SiteData{site}, aggPackages)
+	return flags
 }
 
 func parseDuration(s string) (time.Duration, string, error) {
