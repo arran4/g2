@@ -77,6 +77,7 @@ type GenericPageContext struct {
 	ValidRepoEclasses     map[string]bool
 	ValidProfiles         map[string]bool
 	ValidRepoProfiles     map[string]bool
+	ValidArches           map[string]bool
 	LinkReport            *LinkIntegrityReport
 	RepoName              string
 	Group                 *RepoGroup

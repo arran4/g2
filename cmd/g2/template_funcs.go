@@ -23,6 +23,7 @@ func getTemplateFuncMap() template.FuncMap {
 		"slugify":             sanitizeFilename,
 		"split":               strings.Split,
 		"formatKeywords":      formatKeywordsFunc,
+		"formatKeywordsKnown": formatKeywordsKnownFunc,
 		"hasPrefix": func(s, prefix any) bool {
 			sStr, ok1 := s.(string)
 			pStr, ok2 := prefix.(string)
@@ -269,6 +270,10 @@ func formatDependencyFunc(baseURL string, dep string) template.HTML {
 }
 
 func formatKeywordsFunc(keywords string, baseURL string) template.HTML {
+	return formatKeywordsKnownFunc(keywords, baseURL, nil)
+}
+
+func formatKeywordsKnownFunc(keywords string, baseURL string, validArches map[string]bool) template.HTML {
 	if keywords == "" {
 		return template.HTML("")
 	}
@@ -289,6 +294,10 @@ func formatKeywordsFunc(keywords string, baseURL string) template.HTML {
 		}
 
 		safeArchText := template.HTMLEscapeString(arch)
+		if validArches != nil && !validArches[arch] {
+			formatted = append(formatted, prefix+safeArchText)
+			continue
+		}
 		safeArchURL := url.PathEscape(arch)
 
 		formatted = append(formatted, fmt.Sprintf("%s<a href=\"%sarches/%s/\" class=\"text-decoration-none\">%s</a>", prefix, safeBaseURL, safeArchURL, safeArchText))

@@ -33,7 +33,7 @@ func isValidUseFlagName(name string) bool {
 	return hasAlphaNum
 }
 
-func reserveUseFlagDest(used map[string]string, name string) (string, bool) {
+func reserveUseFlagDirSegment(used map[string]string, name string) (string, bool) {
 	safeName := strings.ReplaceAll(name, "/", "_")
 	if safeName == "" || safeName == "." || safeName == ".." {
 		return "", false

@@ -483,7 +483,7 @@ func generateOtherGlobalPages(outDir string, tmpl *template.Template, data *Aggr
 	}
 	usedUseDirs := make(map[string]string)
 	for _, f := range validGlobalUseFlagsList {
-		if _, ok := reserveUseFlagDest(usedUseDirs, f.Name); ok {
+		if _, ok := reserveUseFlagDirSegment(usedUseDirs, f.Name); ok {
 			validGlobalUseFlags[f.Name] = true
 		}
 	}
@@ -500,7 +500,7 @@ func generateOtherGlobalPages(outDir string, tmpl *template.Template, data *Aggr
 
 	usedUseDirsRender := make(map[string]string)
 	for _, f := range validGlobalUseFlagsList {
-		safeName, ok := reserveUseFlagDest(usedUseDirsRender, f.Name)
+		safeName, ok := reserveUseFlagDirSegment(usedUseDirsRender, f.Name)
 		if !ok {
 			continue
 		}
@@ -896,7 +896,7 @@ func generateRepoUseFlagsPages(repoDir string, tmpl *template.Template, site *g2
 
 	usedDirs := make(map[string]string, len(filtered))
 	for _, f := range filtered {
-		safeName, ok := reserveUseFlagDest(usedDirs, f.Name)
+		safeName, ok := reserveUseFlagDirSegment(usedDirs, f.Name)
 		if !ok {
 			continue
 		}
@@ -1622,6 +1622,10 @@ func generateRepoPackagesPages(repoDir string, tmpl *template.Template, site *g2
 	for _, p := range repoPkgs {
 		validRepoPkgs[p.Category+"/"+p.Name] = true
 	}
+	validArches := make(map[string]bool, len(data.Arches))
+	for _, a := range data.Arches {
+		validArches[a.Name] = true
+	}
 	validRepoUseFlags := make(map[string]bool)
 	if site.AggUseFlags != nil {
 		if flags, ok := site.AggUseFlags.([]*AggUseFlag); ok {
@@ -1758,6 +1762,7 @@ func generateRepoPackagesPages(repoDir string, tmpl *template.Template, site *g2
 					ValidPackages:     validGlobalPkgs,
 					ValidRepoEclasses: validRepoEclasses,
 					ValidRepoUseFlags: validRepoUseFlags,
+					ValidArches:       validArches,
 				}); err != nil {
 					return fmt.Errorf("rendering page: %w", err)
 				}

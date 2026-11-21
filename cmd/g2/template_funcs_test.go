@@ -73,6 +73,19 @@ func TestFormatKeywordsFunc(t *testing.T) {
 	}
 }
 
+func TestFormatKeywordsKnownFunc(t *testing.T) {
+	if got := formatKeywordsKnownFunc("amd64 ~arm64", "/", nil); got != template.HTML(`<a href="/arches/amd64/" class="text-decoration-none">amd64</a> ~<a href="/arches/arm64/" class="text-decoration-none">arm64</a>`) {
+		t.Fatalf("nil validArches = %q", got)
+	}
+	valid := map[string]bool{"amd64": true}
+	if got := formatKeywordsKnownFunc("amd64 ~amd64 arm64 ~arm64 -x86", "../../", valid); got != template.HTML(`<a href="../../arches/amd64/" class="text-decoration-none">amd64</a> ~<a href="../../arches/amd64/" class="text-decoration-none">amd64</a> arm64 ~arm64 -x86`) {
+		t.Fatalf("populated validArches = %q", got)
+	}
+	if got := formatKeywordsKnownFunc("amd64 ~arm64", "/", map[string]bool{}); got != template.HTML(`amd64 ~arm64`) {
+		t.Fatalf("empty non-nil validArches = %q", got)
+	}
+}
+
 func TestFormatDependencyFunc(t *testing.T) {
 	tests := []struct {
 		name     string

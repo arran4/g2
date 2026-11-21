@@ -367,7 +367,7 @@ func (l *LinkLedger) ScanHTML(sourceRelPath string, htmlBytes []byte) {
 				}
 			}
 			if isMetaRefresh && metaContent != "" {
-				if target := parseMetaRefreshTarget(metaContent); target != "" {
+				if target := parseLedgerMetaRefreshTarget(metaContent); target != "" {
 					refs = append(refs, [2]string{"meta[refresh]", target})
 				}
 			}
@@ -393,7 +393,7 @@ done:
 	}
 }
 
-func parseMetaRefreshTarget(content string) string {
+func parseLedgerMetaRefreshTarget(content string) string {
 	lower := strings.ToLower(content)
 	idx := strings.Index(lower, "url=")
 	if idx == -1 {
