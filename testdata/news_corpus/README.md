@@ -1,19 +1,25 @@
 # GLEP 42 News Corpus Research & Golden Fixtures (#610)
 
-## Corpus Scope & Split
-Evaluated **144** real GLEP 42 news files across 4 sources (split deterministically 70/30 by SHA-256 of `repo:filename` into **102 train** and **42 holdout** files):
-- `gentoo-mirror/gentoo` (`metadata/news/`): 128 files (en: 120, pl: 5, ru: 3)
+## Corpus Scope & Sample Boundaries
+Evaluated an **initial empirical sample of 144** real GLEP 42 news files across 4 sources (split deterministically 70/30 by SHA-256 of `repo:filename` into **102 train** and **42 holdout** files). Because this 144-file snapshot is a **sample** rather than the entire historical Gentoo or multi-overlay news dataset, it informs the initial classifier rules and regression goldens without claiming exhaustive dataset coverage:
+- `gentoo-mirror/gentoo` (`metadata/news/`, sampled snapshot): 128 files (en: 120, pl: 5, ru: 3)
 - `arran4/arrans_overlay` (`metadata/news/`): 11 files (en: 11)
 - `anyc/steam-overlay` (`metadata/news/`): 1 file (en: 1)
 - `g2` repository `testdata`: 4 files (en: 4)
 
-Era distribution across the 144 files:
+Era distribution across the 144 sampled files:
 - `2015-2019`: 17 files
 - `2020-2023`: 63 files
 - `2024-2026`: 64 files
 - Formats: `2.0`: 142 files; missing format header: 2 files
 
-## Empirical Findings
+## Remaining Work for Full-Corpus Objective (#610)
+To fully close `#610`, the following follow-up work remains outside this initial sample PR (`Part of #610`):
+1. **Expanded full-corpus ingestion**: Analyze the full multi-overlay / historical GLEP 42 corpus across `gentoo-mirror/gentoo` and third-party overlays (including Format `1.0` / pre-2015 items, broader non-English translations, and locating/archiving the source of `steam-overlay/2026-10-04-steam-runtime`).
+2. **Opt-in local research/reporting mode**: Implement an opt-in CLI/co-generation research report capturing pattern distributions by era and language, chosen dialect/transform passes, pattern confidence, false-positive/false-negative counts against reviewed goldens, representative before/after HTML or line-level diffs, and timing/memory overhead while keeping default site generation lightweight.
+3. **Post-implementation independent holdout verification**: Re-verify `#599` (AST heading/footnote transforms) and `#598` (autolinks) against an expanded unseen holdout partition once both implementation PRs are integrated.
+
+## Empirical Findings (144-File Sample)
 
 ### 1. Heading Dialects & Shell Comments
 Across all 144 files:
