@@ -110,7 +110,6 @@ type LinkLedger struct {
 	checkedRefs      int
 	externalRefs     int
 	fragmentOnlyRefs int
-	missingExtra     int
 	duplicateCount   int
 	rootEscapeCount  int
 	malformedCount   int

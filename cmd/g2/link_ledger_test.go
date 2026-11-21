@@ -116,6 +116,12 @@ func TestLinkIntegrityLedgerCleanRichSiteStrictAndHTTP(t *testing.T) {
 			"repos/alpha-ov/masked/",
 			"repos/alpha-ov/uses/foo/",
 			"repos/alpha-ov/uses_expand/video_cards/",
+			"news/",
+			"news/index.rss",
+			"news/index.atom",
+			"repos/alpha-ov/news/",
+			"repos/alpha-ov/news/index.rss",
+			"repos/alpha-ov/news/index.atom",
 		} {
 			resp, err := http.Get(base + rel)
 			if err != nil {

@@ -1325,10 +1325,6 @@ func generateRepoNewsPages(repoDir string, tmpl *template.Template, site *g2.Sit
 	return nil
 }
 
-func generateGlobalNewsFeeds(dir, siteTitle string, news []AggNewsItem) error {
-	return generateGlobalNewsFeedsWithLedger(dir, siteTitle, news, nil)
-}
-
 func generateGlobalNewsFeedsWithLedger(dir, siteTitle string, news []AggNewsItem, ledger *LinkLedger) error {
 	items := make([]g2.FeedItem, 0, len(news))
 	for _, item := range news {
@@ -1344,10 +1340,6 @@ func generateGlobalNewsFeedsWithLedger(dir, siteTitle string, news []AggNewsItem
 		Description: "News from " + siteTitle,
 		Items:       items,
 	}, ledger)
-}
-
-func generateRepoNewsFeeds(dir string, site *g2.SiteData) error {
-	return generateRepoNewsFeedsWithLedger(dir, site, nil)
 }
 
 func generateRepoNewsFeedsWithLedger(dir string, site *g2.SiteData, ledger *LinkLedger) error {
@@ -1381,10 +1373,6 @@ func newsFeedItem(item g2.NewsItem, link, description, repoName string) g2.FeedI
 	}
 }
 
-func renderNewsFeeds(dir string, feed g2.Feed) error {
-	return renderNewsFeedsWithLedger(dir, feed, nil)
-}
-
 func renderNewsFeedsWithLedger(dir string, feed g2.Feed, ledger *LinkLedger) error {
 	feed.ID = stableURN("feed", feed.Title)
 	if len(feed.Items) > 0 {
@@ -1411,10 +1399,6 @@ func stableURN(namespace string, parts ...string) string {
 		_, _ = digest.Write([]byte{0})
 	}
 	return fmt.Sprintf("urn:g2:%s:%x", namespace, digest.Sum(nil))
-}
-
-func renderXMLFeed(path, templateName string, feed g2.Feed) error {
-	return renderXMLFeedWithLedger(path, templateName, feed, nil)
 }
 
 func renderXMLFeedWithLedger(path, templateName string, feed g2.Feed, ledger *LinkLedger) error {
