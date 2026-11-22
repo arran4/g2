@@ -51,6 +51,40 @@ func getTemplateFuncMap() template.FuncMap {
 		"groupUseFlags":             groupUseFlagsFunc,
 		"groupUseFlagsByProvenance": groupUseFlagsByProvenanceFunc,
 		"getBestDesc":               getBestDescFunc,
+		"renderNewsAutolink":        renderNewsAutolinkFunc,
+	}
+}
+
+func renderNewsAutolinkFunc(item any, baseURL, currentRepo string, pkgIndex map[string][]string, verIndex map[string]map[string]bool) template.HTML {
+	ctx := g2.NewsLinkContext{
+		BaseURL:      baseURL,
+		CurrentRepo:  currentRepo,
+		PackageIndex: pkgIndex,
+		VersionIndex: verIndex,
+	}
+	switch v := item.(type) {
+	case AggNewsItem:
+		if ctx.CurrentRepo == "" {
+			ctx.CurrentRepo = v.RepoName
+		}
+		return v.ToHTMLWithLinks(ctx)
+	case *AggNewsItem:
+		if v == nil {
+			return ""
+		}
+		if ctx.CurrentRepo == "" {
+			ctx.CurrentRepo = v.RepoName
+		}
+		return v.ToHTMLWithLinks(ctx)
+	case g2.NewsItem:
+		return v.ToHTMLWithLinks(ctx)
+	case *g2.NewsItem:
+		if v == nil {
+			return ""
+		}
+		return v.ToHTMLWithLinks(ctx)
+	default:
+		return ""
 	}
 }
 
