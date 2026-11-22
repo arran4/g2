@@ -58,6 +58,7 @@ type GenericPageContext struct {
 	FileContent           string
 	Arch                  *AggArch
 	GlobalUseFlag         *AggUseFlag
+	HasMultipleNewsRepos  bool
 	RepoUseFlag           *g2.UseFlag
 	License               *AggLicense
 	Project               *AggProject

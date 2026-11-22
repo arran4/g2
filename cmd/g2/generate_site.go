@@ -633,6 +633,13 @@ func generateOtherGlobalPages(outDir string, tmpl *template.Template, data *Aggr
 }
 
 func generateRepoPages(outDir string, tmpl *template.Template, sites []*g2.SiteData, data *AggregatedData, title, version, recentDurationStr string, genInfo GenerationInfo) error {
+	reposWithNews := 0
+	for _, s := range sites {
+		if len(s.News) > 0 {
+			reposWithNews++
+		}
+	}
+	hasMultipleNewsRepos := reposWithNews > 1
 	// 6. Repo-Specific Pages
 
 	if err := os.MkdirAll(filepath.Join(outDir, "repos"), 0755); err != nil {
@@ -710,7 +717,7 @@ func generateRepoPages(outDir string, tmpl *template.Template, sites []*g2.SiteD
 				return err
 			}
 
-			if err := generateRepoNewsPages(repoDir, tmpl, site, title, version, genInfo, repoRecentNews); err != nil {
+			if err := generateRepoNewsPages(repoDir, tmpl, site, title, version, genInfo, repoRecentNews, hasMultipleNewsRepos); err != nil {
 				return err
 			}
 
@@ -1080,19 +1087,20 @@ func generateRepoProfilesPages(repoDir string, tmpl *template.Template, site *g2
 	return nil
 }
 
-func generateRepoNewsPages(repoDir string, tmpl *template.Template, site *g2.SiteData, title, version string, genInfo GenerationInfo, repoRecentNews []g2.NewsItem) error {
+func generateRepoNewsPages(repoDir string, tmpl *template.Template, site *g2.SiteData, title, version string, genInfo GenerationInfo, repoRecentNews []g2.NewsItem, hasMultipleNewsRepos bool) error {
 	if len(site.News) > 0 {
 		if err := os.MkdirAll(filepath.Join(repoDir, "news"), 0755); err != nil {
 			return fmt.Errorf("creating directory: %w", err)
 		}
 		if err := renderPage(filepath.Join(repoDir, "news", "index.html"), tmpl, "news_dashboard.html", GenericPageContext{
-			Title:          site.RepoName + " - News Dashboard",
-			BaseURL:        "../../../",
-			Breadcrumbs:    []g2.Breadcrumb{{Name: title, URL: "../../../"}, {Name: "Overlays", URL: "../../../overlays/"}, {Name: site.RepoName, URL: "../"}, {Name: "News"}},
-			AlternateFeeds: newsAlternates(site.RepoName),
-			RecentRepoNews: repoRecentNews,
-			Version:        version,
-			GenInfo:        genInfo,
+			Title:                site.RepoName + " - News Dashboard",
+			BaseURL:              "../../../",
+			Breadcrumbs:          []g2.Breadcrumb{{Name: title, URL: "../../../"}, {Name: "Overlays", URL: "../../../overlays/"}, {Name: site.RepoName, URL: "../"}, {Name: "News"}},
+			AlternateFeeds:       newsAlternates(site.RepoName),
+			RecentRepoNews:       repoRecentNews,
+			HasMultipleNewsRepos: hasMultipleNewsRepos,
+			Version:              version,
+			GenInfo:              genInfo,
 		}); err != nil {
 			return fmt.Errorf("rendering page: %w", err)
 		}
@@ -1105,12 +1113,13 @@ func generateRepoNewsPages(repoDir string, tmpl *template.Template, site *g2.Sit
 			return fmt.Errorf("creating directory: %w", err)
 		}
 		if err := renderPage(filepath.Join(repoDir, "news", "archive", "index.html"), tmpl, "news_archive.html", GenericPageContext{
-			Title:       site.RepoName + " - News Archive",
-			BaseURL:     "../../../../",
-			Breadcrumbs: []g2.Breadcrumb{{Name: title, URL: "../../../../"}, {Name: "Overlays", URL: "../../../../overlays/"}, {Name: site.RepoName, URL: "../../"}, {Name: "News", URL: "../"}, {Name: "Archive"}},
-			News:        site.News,
-			Version:     version,
-			GenInfo:     genInfo,
+			Title:                site.RepoName + " - News Archive",
+			BaseURL:              "../../../../",
+			Breadcrumbs:          []g2.Breadcrumb{{Name: title, URL: "../../../../"}, {Name: "Overlays", URL: "../../../../overlays/"}, {Name: site.RepoName, URL: "../../"}, {Name: "News", URL: "../"}, {Name: "Archive"}},
+			News:                 site.News,
+			HasMultipleNewsRepos: hasMultipleNewsRepos,
+			Version:              version,
+			GenInfo:              genInfo,
 		}); err != nil {
 			return fmt.Errorf("rendering page: %w", err)
 		}
@@ -1122,12 +1131,13 @@ func generateRepoNewsPages(repoDir string, tmpl *template.Template, site *g2.Sit
 				return fmt.Errorf("creating directory %s: %w", newsDir, err)
 			}
 			if err := renderPage(filepath.Join(newsDir, "index.html"), tmpl, "news_article.html", GenericPageContext{
-				Title:        n.Title,
-				BaseURL:      "../../../../../",
-				Breadcrumbs:  []g2.Breadcrumb{{Name: title, URL: "../../../../../"}, {Name: "Overlays", URL: "../../../../../overlays/"}, {Name: site.RepoName, URL: "../../../"}, {Name: "News", URL: "../../"}, {Name: "Archive", URL: "../"}, {Name: n.Title}},
-				RepoNewsItem: &n,
-				Version:      version,
-				GenInfo:      genInfo,
+				Title:                n.Title,
+				BaseURL:              "../../../../../",
+				Breadcrumbs:          []g2.Breadcrumb{{Name: title, URL: "../../../../../"}, {Name: "Overlays", URL: "../../../../../overlays/"}, {Name: site.RepoName, URL: "../../../"}, {Name: "News", URL: "../../"}, {Name: "Archive", URL: "../"}, {Name: n.Title}},
+				RepoNewsItem:         &n,
+				HasMultipleNewsRepos: hasMultipleNewsRepos,
+				Version:              version,
+				GenInfo:              genInfo,
 			}); err != nil {
 				return fmt.Errorf("rendering page: %w", err)
 			}
