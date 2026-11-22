@@ -43,11 +43,11 @@ func getTemplateFuncMap() template.FuncMap {
 			}
 			return 0
 		},
-		"formatDependency":       formatDependencyFunc,
-		"packageLink":            packageLinkFunc,
-		"formatPkgLinkBody":      formatPkgLinkBodyFunc,
-		"formatQualifiedPackage": formatQualifiedPackageFunc,
-		"resolveBreadcrumbs":     resolveBreadcrumbsFunc,
+		"formatDependency":          formatDependencyFunc,
+		"packageLink":               packageLinkFunc,
+		"formatPkgLinkBody":         formatPkgLinkBodyFunc,
+		"formatQualifiedPackage":    formatQualifiedPackageFunc,
+		"resolveBreadcrumbs":        resolveBreadcrumbsFunc,
 		"groupUseFlags":             groupUseFlagsFunc,
 		"groupUseFlagsByProvenance": groupUseFlagsByProvenanceFunc,
 		"getBestDesc":               getBestDescFunc,
