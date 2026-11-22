@@ -1,0 +1,134 @@
+[
+  {
+    "file": "cases/01-markdown-headings-footnotes.en.txt",
+    "format": "2.0",
+    "expected_dialect": "markdown_hash",
+    "expected_headings": ["Varnish Renamed to Vinyl-Cache", "Changes", "Upgrading", "Refs"],
+    "expected_footnote_defs": ["0", "1", "2", "3"],
+    "expected_footnote_refs": ["0", "1", "2", "3"],
+    "expected_urls": ["https://example.com/announcement", "https://example.com/release-notes", "https://example.com/migration", "https://example.com/upstream"],
+    "forbidden_headings": ["varnishd -> vinyld"],
+    "notes": "Modeled on gentoo/2026-03-31-varnish-renamed: 1-space indented verbatim mapping + # headings + [0][1][2][3] refs and definitions."
+  },
+  {
+    "file": "cases/02-backticks-and-emerge-commands.en.txt",
+    "format": "2.0",
+    "expected_dialect": "plain",
+    "expected_headings": [],
+    "expected_footnote_defs": [],
+    "expected_footnote_refs": [],
+    "expected_urls": [],
+    "forbidden_headings": [],
+    "notes": "Modeled on arrans_overlay/2026-08-13-antigravity-migration: backtick atoms and unindented emerge commands."
+  },
+  {
+    "file": "cases/03-urls-and-atoms-prose.en.txt",
+    "format": "2.0",
+    "expected_dialect": "plain",
+    "expected_headings": [],
+    "expected_footnote_defs": [],
+    "expected_footnote_refs": [],
+    "expected_urls": ["https://example.com/docs/runtime", "https://example.com/issues/42", "https://example.com/legacy-guide"],
+    "forbidden_headings": [],
+    "notes": "Modeled on steam-overlay/2026-10-04-steam-runtime: prose package atoms and URLs with trailing ). and ."
+  },
+  {
+    "file": "cases/04-mixed-headings-and-shell-comments.en.txt",
+    "format": "2.0",
+    "expected_dialect": "markdown_hash",
+    "expected_headings": ["Pre-upgrade requirements", "Configuration", "Further reading"],
+    "expected_footnote_defs": ["1"],
+    "expected_footnote_refs": [],
+    "expected_urls": ["https://example.com/alternatives-spec"],
+    "forbidden_headings": ["https://example.com/wiki/Parallel", "Make /bin/gzip a symlink to pigz", "emerge -v1 sys-apps/alternatives"],
+    "notes": "Modeled on gentoo/2022-12-27-alternatives-introduction: real ## headings mixed with unindented # shell/URL comments."
+  },
+  {
+    "file": "cases/05-setext-underline-headings.en.txt",
+    "format": "2.0",
+    "expected_dialect": "setext_underline",
+    "expected_headings": ["Deferring the upgrade", "Safer upgrade procedure"],
+    "expected_footnote_defs": [],
+    "expected_footnote_refs": [],
+    "expected_urls": [],
+    "forbidden_headings": [],
+    "notes": "Modeled on gentoo/2024-05-09-python3-12: Setext === and --- underline headings."
+  },
+  {
+    "file": "cases/06-mediawiki-equals-headings.en.txt",
+    "format": "2.0",
+    "expected_dialect": "mediawiki_equals",
+    "expected_headings": ["Systemd users", "OpenRC users"],
+    "expected_footnote_defs": [],
+    "expected_footnote_refs": [],
+    "expected_urls": [],
+    "forbidden_headings": ["systemctl stop example-sssd"],
+    "notes": "Modeled on gentoo/2026-02-11-sssd-2_12-keywording: symmetric and asymmetrical == Heading ===."
+  },
+  {
+    "file": "cases/07-shell-prompts-only-no-headings.en.txt",
+    "format": "2.0",
+    "expected_dialect": "plain",
+    "expected_headings": [],
+    "expected_footnote_defs": [],
+    "expected_footnote_refs": [],
+    "expected_urls": [],
+    "forbidden_headings": ["emerge --sync", "perl-cleaner --all", "This is the raw git repository and it lacks metadata."],
+    "notes": "Modeled on gentoo/2021-07-20-perl-5_34-upgrade and 2025-11-01-portage-git-sync-verify: shell prompts and config comments must remain plain/code."
+  },
+  {
+    "file": "cases/08-format-1-and-separator.en.txt",
+    "format": "1.0",
+    "expected_dialect": "plain",
+    "expected_headings": [],
+    "expected_footnote_defs": [],
+    "expected_footnote_refs": [],
+    "expected_urls": ["https://example.com/archive"],
+    "forbidden_headings": ["This is a Format 1.0 plain text news notice. The rest of this paragraph", "still applies."],
+    "notes": "Format 1.0 prose + --- separator after sentence-ending period must not create a Setext heading; either/or prose must not autolink."
+  },
+  {
+    "file": "cases/09-xss-escaping-and-code-blocks.en.txt",
+    "format": "2.0",
+    "expected_dialect": "plain",
+    "expected_headings": [],
+    "expected_footnote_defs": [],
+    "expected_footnote_refs": [],
+    "expected_urls": ["https://example.com/safe(v1)"],
+    "forbidden_headings": [],
+    "notes": "Raw HTML tags, javascript:/data: schemes, emails, and indented code block URLs must never link or inject HTML."
+  },
+  {
+    "file": "cases/10-footnotes-unmatched-duplicate-unused.en.txt",
+    "format": "2.0",
+    "expected_dialect": "plain",
+    "expected_headings": [],
+    "expected_footnote_defs": ["1", "2"],
+    "expected_footnote_refs": ["1"],
+    "expected_urls": ["https://example.com/first", "https://example.com/unused-definition"],
+    "forbidden_headings": [],
+    "notes": "Tests unmatched [99], code array items[1], duplicate [1] definition, and unused [2] definition."
+  },
+  {
+    "file": "cases/11-non-english-translation.pl.txt",
+    "format": "2.0",
+    "expected_dialect": "markdown_hash",
+    "expected_headings": ["Przygotowanie do aktualizacji"],
+    "expected_footnote_defs": ["1"],
+    "expected_footnote_refs": ["1"],
+    "expected_urls": ["https://example.com/pl/python-guide"],
+    "forbidden_headings": [],
+    "notes": "UTF-8 Polish translation with ## heading, package atom, and [1] footnote."
+  },
+  {
+    "file": "cases/12-timeline-heading-before-list-and-atoms.en.txt",
+    "format": "2.0",
+    "expected_dialect": "markdown_hash",
+    "expected_headings": ["Timeline:"],
+    "expected_footnote_defs": [],
+    "expected_footnote_refs": [],
+    "expected_urls": [],
+    "forbidden_headings": [],
+    "notes": "Modeled on gentoo/2026-03-15-postfix-database-change: single-# section header followed by bullet list and slot/repo package atoms."
+  }
+]

@@ -1,0 +1,15 @@
+Title: Python Upgrade Paths
+Author: Jane Doe <jane@example.com>
+Posted: 2024-05-09
+Revision: 1
+News-Item-Format: 2.0
+
+Deferring the upgrade
+=====================
+
+Keep the existing target until packages rebuild.
+
+Safer upgrade procedure
+-----------------------
+
+Run emerge --ask --changed-use @world after updating package.use.

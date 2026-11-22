@@ -1,0 +1,19 @@
+Title: Mixed Headings and Root Shell Comments
+Author: Jane Doe <jane@example.com>
+Posted: 2022-12-27
+Revision: 1
+News-Item-Format: 2.0
+
+## Pre-upgrade requirements
+
+Ensure sys-apps/openrc is updated first.
+
+## Configuration
+
+# https://example.com/wiki/Parallel
+# Make /bin/gzip a symlink to pigz
+# emerge -v1 sys-apps/alternatives
+
+## Further reading
+
+[1] https://example.com/alternatives-spec

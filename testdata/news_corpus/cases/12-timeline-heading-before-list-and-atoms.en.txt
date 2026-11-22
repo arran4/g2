@@ -1,0 +1,13 @@
+Title: Postfix Database Timeline
+Author: Jane Doe <jane@example.com>
+Posted: 2026-03-15
+Revision: 1
+News-Item-Format: 2.0
+Display-If-Installed: mail-mta/postfix
+
+# Timeline:
+
+ * mail-mta/postfix-3.11.0: switches default database to lmdb.
+ * mail-mta/postfix-3.12.0: disables berkdb by default.
+
+See mail-mta/postfix:0::gentoo-example or unknown/pkg for contrast.
