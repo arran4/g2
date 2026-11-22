@@ -108,7 +108,7 @@ func parseNewsBodyAST(body string) []NewsNode {
 			flushCode()
 
 			if currentList == nil {
-				currentList = &NewsNode{Type: NewsNodeList, Lines: []string{}}
+				currentList = &NewsNode{Type: NewsNodeList, Lines: []string{}, StartLine: i + 1}
 			}
 
 			prefix := "- "
@@ -141,21 +141,29 @@ func parseNewsBodyAST(body string) []NewsNode {
 			}
 
 			currentList.Lines = append(currentList.Lines, strings.Join(listItem, " "))
+			for k := i; k < j; k++ {
+				currentList.RawLines = append(currentList.RawLines, lines[k])
+			}
+			currentList.EndLine = j
 			i = j - 1
 			continue
 		}
 
-		isCodeLine := strings.HasPrefix(line, "  ") && trimmed != ""
+		isCodeLine := (strings.HasPrefix(line, "  ") || (strings.HasPrefix(line, " ") && !strings.HasPrefix(trimmed, "* ") && !strings.HasPrefix(trimmed, "- "))) && trimmed != ""
 
 		if isCodeLine {
 			flushText()
 			flushList()
 
 			if currentCode == nil {
-				currentCode = &NewsNode{Type: NewsNodeCode, Lines: []string{}}
+				currentCode = &NewsNode{Type: NewsNodeCode, Lines: []string{}, StartLine: i + 1}
 			}
+			currentCode.EndLine = i + 1
+			currentCode.RawLines = append(currentCode.RawLines, line)
 			if strings.HasPrefix(line, "  ") {
 				currentCode.Lines = append(currentCode.Lines, line[2:])
+			} else if strings.HasPrefix(line, " ") {
+				currentCode.Lines = append(currentCode.Lines, line[1:])
 			} else {
 				currentCode.Lines = append(currentCode.Lines, line)
 			}
@@ -166,16 +174,20 @@ func parseNewsBodyAST(body string) []NewsNode {
 				if trimmed == "" {
 					// Blank line within code block
 					currentCode.Lines = append(currentCode.Lines, "")
+					currentCode.RawLines = append(currentCode.RawLines, line)
+					currentCode.EndLine = i + 1
 				} else {
 					flushCode()
-					currentText = &NewsNode{Type: NewsNodeText, Lines: []string{line}}
+					currentText = &NewsNode{Type: NewsNodeText, Lines: []string{line}, StartLine: i + 1, EndLine: i + 1, RawLines: []string{line}}
 				}
 			} else {
 				// Text context
 				if currentText == nil {
-					currentText = &NewsNode{Type: NewsNodeText, Lines: []string{}}
+					currentText = &NewsNode{Type: NewsNodeText, Lines: []string{}, StartLine: i + 1}
 				}
+				currentText.EndLine = i + 1
 				currentText.Lines = append(currentText.Lines, line)
+				currentText.RawLines = append(currentText.RawLines, line)
 			}
 		}
 	}
@@ -187,59 +199,10 @@ func parseNewsBodyAST(body string) []NewsNode {
 	return nodes
 }
 
-// ToHTMLTemplate converts the NewsItem body into an HTML template representation.
+// ToHTMLTemplate converts the NewsItem body into an HTML template representation
+// using immutable AST transformations for headings and footnotes.
 func (n NewsItem) ToHTMLTemplate() template.HTML {
-	if n.NewsItemFormat == "2.0" {
-		var out strings.Builder
-		first := true
-		for _, node := range n.BodyAST {
-			switch node.Type {
-			case NewsNodeText:
-				for _, line := range node.Lines {
-					if !first {
-						out.WriteByte('\n')
-					}
-					first = false
-					if strings.TrimSpace(line) == "" {
-						out.WriteString("<br><br>")
-					} else {
-						out.WriteString(template.HTMLEscapeString(line))
-					}
-				}
-			case NewsNodeList:
-				if !first {
-					out.WriteByte('\n')
-				}
-				first = false
-				out.WriteString("<ul>")
-				for _, item := range node.Lines {
-					out.WriteString("\n<li>")
-					out.WriteString(template.HTMLEscapeString(item))
-					out.WriteString("</li>")
-				}
-				out.WriteString("\n</ul>")
-			case NewsNodeCode:
-				if !first {
-					out.WriteByte('\n')
-				}
-				first = false
-				out.WriteString("<pre><code>")
-				firstCode := true
-				for _, codeLine := range node.Lines {
-					if !firstCode {
-						out.WriteByte('\n')
-					}
-					firstCode = false
-					out.WriteString(template.HTMLEscapeString(codeLine))
-				}
-				out.WriteString("</code></pre>")
-			}
-		}
-		return template.HTML(out.String())
-	}
-	escaped := template.HTMLEscapeString(n.Body)
-	escaped = strings.ReplaceAll(escaped, "\n", "<br>")
-	return template.HTML(escaped)
+	return n.ToHTMLWithScope(n.DirName)
 }
 
 // ToText returns the plain text body of the NewsItem.

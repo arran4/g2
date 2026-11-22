@@ -51,6 +51,28 @@ func getTemplateFuncMap() template.FuncMap {
 		"groupUseFlags":             groupUseFlagsFunc,
 		"groupUseFlagsByProvenance": groupUseFlagsByProvenanceFunc,
 		"getBestDesc":               getBestDescFunc,
+		"renderNewsHTML":            renderNewsHTMLFunc,
+	}
+}
+
+func renderNewsHTMLFunc(item any, scope string) template.HTML {
+	switch v := item.(type) {
+	case AggNewsItem:
+		return v.ToHTMLWithScope(scope)
+	case *AggNewsItem:
+		if v == nil {
+			return ""
+		}
+		return v.ToHTMLWithScope(scope)
+	case g2.NewsItem:
+		return v.ToHTMLWithScope(scope)
+	case *g2.NewsItem:
+		if v == nil {
+			return ""
+		}
+		return v.ToHTMLWithScope(scope)
+	default:
+		return ""
 	}
 }
 
