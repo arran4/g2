@@ -1259,6 +1259,7 @@ type AggregatedData struct {
 	Moves               map[string]*AggPackageMove
 	GlobalNews          []AggNewsItem
 	RecentNews          []AggNewsItem
+	RecentNewsFallback  bool
 	TotalPackages       int
 	UseFlags            []*AggUseFlag
 	Eclasses            []*AggEclass
@@ -1713,13 +1714,22 @@ func sortEclasses(aggEclasses map[string]*AggEclass) []*AggEclass {
 	return sortedEclasses
 }
 
-func extractRecentNews(globalNews []AggNewsItem) []AggNewsItem {
+func extractRecentNewsWithDuration(globalNews []AggNewsItem, recentDuration time.Duration) ([]AggNewsItem, bool) {
 	sort.Slice(globalNews, func(i, j int) bool {
-		return globalNews[i].Posted.After(globalNews[j].Posted)
+		if !globalNews[i].Posted.Equal(globalNews[j].Posted) {
+			return globalNews[i].Posted.After(globalNews[j].Posted)
+		}
+		if globalNews[i].DirName != globalNews[j].DirName {
+			return globalNews[i].DirName < globalNews[j].DirName
+		}
+		return globalNews[i].RepoName < globalNews[j].RepoName
 	})
 
+	if recentDuration <= 0 {
+		recentDuration = 90 * 24 * time.Hour
+	}
 	var recentNews []AggNewsItem
-	cutoffDate := time.Now().AddDate(0, -3, 0)
+	cutoffDate := time.Now().Add(-recentDuration)
 	for _, n := range globalNews {
 		if n.Posted.After(cutoffDate) {
 			recentNews = append(recentNews, n)
@@ -1728,12 +1738,13 @@ func extractRecentNews(globalNews []AggNewsItem) []AggNewsItem {
 		}
 	}
 	if len(recentNews) == 0 && len(globalNews) > 0 {
-		// fallback if no news in last 3 months, show the last 3 items
+		// Fallback when no news falls within recentDuration: show latest 3 items, marked as fallback.
 		for i := 0; i < len(globalNews) && i < 3; i++ {
 			recentNews = append(recentNews, globalNews[i])
 		}
+		return recentNews, true
 	}
-	return recentNews
+	return recentNews, false
 }
 
 func sortGroupedRepos(groupedReposMap map[string]*RepoGroup) []RepoGroup {
@@ -1751,6 +1762,10 @@ func sortGroupedRepos(groupedReposMap map[string]*RepoGroup) []RepoGroup {
 }
 
 func prepareAggregatedData(sites []*g2.SiteData) *AggregatedData {
+	return prepareAggregatedDataWithDuration(sites, 90*24*time.Hour)
+}
+
+func prepareAggregatedDataWithDuration(sites []*g2.SiteData, recentDuration time.Duration) *AggregatedData {
 	groupedReposMap := aggregateGroupedRepos(sites)
 	aggUseExpandDescs := aggregateUseExpandDescs(sites)
 	aggProjects := aggregateProjects(sites)
@@ -1769,7 +1784,7 @@ func prepareAggregatedData(sites []*g2.SiteData) *AggregatedData {
 	sortedProfiles := sortProfiles(aggProfiles)
 	sortedArches := sortArches(aggArches)
 	sortedEclasses := sortEclasses(aggEclasses)
-	recentNews := extractRecentNews(globalNews)
+	recentNews, recentFallback := extractRecentNewsWithDuration(globalNews, recentDuration)
 	sortedGroupedRepos := sortGroupedRepos(groupedReposMap)
 
 	sortedUseFlags, _ := AggregateUseFlags(sites, aggPackages)
@@ -1785,6 +1800,7 @@ func prepareAggregatedData(sites []*g2.SiteData) *AggregatedData {
 		Moves:               aggMoves,
 		GlobalNews:          globalNews,
 		RecentNews:          recentNews,
+		RecentNewsFallback:  recentFallback,
 		TotalPackages:       totalPackages,
 		UseFlags:            sortedUseFlags,
 		ValidLicenses:       validLicenses,

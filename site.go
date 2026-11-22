@@ -21,6 +21,7 @@ type SiteData struct {
 	Moves             []PackageMove
 	SlotMoves         []PackageSlotMove
 	News              []NewsItem
+	NewsDiagnostics   []string
 	LayoutConf        *LayoutConf
 	LicenseMapping    map[string][]string
 	ProvidedLicenses  []string

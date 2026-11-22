@@ -58,6 +58,10 @@ type GenericPageContext struct {
 	FileContent           string
 	Arch                  *AggArch
 	GlobalUseFlag         *AggUseFlag
+	RecentNewsFallback    bool
+	ActiveLanguage        string
+	IsTranslationSubpage  bool
+	DefaultArticleURL     string
 	RepoUseFlag           *g2.UseFlag
 	License               *AggLicense
 	Project               *AggProject
