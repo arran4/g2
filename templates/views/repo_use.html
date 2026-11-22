@@ -81,6 +81,40 @@
 </div>
 {{end}}
 
+{{if .UseDetailPage}}
+{{$dp := .UseDetailPage}}
+<div class="metadata-section">
+    <p><a href="{{$.BaseURL}}uses/{{.GlobalUseFlag.Name}}/">View across all overlays</a></p>
+    <h3>Package Usage Occurrences ({{$dp.TotalPackages}}{{if $dp.IsPaginated}} — Page {{$dp.Page}} of {{$dp.TotalPages}}{{end}})</h3>
+    {{if $dp.PageLinks}}
+    <nav class="pagination" aria-label="Package list pagination" style="margin: 8px 0;">
+        {{if $dp.PrevURL}}<a href="{{$dp.PrevURL}}">Previous</a> | {{end}}
+        {{range $dp.PageLinks}}
+            {{if .Current}}<strong>[{{.Page}}]</strong> {{else}}<a href="{{.URL}}">{{.Page}}</a> {{end}}
+        {{end}}
+        {{if $dp.NextURL}}| <a href="{{$dp.NextURL}}">Next</a>{{end}}
+    </nav>
+    {{end}}
+    <table>
+        <tr>
+            <th>Package</th>
+            <th>Observations</th>
+            <th>Versions</th>
+            <th>Local Description (use.local.desc)</th>
+            <th>Metadata Description (metadata.xml)</th>
+        </tr>
+        {{range $dp.Packages}}
+        <tr>
+            <td><a href="{{$.BaseURL}}repos/{{if .RepoName}}{{.RepoName}}{{else}}{{$.Repo.RepoName}}{{end}}/categories/{{.Category}}/packages/{{.Name}}/">{{.PkgKey}}</a></td>
+            <td>{{if .DeclaredIUSE}}IUSE{{end}}{{if and .DeclaredIUSE .RequiredUse}} + {{end}}{{if .RequiredUse}}REQUIRED_USE{{end}}{{if and (not .DeclaredIUSE) (not .RequiredUse)}}metadata only{{end}}</td>
+            <td>{{if .Versions}}{{join .Versions ", "}}{{else}}<em>-</em>{{end}}</td>
+            <td>{{if .LocalDesc}}{{.LocalDesc}}{{else}}<em>-</em>{{end}}</td>
+            <td>{{if .MetadataDesc}}{{.MetadataDesc}}{{else}}<em>-</em>{{end}}</td>
+        </tr>
+        {{end}}
+    </table>
+</div>
+{{else}}
 <div class="metadata-section">
     <h3>Package Usage Occurrences</h3>
     <table>
@@ -102,3 +136,4 @@
         {{end}}
     </table>
 </div>
+{{end}}

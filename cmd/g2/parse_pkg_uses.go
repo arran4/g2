@@ -21,7 +21,9 @@ func AggregateUseFlags(sites []*g2.SiteData, aggPackages map[string]*AggPackage)
 func populatePkgUseFlags(site *g2.SiteData) {
 	globalDescs := make(map[string]string)
 	if site.UseDesc != nil {
-		globalDescs = site.UseDesc.Flags
+		for k, v := range site.UseDesc.Flags {
+			globalDescs[k] = v
+		}
 	}
 
 	localDescs := make(map[string]map[string]string)
