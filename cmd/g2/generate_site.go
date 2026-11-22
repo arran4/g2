@@ -49,12 +49,14 @@ func generateGlobalPages(outDir string, tmpl *template.Template, sites []*g2.Sit
 		return err
 	}
 	statsNode := &PageNode{Parent: rootNode, Name: "Statistics", Path: "stats"}
+	siteInventory := computeSiteInventoryStats(sites, data)
 	if err := renderPage(filepath.Join(outDir, "stats", "index.html"), tmpl, "stats.html", GenericPageContext{
-		Title:       "Generation Statistics",
-		BaseURL:     statsNode.BaseURL(),
-		Breadcrumbs: statsNode.Breadcrumbs(),
-		Version:     version,
-		GenInfo:     genInfo,
+		Title:         "Generation Statistics",
+		BaseURL:       statsNode.BaseURL(),
+		Breadcrumbs:   statsNode.Breadcrumbs(),
+		Version:       version,
+		GenInfo:       genInfo,
+		SiteInventory: siteInventory,
 	}); err != nil {
 		return fmt.Errorf("rendering page: %w", err)
 	}
@@ -988,11 +990,13 @@ func generateRepoMovedPackagesPages(repoDir string, tmpl *template.Template, sit
 }
 
 func generateRepoIndexAndStatsPages(repoDir string, tmpl *template.Template, site *g2.SiteData, data *AggregatedData, title, version, recentDurationStr string, genInfo GenerationInfo, repoRecentNews []g2.NewsItem) error {
+	repoSummary := computeRepoInventorySummary(site)
 	if err := renderPage(filepath.Join(repoDir, "index.html"), tmpl, "repo_index.html", GenericPageContext{
 		Title:                 site.RepoName,
 		BaseURL:               "../../",
 		Breadcrumbs:           []g2.Breadcrumb{{Name: title, URL: "../../"}, {Name: "Overlays", URL: "../../overlays/"}, {Name: site.RepoName}},
 		Repo:                  site,
+		RepoSummary:           &repoSummary,
 		PackageCount:          site.PackageCount,
 		Version:               version,
 		GenInfo:               genInfo,
@@ -1014,6 +1018,7 @@ func generateRepoIndexAndStatsPages(repoDir string, tmpl *template.Template, sit
 		BaseURL:     "../../../",
 		Breadcrumbs: []g2.Breadcrumb{{Name: title, URL: "../../../"}, {Name: "Overlays", URL: "../../../overlays/"}, {Name: site.RepoName, URL: "../"}, {Name: "Statistics"}},
 		Repo:        site,
+		RepoSummary: &repoSummary,
 		Version:     version,
 		GenInfo:     genInfo,
 	}); err != nil {

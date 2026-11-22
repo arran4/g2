@@ -97,6 +97,21 @@
 </div>
 {{end}}
 
+{{if .RepoSummary}}
+<div class="metadata-section">
+    <h3>Repository Summary</h3>
+    <p>
+        <strong>Packages:</strong> {{.RepoSummary.Packages}} |
+        <strong>Ebuilds:</strong> {{.RepoSummary.Ebuilds}} |
+        <strong>Categories:</strong> {{.RepoSummary.Categories}} |
+        <strong>News:</strong> {{.RepoSummary.NewsItems}} ({{.RepoSummary.NewsVariants}} variants)
+        {{if .RepoSummary.LatestNewsDate}} | <strong>Latest News:</strong> {{.RepoSummary.LatestNewsDate}}{{end}}
+        {{if .RepoSummary.ParseTime}} | <strong>Parse Time:</strong> {{.RepoSummary.ParseTime}}{{end}}
+        | <a href="stats/">Full Repository Statistics</a>
+    </p>
+</div>
+{{end}}
+
 <ul>
     <li><a href="stats/">Repository Statistics</a></li>
     {{if .Repo.RemoteURL}}
