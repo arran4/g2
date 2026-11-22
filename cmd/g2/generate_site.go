@@ -311,7 +311,12 @@ func generatePackagePages(outDir string, tmpl *template.Template, data *Aggregat
 			if len(reposList) == 1 {
 				targetURL := fmt.Sprintf("../../../repos/%s/categories/%s/packages/%s/", reposList[0].RepoName, pkg.Category, pkg.Name)
 				if err := renderPage(filepath.Join(pkgDir, "index.html"), tmpl, "redirect.html", GenericPageContext{
-					TargetURL: targetURL,
+					Title:       "Package: " + pkg.Category + "/" + pkg.Name,
+					BaseURL:     "../../../",
+					Breadcrumbs: []g2.Breadcrumb{{Name: title, URL: "../../../"}, {Name: "Packages", URL: "../../"}, {Name: pkg.Category + "/" + pkg.Name}},
+					Version:     version,
+					GenInfo:     genInfo,
+					TargetURL:   targetURL,
 				}); err != nil {
 					return fmt.Errorf("rendering page: %w", err)
 				}
