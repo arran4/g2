@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 
@@ -395,19 +396,14 @@ func aggregateUseFlagsWithProvenance(sites []*g2.SiteData, aggPackages map[strin
 }
 
 func splitCatPkg(key string) (string, string) {
-	if idx := strings.IndexByte(key, '/'); idx != -1 {
-		return key[:idx], key[idx+1:]
+	if before, after, ok := strings.Cut(key, "/"); ok {
+		return before, after
 	}
 	return "", key
 }
 
 func containsStrUse(slice []string, target string) bool {
-	for _, s := range slice {
-		if s == target {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(slice, target)
 }
 
 func groupUseFlagsByProvenanceFunc(flags []*AggUseFlag) ProvenanceUseFlagGroups {
