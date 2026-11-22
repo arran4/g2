@@ -1,9 +1,11 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
+	"strings"
 	"sync"
 	"time"
 )
@@ -65,6 +67,20 @@ func (p *Profiler) Write() error {
 	}
 
 	total := time.Since(p.startTime)
+	if strings.HasSuffix(strings.ToLower(p.outPath), ".json") {
+		payload := struct {
+			TotalMS int64          `json:"total_ms"`
+			Total   string         `json:"total"`
+			Events  []ProfileEvent `json:"events"`
+		}{
+			TotalMS: total.Milliseconds(),
+			Total:   total.String(),
+			Events:  p.events,
+		}
+		enc := json.NewEncoder(out)
+		enc.SetIndent("", "  ")
+		return enc.Encode(payload)
+	}
 	_, _ = fmt.Fprintf(out, "Site Generation Profile Report\n")
 	_, _ = fmt.Fprintf(out, "==============================\n")
 	for _, ev := range p.events {

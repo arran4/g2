@@ -44,21 +44,6 @@ func generateGlobalPages(outDir string, tmpl *template.Template, sites []*g2.Sit
 		return fmt.Errorf("rendering page: %w", err)
 	}
 
-	// Generate Stats Page
-	if err := os.MkdirAll(filepath.Join(outDir, "stats"), 0755); err != nil {
-		return err
-	}
-	statsNode := &PageNode{Parent: rootNode, Name: "Statistics", Path: "stats"}
-	if err := renderPage(filepath.Join(outDir, "stats", "index.html"), tmpl, "stats.html", GenericPageContext{
-		Title:       "Generation Statistics",
-		BaseURL:     statsNode.BaseURL(),
-		Breadcrumbs: statsNode.Breadcrumbs(),
-		Version:     version,
-		GenInfo:     genInfo,
-	}); err != nil {
-		return fmt.Errorf("rendering page: %w", err)
-	}
-
 	// 1. Root Dashboard
 	if err := renderPage(filepath.Join(outDir, "index.html"), tmpl, "dashboard.html", GenericPageContext{
 		Title:                title,
@@ -1574,33 +1559,47 @@ func generateSite(outDir string, sites []*g2.SiteData, recentDuration time.Durat
 
 	defer genInfo.Profiler.Track("Total Generation")()
 
+	collector := newSiteStatsCollector(genInfo.NowFn)
+	if genInfo.FetchParseWall > 0 || genInfo.CheckoutWorker > 0 || genInfo.ParseWorker > 0 {
+		collector.addParallelPhase("Acquisition & Parse (Repos)", genInfo.FetchParseWall, genInfo.CheckoutWorker+genInfo.ParseWorker)
+	}
+
 	log.Printf("Starting site generation (v%s) with %d repos to %s", version, len(sites), outDir)
 	stepMkdir := genInfo.Profiler.Track("Create Output Directory")
+	endMkdir := collector.trackPhase("Create Output Directory")
 	if err := os.MkdirAll(outDir, 0755); err != nil {
 		return err
 	}
+	endMkdir()
 	stepMkdir()
 
 	stepPopulate := genInfo.Profiler.Track("Populate Package Use Flags")
+	endPopulate := collector.trackPhase("Populate Package Use Flags")
 	for _, site := range sites {
 		populatePkgUseFlags(site)
 	}
+	endPopulate()
 	stepPopulate()
 
 	// Generate search index
 	stepSearchIndex := genInfo.Profiler.Track("Generate Search Index")
+	endSearchIndex := collector.trackPhase("Generate Search Index")
 	if err := generateSearchIndex(outDir, sites); err != nil {
 		log.Printf("Warning: failed to generate search index: %v", err)
 	}
+	endSearchIndex()
 	stepSearchIndex()
 
 	stepTemplates := genInfo.Profiler.Track("Load Templates")
+	endTemplates := collector.trackPhase("Load Templates")
 	tmpl, err := GetSiteTemplates()
 	if err != nil {
 		return fmt.Errorf("loading templates: %w", err)
 	}
+	endTemplates()
 	stepTemplates()
 
+	endAgg := collector.trackPhase("Aggregate Data")
 	for _, site := range sites {
 		aggPackagesMap := make(map[string]*AggPackage)
 		for _, cat := range site.Categories {
@@ -1624,6 +1623,7 @@ func generateSite(outDir string, sites []*g2.SiteData, recentDuration time.Durat
 
 	// Prepare Immutable Render Context
 	data := prepareAggregatedData(sites)
+	endAgg()
 
 	// Title
 	title := "Gentoo Packages"
@@ -1634,37 +1634,47 @@ func generateSite(outDir string, sites []*g2.SiteData, recentDuration time.Durat
 	// Render Phases
 	log.Printf("[PHASE] Rendering global pages...")
 	stepGlobalPages := genInfo.Profiler.Track("Render Global Pages")
+	endGlobalPages := collector.trackPhase("Render Global Pages")
 	if err := generateGlobalPages(outDir, tmpl, sites, data, title, version, recentDurationStr, genInfo); err != nil {
 		return err
 	}
+	endGlobalPages()
 	stepGlobalPages()
 
 	log.Printf("[PHASE] Rendering %d category pages...", len(data.Categories))
 	stepCategoryPages := genInfo.Profiler.Track("Render Category Pages")
+	endCategoryPages := collector.trackPhase("Render Category Pages")
 	if err := generateCategoryPages(outDir, tmpl, data, title, version, genInfo); err != nil {
 		return err
 	}
+	endCategoryPages()
 	stepCategoryPages()
 
 	log.Printf("[PHASE] Rendering package pages...")
 	stepPackagePages := genInfo.Profiler.Track("Render Package Pages")
+	endPackagePages := collector.trackPhase("Render Package Pages")
 	if err := generatePackagePages(outDir, tmpl, data, title, version, genInfo); err != nil {
 		return err
 	}
+	endPackagePages()
 	stepPackagePages()
 
 	log.Printf("[PHASE] Rendering other global pages...")
 	stepOtherGlobalPages := genInfo.Profiler.Track("Render Other Global Pages")
+	endOtherGlobalPages := collector.trackPhase("Render Other Global Pages")
 	if err := generateOtherGlobalPages(outDir, tmpl, data, title, version, genInfo); err != nil {
 		return err
 	}
+	endOtherGlobalPages()
 	stepOtherGlobalPages()
 
 	log.Printf("[PHASE] Rendering %d repository pages...", len(sites))
 	stepRepositoryPages := genInfo.Profiler.Track("Render Repository Pages")
+	endRepositoryPages := collector.trackPhase("Render Repository Pages")
 	if err := generateRepoPages(outDir, tmpl, sites, data, title, version, recentDurationStr, genInfo); err != nil {
 		return err
 	}
+	endRepositoryPages()
 	stepRepositoryPages()
 
 	totalNodes := len(data.Categories) + data.TotalPackages + len(data.Profiles) + len(data.GlobalNews) + len(data.Moves) + len(data.Eclasses)
@@ -1672,6 +1682,74 @@ func generateSite(outDir string, sites []*g2.SiteData, recentDuration time.Durat
 		for repoName := range pkg.Repos {
 			totalNodes += len(pkg.GetVersionsInRepo(repoName))
 		}
+	}
+
+	stepFinalize := genInfo.Profiler.Track("Finalize Statistics")
+	endFinalize := collector.trackPhase("Storage Scan & Finalization")
+	storageStats, walkErr := scanOutputStorage(outDir)
+	if walkErr != nil {
+		log.Printf("Warning: failed to scan output storage: %v", walkErr)
+	}
+	memStats := captureRuntimeMemory()
+	endFinalize()
+	stepFinalize()
+
+	completedAt := collector.now().UTC()
+	totalWall := completedAt.Sub(collector.startedAt)
+	if totalWall < 0 {
+		totalWall = 0
+	}
+	if genInfo.FetchParseWall > 0 {
+		totalWall += genInfo.FetchParseWall
+	}
+
+	sanitizedArgs := sanitizeCLIArgs(genInfo.Args)
+	sanitizedRepoXML := ""
+	if genInfo.RepositoriesXML != "" {
+		sanitizedRepoXML = sanitizeURLOrPath(genInfo.RepositoriesXML)
+	}
+	genInfo.Args = sanitizedArgs
+	genInfo.RepositoriesXML = sanitizedRepoXML
+	genInfo.TimeTaken = formatDurationCompact(totalWall)
+	genInfo.MemoryConsumed = fmt.Sprintf("%s heap alloc (%s total allocated)", memStats.HeapAllocHuman, memStats.TotalAllocHuman)
+	genInfo.DiskConsumed = fmt.Sprintf("%s (%d files)", storageStats.TotalHuman, storageStats.TotalFiles)
+	genInfo.SiteStats = &SiteStatsReport{
+		Version:          version,
+		StartedAt:        collector.startedAt.Format(time.RFC3339),
+		CompletedAt:      completedAt.Format(time.RFC3339),
+		TotalWallMS:      totalWall.Milliseconds(),
+		TotalWallHuman:   formatDurationCompact(totalWall),
+		RepoCount:        len(sites),
+		TotalNodes:       totalNodes,
+		FastGit:          genInfo.FastGit,
+		RecentDuration:   genInfo.RecentDuration,
+		SanitizedArgs:    sanitizedArgs,
+		Phases:           collector.phases,
+		Storage:          storageStats,
+		Memory:           memStats,
+		Repos:            buildRepoBuildStats(sites),
+		StatsJSONEnabled: !genInfo.DisableStatsJSON,
+	}
+
+	if !genInfo.DisableStatsJSON {
+		if err := writeStatsJSON(outDir, genInfo.SiteStats); err != nil {
+			log.Printf("Warning: failed to write stats.json: %v", err)
+		}
+	}
+
+	rootNode := &PageNode{Name: "Home", Path: ""}
+	statsNode := &PageNode{Parent: rootNode, Name: "Statistics", Path: "stats"}
+	if err := os.MkdirAll(filepath.Join(outDir, "stats"), 0755); err != nil {
+		return err
+	}
+	if err := renderPage(filepath.Join(outDir, "stats", "index.html"), tmpl, "stats.html", GenericPageContext{
+		Title:       "Generation Statistics",
+		BaseURL:     statsNode.BaseURL(),
+		Breadcrumbs: statsNode.Breadcrumbs(),
+		Version:     version,
+		GenInfo:     genInfo,
+	}); err != nil {
+		return fmt.Errorf("rendering stats page: %w", err)
 	}
 
 	log.Printf("[DONE] Site generation complete. Total nodes generated: %d", totalNodes)

@@ -1,6 +1,128 @@
-{{define "content"}}
 <h2>Generation Statistics</h2>
 
+{{if and .GenInfo .GenInfo.SiteStats}}
+{{$s := .GenInfo.SiteStats}}
+<div class="stats-summary-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:20px;">
+    <div class="card" style="padding:12px;border:1px solid #ddd;border-radius:6px;">
+        <div style="font-size:0.85em;color:#666;">Total Wall Time</div>
+        <div style="font-size:1.35em;font-weight:bold;">{{$s.TotalWallHuman}}</div>
+    </div>
+    <div class="card" style="padding:12px;border:1px solid #ddd;border-radius:6px;">
+        <div style="font-size:0.85em;color:#666;">Repositories Processed</div>
+        <div style="font-size:1.35em;font-weight:bold;">{{$s.RepoCount}}</div>
+    </div>
+    <div class="card" style="padding:12px;border:1px solid #ddd;border-radius:6px;">
+        <div style="font-size:0.85em;color:#666;">Output Size (Logical)</div>
+        <div style="font-size:1.35em;font-weight:bold;">{{$s.Storage.TotalHuman}}</div>
+    </div>
+    <div class="card" style="padding:12px;border:1px solid #ddd;border-radius:6px;">
+        <div style="font-size:0.85em;color:#666;">Output Files</div>
+        <div style="font-size:1.35em;font-weight:bold;">{{$s.Storage.TotalFiles}}</div>
+    </div>
+    <div class="card" style="padding:12px;border:1px solid #ddd;border-radius:6px;">
+        <div style="font-size:0.85em;color:#666;">Total Nodes</div>
+        <div style="font-size:1.35em;font-weight:bold;">{{$s.TotalNodes}}</div>
+    </div>
+</div>
+
+<div class="metadata-section" style="margin-bottom:20px;">
+    <strong>Started (UTC):</strong> {{$s.StartedAt}}<br>
+    <strong>Completed (UTC):</strong> {{$s.CompletedAt}}<br>
+    <strong>Generator Version:</strong> {{$s.Version}}<br>
+    <strong>Fast Git:</strong> {{$s.FastGit}}<br>
+    <strong>Recent Duration:</strong> {{$s.RecentDuration}}<br>
+    {{if .GenInfo.RepositoriesXML}}<strong>Repositories XML:</strong> {{.GenInfo.RepositoriesXML}}<br>{{end}}
+    {{if $s.SanitizedArgs}}<strong>Arguments (sanitized):</strong> <code>{{join $s.SanitizedArgs " "}}</code><br>{{end}}
+    {{if $s.StatsJSONEnabled}}<strong>Machine-Readable Metrics:</strong> <a href="stats.json">stats.json</a><br>{{end}}
+</div>
+
+<h3>Phase Timing Breakdown</h3>
+<p style="font-size:0.9em;color:#555;">Parallel phases report wall-clock elapsed time separately from accumulated worker CPU/IO time.</p>
+<table>
+    <thead>
+        <tr>
+            <th>Phase</th>
+            <th>Wall Time</th>
+            <th>Worker Time (Parallel Sum)</th>
+        </tr>
+    </thead>
+    <tbody>
+        {{range $s.Phases}}
+        <tr>
+            <td>{{.Name}}</td>
+            <td>{{.WallHuman}}</td>
+            <td>{{if .IsParallel}}{{.WorkerHuman}}{{else}}—{{end}}</td>
+        </tr>
+        {{end}}
+    </tbody>
+</table>
+
+<h3>Output Storage Breakdown</h3>
+<p style="font-size:0.9em;color:#555;">{{$s.Storage.Note}}</p>
+<table>
+    <thead>
+        <tr>
+            <th>Output Type</th>
+            <th>Files</th>
+            <th>Logical Bytes</th>
+            <th>Human Size</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr><td>HTML Pages</td><td>{{$s.Storage.HTMLFiles}}</td><td>{{$s.Storage.HTMLBytes}}</td><td>{{$s.Storage.HTMLHuman}}</td></tr>
+        <tr><td>Search Index &amp; Scripts</td><td>{{$s.Storage.SearchFiles}}</td><td>{{$s.Storage.SearchBytes}}</td><td>{{$s.Storage.SearchHuman}}</td></tr>
+        <tr><td>JS / CSS Assets</td><td>{{$s.Storage.AssetFiles}}</td><td>{{$s.Storage.AssetBytes}}</td><td>{{$s.Storage.AssetHuman}}</td></tr>
+        <tr><td>RSS / Atom / XML Feeds</td><td>{{$s.Storage.FeedFiles}}</td><td>{{$s.Storage.FeedBytes}}</td><td>{{$s.Storage.FeedHuman}}</td></tr>
+        <tr><td>Other</td><td>{{$s.Storage.OtherFiles}}</td><td>{{$s.Storage.OtherBytes}}</td><td>{{$s.Storage.OtherHuman}}</td></tr>
+        <tr><th>Total (excluding /stats/)</th><th>{{$s.Storage.TotalFiles}}</th><th>{{$s.Storage.TotalLogicalBytes}}</th><th>{{$s.Storage.TotalHuman}}</th></tr>
+    </tbody>
+</table>
+
+<h3>Go Runtime Memory Snapshot</h3>
+<table>
+    <thead>
+        <tr>
+            <th>Metric</th>
+            <th>Value</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr><td>Heap Alloc (at finalization)</td><td>{{$s.Memory.HeapAllocHuman}} ({{$s.Memory.HeapAllocBytes}} bytes)</td></tr>
+        <tr><td>Cumulative Total Allocated</td><td>{{$s.Memory.TotalAllocHuman}} ({{$s.Memory.TotalAllocBytes}} bytes)</td></tr>
+        <tr><td>Runtime Sys</td><td>{{$s.Memory.SysHuman}} ({{$s.Memory.SysBytes}} bytes)</td></tr>
+        <tr><td>GC Cycles</td><td>{{$s.Memory.NumGC}}</td></tr>
+    </tbody>
+</table>
+
+{{if $s.Repos}}
+<details style="margin-top:20px;">
+    <summary style="cursor:pointer;font-weight:bold;">Per-Repository Acquisition &amp; Parse Timings ({{len $s.Repos}} repositories)</summary>
+    <table style="margin-top:10px;">
+        <thead>
+            <tr>
+                <th>Repository</th>
+                <th>Packages</th>
+                <th>Checkout Time</th>
+                <th>Parse Time</th>
+                <th>Source Clone Size</th>
+            </tr>
+        </thead>
+        <tbody>
+            {{range $s.Repos}}
+            <tr>
+                <td><a href="{{$.BaseURL}}repos/{{.RepoName}}/stats/">{{.RepoName}}</a></td>
+                <td>{{.PackageCount}}</td>
+                <td>{{if .CheckoutTime}}{{.CheckoutTime}}{{else}}—{{end}}</td>
+                <td>{{if .ParseTime}}{{.ParseTime}}{{else}}—{{end}}</td>
+                <td>{{if .GitSize}}{{.GitSize}}{{else}}—{{end}}</td>
+            </tr>
+            {{end}}
+        </tbody>
+    </table>
+</details>
+{{end}}
+
+{{else}}
 <div class="metadata-section">
     <strong>Date:</strong> {{now.Format "2006-01-02 15:04:05 MST"}}<br>
     {{if .GenInfo}}
@@ -13,5 +135,4 @@
     <strong>Recent Duration:</strong> {{.GenInfo.RecentDuration}}<br>
     {{end}}
 </div>
-
 {{end}}

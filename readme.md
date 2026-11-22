@@ -202,6 +202,9 @@ g2 overlay site generate [-out <dir>] [-clear] [<location>]
 * `-clear`: Clear output directory before generation.
 * `-fast-git-modtime`: Use fast (O(1)) but potentially less reliable go-git file log lookup.
 * `-recent-duration`: Duration to consider an update 'recent' (e.g., 3mo, 14d, 72h) (default "3mo").
+* `-stats-json`: Write machine-readable generation statistics to `/stats/stats.json` (default `true`).
+* `-profile`: Generate a detailed phase profile report of site generation.
+* `-profile-out`: Output file for the profile report (`.txt` or `.json`), or `-` for stdout (default `profile.txt`).
 
 When the overlay contains news items, the generated news dashboard includes RSS 2.0 and Atom feeds at `news/index.rss` and `news/index.atom`. Aggregated sites also provide combined feeds there, while each repository has its own feeds under `repos/<repository>/news/`.
 
