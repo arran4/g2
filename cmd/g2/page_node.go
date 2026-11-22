@@ -1,64 +1,88 @@
 package main
 
 import (
-	"github.com/arran4/g2"
 	"strings"
+
+	"github.com/arran4/g2"
 )
 
+// PageNode models a page in the generated site hierarchy.
+//
+// Invariant: Path is the node's path relative to its Parent (e.g. "packages" or
+// "media-gfx"), with empty Path representing the same route as Parent. For
+// backward compatibility, if a non-root node's Path already starts with
+// Parent.CanonicalPath()+"/", CanonicalPath treats it as a site-relative path
+// rather than double-counting ancestor segments.
 type PageNode struct {
 	Parent *PageNode
 	Name   string
 	Path   string
 }
 
+// CanonicalPath returns the normalized slash-separated path from the site root
+// without leading or trailing slashes.
+func (n *PageNode) CanonicalPath() string {
+	if n == nil {
+		return ""
+	}
+	p := strings.Trim(n.Path, "/")
+	if n.Parent == nil {
+		return p
+	}
+	parentCanon := n.Parent.CanonicalPath()
+	if p == "" {
+		return parentCanon
+	}
+	if parentCanon == "" {
+		return p
+	}
+	if strings.HasPrefix(p, parentCanon+"/") {
+		return p
+	}
+	return parentCanon + "/" + p
+}
+
+func pathSegmentDepth(canonPath string) int {
+	if canonPath == "" {
+		return 0
+	}
+	depth := 0
+	for p := range strings.SplitSeq(canonPath, "/") {
+		if p != "" {
+			depth++
+		}
+	}
+	return depth
+}
+
 func (n *PageNode) BaseURL() string {
 	if n == nil || n.Parent == nil {
 		return ""
 	}
-	depth := 0
-	curr := n
-	for curr.Parent != nil {
-		if curr.Path != "" {
-			parts := strings.SplitSeq(curr.Path, "/")
-			for p := range parts {
-				if p != "" {
-					depth++
-				}
-			}
-		}
-		curr = curr.Parent
-	}
-
-	return strings.Repeat("../", depth)
+	return strings.Repeat("../", pathSegmentDepth(n.CanonicalPath()))
 }
 
 func (n *PageNode) Breadcrumbs() []g2.Breadcrumb {
-	var crumbs []g2.Breadcrumb
-	curr := n
-
-	for curr != nil {
+	if n == nil {
+		return nil
+	}
+	var nodes []*PageNode
+	for curr := n; curr != nil; curr = curr.Parent {
+		nodes = append(nodes, curr)
+	}
+	targetCanon := n.CanonicalPath()
+	crumbs := make([]g2.Breadcrumb, 0, len(nodes))
+	for i := len(nodes) - 1; i >= 0; i-- {
+		curr := nodes[i]
 		url := ""
 		if curr != n {
-			depthDiff := 0
-			temp := n
-			for temp != curr {
-				if temp.Path != "" {
-					parts := strings.SplitSeq(temp.Path, "/")
-					for p := range parts {
-						if p != "" {
-							depthDiff++
-						}
-					}
-				}
-				temp = temp.Parent
+			rel := pathRel(targetCanon, curr.CanonicalPath())
+			if rel != "." {
+				url = rel + "/"
 			}
-			url = strings.Repeat("../", depthDiff)
 		}
-
-		crumbs = append([]g2.Breadcrumb{{Name: curr.Name, URL: url}}, crumbs...)
-		curr = curr.Parent
+		crumbs = append(crumbs, g2.Breadcrumb{Name: curr.Name, URL: url})
 	}
-
 	return crumbs
 }
 
