@@ -113,6 +113,57 @@ func TestGenerateSite(t *testing.T) {
 		t.Fatalf("generateSite failed: %v", err)
 	}
 
+	// All public news entry points must advertise the same existing feed files
+	// in both HTML head metadata and visible subscription links.
+	for _, scope := range []struct {
+		dir     string
+		article string
+	}{
+		{"", filepath.Join(siteData.RepoName, siteData.News[0].DirName)},
+		{filepath.Join("repos", siteData.RepoName), siteData.News[0].DirName},
+	} {
+		for _, page := range []struct {
+			path   string
+			prefix string
+		}{
+			{"index.html", "news/"},
+			{filepath.Join("news", "index.html"), ""},
+			{filepath.Join("news", "archive", "index.html"), "../"},
+			{filepath.Join("news", "archive", scope.article, "index.html"), strings.Repeat("../", len(strings.Split(filepath.ToSlash(scope.article), "/"))+1)},
+		} {
+			t.Run(filepath.Join(scope.dir, page.path), func(t *testing.T) {
+				pagePath := filepath.Join(outDir, scope.dir, page.path)
+				contents, err := os.ReadFile(pagePath)
+				if err != nil {
+					t.Fatal(err)
+				}
+				for _, feed := range []struct {
+					file string
+					mime string
+				}{
+					{"index.rss", "application/rss+xml"},
+					{"index.atom", "application/atom+xml"},
+				} {
+					href := page.prefix + feed.file
+					if !strings.Contains(string(contents), `<link rel="alternate" type="`+feed.mime+`"`) || !strings.Contains(string(contents), `href="`+href+`" />`) {
+						t.Errorf("missing feed discovery metadata for %s", href)
+					}
+					if !strings.Contains(string(contents), `<a href="`+href+`" type="`+feed.mime+`">`) {
+						t.Errorf("missing visible subscription link for %s", href)
+					}
+					resolved := filepath.Join(filepath.Dir(pagePath), filepath.FromSlash(href))
+					want := filepath.Join(outDir, scope.dir, "news", feed.file)
+					if resolved != want {
+						t.Errorf("feed link resolves to %q, want %q", resolved, want)
+					}
+					if _, err := os.Stat(resolved); err != nil {
+						t.Errorf("feed target missing: %v", err)
+					}
+				}
+			})
+		}
+	}
+
 	type rssDocument struct {
 		Channel struct {
 			Title         string `xml:"title"`

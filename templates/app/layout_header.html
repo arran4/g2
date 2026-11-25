@@ -32,4 +32,7 @@
                 {{end}}
             </nav>
             {{end}}
+            {{if .AlternateFeeds}}
+            <p class="feed-subscriptions">Subscribe: {{range $i, $feed := .AlternateFeeds}}{{if $i}} | {{end}}<a href="{{$feed.Href}}" type="{{$feed.Type}}">{{$feed.Title}}</a>{{end}}</p>
+            {{end}}
         </div>
